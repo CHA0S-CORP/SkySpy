@@ -5,14 +5,28 @@ Tests antenna performance metrics, coverage analysis,
 RSSI correlation, and signal strength statistics.
 """
 
+import math
 from datetime import timedelta
 from unittest.mock import patch
 
+from django.conf import settings
 from django.test import TestCase
 from django.utils import timezone
 
 from skyspy.models import AircraftSighting
 from skyspy.services import antenna_analytics
+
+
+def _position_at_bearing(bearing_deg: float, distance_deg: float = 1.0) -> tuple[float, float]:
+    """
+    Get a lat/lon approximately `distance_deg` degrees away from the feeder
+    at the given bearing. Polar coverage buckets by the bearing from the
+    receiver to the aircraft position (not by aircraft track/heading).
+    """
+    rad = math.radians(bearing_deg)
+    lat = settings.FEEDER_LAT + distance_deg * math.cos(rad)
+    lon = settings.FEEDER_LON + distance_deg * math.sin(rad) / math.cos(math.radians(settings.FEEDER_LAT))
+    return lat, lon
 
 
 class PolarDataTests(TestCase):
@@ -39,14 +53,14 @@ class PolarDataTests(TestCase):
 
     def test_calculate_polar_data_with_sightings(self):
         """Test polar data with sighting data."""
-        # Create sightings with track (bearing) and distance
+        # Create sightings northeast of the receiver
+        lat, lon = _position_at_bearing(45.0)
         for i in range(10):
             AircraftSighting.objects.create(
                 icao_hex=f"ABC{i:03d}",
                 timestamp=self.now - timedelta(hours=1),
-                latitude=40.0,
-                longitude=-74.0,
-                track=45.0,  # Northeast bearing
+                latitude=lat,
+                longitude=lon,
                 distance_nm=50.0,
                 rssi=-5.0,
             )
@@ -58,15 +72,15 @@ class PolarDataTests(TestCase):
 
     def test_calculate_polar_data_sector_coverage(self):
         """Test that sectors are correctly populated."""
-        # Create sightings at different bearings
+        # Create sightings at different bearings from the receiver
         bearings = [0, 45, 90, 135, 180, 225, 270, 315]
         for bearing in bearings:
+            lat, lon = _position_at_bearing(float(bearing))
             AircraftSighting.objects.create(
                 icao_hex=f"B{bearing:03d}",
                 timestamp=self.now - timedelta(hours=1),
-                latitude=40.0,
-                longitude=-74.0,
-                track=float(bearing),
+                latitude=lat,
+                longitude=lon,
                 distance_nm=50.0,
             )
 
@@ -77,14 +91,14 @@ class PolarDataTests(TestCase):
 
     def test_calculate_polar_data_rssi_stats(self):
         """Test RSSI statistics in polar data."""
-        # Create sightings with varying RSSI
+        # Create sightings with varying RSSI at bearing 45 from the receiver
+        lat, lon = _position_at_bearing(45.0)
         for i in range(5):
             AircraftSighting.objects.create(
                 icao_hex=f"ABC{i:03d}",
                 timestamp=self.now - timedelta(hours=1),
-                latitude=40.0,
-                longitude=-74.0,
-                track=45.0,
+                latitude=lat,
+                longitude=lon,
                 distance_nm=50.0,
                 rssi=-5.0 - i,  # -5, -6, -7, -8, -9
             )
@@ -101,14 +115,14 @@ class PolarDataTests(TestCase):
 
     def test_calculate_polar_data_unique_aircraft(self):
         """Test unique aircraft counting in polar data."""
-        # Create multiple sightings for same aircraft
+        # Create multiple sightings for same aircraft at bearing 45 from the receiver
+        lat, lon = _position_at_bearing(45.0)
         for i in range(5):
             AircraftSighting.objects.create(
                 icao_hex="ABC001",  # Same ICAO
                 timestamp=self.now - timedelta(minutes=i),
-                latitude=40.0,
-                longitude=-74.0,
-                track=45.0,
+                latitude=lat,
+                longitude=lon,
                 distance_nm=50.0,
             )
 
@@ -123,12 +137,12 @@ class PolarDataTests(TestCase):
         """Test coverage percentage calculation."""
         # Create sightings in 18 sectors (half coverage)
         for sector in range(0, 180, 10):  # 18 sectors
+            lat, lon = _position_at_bearing(float(sector + 5))  # Middle of sector
             AircraftSighting.objects.create(
                 icao_hex=f"S{sector:03d}",
                 timestamp=self.now - timedelta(hours=1),
-                latitude=40.0,
-                longitude=-74.0,
-                track=float(sector + 5),  # Middle of sector
+                latitude=lat,
+                longitude=lon,
                 distance_nm=50.0,
             )
 
@@ -351,15 +365,15 @@ class SummaryTests(TestCase):
 
     def test_calculate_summary_coverage_stats(self):
         """Test coverage statistics in summary."""
-        # Create sightings in 10 different sectors
+        # Create sightings in 10 different sectors (by bearing from the receiver)
         for sector in range(0, 100, 10):
+            lat, lon = _position_at_bearing(float(sector + 5))
             AircraftSighting.objects.create(
                 icao_hex=f"COV{sector:03d}",
                 timestamp=self.now - timedelta(hours=1),
-                latitude=40.0,
-                longitude=-74.0,
+                latitude=lat,
+                longitude=lon,
                 distance_nm=50.0,
-                track=float(sector + 5),
             )
 
         result = antenna_analytics.calculate_summary(hours=24)
@@ -553,21 +567,21 @@ class EdgeCaseTests(TestCase):
         """Clean up after tests."""
         AircraftSighting.objects.all().delete()
 
-    def test_polar_data_handles_null_track(self):
-        """Test polar data handles sightings without track."""
+    def test_polar_data_handles_null_position(self):
+        """Test polar data skips sightings without a position."""
         AircraftSighting.objects.create(
             icao_hex="NULL01",
             timestamp=self.now - timedelta(hours=1),
-            latitude=40.0,
-            longitude=-74.0,
+            latitude=None,  # No position
+            longitude=None,
             distance_nm=50.0,
-            track=None,  # No track
         )
 
         result = antenna_analytics.calculate_polar_data(hours=24)
 
-        # Should complete without error
+        # Should complete without error and not count the position-less sighting
         self.assertIn("bearing_data", result)
+        self.assertEqual(result["summary"]["total_sightings"], 0)
 
     def test_rssi_data_handles_null_rssi(self):
         """Test RSSI data handles sightings without RSSI."""
@@ -620,14 +634,14 @@ class EdgeCaseTests(TestCase):
 
     def test_polar_sector_boundary_360_to_0(self):
         """Test polar data handles 360/0 degree boundary."""
-        # Create sighting at track 355 (should be in 350-360 sector)
+        # Create sighting at bearing 355 from the receiver (should be in 350-360 sector)
+        lat, lon = _position_at_bearing(355.0)
         AircraftSighting.objects.create(
             icao_hex="BND001",
             timestamp=self.now - timedelta(hours=1),
-            latitude=40.0,
-            longitude=-74.0,
+            latitude=lat,
+            longitude=lon,
             distance_nm=50.0,
-            track=355.0,
         )
 
         result = antenna_analytics.calculate_polar_data(hours=24)
@@ -662,18 +676,15 @@ class TimeRangeTests(TestCase):
         )
 
         # Create sighting outside time range
-        # Note: auto_now_add on timestamp ignores values passed to create(),
-        # so we must use .update() to backdate the record.
-        old_sighting = AircraftSighting.objects.create(
+        # (timestamp is auto_now_add, so it must be moved via update())
+        AircraftSighting.objects.create(
             icao_hex="OUT001",
             latitude=40.0,
             longitude=-74.0,
             distance_nm=50.0,
             track=90.0,
         )
-        AircraftSighting.objects.filter(pk=old_sighting.pk).update(
-            timestamp=self.now - timedelta(hours=48),
-        )
+        AircraftSighting.objects.filter(icao_hex="OUT001").update(timestamp=self.now - timedelta(hours=48))
 
         result = antenna_analytics.calculate_polar_data(hours=24)
 
@@ -692,18 +703,15 @@ class TimeRangeTests(TestCase):
         )
 
         # Create sighting outside time range
-        # Note: auto_now_add on timestamp ignores values passed to create(),
-        # so we must use .update() to backdate the record.
-        old_sighting = AircraftSighting.objects.create(
+        # (timestamp is auto_now_add, so it must be moved via update())
+        AircraftSighting.objects.create(
             icao_hex="OUT001",
             latitude=40.0,
             longitude=-74.0,
             distance_nm=50.0,
             rssi=-5.0,
         )
-        AircraftSighting.objects.filter(pk=old_sighting.pk).update(
-            timestamp=self.now - timedelta(hours=48),
-        )
+        AircraftSighting.objects.filter(icao_hex="OUT001").update(timestamp=self.now - timedelta(hours=48))
 
         result = antenna_analytics.calculate_rssi_data(hours=24)
 
@@ -721,17 +729,14 @@ class TimeRangeTests(TestCase):
         )
 
         # Create sighting outside time range
-        # Note: auto_now_add on timestamp ignores values passed to create(),
-        # so we must use .update() to backdate the record.
-        old_sighting = AircraftSighting.objects.create(
+        # (timestamp is auto_now_add, so it must be moved via update())
+        AircraftSighting.objects.create(
             icao_hex="OUT001",
             latitude=40.0,
             longitude=-74.0,
             distance_nm=50.0,
         )
-        AircraftSighting.objects.filter(pk=old_sighting.pk).update(
-            timestamp=self.now - timedelta(hours=48),
-        )
+        AircraftSighting.objects.filter(icao_hex="OUT001").update(timestamp=self.now - timedelta(hours=48))
 
         result = antenna_analytics.calculate_summary(hours=24)
 

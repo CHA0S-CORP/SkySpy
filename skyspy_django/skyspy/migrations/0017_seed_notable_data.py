@@ -111,17 +111,17 @@ def seed_notable_callsigns(apps, schema_editor):
         },
         {
             "name": "Coast Guard",
-            "pattern_type": "prefix",
-            "pattern": "USCG",
-            "category": "government",
+            "pattern_type": "regex",
+            "pattern": "^USCG|^COAST",
+            "category": "law_enforcement",
             "description": "US Coast Guard",
-            "rarity_score": 5,
+            "rarity_score": 6,
         },
         {
             "name": "Life Flight",
             "pattern_type": "prefix",
             "pattern": "LIFE",
-            "category": "emergency",
+            "category": "air_ambulance",
             "description": "Air ambulance / HEMS",
             "rarity_score": 4,
         },
@@ -129,7 +129,7 @@ def seed_notable_callsigns(apps, schema_editor):
             "name": "Medevac",
             "pattern_type": "prefix",
             "pattern": "MEDEVAC",
-            "category": "emergency",
+            "category": "air_ambulance",
             "description": "Medical evacuation flight",
             "rarity_score": 5,
         },
@@ -210,11 +210,30 @@ def seed_notable_registrations(apps, schema_editor):
         },
         {
             "name": "FAA Flight Check",
-            "pattern_type": "prefix",
-            "pattern": "N",
+            # Two-digit N-numbers are almost exclusively FAA-owned aircraft
+            # (flight inspection fleet: N58, N71, N85, ...). A bare "N" prefix
+            # would match every US-registered aircraft.
+            "pattern_type": "regex",
+            "pattern": "^N[0-9]{2}$",
             "category": "government",
             "description": "FAA flight inspection aircraft",
             "rarity_score": 5,
+        },
+        {
+            "name": "US Government (N1xx)",
+            "pattern_type": "regex",
+            "pattern": "^N1[0-9]{2}$",
+            "category": "government",
+            "description": "US government executive fleet registration block",
+            "rarity_score": 9,
+        },
+        {
+            "name": "Boeing Test (N7xx)",
+            "pattern_type": "regex",
+            "pattern": "^N7[0-9]{2}",
+            "category": "test_flight",
+            "description": "Boeing test/delivery registration block",
+            "rarity_score": 7,
         },
         {
             "name": "NASA",
@@ -473,6 +492,15 @@ def seed_rare_aircraft_types(apps, schema_editor):
         {
             "type_code": "A388",
             "type_name": "Airbus A380-800",
+            "manufacturer": "Airbus",
+            "category": "rare_commercial",
+            "description": "Double-deck widebody (production ended)",
+            "rarity_score": 5,
+        },
+        {
+            # Alias: some feeds report the family code instead of A388
+            "type_code": "A380",
+            "type_name": "Airbus A380",
             "manufacturer": "Airbus",
             "category": "rare_commercial",
             "description": "Double-deck widebody (production ended)",

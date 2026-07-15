@@ -12,6 +12,19 @@ from rest_framework import permissions
 logger = logging.getLogger(__name__)
 
 
+def _scope_covers_permission(scopes, permission):
+    """Check whether an API key scope list covers a permission string.
+
+    Scopes store full permission strings (e.g. 'alerts.view'), validated
+    against ALL_PERMISSIONS at key creation. A feature's manage_all scope
+    implies every action on that feature.
+    """
+    if permission in scopes:
+        return True
+    feature = permission.partition(".")[0]
+    return f"{feature}.manage_all" in scopes
+
+
 class IsAuthenticatedOrPublic(permissions.BasePermission):
     """
     Allow access if user is authenticated OR system is in public mode.
@@ -85,6 +98,7 @@ class FeatureBasedPermission(permissions.BasePermission):
         "MapViewSet": "aircraft",
         "NotamViewSet": "aircraft",
         "MobileViewSet": "aircraft",
+        "WatchListViewSet": "aircraft",
         # User management
         "UserViewSet": "users",
         "SkyspyUserViewSet": "users",
@@ -110,12 +124,10 @@ class FeatureBasedPermission(permissions.BasePermission):
         """Check if user has access to this feature."""
         from skyspy.models.auth import FeatureAccess
 
-        # Validate API key scopes if present
+        # Validate API key scopes if present (empty scopes = all user permissions)
         api_key_scopes = getattr(request, "api_key_scopes", None)
-        if api_key_scopes is not None:
-            required_scope = self._get_required_scope(view)
-            if required_scope and required_scope not in api_key_scopes:
-                return False
+        if api_key_scopes and not self._scope_allows(request, view, api_key_scopes):
+            return False
 
         auth_mode = getattr(settings, "AUTH_MODE", "hybrid")
 
@@ -180,10 +192,38 @@ class FeatureBasedPermission(permissions.BasePermission):
         view_name = view.__class__.__name__
         return self.FEATURE_MAP.get(view_name)
 
-    def _get_required_scope(self, view):
-        """Get the required API key scope for this view from FEATURE_MAP."""
-        view_name = view.__class__.__name__
-        return self.FEATURE_MAP.get(view_name)
+    def _scope_allows(self, request, view, scopes):
+        """Check whether an API key's scopes permit this request.
+
+        Scopes store full permission strings (e.g. 'alerts.view'), not bare
+        feature names. Views not present in FEATURE_MAP are denied for scoped
+        keys (default-deny) rather than skipping the check.
+        """
+        feature = self._get_feature(view)
+        if not feature:
+            logger.warning(
+                f"API key scope check: view {view.__class__.__name__} not in FEATURE_MAP - denying scoped key"
+            )
+            return False
+
+        feature_scopes = {s for s in scopes if s.partition(".")[0] == feature}
+        if not feature_scopes:
+            return False
+
+        # Any scope on the feature implies read access
+        if request.method in permissions.SAFE_METHODS:
+            return True
+
+        # Writes require a scope covering the specific action
+        required = {
+            self._get_required_permission(request, feature, is_write=True),
+            f"{feature}.manage",
+            f"{feature}.manage_all",
+        }
+        action = getattr(view, "action", None)
+        if action:
+            required.add(f"{feature}.{action}")
+        return bool(required & feature_scopes)
 
     def _check_access_level(self, request, access_level, feature, is_write):
         """Check if request meets the access level requirement."""
@@ -316,15 +356,11 @@ class HasPermission(permissions.BasePermission):
         # Get required permissions from view or class
         required = getattr(view, "required_permissions", None) or self.required_permissions
 
-        # Validate API key scopes if present
+        # Validate API key scopes if present (empty scopes = all user permissions)
         api_key_scopes = getattr(request, "api_key_scopes", None)
-        if api_key_scopes is not None and required:
-            # Check if any required permission's feature is in API key scopes
-            for perm in required:
-                # Extract feature from permission (e.g., 'alerts.create' -> 'alerts')
-                feature = perm.split(".")[0] if "." in perm else perm
-                if feature not in api_key_scopes:
-                    return False
+        # Scopes store full permission strings (e.g. 'alerts.create')
+        if api_key_scopes and required and not all(_scope_covers_permission(api_key_scopes, p) for p in required):
+            return False
 
         # Check if any required permissions are admin-related (always enforce)
         always_enforce = any(perm in self.ALWAYS_ENFORCE_PERMISSIONS for perm in required) if required else False
@@ -379,20 +415,12 @@ class HasAnyPermission(permissions.BasePermission):
         # Get required permissions from view or class
         required = getattr(view, "required_permissions", None) or self.required_permissions
 
-        # Validate API key scopes if present
-        # For HasAnyPermission, check if at least one required permission's feature is in scopes
+        # Validate API key scopes if present (empty scopes = all user permissions)
+        # For HasAnyPermission, at least one required permission must be covered
         api_key_scopes = getattr(request, "api_key_scopes", None)
-        if api_key_scopes is not None and required:
-            # Check if any required permission's feature is in API key scopes
-            has_valid_scope = False
-            for perm in required:
-                # Extract feature from permission (e.g., 'alerts.create' -> 'alerts')
-                feature = perm.split(".")[0] if "." in perm else perm
-                if feature in api_key_scopes:
-                    has_valid_scope = True
-                    break
-            if not has_valid_scope:
-                return False
+        # Scopes store full permission strings (e.g. 'alerts.create')
+        if api_key_scopes and required and not any(_scope_covers_permission(api_key_scopes, p) for p in required):
+            return False
 
         # Check if any required permissions are admin-related (always enforce)
         always_enforce = any(perm in self.ALWAYS_ENFORCE_PERMISSIONS for perm in required) if required else False

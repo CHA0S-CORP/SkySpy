@@ -365,7 +365,8 @@ def decode_message_text(text: str, label: str = None, libacars_data: dict = None
         text: Message text content
         label: ACARS message label
         libacars_data: Pre-decoded data from upstream (if available)
-        direction: Message direction (0=unknown, 1=air-to-ground, 2=ground-to-air)
+        direction: Message direction, matching MsgDir
+            (0=unknown, 1=uplink/ground-to-air, 2=downlink/air-to-ground)
 
     Returns:
         Dictionary with decoded message fields
@@ -656,12 +657,13 @@ def enrich_acars_message(msg: dict, *, decode_text: bool = False) -> dict:
         text = msg.get("text")
         libacars_data = msg.get("libacars")
         if text:
-            # Get message direction if available (1=uplink/air-to-ground, 2=downlink/ground-to-air)
+            # Get message direction if available, matching MsgDir
+            # (1=GND2AIR/uplink, 2=AIR2GND/downlink)
             direction = 0
             if msg.get("fromaddr"):
-                direction = 1  # Air-to-ground (has sender address)
+                direction = 2  # Downlink (air-to-ground): aircraft is the sender
             elif msg.get("toaddr"):
-                direction = 2  # Ground-to-air (has recipient address)
+                direction = 1  # Uplink (ground-to-air): aircraft is the recipient
 
             decoded_text = decode_message_text(text, label, libacars_data, direction)
             if decoded_text:

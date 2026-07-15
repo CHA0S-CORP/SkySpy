@@ -34,6 +34,10 @@ from skyspy.models import (
     NotificationLog,
     SafetyEvent,
 )
+from skyspy.models.auth import APIKey, FeatureAccess
+from skyspy.models.notifications import NotificationChannel, NotificationTemplate, UserNotificationPreference
+from skyspy.models.stats import DailyStats, PersonalRecord, RareSighting, SightingStreak
+from skyspy.models.watch_list import WatchedAircraft
 
 
 def generate_icao_hex():
@@ -708,3 +712,233 @@ class NotificationLogFactory(DjangoModelFactory):
     callsign = factory.LazyFunction(generate_callsign)
     message = factory.LazyFunction(lambda: "Test notification message")
     details = factory.LazyFunction(lambda: {"test": True})
+
+
+class NotificationChannelFactory(DjangoModelFactory):
+    """Factory for NotificationChannel model."""
+
+    class Meta:
+        model = NotificationChannel
+
+    name = factory.LazyFunction(lambda: f"Channel {random.randint(1, 1000)}")
+    channel_type = factory.LazyFunction(
+        lambda: random.choice(["discord", "slack", "webhook", "ntfy", "telegram", "email"])
+    )
+    apprise_url = factory.LazyAttribute(
+        lambda o: {
+            "discord": "discord://webhook_id/webhook_token",
+            "slack": "slack://token_a/token_b/token_c/#channel",
+            "webhook": "json://localhost:8080/notify",
+            "ntfy": "ntfy://ntfy.sh/test-topic",
+            "telegram": "tgram://bot_token/chat_id",
+            "email": "mailto://user:pass@gmail.com",
+        }.get(o.channel_type, "json://localhost:8080/notify")
+    )
+    description = factory.LazyAttribute(lambda o: f"Test {o.channel_type} channel")
+    supports_rich = factory.LazyAttribute(lambda o: o.channel_type in ("discord", "slack"))
+    is_global = True
+    owner = None
+    enabled = True
+    verified = False
+
+    class Params:
+        # User-owned private channel
+        private = factory.Trait(
+            is_global=False,
+        )
+        # Verified channel
+        verified_channel = factory.Trait(
+            verified=True,
+            last_success=factory.LazyFunction(timezone.now),
+        )
+        # Disabled channel
+        disabled = factory.Trait(
+            enabled=False,
+        )
+
+
+class NotificationTemplateFactory(DjangoModelFactory):
+    """Factory for NotificationTemplate model."""
+
+    class Meta:
+        model = NotificationTemplate
+
+    name = factory.LazyFunction(lambda: f"template-{random.randint(1, 10000)}")
+    description = "Test notification template"
+    title_template = "Alert: {rule_name}"
+    body_template = "{callsign} at {altitude}ft triggered {rule_name}"
+    event_type = None
+    priority = None
+    is_default = False
+
+    class Params:
+        # Default template
+        default = factory.Trait(
+            name="default",
+            is_default=True,
+        )
+        # Alert-specific
+        alert = factory.Trait(
+            event_type="alert",
+        )
+        # Critical priority
+        critical = factory.Trait(
+            priority="critical",
+            title_template="CRITICAL: {rule_name}",
+            body_template="EMERGENCY: {callsign} at {altitude}ft - {rule_name}",
+        )
+
+
+class UserNotificationPreferenceFactory(DjangoModelFactory):
+    """Factory for UserNotificationPreference model."""
+
+    class Meta:
+        model = UserNotificationPreference
+
+    channel = factory.SubFactory(NotificationChannelFactory)
+    min_priority = "info"
+    event_types = factory.LazyFunction(list)
+    quiet_hours_start = None
+    quiet_hours_end = None
+    critical_overrides_quiet = True
+    timezone = "UTC"
+    enabled = True
+
+    class Params:
+        # Warning-only preference
+        warnings_only = factory.Trait(
+            min_priority="warning",
+        )
+        # With quiet hours
+        with_quiet_hours = factory.Trait(
+            quiet_hours_start=factory.LazyFunction(lambda: __import__("datetime").time(22, 0)),
+            quiet_hours_end=factory.LazyFunction(lambda: __import__("datetime").time(8, 0)),
+        )
+
+
+class WatchedAircraftFactory(DjangoModelFactory):
+    """Factory for WatchedAircraft model."""
+
+    class Meta:
+        model = WatchedAircraft
+
+    hex = factory.LazyFunction(generate_icao_hex)
+    callsign = factory.LazyFunction(generate_callsign)
+    registration = factory.LazyFunction(generate_n_number)
+    type_code = factory.LazyFunction(lambda: random.choice(["B738", "A320", "C172", "B77W", "E75L"]))
+    notes = ""
+
+
+class DailyStatsFactory(DjangoModelFactory):
+    """Factory for DailyStats model."""
+
+    class Meta:
+        model = DailyStats
+
+    date = factory.LazyFunction(lambda: timezone.now().date())
+    unique_aircraft = fuzzy.FuzzyInteger(50, 500)
+    new_aircraft = fuzzy.FuzzyInteger(0, 50)
+    total_sessions = fuzzy.FuzzyInteger(50, 500)
+    total_positions = fuzzy.FuzzyInteger(5000, 50000)
+    military_count = fuzzy.FuzzyInteger(0, 20)
+    max_distance_nm = fuzzy.FuzzyFloat(50.0, 250.0)
+    max_altitude = fuzzy.FuzzyInteger(30000, 45000)
+    max_speed = fuzzy.FuzzyFloat(400.0, 600.0)
+    aircraft_types = factory.LazyFunction(lambda: {"B738": 45, "A320": 30, "C172": 10})
+    operators = factory.LazyFunction(lambda: {"United Airlines": 20, "Delta Air Lines": 15})
+
+
+class PersonalRecordFactory(DjangoModelFactory):
+    """Factory for PersonalRecord model."""
+
+    class Meta:
+        model = PersonalRecord
+
+    record_type = factory.LazyFunction(
+        lambda: random.choice(["max_distance", "max_altitude", "max_speed", "longest_session", "closest_approach"])
+    )
+    icao_hex = factory.LazyFunction(generate_icao_hex)
+    callsign = factory.LazyFunction(generate_callsign)
+    aircraft_type = factory.LazyFunction(lambda: random.choice(["B738", "A320", "B77W", "C172"]))
+    registration = factory.LazyFunction(generate_n_number)
+    operator = factory.LazyFunction(lambda: random.choice(["United Airlines", "Delta Air Lines", "Private"]))
+    value = factory.LazyAttribute(
+        lambda o: {
+            "max_distance": random.uniform(100, 250),
+            "max_altitude": random.randint(35000, 45000),
+            "max_speed": random.uniform(400, 600),
+            "longest_session": random.uniform(60, 600),
+            "closest_approach": random.uniform(0.1, 2.0),
+        }.get(o.record_type, 100.0)
+    )
+    achieved_at = factory.LazyFunction(timezone.now)
+
+
+class RareSightingFactory(DjangoModelFactory):
+    """Factory for RareSighting model."""
+
+    class Meta:
+        model = RareSighting
+
+    rarity_type = factory.LazyFunction(
+        lambda: random.choice(["first_hex", "first_type", "rare_type", "military", "government"])
+    )
+    icao_hex = factory.LazyFunction(generate_icao_hex)
+    callsign = factory.LazyFunction(generate_callsign)
+    registration = factory.LazyFunction(generate_n_number)
+    aircraft_type = factory.LazyFunction(lambda: random.choice(["B738", "C17", "A10", "B2"]))
+    sighted_at = factory.LazyFunction(timezone.now)
+
+
+class SightingStreakFactory(DjangoModelFactory):
+    """Factory for SightingStreak model."""
+
+    class Meta:
+        model = SightingStreak
+
+    streak_type = factory.Iterator(
+        ["any_sighting", "military", "unique_new", "rare_type", "high_altitude", "long_range"]
+    )
+    current_streak_days = fuzzy.FuzzyInteger(0, 30)
+    current_streak_start = factory.LazyFunction(lambda: timezone.now().date() - timedelta(days=random.randint(1, 30)))
+    last_qualifying_date = factory.LazyFunction(lambda: timezone.now().date())
+    best_streak_days = fuzzy.FuzzyInteger(5, 60)
+    best_streak_start = factory.LazyFunction(lambda: (timezone.now() - timedelta(days=90)).date())
+    best_streak_end = factory.LazyFunction(lambda: (timezone.now() - timedelta(days=30)).date())
+
+
+class APIKeyFactory(DjangoModelFactory):
+    """Factory for APIKey model."""
+
+    class Meta:
+        model = APIKey
+
+    name = factory.LazyFunction(lambda: f"Test API Key {random.randint(1, 1000)}")
+    key_hash = factory.LazyFunction(
+        lambda: __import__("hashlib").sha256(f"sk_test_{random.randint(1, 999999)}".encode()).hexdigest()
+    )
+    key_prefix = factory.LazyFunction(lambda: f"sk_test_{random.randint(10, 99)}")
+    scopes = factory.LazyFunction(list)
+    is_active = True
+    expires_at = None
+
+    class Params:
+        # Expired key
+        expired = factory.Trait(
+            expires_at=factory.LazyFunction(lambda: timezone.now() - timedelta(days=1)),
+        )
+        # Inactive key
+        inactive = factory.Trait(
+            is_active=False,
+        )
+
+
+class FeatureAccessFactory(DjangoModelFactory):
+    """Factory for FeatureAccess model."""
+
+    class Meta:
+        model = FeatureAccess
+
+    feature = factory.Iterator(["aircraft", "alerts", "safety", "audio", "stats", "history", "admin"])
+    read_access = "public"
+    write_access = "authenticated"

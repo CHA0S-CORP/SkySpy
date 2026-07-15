@@ -12,39 +12,31 @@ Tests for:
 
 from datetime import timedelta
 
+import pytest
 from django.utils import timezone
 from rest_framework import status
-from rest_framework.test import APIClient, APITestCase
 
 from skyspy.models import AircraftSession, AircraftSighting
 
 
-class SightingViewSetTests(APITestCase):
+@pytest.mark.django_db
+class TestSightingViewSetList:
     """Tests for the sightings list endpoint."""
 
-    def setUp(self):
-        """Set up test fixtures."""
-        self.client = APIClient()
-        AircraftSighting.objects.all().delete()
-
-    def tearDown(self):
-        """Clean up after tests."""
-        AircraftSighting.objects.all().delete()
-
-    def test_list_returns_200(self):
+    def test_list_returns_200(self, api_client):
         """Test that list returns 200 OK."""
-        response = self.client.get("/api/v1/sightings/")
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        response = api_client.get("/api/v1/sightings/")
+        assert response.status_code == status.HTTP_200_OK
 
-    def test_list_empty(self):
+    def test_list_empty(self, api_client):
         """Test list response when no sightings exist."""
-        response = self.client.get("/api/v1/sightings/")
+        response = api_client.get("/api/v1/sightings/")
         data = response.json()
 
         # Should have results key (from pagination)
-        self.assertIn("results", data)
+        assert "results" in data
 
-    def test_list_with_sightings(self):
+    def test_list_with_sightings(self, api_client):
         """Test list with existing sightings."""
         AircraftSighting.objects.create(
             icao_hex="ABC123",
@@ -65,12 +57,12 @@ class SightingViewSetTests(APITestCase):
             vertical_rate=-500,
         )
 
-        response = self.client.get("/api/v1/sightings/")
+        response = api_client.get("/api/v1/sightings/")
         data = response.json()
 
-        self.assertGreater(len(data["results"]), 0)
+        assert len(data["results"]) > 0
 
-    def test_list_sighting_structure(self):
+    def test_list_sighting_structure(self, api_client):
         """Test that sightings have expected fields."""
         AircraftSighting.objects.create(
             icao_hex="ABC123",
@@ -85,7 +77,7 @@ class SightingViewSetTests(APITestCase):
             squawk="1234",
         )
 
-        response = self.client.get("/api/v1/sightings/")
+        response = api_client.get("/api/v1/sightings/")
         sighting = response.json()["results"][0]
 
         expected_fields = [
@@ -103,9 +95,9 @@ class SightingViewSetTests(APITestCase):
             "squawk",
         ]
         for field in expected_fields:
-            self.assertIn(field, sighting, f"Missing field: {field}")
+            assert field in sighting, f"Missing field: {field}"
 
-    def test_list_time_filter(self):
+    def test_list_time_filter(self, api_client):
         """Test filtering by time range."""
         # Create old sighting
         old_sighting = AircraftSighting.objects.create(
@@ -123,59 +115,59 @@ class SightingViewSetTests(APITestCase):
             longitude=-122.3,
         )
 
-        response = self.client.get("/api/v1/sightings/?hours=24")
+        response = api_client.get("/api/v1/sightings/?hours=24")
         data = response.json()
 
         icao_list = [s["icao_hex"] for s in data["results"]]
-        self.assertIn("NEW123", icao_list)
-        self.assertNotIn("OLD123", icao_list)
+        assert "NEW123" in icao_list
+        assert "OLD123" not in icao_list
 
-    def test_list_filter_by_icao(self):
+    def test_list_filter_by_icao(self, api_client):
         """Test filtering by ICAO hex."""
         AircraftSighting.objects.create(icao_hex="ABC123", latitude=47.5, longitude=-122.3)
         AircraftSighting.objects.create(icao_hex="DEF456", latitude=47.6, longitude=-122.4)
 
-        response = self.client.get("/api/v1/sightings/?icao=ABC123")
+        response = api_client.get("/api/v1/sightings/?icao=ABC123")
         data = response.json()
 
         for sighting in data["results"]:
-            self.assertEqual(sighting["icao_hex"], "ABC123")
+            assert sighting["icao_hex"] == "ABC123"
 
-    def test_list_filter_by_callsign(self):
+    def test_list_filter_by_callsign(self, api_client):
         """Test filtering by callsign (contains)."""
         AircraftSighting.objects.create(icao_hex="A", callsign="UAL123", latitude=47.5, longitude=-122.3)
         AircraftSighting.objects.create(icao_hex="B", callsign="DAL456", latitude=47.6, longitude=-122.4)
 
-        response = self.client.get("/api/v1/sightings/?callsign=UAL")
+        response = api_client.get("/api/v1/sightings/?callsign=UAL")
         data = response.json()
 
         for sighting in data["results"]:
-            self.assertIn("UAL", sighting["callsign"])
+            assert "UAL" in sighting["callsign"]
 
-    def test_list_filter_by_military(self):
+    def test_list_filter_by_military(self, api_client):
         """Test filtering by military status."""
         AircraftSighting.objects.create(icao_hex="A", is_military=True, latitude=47.5, longitude=-122.3)
         AircraftSighting.objects.create(icao_hex="B", is_military=False, latitude=47.6, longitude=-122.4)
 
-        response = self.client.get("/api/v1/sightings/?is_military=true")
+        response = api_client.get("/api/v1/sightings/?is_military=true")
         data = response.json()
 
         for sighting in data["results"]:
-            self.assertTrue(sighting["is_military"])
+            assert sighting["is_military"]
 
-    def test_list_ordered_by_timestamp(self):
+    def test_list_ordered_by_timestamp(self, api_client):
         """Test that sightings are ordered by timestamp descending."""
         AircraftSighting.objects.create(icao_hex="FIRST", latitude=47.5, longitude=-122.3)
         AircraftSighting.objects.create(icao_hex="SECOND", latitude=47.6, longitude=-122.4)
 
-        response = self.client.get("/api/v1/sightings/")
+        response = api_client.get("/api/v1/sightings/")
         data = response.json()
 
         # Most recent should be first
         if len(data["results"]) >= 2:
-            self.assertEqual(data["results"][0]["icao_hex"], "SECOND")
+            assert data["results"][0]["icao_hex"] == "SECOND"
 
-    def test_list_large_result_set(self):
+    def test_list_large_result_set(self, api_client):
         """Test handling of large result sets."""
         for i in range(150):
             AircraftSighting.objects.create(
@@ -184,27 +176,27 @@ class SightingViewSetTests(APITestCase):
                 longitude=-122.3,
             )
 
-        response = self.client.get("/api/v1/sightings/")
+        response = api_client.get("/api/v1/sightings/")
         data = response.json()
 
         # Should return all results with count
-        self.assertIn("results", data)
-        self.assertIn("count", data)
-        self.assertEqual(data["count"], 150)
+        assert "results" in data
+        assert "count" in data
+        assert data["count"] == 150
 
-    def test_list_read_only(self):
+    def test_list_read_only(self, api_client):
         """Test that POST is not allowed."""
-        response = self.client.post("/api/v1/sightings/", {"icao_hex": "TEST"}, format="json")
-        self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+        response = api_client.post("/api/v1/sightings/", {"icao_hex": "TEST"}, format="json")
+        assert response.status_code == status.HTTP_405_METHOD_NOT_ALLOWED
 
 
-class SightingRetrieveTests(APITestCase):
+@pytest.mark.django_db
+class TestSightingRetrieve:
     """Tests for retrieving a single sighting."""
 
-    def setUp(self):
+    @pytest.fixture(autouse=True)
+    def setup_sighting(self):
         """Set up test fixtures."""
-        self.client = APIClient()
-        AircraftSighting.objects.all().delete()
         self.sighting = AircraftSighting.objects.create(
             icao_hex="ABC123",
             callsign="UAL123",
@@ -213,57 +205,45 @@ class SightingRetrieveTests(APITestCase):
             altitude_baro=35000,
         )
 
-    def tearDown(self):
-        """Clean up after tests."""
-        AircraftSighting.objects.all().delete()
-
-    def test_retrieve_existing_sighting(self):
+    def test_retrieve_existing_sighting(self, api_client):
         """Test retrieving an existing sighting."""
-        response = self.client.get(f"/api/v1/sightings/{self.sighting.id}/")
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        response = api_client.get(f"/api/v1/sightings/{self.sighting.id}/")
+        assert response.status_code == status.HTTP_200_OK
 
-    def test_retrieve_sighting_data(self):
+    def test_retrieve_sighting_data(self, api_client):
         """Test that retrieved sighting has correct data."""
-        response = self.client.get(f"/api/v1/sightings/{self.sighting.id}/")
+        response = api_client.get(f"/api/v1/sightings/{self.sighting.id}/")
         data = response.json()
 
-        self.assertEqual(data["icao_hex"], "ABC123")
-        self.assertEqual(data["callsign"], "UAL123")
-        self.assertEqual(data["lat"], 47.5)
-        self.assertEqual(data["lon"], -122.3)
-        self.assertEqual(data["altitude"], 35000)
+        assert data["icao_hex"] == "ABC123"
+        assert data["callsign"] == "UAL123"
+        assert data["lat"] == 47.5
+        assert data["lon"] == -122.3
+        assert data["altitude"] == 35000
 
-    def test_retrieve_nonexistent_sighting(self):
+    def test_retrieve_nonexistent_sighting(self, api_client):
         """Test retrieving non-existent sighting returns 404."""
-        response = self.client.get("/api/v1/sightings/99999/")
-        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        response = api_client.get("/api/v1/sightings/99999/")
+        assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
-class SessionViewSetTests(APITestCase):
+@pytest.mark.django_db
+class TestSessionViewSetList:
     """Tests for the sessions list endpoint."""
 
-    def setUp(self):
-        """Set up test fixtures."""
-        self.client = APIClient()
-        AircraftSession.objects.all().delete()
-
-    def tearDown(self):
-        """Clean up after tests."""
-        AircraftSession.objects.all().delete()
-
-    def test_list_returns_200(self):
+    def test_list_returns_200(self, api_client):
         """Test that list returns 200 OK."""
-        response = self.client.get("/api/v1/sessions/")
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        response = api_client.get("/api/v1/sessions/")
+        assert response.status_code == status.HTTP_200_OK
 
-    def test_list_empty(self):
+    def test_list_empty(self, api_client):
         """Test list response when no sessions exist."""
-        response = self.client.get("/api/v1/sessions/")
+        response = api_client.get("/api/v1/sessions/")
         data = response.json()
 
-        self.assertIn("sessions", data)
+        assert "sessions" in data
 
-    def test_list_with_sessions(self):
+    def test_list_with_sessions(self, api_client):
         """Test list with existing sessions."""
         AircraftSession.objects.create(
             icao_hex="ABC123",
@@ -275,12 +255,12 @@ class SessionViewSetTests(APITestCase):
             max_distance_nm=50.0,
         )
 
-        response = self.client.get("/api/v1/sessions/")
+        response = api_client.get("/api/v1/sessions/")
         data = response.json()
 
-        self.assertGreater(len(data["sessions"]), 0)
+        assert len(data["sessions"]) > 0
 
-    def test_list_session_structure(self):
+    def test_list_session_structure(self, api_client):
         """Test that sessions have expected fields."""
         now = timezone.now()
         session = AircraftSession.objects.create(
@@ -302,7 +282,7 @@ class SessionViewSetTests(APITestCase):
         session.last_seen = now
         session.save()
 
-        response = self.client.get("/api/v1/sessions/")
+        response = api_client.get("/api/v1/sessions/")
         sess = response.json()["sessions"][0]
 
         expected_fields = [
@@ -324,9 +304,9 @@ class SessionViewSetTests(APITestCase):
             "type",
         ]
         for field in expected_fields:
-            self.assertIn(field, sess, f"Missing field: {field}")
+            assert field in sess, f"Missing field: {field}"
 
-    def test_list_duration_calculation(self):
+    def test_list_duration_calculation(self, api_client):
         """Test that duration is calculated correctly."""
         now = timezone.now()
         session = AircraftSession.objects.create(
@@ -337,13 +317,13 @@ class SessionViewSetTests(APITestCase):
         session.last_seen = now
         session.save()
 
-        response = self.client.get("/api/v1/sessions/")
+        response = api_client.get("/api/v1/sessions/")
         sess = response.json()["sessions"][0]
 
         # Duration should be approximately 30 minutes
-        self.assertAlmostEqual(sess["duration_min"], 30.0, delta=1.0)
+        assert abs(sess["duration_min"] - 30.0) <= 1.0
 
-    def test_list_time_filter(self):
+    def test_list_time_filter(self, api_client):
         """Test filtering by time range."""
         # Create old session - use update() to bypass auto_now
         old_session = AircraftSession.objects.create(
@@ -358,59 +338,59 @@ class SessionViewSetTests(APITestCase):
             total_positions=50,
         )
 
-        response = self.client.get("/api/v1/sessions/?hours=24")
+        response = api_client.get("/api/v1/sessions/?hours=24")
         data = response.json()
 
         icao_list = [s["icao_hex"] for s in data["sessions"]]
-        self.assertIn("NEW123", icao_list)
-        self.assertNotIn("OLD123", icao_list)
+        assert "NEW123" in icao_list
+        assert "OLD123" not in icao_list
 
-    def test_list_filter_military_only(self):
+    def test_list_filter_military_only(self, api_client):
         """Test filtering for military only."""
         AircraftSession.objects.create(icao_hex="MIL001", is_military=True)
         AircraftSession.objects.create(icao_hex="CIV001", is_military=False)
 
-        response = self.client.get("/api/v1/sessions/?military_only=true")
+        response = api_client.get("/api/v1/sessions/?military_only=true")
         data = response.json()
 
         for session in data["sessions"]:
-            self.assertTrue(session["is_military"])
+            assert session["is_military"]
 
-    def test_list_filter_by_icao(self):
+    def test_list_filter_by_icao(self, api_client):
         """Test filtering by ICAO hex."""
         AircraftSession.objects.create(icao_hex="ABC123")
         AircraftSession.objects.create(icao_hex="DEF456")
 
-        response = self.client.get("/api/v1/sessions/?icao_hex=ABC123")
+        response = api_client.get("/api/v1/sessions/?icao_hex=ABC123")
         data = response.json()
 
         for session in data["sessions"]:
-            self.assertEqual(session["icao_hex"], "ABC123")
+            assert session["icao_hex"] == "ABC123"
 
-    def test_list_ordered_by_last_seen(self):
+    def test_list_ordered_by_last_seen(self, api_client):
         """Test that sessions are ordered by last_seen descending."""
         AircraftSession.objects.create(icao_hex="FIRST")
         AircraftSession.objects.create(icao_hex="SECOND")
 
-        response = self.client.get("/api/v1/sessions/")
+        response = api_client.get("/api/v1/sessions/")
         data = response.json()
 
         if len(data["sessions"]) >= 2:
-            self.assertEqual(data["sessions"][0]["icao_hex"], "SECOND")
+            assert data["sessions"][0]["icao_hex"] == "SECOND"
 
-    def test_list_read_only(self):
+    def test_list_read_only(self, api_client):
         """Test that POST is not allowed."""
-        response = self.client.post("/api/v1/sessions/", {"icao_hex": "TEST"}, format="json")
-        self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+        response = api_client.post("/api/v1/sessions/", {"icao_hex": "TEST"}, format="json")
+        assert response.status_code == status.HTTP_405_METHOD_NOT_ALLOWED
 
 
-class SessionRetrieveTests(APITestCase):
+@pytest.mark.django_db
+class TestSessionRetrieve:
     """Tests for retrieving a single session."""
 
-    def setUp(self):
+    @pytest.fixture(autouse=True)
+    def setup_session(self):
         """Set up test fixtures."""
-        self.client = APIClient()
-        AircraftSession.objects.all().delete()
         self.session = AircraftSession.objects.create(
             icao_hex="ABC123",
             callsign="UAL123",
@@ -418,53 +398,39 @@ class SessionRetrieveTests(APITestCase):
             max_altitude=35000,
         )
 
-    def tearDown(self):
-        """Clean up after tests."""
-        AircraftSession.objects.all().delete()
-
-    def test_retrieve_existing_session(self):
+    def test_retrieve_existing_session(self, api_client):
         """Test retrieving an existing session."""
-        response = self.client.get(f"/api/v1/sessions/{self.session.id}/")
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        response = api_client.get(f"/api/v1/sessions/{self.session.id}/")
+        assert response.status_code == status.HTTP_200_OK
 
-    def test_retrieve_session_data(self):
+    def test_retrieve_session_data(self, api_client):
         """Test that retrieved session has correct data."""
-        response = self.client.get(f"/api/v1/sessions/{self.session.id}/")
+        response = api_client.get(f"/api/v1/sessions/{self.session.id}/")
         data = response.json()
 
-        self.assertEqual(data["icao_hex"], "ABC123")
-        self.assertEqual(data["callsign"], "UAL123")
-        self.assertEqual(data["positions"], 100)
-        self.assertEqual(data["max_alt"], 35000)
+        assert data["icao_hex"] == "ABC123"
+        assert data["callsign"] == "UAL123"
+        assert data["positions"] == 100
+        assert data["max_alt"] == 35000
 
-    def test_retrieve_nonexistent_session(self):
+    def test_retrieve_nonexistent_session(self, api_client):
         """Test retrieving non-existent session returns 404."""
-        response = self.client.get("/api/v1/sessions/99999/")
-        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        response = api_client.get("/api/v1/sessions/99999/")
+        assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
-class HistoryStatsViewTests(APITestCase):
+@pytest.mark.django_db
+class TestHistoryStatsView:
     """Tests for the history stats endpoint."""
 
-    def setUp(self):
-        """Set up test fixtures."""
-        self.client = APIClient()
-        AircraftSighting.objects.all().delete()
-        AircraftSession.objects.all().delete()
-
-    def tearDown(self):
-        """Clean up after tests."""
-        AircraftSighting.objects.all().delete()
-        AircraftSession.objects.all().delete()
-
-    def test_stats_returns_200(self):
+    def test_stats_returns_200(self, api_client):
         """Test that stats returns 200 OK."""
-        response = self.client.get("/api/v1/history/stats/")
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        response = api_client.get("/api/v1/history/stats/")
+        assert response.status_code == status.HTTP_200_OK
 
-    def test_stats_response_structure(self):
+    def test_stats_response_structure(self, api_client):
         """Test that stats response has expected fields."""
-        response = self.client.get("/api/v1/history/stats/")
+        response = api_client.get("/api/v1/history/stats/")
         data = response.json()
 
         expected_fields = [
@@ -482,18 +448,18 @@ class HistoryStatsViewTests(APITestCase):
             "max_speed",
         ]
         for field in expected_fields:
-            self.assertIn(field, data, f"Missing field: {field}")
+            assert field in data, f"Missing field: {field}"
 
-    def test_stats_empty(self):
+    def test_stats_empty(self, api_client):
         """Test stats with no data."""
-        response = self.client.get("/api/v1/history/stats/")
+        response = api_client.get("/api/v1/history/stats/")
         data = response.json()
 
-        self.assertEqual(data["total_sightings"], 0)
-        self.assertEqual(data["total_sessions"], 0)
-        self.assertEqual(data["unique_aircraft"], 0)
+        assert data["total_sightings"] == 0
+        assert data["total_sessions"] == 0
+        assert data["unique_aircraft"] == 0
 
-    def test_stats_with_data(self):
+    def test_stats_with_data(self, api_client):
         """Test stats with sightings and sessions."""
         # Create sightings
         AircraftSighting.objects.create(
@@ -517,15 +483,15 @@ class HistoryStatsViewTests(APITestCase):
         AircraftSession.objects.create(icao_hex="ABC123", is_military=True)
         AircraftSession.objects.create(icao_hex="DEF456", is_military=False)
 
-        response = self.client.get("/api/v1/history/stats/")
+        response = api_client.get("/api/v1/history/stats/")
         data = response.json()
 
-        self.assertEqual(data["total_sightings"], 2)
-        self.assertEqual(data["total_sessions"], 2)
-        self.assertEqual(data["unique_aircraft"], 2)
-        self.assertEqual(data["military_sessions"], 1)  # One military session (ABC123)
+        assert data["total_sightings"] == 2
+        assert data["total_sessions"] == 2
+        assert data["unique_aircraft"] == 2
+        assert data["military_sessions"] == 1  # One military session (ABC123)
 
-    def test_stats_calculations(self):
+    def test_stats_calculations(self, api_client):
         """Test that stats calculations are correct."""
         AircraftSighting.objects.create(
             icao_hex="A",
@@ -544,23 +510,23 @@ class HistoryStatsViewTests(APITestCase):
             distance_nm=20.0,
         )
 
-        response = self.client.get("/api/v1/history/stats/")
+        response = api_client.get("/api/v1/history/stats/")
         data = response.json()
 
         # Average altitude should be 35000
-        self.assertEqual(data["avg_altitude"], 35000)
-        self.assertEqual(data["max_altitude"], 40000)
-        self.assertEqual(data["min_altitude"], 30000)
+        assert data["avg_altitude"] == 35000
+        assert data["max_altitude"] == 40000
+        assert data["min_altitude"] == 30000
 
         # Average speed should be 450
-        self.assertEqual(data["avg_speed"], 450)
-        self.assertEqual(data["max_speed"], 500)
+        assert data["avg_speed"] == 450
+        assert data["max_speed"] == 500
 
         # Average distance should be 15
-        self.assertEqual(data["avg_distance_nm"], 15.0)
-        self.assertEqual(data["max_distance_nm"], 20.0)
+        assert data["avg_distance_nm"] == 15.0
+        assert data["max_distance_nm"] == 20.0
 
-    def test_stats_time_filter(self):
+    def test_stats_time_filter(self, api_client):
         """Test that stats respect time filter."""
         # Create old sighting
         old_sighting = AircraftSighting.objects.create(icao_hex="OLD", latitude=47.5, longitude=-122.3)
@@ -570,58 +536,50 @@ class HistoryStatsViewTests(APITestCase):
         # Create recent sighting
         AircraftSighting.objects.create(icao_hex="NEW", latitude=47.6, longitude=-122.4)
 
-        response = self.client.get("/api/v1/history/stats/?hours=24")
+        response = api_client.get("/api/v1/history/stats/?hours=24")
         data = response.json()
 
-        self.assertEqual(data["total_sightings"], 1)
-        self.assertEqual(data["unique_aircraft"], 1)
+        assert data["total_sightings"] == 1
+        assert data["unique_aircraft"] == 1
 
 
-class HistoryTrendsViewTests(APITestCase):
+@pytest.mark.django_db
+class TestHistoryTrendsView:
     """Tests for the history trends endpoint."""
 
-    def setUp(self):
-        """Set up test fixtures."""
-        self.client = APIClient()
-        AircraftSighting.objects.all().delete()
-
-    def tearDown(self):
-        """Clean up after tests."""
-        AircraftSighting.objects.all().delete()
-
-    def test_trends_returns_200(self):
+    def test_trends_returns_200(self, api_client):
         """Test that trends returns 200 OK."""
-        response = self.client.get("/api/v1/history/trends/")
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        response = api_client.get("/api/v1/history/trends/")
+        assert response.status_code == status.HTTP_200_OK
 
-    def test_trends_response_structure(self):
+    def test_trends_response_structure(self, api_client):
         """Test that trends response has expected structure."""
-        response = self.client.get("/api/v1/history/trends/")
+        response = api_client.get("/api/v1/history/trends/")
         data = response.json()
 
-        self.assertIn("intervals", data)
-        self.assertIn("interval_type", data)
-        self.assertIn("time_range_hours", data)
-        self.assertIn("summary", data)
+        assert "intervals" in data
+        assert "interval_type" in data
+        assert "time_range_hours" in data
+        assert "summary" in data
 
-    def test_trends_summary_structure(self):
+    def test_trends_summary_structure(self, api_client):
         """Test that trends summary has expected fields."""
-        response = self.client.get("/api/v1/history/trends/")
+        response = api_client.get("/api/v1/history/trends/")
         summary = response.json()["summary"]
 
         expected_fields = ["total_unique_aircraft", "peak_concurrent", "peak_interval", "total_intervals"]
         for field in expected_fields:
-            self.assertIn(field, summary, f"Missing field: {field}")
+            assert field in summary, f"Missing field: {field}"
 
-    def test_trends_empty(self):
+    def test_trends_empty(self, api_client):
         """Test trends with no data."""
-        response = self.client.get("/api/v1/history/trends/")
+        response = api_client.get("/api/v1/history/trends/")
         data = response.json()
 
-        self.assertEqual(data["intervals"], [])
-        self.assertEqual(data["summary"]["total_unique_aircraft"], 0)
+        assert data["intervals"] == []
+        assert data["summary"]["total_unique_aircraft"] == 0
 
-    def test_trends_with_data(self):
+    def test_trends_with_data(self, api_client):
         """Test trends with sighting data."""
         now = timezone.now()
 
@@ -637,13 +595,13 @@ class HistoryTrendsViewTests(APITestCase):
                 sighting.timestamp = timestamp
                 sighting.save()
 
-        response = self.client.get("/api/v1/history/trends/?hours=6")
+        response = api_client.get("/api/v1/history/trends/?hours=6")
         data = response.json()
 
         # Should have intervals
-        self.assertGreater(len(data["intervals"]), 0)
+        assert len(data["intervals"]) > 0
 
-    def test_trends_interval_structure(self):
+    def test_trends_interval_structure(self, api_client):
         """Test that trend intervals have expected fields."""
         # Create a sighting
         AircraftSighting.objects.create(
@@ -656,7 +614,7 @@ class HistoryTrendsViewTests(APITestCase):
             is_military=True,
         )
 
-        response = self.client.get("/api/v1/history/trends/")
+        response = api_client.get("/api/v1/history/trends/")
         data = response.json()
 
         if data["intervals"]:
@@ -674,29 +632,21 @@ class HistoryTrendsViewTests(APITestCase):
                 "max_speed",
             ]
             for field in expected_fields:
-                self.assertIn(field, interval, f"Missing field: {field}")
+                assert field in interval, f"Missing field: {field}"
 
 
-class HistoryTopPerformersViewTests(APITestCase):
+@pytest.mark.django_db
+class TestHistoryTopPerformersView:
     """Tests for the history top performers endpoint."""
 
-    def setUp(self):
-        """Set up test fixtures."""
-        self.client = APIClient()
-        AircraftSession.objects.all().delete()
-
-    def tearDown(self):
-        """Clean up after tests."""
-        AircraftSession.objects.all().delete()
-
-    def test_top_performers_returns_200(self):
+    def test_top_performers_returns_200(self, api_client):
         """Test that top-performers returns 200 OK."""
-        response = self.client.get("/api/v1/history/top-performers/")
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        response = api_client.get("/api/v1/history/top-performers/")
+        assert response.status_code == status.HTTP_200_OK
 
-    def test_top_performers_response_structure(self):
+    def test_top_performers_response_structure(self, api_client):
         """Test that response has expected categories."""
-        response = self.client.get("/api/v1/history/top-performers/")
+        response = api_client.get("/api/v1/history/top-performers/")
         data = response.json()
 
         expected_categories = [
@@ -707,20 +657,20 @@ class HistoryTopPerformersViewTests(APITestCase):
             "closest_approach",
         ]
         for category in expected_categories:
-            self.assertIn(category, data, f"Missing category: {category}")
+            assert category in data, f"Missing category: {category}"
 
-        self.assertIn("time_range_hours", data)
-        self.assertIn("limit", data)
+        assert "time_range_hours" in data
+        assert "limit" in data
 
-    def test_top_performers_empty(self):
+    def test_top_performers_empty(self, api_client):
         """Test top performers with no sessions."""
-        response = self.client.get("/api/v1/history/top-performers/")
+        response = api_client.get("/api/v1/history/top-performers/")
         data = response.json()
 
-        self.assertEqual(data["longest_tracked"], [])
-        self.assertEqual(data["furthest_distance"], [])
+        assert data["longest_tracked"] == []
+        assert data["furthest_distance"] == []
 
-    def test_top_performers_with_sessions(self):
+    def test_top_performers_with_sessions(self, api_client):
         """Test top performers with session data."""
         now = timezone.now()
 
@@ -740,15 +690,15 @@ class HistoryTopPerformersViewTests(APITestCase):
             session.last_seen = now
             session.save()
 
-        response = self.client.get("/api/v1/history/top-performers/")
+        response = api_client.get("/api/v1/history/top-performers/")
         data = response.json()
 
         # Should have results in each category
-        self.assertGreater(len(data["longest_tracked"]), 0)
-        self.assertGreater(len(data["furthest_distance"]), 0)
-        self.assertGreater(len(data["highest_altitude"]), 0)
+        assert len(data["longest_tracked"]) > 0
+        assert len(data["furthest_distance"]) > 0
+        assert len(data["highest_altitude"]) > 0
 
-    def test_top_performers_entry_structure(self):
+    def test_top_performers_entry_structure(self, api_client):
         """Test that performer entries have expected fields."""
         now = timezone.now()
         session = AircraftSession.objects.create(
@@ -766,7 +716,7 @@ class HistoryTopPerformersViewTests(APITestCase):
         session.last_seen = now
         session.save()
 
-        response = self.client.get("/api/v1/history/top-performers/")
+        response = api_client.get("/api/v1/history/top-performers/")
         data = response.json()
 
         if data["longest_tracked"]:
@@ -786,9 +736,9 @@ class HistoryTopPerformersViewTests(APITestCase):
                 "max_altitude",
             ]
             for field in expected_fields:
-                self.assertIn(field, entry, f"Missing field: {field}")
+                assert field in entry, f"Missing field: {field}"
 
-    def test_top_performers_limit(self):
+    def test_top_performers_limit(self, api_client):
         """Test limit parameter."""
         now = timezone.now()
         for i in range(15):
@@ -801,13 +751,13 @@ class HistoryTopPerformersViewTests(APITestCase):
             session.last_seen = now
             session.save()
 
-        response = self.client.get("/api/v1/history/top-performers/?limit=5")
+        response = api_client.get("/api/v1/history/top-performers/?limit=5")
         data = response.json()
 
-        self.assertLessEqual(len(data["longest_tracked"]), 5)
-        self.assertLessEqual(len(data["highest_altitude"]), 5)
+        assert len(data["longest_tracked"]) <= 5
+        assert len(data["highest_altitude"]) <= 5
 
-    def test_top_performers_sorted_correctly(self):
+    def test_top_performers_sorted_correctly(self, api_client):
         """Test that performers are sorted correctly."""
         now = timezone.now()
 
@@ -833,28 +783,18 @@ class HistoryTopPerformersViewTests(APITestCase):
         session3.last_seen = now
         session3.save()
 
-        response = self.client.get("/api/v1/history/top-performers/")
+        response = api_client.get("/api/v1/history/top-performers/")
         data = response.json()
 
         # Highest altitude should be first
-        self.assertEqual(data["highest_altitude"][0]["icao_hex"], "HIGH")
+        assert data["highest_altitude"][0]["icao_hex"] == "HIGH"
 
 
-class HistoryIntegrationTests(APITestCase):
+@pytest.mark.django_db
+class TestHistoryIntegration:
     """Integration tests for history endpoints."""
 
-    def setUp(self):
-        """Set up test fixtures."""
-        self.client = APIClient()
-        AircraftSighting.objects.all().delete()
-        AircraftSession.objects.all().delete()
-
-    def tearDown(self):
-        """Clean up after tests."""
-        AircraftSighting.objects.all().delete()
-        AircraftSession.objects.all().delete()
-
-    def test_all_endpoints_return_json(self):
+    def test_all_endpoints_return_json(self, api_client):
         """Test that all endpoints return JSON."""
         # Create some data
         AircraftSighting.objects.create(icao_hex="ABC123", latitude=47.5, longitude=-122.3)
@@ -869,12 +809,12 @@ class HistoryIntegrationTests(APITestCase):
         ]
 
         for endpoint in endpoints:
-            response = self.client.get(endpoint)
-            self.assertEqual(response["Content-Type"], "application/json", f"Endpoint {endpoint} should return JSON")
+            response = api_client.get(endpoint)
+            assert response["Content-Type"] == "application/json", f"Endpoint {endpoint} should return JSON"
 
-    def test_no_authentication_required(self):
+    def test_no_authentication_required(self, api_client):
         """Test that no authentication is required."""
-        self.client.credentials()
+        api_client.credentials()
 
         endpoints = [
             "/api/v1/sightings/",
@@ -885,14 +825,13 @@ class HistoryIntegrationTests(APITestCase):
         ]
 
         for endpoint in endpoints:
-            response = self.client.get(endpoint)
-            self.assertNotIn(
-                response.status_code,
-                [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN],
-                f"{endpoint} should not require authentication",
-            )
+            response = api_client.get(endpoint)
+            assert response.status_code not in [
+                status.HTTP_401_UNAUTHORIZED,
+                status.HTTP_403_FORBIDDEN,
+            ], f"{endpoint} should not require authentication"
 
-    def test_consistent_time_filtering(self):
+    def test_consistent_time_filtering(self, api_client):
         """Test that time filtering is consistent across endpoints."""
         now = timezone.now()
 
@@ -908,19 +847,19 @@ class HistoryIntegrationTests(APITestCase):
         AircraftSession.objects.create(icao_hex="NEW")
 
         # All endpoints should only return recent data with hours=24
-        sightings_response = self.client.get("/api/v1/sightings/?hours=24")
-        sessions_response = self.client.get("/api/v1/sessions/?hours=24")
-        stats_response = self.client.get("/api/v1/history/stats/?hours=24")
+        sightings_response = api_client.get("/api/v1/sightings/?hours=24")
+        sessions_response = api_client.get("/api/v1/sessions/?hours=24")
+        stats_response = api_client.get("/api/v1/history/stats/?hours=24")
 
         # Check that old data is excluded
         sighting_icaos = [s["icao_hex"] for s in sightings_response.json()["results"]]
         session_icaos = [s["icao_hex"] for s in sessions_response.json()["sessions"]]
 
-        self.assertNotIn("OLD", sighting_icaos)
-        self.assertNotIn("OLD", session_icaos)
-        self.assertEqual(stats_response.json()["time_range_hours"], 24)
+        assert "OLD" not in sighting_icaos
+        assert "OLD" not in session_icaos
+        assert stats_response.json()["time_range_hours"] == 24
 
-    def test_stats_match_list_counts(self):
+    def test_stats_match_list_counts(self, api_client):
         """Test that stats counts match list data."""
         for i in range(10):
             AircraftSighting.objects.create(
@@ -930,16 +869,16 @@ class HistoryIntegrationTests(APITestCase):
             )
             AircraftSession.objects.create(icao_hex=f"AC{i}")
 
-        sightings_response = self.client.get("/api/v1/sightings/")
-        self.client.get("/api/v1/sessions/")
-        stats_response = self.client.get("/api/v1/history/stats/")
+        sightings_response = api_client.get("/api/v1/sightings/")
+        api_client.get("/api/v1/sessions/")
+        stats_response = api_client.get("/api/v1/history/stats/")
 
         stats = stats_response.json()
 
         # Note: pagination affects counts - use the count field
-        self.assertEqual(stats["total_sightings"], sightings_response.json()["count"])
+        assert stats["total_sightings"] == sightings_response.json()["count"]
 
-    def test_read_only_endpoints(self):
+    def test_read_only_endpoints(self, api_client):
         """Test that history endpoints are read-only."""
         sighting = AircraftSighting.objects.create(icao_hex="ABC123", latitude=47.5, longitude=-122.3)
         session = AircraftSession.objects.create(icao_hex="ABC123")
@@ -956,12 +895,12 @@ class HistoryIntegrationTests(APITestCase):
 
         for endpoint, method in test_cases:
             if method == "POST":
-                response = self.client.post(endpoint, {}, format="json")
+                response = api_client.post(endpoint, {}, format="json")
             elif method == "PUT":
-                response = self.client.put(endpoint, {}, format="json")
+                response = api_client.put(endpoint, {}, format="json")
             elif method == "DELETE":
-                response = self.client.delete(endpoint)
+                response = api_client.delete(endpoint)
 
-            self.assertEqual(
-                response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED, f"{method} {endpoint} should be disallowed"
+            assert response.status_code == status.HTTP_405_METHOD_NOT_ALLOWED, (
+                f"{method} {endpoint} should be disallowed"
             )

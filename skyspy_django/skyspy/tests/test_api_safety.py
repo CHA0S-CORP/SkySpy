@@ -14,41 +14,33 @@ Tests for:
 
 from datetime import timedelta
 
+import pytest
 from django.utils import timezone
 from rest_framework import status
-from rest_framework.test import APIClient, APITestCase
 
 from skyspy.models import SafetyEvent
 
 
-class SafetyEventListViewTests(APITestCase):
+@pytest.mark.django_db
+class TestSafetyEventListView:
     """Tests for the safety events list endpoint."""
 
-    def setUp(self):
-        """Set up test fixtures."""
-        self.client = APIClient()
-        SafetyEvent.objects.all().delete()
-
-    def tearDown(self):
-        """Clean up after tests."""
-        SafetyEvent.objects.all().delete()
-
-    def test_list_returns_200(self):
+    def test_list_returns_200(self, api_client):
         """Test that list returns 200 OK."""
-        response = self.client.get("/api/v1/safety/events/")
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        response = api_client.get("/api/v1/safety/events/")
+        assert response.status_code == status.HTTP_200_OK
 
-    def test_list_empty(self):
+    def test_list_empty(self, api_client):
         """Test list response when no events exist."""
-        response = self.client.get("/api/v1/safety/events/")
+        response = api_client.get("/api/v1/safety/events/")
         data = response.json()
 
-        self.assertIn("events", data)
-        self.assertIn("count", data)
-        self.assertEqual(data["events"], [])
-        self.assertEqual(data["count"], 0)
+        assert "events" in data
+        assert "count" in data
+        assert data["events"] == []
+        assert data["count"] == 0
 
-    def test_list_with_events(self):
+    def test_list_with_events(self, api_client):
         """Test list response with existing events."""
         SafetyEvent.objects.create(
             event_type="tcas_ra",
@@ -64,13 +56,13 @@ class SafetyEventListViewTests(APITestCase):
             message="Extreme vertical speed detected",
         )
 
-        response = self.client.get("/api/v1/safety/events/")
+        response = api_client.get("/api/v1/safety/events/")
         data = response.json()
 
-        self.assertEqual(data["count"], 2)
-        self.assertEqual(len(data["events"]), 2)
+        assert data["count"] == 2
+        assert len(data["events"]) == 2
 
-    def test_list_event_structure(self):
+    def test_list_event_structure(self, api_client):
         """Test that events have expected fields."""
         SafetyEvent.objects.create(
             event_type="tcas_ra",
@@ -84,7 +76,7 @@ class SafetyEventListViewTests(APITestCase):
             acknowledged=False,
         )
 
-        response = self.client.get("/api/v1/safety/events/")
+        response = api_client.get("/api/v1/safety/events/")
         event = response.json()["events"][0]
 
         expected_fields = [
@@ -104,55 +96,55 @@ class SafetyEventListViewTests(APITestCase):
             "timestamp",
         ]
         for field in expected_fields:
-            self.assertIn(field, event, f"Missing field: {field}")
+            assert field in event, f"Missing field: {field}"
 
-    def test_list_filter_by_event_type(self):
+    def test_list_filter_by_event_type(self, api_client):
         """Test filtering events by type."""
         SafetyEvent.objects.create(event_type="tcas_ra", icao_hex="A")
         SafetyEvent.objects.create(event_type="extreme_vs", icao_hex="B")
         SafetyEvent.objects.create(event_type="tcas_ra", icao_hex="C")
 
-        response = self.client.get("/api/v1/safety/events/?event_type=tcas_ra")
+        response = api_client.get("/api/v1/safety/events/?event_type=tcas_ra")
         data = response.json()
 
-        self.assertEqual(data["count"], 2)
+        assert data["count"] == 2
         for event in data["events"]:
-            self.assertEqual(event["event_type"], "tcas_ra")
+            assert event["event_type"] == "tcas_ra"
 
-    def test_list_filter_by_severity(self):
+    def test_list_filter_by_severity(self, api_client):
         """Test filtering events by severity."""
         SafetyEvent.objects.create(event_type="tcas_ra", severity="critical", icao_hex="A")
         SafetyEvent.objects.create(event_type="extreme_vs", severity="warning", icao_hex="B")
 
-        response = self.client.get("/api/v1/safety/events/?severity=critical")
+        response = api_client.get("/api/v1/safety/events/?severity=critical")
         data = response.json()
 
-        self.assertEqual(data["count"], 1)
-        self.assertEqual(data["events"][0]["severity"], "critical")
+        assert data["count"] == 1
+        assert data["events"][0]["severity"] == "critical"
 
-    def test_list_filter_by_icao(self):
+    def test_list_filter_by_icao(self, api_client):
         """Test filtering events by ICAO hex."""
         SafetyEvent.objects.create(event_type="tcas_ra", icao_hex="ABC123")
         SafetyEvent.objects.create(event_type="extreme_vs", icao_hex="DEF456")
 
-        response = self.client.get("/api/v1/safety/events/?icao_hex=ABC123")
+        response = api_client.get("/api/v1/safety/events/?icao_hex=ABC123")
         data = response.json()
 
-        self.assertEqual(data["count"], 1)
-        self.assertEqual(data["events"][0]["icao"], "ABC123")
+        assert data["count"] == 1
+        assert data["events"][0]["icao"] == "ABC123"
 
-    def test_list_filter_by_acknowledged(self):
+    def test_list_filter_by_acknowledged(self, api_client):
         """Test filtering events by acknowledged status."""
         SafetyEvent.objects.create(event_type="tcas_ra", icao_hex="A", acknowledged=True)
         SafetyEvent.objects.create(event_type="extreme_vs", icao_hex="B", acknowledged=False)
 
-        response = self.client.get("/api/v1/safety/events/?acknowledged=true")
+        response = api_client.get("/api/v1/safety/events/?acknowledged=true")
         data = response.json()
 
-        self.assertEqual(data["count"], 1)
-        self.assertTrue(data["events"][0]["acknowledged"])
+        assert data["count"] == 1
+        assert data["events"][0]["acknowledged"]
 
-    def test_list_time_filter(self):
+    def test_list_time_filter(self, api_client):
         """Test filtering by time range."""
         # Create event outside time range
         old_event = SafetyEvent.objects.create(
@@ -168,31 +160,31 @@ class SafetyEventListViewTests(APITestCase):
             icao_hex="NEW123",
         )
 
-        response = self.client.get("/api/v1/safety/events/?hours=24")
+        response = api_client.get("/api/v1/safety/events/?hours=24")
         data = response.json()
 
-        self.assertEqual(data["count"], 1)
-        self.assertEqual(data["events"][0]["icao"], "NEW123")
+        assert data["count"] == 1
+        assert data["events"][0]["icao"] == "NEW123"
 
-    def test_list_ordered_by_timestamp(self):
+    def test_list_ordered_by_timestamp(self, api_client):
         """Test that events are ordered by timestamp descending."""
         SafetyEvent.objects.create(event_type="tcas_ra", icao_hex="FIRST")
         SafetyEvent.objects.create(event_type="extreme_vs", icao_hex="SECOND")
 
-        response = self.client.get("/api/v1/safety/events/")
+        response = api_client.get("/api/v1/safety/events/")
         data = response.json()
 
         # Most recent should be first
-        self.assertEqual(data["events"][0]["icao"], "SECOND")
+        assert data["events"][0]["icao"] == "SECOND"
 
 
-class SafetyEventRetrieveViewTests(APITestCase):
+@pytest.mark.django_db
+class TestSafetyEventRetrieveView:
     """Tests for retrieving a single safety event."""
 
-    def setUp(self):
+    @pytest.fixture(autouse=True)
+    def setup_event(self):
         """Set up test fixtures."""
-        self.client = APIClient()
-        SafetyEvent.objects.all().delete()
         self.event = SafetyEvent.objects.create(
             event_type="tcas_ra",
             severity="critical",
@@ -201,52 +193,40 @@ class SafetyEventRetrieveViewTests(APITestCase):
             message="TCAS RA: Climb",
         )
 
-    def tearDown(self):
-        """Clean up after tests."""
-        SafetyEvent.objects.all().delete()
-
-    def test_retrieve_existing_event(self):
+    def test_retrieve_existing_event(self, api_client):
         """Test retrieving an existing event."""
-        response = self.client.get(f"/api/v1/safety/events/{self.event.id}/")
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        response = api_client.get(f"/api/v1/safety/events/{self.event.id}/")
+        assert response.status_code == status.HTTP_200_OK
 
-    def test_retrieve_event_data(self):
+    def test_retrieve_event_data(self, api_client):
         """Test that retrieved event has correct data."""
-        response = self.client.get(f"/api/v1/safety/events/{self.event.id}/")
+        response = api_client.get(f"/api/v1/safety/events/{self.event.id}/")
         data = response.json()
 
-        self.assertEqual(data["event_type"], "tcas_ra")
-        self.assertEqual(data["severity"], "critical")
-        self.assertEqual(data["icao"], "ABC123")
-        self.assertEqual(data["callsign"], "UAL123")
-        self.assertEqual(data["message"], "TCAS RA: Climb")
+        assert data["event_type"] == "tcas_ra"
+        assert data["severity"] == "critical"
+        assert data["icao"] == "ABC123"
+        assert data["callsign"] == "UAL123"
+        assert data["message"] == "TCAS RA: Climb"
 
-    def test_retrieve_nonexistent_event(self):
+    def test_retrieve_nonexistent_event(self, api_client):
         """Test retrieving non-existent event returns 404."""
-        response = self.client.get("/api/v1/safety/events/99999/")
-        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        response = api_client.get("/api/v1/safety/events/99999/")
+        assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
-class SafetyEventStatsViewTests(APITestCase):
+@pytest.mark.django_db
+class TestSafetyEventStatsView:
     """Tests for the safety events stats endpoint."""
 
-    def setUp(self):
-        """Set up test fixtures."""
-        self.client = APIClient()
-        SafetyEvent.objects.all().delete()
-
-    def tearDown(self):
-        """Clean up after tests."""
-        SafetyEvent.objects.all().delete()
-
-    def test_stats_returns_200(self):
+    def test_stats_returns_200(self, api_client):
         """Test that stats returns 200 OK."""
-        response = self.client.get("/api/v1/safety/events/stats/")
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        response = api_client.get("/api/v1/safety/events/stats/")
+        assert response.status_code == status.HTTP_200_OK
 
-    def test_stats_response_structure(self):
+    def test_stats_response_structure(self, api_client):
         """Test that stats response has expected fields."""
-        response = self.client.get("/api/v1/safety/events/stats/")
+        response = api_client.get("/api/v1/safety/events/stats/")
         data = response.json()
 
         expected_fields = [
@@ -264,11 +244,11 @@ class SafetyEventStatsViewTests(APITestCase):
             "timestamp",
         ]
         for field in expected_fields:
-            self.assertIn(field, data, f"Missing field: {field}")
+            assert field in data, f"Missing field: {field}"
 
-    def test_stats_thresholds(self):
+    def test_stats_thresholds(self, api_client):
         """Test that thresholds are included in stats."""
-        response = self.client.get("/api/v1/safety/events/stats/")
+        response = api_client.get("/api/v1/safety/events/stats/")
         data = response.json()
 
         thresholds = data["thresholds"]
@@ -281,92 +261,92 @@ class SafetyEventStatsViewTests(APITestCase):
             "tcas_vs_threshold",
         ]
         for threshold in expected_thresholds:
-            self.assertIn(threshold, thresholds)
+            assert threshold in thresholds
 
-    def test_stats_counts_by_type(self):
+    def test_stats_counts_by_type(self, api_client):
         """Test that events are counted by type."""
         SafetyEvent.objects.create(event_type="tcas_ra", icao_hex="A")
         SafetyEvent.objects.create(event_type="tcas_ra", icao_hex="B")
         SafetyEvent.objects.create(event_type="extreme_vs", icao_hex="C")
 
-        response = self.client.get("/api/v1/safety/events/stats/")
+        response = api_client.get("/api/v1/safety/events/stats/")
         data = response.json()
 
-        self.assertEqual(data["events_by_type"].get("tcas_ra", 0), 2)
-        self.assertEqual(data["events_by_type"].get("extreme_vs", 0), 1)
+        assert data["events_by_type"].get("tcas_ra", 0) == 2
+        assert data["events_by_type"].get("extreme_vs", 0) == 1
 
-    def test_stats_counts_by_severity(self):
+    def test_stats_counts_by_severity(self, api_client):
         """Test that events are counted by severity."""
         SafetyEvent.objects.create(event_type="tcas_ra", severity="critical", icao_hex="A")
         SafetyEvent.objects.create(event_type="extreme_vs", severity="warning", icao_hex="B")
         SafetyEvent.objects.create(event_type="vs_reversal", severity="warning", icao_hex="C")
 
-        response = self.client.get("/api/v1/safety/events/stats/")
+        response = api_client.get("/api/v1/safety/events/stats/")
         data = response.json()
 
-        self.assertEqual(data["events_by_severity"].get("critical", 0), 1)
-        self.assertEqual(data["events_by_severity"].get("warning", 0), 2)
+        assert data["events_by_severity"].get("critical", 0) == 1
+        assert data["events_by_severity"].get("warning", 0) == 2
 
-    def test_stats_unique_aircraft(self):
+    def test_stats_unique_aircraft(self, api_client):
         """Test unique aircraft count."""
         SafetyEvent.objects.create(event_type="tcas_ra", icao_hex="ABC123")
         SafetyEvent.objects.create(event_type="extreme_vs", icao_hex="ABC123")  # Same ICAO
         SafetyEvent.objects.create(event_type="vs_reversal", icao_hex="DEF456")
 
-        response = self.client.get("/api/v1/safety/events/stats/")
+        response = api_client.get("/api/v1/safety/events/stats/")
         data = response.json()
 
-        self.assertEqual(data["unique_aircraft"], 2)
+        assert data["unique_aircraft"] == 2
 
-    def test_stats_total_events(self):
+    def test_stats_total_events(self, api_client):
         """Test total events count."""
         SafetyEvent.objects.create(event_type="tcas_ra", icao_hex="A")
         SafetyEvent.objects.create(event_type="extreme_vs", icao_hex="B")
         SafetyEvent.objects.create(event_type="vs_reversal", icao_hex="C")
 
-        response = self.client.get("/api/v1/safety/events/stats/")
+        response = api_client.get("/api/v1/safety/events/stats/")
         data = response.json()
 
-        self.assertEqual(data["total_events"], 3)
+        assert data["total_events"] == 3
 
-    def test_stats_event_rate(self):
+    def test_stats_event_rate(self, api_client):
         """Test event rate per hour."""
         # Create 24 events for 24 hours = 1 per hour
         for i in range(24):
             SafetyEvent.objects.create(event_type="tcas_ra", icao_hex=f"AC{i}")
 
-        response = self.client.get("/api/v1/safety/events/stats/?hours=24")
+        response = api_client.get("/api/v1/safety/events/stats/?hours=24")
         data = response.json()
 
-        self.assertEqual(data["event_rate_per_hour"], 1.0)
+        assert data["event_rate_per_hour"] == 1.0
 
-    def test_stats_top_aircraft(self):
+    def test_stats_top_aircraft(self, api_client):
         """Test top aircraft list."""
         # Create multiple events for same aircraft
         for _ in range(5):
             SafetyEvent.objects.create(event_type="tcas_ra", icao_hex="FREQUENT")
         SafetyEvent.objects.create(event_type="extreme_vs", icao_hex="SINGLE")
 
-        response = self.client.get("/api/v1/safety/events/stats/")
+        response = api_client.get("/api/v1/safety/events/stats/")
         data = response.json()
 
         # FREQUENT should be first in top_aircraft
-        self.assertTrue(len(data["top_aircraft"]) > 0)
-        self.assertEqual(data["top_aircraft"][0]["icao_hex"], "FREQUENT")
-        self.assertEqual(data["top_aircraft"][0]["count"], 5)
+        assert len(data["top_aircraft"]) > 0
+        assert data["top_aircraft"][0]["icao_hex"] == "FREQUENT"
+        assert data["top_aircraft"][0]["count"] == 5
 
-    def test_stats_recent_events(self):
+    def test_stats_recent_events(self, api_client):
         """Test recent events list."""
         SafetyEvent.objects.create(event_type="tcas_ra", icao_hex="A")
         SafetyEvent.objects.create(event_type="extreme_vs", icao_hex="B")
 
-        response = self.client.get("/api/v1/safety/events/stats/")
+        response = api_client.get("/api/v1/safety/events/stats/")
         data = response.json()
 
         # Should have recent events
-        self.assertIsInstance(data["recent_events"], list)
+        assert isinstance(data["recent_events"], list)
 
-    def test_stats_time_filter(self):
+    def test_stats_time_filter(self, api_client):
         """Test that stats respect time filter."""
         # Create old event
         old_event = SafetyEvent.objects.create(event_type="tcas_ra", icao_hex="OLD")
@@ -376,48 +356,40 @@ class SafetyEventStatsViewTests(APITestCase):
         # Create recent event
         SafetyEvent.objects.create(event_type="extreme_vs", icao_hex="NEW")
 
-        response = self.client.get("/api/v1/safety/events/stats/?hours=24")
+        response = api_client.get("/api/v1/safety/events/stats/?hours=24")
         data = response.json()
 
-        self.assertEqual(data["total_events"], 1)
+        assert data["total_events"] == 1
 
 
-class SafetyEventAircraftStatsViewTests(APITestCase):
+@pytest.mark.django_db
+class TestSafetyEventAircraftStatsView:
     """Tests for the safety events aircraft stats endpoint."""
 
-    def setUp(self):
-        """Set up test fixtures."""
-        self.client = APIClient()
-        SafetyEvent.objects.all().delete()
-
-    def tearDown(self):
-        """Clean up after tests."""
-        SafetyEvent.objects.all().delete()
-
-    def test_aircraft_stats_returns_200(self):
+    def test_aircraft_stats_returns_200(self, api_client):
         """Test that aircraft stats returns 200 OK."""
-        response = self.client.get("/api/v1/safety/events/aircraft/")
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        response = api_client.get("/api/v1/safety/events/aircraft/")
+        assert response.status_code == status.HTTP_200_OK
 
-    def test_aircraft_stats_response_structure(self):
+    def test_aircraft_stats_response_structure(self, api_client):
         """Test that response has expected structure."""
-        response = self.client.get("/api/v1/safety/events/aircraft/")
+        response = api_client.get("/api/v1/safety/events/aircraft/")
         data = response.json()
 
-        self.assertIn("aircraft", data)
-        self.assertIn("total_aircraft", data)
-        self.assertIn("time_range_hours", data)
-        self.assertIn("timestamp", data)
+        assert "aircraft" in data
+        assert "total_aircraft" in data
+        assert "time_range_hours" in data
+        assert "timestamp" in data
 
-    def test_aircraft_stats_empty(self):
+    def test_aircraft_stats_empty(self, api_client):
         """Test aircraft stats with no events."""
-        response = self.client.get("/api/v1/safety/events/aircraft/")
+        response = api_client.get("/api/v1/safety/events/aircraft/")
         data = response.json()
 
-        self.assertEqual(data["aircraft"], [])
-        self.assertEqual(data["total_aircraft"], 0)
+        assert data["aircraft"] == []
+        assert data["total_aircraft"] == 0
 
-    def test_aircraft_stats_with_events(self):
+    def test_aircraft_stats_with_events(self, api_client):
         """Test aircraft stats with events."""
         SafetyEvent.objects.create(
             event_type="tcas_ra",
@@ -432,17 +404,17 @@ class SafetyEventAircraftStatsViewTests(APITestCase):
             callsign="UAL123",
         )
 
-        response = self.client.get("/api/v1/safety/events/aircraft/")
+        response = api_client.get("/api/v1/safety/events/aircraft/")
         data = response.json()
 
-        self.assertEqual(data["total_aircraft"], 1)
-        self.assertEqual(len(data["aircraft"]), 1)
+        assert data["total_aircraft"] == 1
+        assert len(data["aircraft"]) == 1
 
         aircraft = data["aircraft"][0]
-        self.assertEqual(aircraft["icao_hex"], "ABC123")
-        self.assertEqual(aircraft["total_events"], 2)
+        assert aircraft["icao_hex"] == "ABC123"
+        assert aircraft["total_events"] == 2
 
-    def test_aircraft_stats_structure(self):
+    def test_aircraft_stats_structure(self, api_client):
         """Test that aircraft stats have expected fields."""
         SafetyEvent.objects.create(
             event_type="tcas_ra",
@@ -451,7 +423,7 @@ class SafetyEventAircraftStatsViewTests(APITestCase):
             callsign="UAL123",
         )
 
-        response = self.client.get("/api/v1/safety/events/aircraft/")
+        response = api_client.get("/api/v1/safety/events/aircraft/")
         aircraft = response.json()["aircraft"][0]
 
         expected_fields = [
@@ -465,9 +437,9 @@ class SafetyEventAircraftStatsViewTests(APITestCase):
             "last_event_type",
         ]
         for field in expected_fields:
-            self.assertIn(field, aircraft, f"Missing field: {field}")
+            assert field in aircraft, f"Missing field: {field}"
 
-    def test_aircraft_stats_worst_severity(self):
+    def test_aircraft_stats_worst_severity(self, api_client):
         """Test worst severity calculation."""
         SafetyEvent.objects.create(
             event_type="tcas_ra",
@@ -480,12 +452,12 @@ class SafetyEventAircraftStatsViewTests(APITestCase):
             icao_hex="ABC123",
         )
 
-        response = self.client.get("/api/v1/safety/events/aircraft/")
+        response = api_client.get("/api/v1/safety/events/aircraft/")
         aircraft = response.json()["aircraft"][0]
 
-        self.assertEqual(aircraft["worst_severity"], "critical")
+        assert aircraft["worst_severity"] == "critical"
 
-    def test_aircraft_stats_ordered_by_event_count(self):
+    def test_aircraft_stats_ordered_by_event_count(self, api_client):
         """Test that aircraft are ordered by event count."""
         for _ in range(5):
             SafetyEvent.objects.create(event_type="tcas_ra", icao_hex="FREQUENT")
@@ -493,20 +465,20 @@ class SafetyEventAircraftStatsViewTests(APITestCase):
             SafetyEvent.objects.create(event_type="extreme_vs", icao_hex="MODERATE")
         SafetyEvent.objects.create(event_type="vs_reversal", icao_hex="RARE")
 
-        response = self.client.get("/api/v1/safety/events/aircraft/")
+        response = api_client.get("/api/v1/safety/events/aircraft/")
         data = response.json()
 
-        self.assertEqual(data["aircraft"][0]["icao_hex"], "FREQUENT")
-        self.assertEqual(data["aircraft"][0]["total_events"], 5)
+        assert data["aircraft"][0]["icao_hex"] == "FREQUENT"
+        assert data["aircraft"][0]["total_events"] == 5
 
 
-class SafetyEventAcknowledgeViewTests(APITestCase):
+@pytest.mark.django_db
+class TestSafetyEventAcknowledgeView:
     """Tests for the safety event acknowledge endpoint."""
 
-    def setUp(self):
+    @pytest.fixture(autouse=True)
+    def setup_event(self):
         """Set up test fixtures."""
-        self.client = APIClient()
-        SafetyEvent.objects.all().delete()
         self.event = SafetyEvent.objects.create(
             event_type="tcas_ra",
             severity="critical",
@@ -514,61 +486,57 @@ class SafetyEventAcknowledgeViewTests(APITestCase):
             acknowledged=False,
         )
 
-    def tearDown(self):
-        """Clean up after tests."""
-        SafetyEvent.objects.all().delete()
-
-    def test_acknowledge_event(self):
+    def test_acknowledge_event(self, api_client):
         """Test acknowledging an event."""
-        response = self.client.post(f"/api/v1/safety/events/{self.event.id}/acknowledge/")
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        response = api_client.post(f"/api/v1/safety/events/{self.event.id}/acknowledge/")
+        assert response.status_code == status.HTTP_200_OK
 
         self.event.refresh_from_db()
-        self.assertTrue(self.event.acknowledged)
+        assert self.event.acknowledged
 
-    def test_acknowledge_sets_timestamp(self):
+    def test_acknowledge_sets_timestamp(self, api_client):
         """Test that acknowledge sets acknowledged_at timestamp."""
-        self.assertIsNone(self.event.acknowledged_at)
+        assert self.event.acknowledged_at is None
 
-        self.client.post(f"/api/v1/safety/events/{self.event.id}/acknowledge/")
+        api_client.post(f"/api/v1/safety/events/{self.event.id}/acknowledge/")
 
         self.event.refresh_from_db()
-        self.assertIsNotNone(self.event.acknowledged_at)
+        assert self.event.acknowledged_at is not None
 
-    def test_acknowledge_returns_event(self):
+    def test_acknowledge_returns_event(self, api_client):
         """Test that acknowledge returns the updated event."""
-        response = self.client.post(f"/api/v1/safety/events/{self.event.id}/acknowledge/")
+        response = api_client.post(f"/api/v1/safety/events/{self.event.id}/acknowledge/")
         data = response.json()
 
-        self.assertTrue(data["acknowledged"])
-        self.assertIsNotNone(data["acknowledged_at"])
+        assert data["acknowledged"]
+        assert data["acknowledged_at"] is not None
 
-    def test_acknowledge_nonexistent_event(self):
+    def test_acknowledge_nonexistent_event(self, api_client):
         """Test acknowledging non-existent event returns 404."""
-        response = self.client.post("/api/v1/safety/events/99999/acknowledge/")
-        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        response = api_client.post("/api/v1/safety/events/99999/acknowledge/")
+        assert response.status_code == status.HTTP_404_NOT_FOUND
 
-    def test_acknowledge_already_acknowledged(self):
+    def test_acknowledge_already_acknowledged(self, api_client):
         """Test acknowledging an already acknowledged event."""
         self.event.acknowledged = True
         self.event.acknowledged_at = timezone.now()
         self.event.save()
 
-        response = self.client.post(f"/api/v1/safety/events/{self.event.id}/acknowledge/")
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        response = api_client.post(f"/api/v1/safety/events/{self.event.id}/acknowledge/")
+        assert response.status_code == status.HTTP_200_OK
 
         # Should still be acknowledged
         self.event.refresh_from_db()
-        self.assertTrue(self.event.acknowledged)
+        assert self.event.acknowledged
 
 
-class SafetyEventUnacknowledgeViewTests(APITestCase):
+@pytest.mark.django_db
+class TestSafetyEventUnacknowledgeView:
     """Tests for the safety event unacknowledge endpoint."""
 
-    def setUp(self):
+    @pytest.fixture(autouse=True)
+    def setup_event(self):
         """Set up test fixtures."""
-        self.client = APIClient()
-        SafetyEvent.objects.all().delete()
         self.event = SafetyEvent.objects.create(
             event_type="tcas_ra",
             severity="critical",
@@ -577,86 +545,86 @@ class SafetyEventUnacknowledgeViewTests(APITestCase):
             acknowledged_at=timezone.now(),
         )
 
-    def tearDown(self):
-        """Clean up after tests."""
-        SafetyEvent.objects.all().delete()
-
-    def test_unacknowledge_event(self):
+    def test_unacknowledge_event(self, api_client):
         """Test unacknowledging an event."""
-        response = self.client.delete(f"/api/v1/safety/events/{self.event.id}/unacknowledge/")
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        response = api_client.delete(f"/api/v1/safety/events/{self.event.id}/unacknowledge/")
+        assert response.status_code == status.HTTP_200_OK
 
         self.event.refresh_from_db()
-        self.assertFalse(self.event.acknowledged)
+        assert not self.event.acknowledged
 
-    def test_unacknowledge_clears_timestamp(self):
+    def test_unacknowledge_clears_timestamp(self, api_client):
         """Test that unacknowledge clears acknowledged_at timestamp."""
-        self.assertIsNotNone(self.event.acknowledged_at)
+        assert self.event.acknowledged_at is not None
 
-        self.client.delete(f"/api/v1/safety/events/{self.event.id}/unacknowledge/")
+        api_client.delete(f"/api/v1/safety/events/{self.event.id}/unacknowledge/")
 
         self.event.refresh_from_db()
-        self.assertIsNone(self.event.acknowledged_at)
+        assert self.event.acknowledged_at is None
 
-    def test_unacknowledge_returns_event(self):
+    def test_unacknowledge_returns_event(self, api_client):
         """Test that unacknowledge returns the updated event."""
-        response = self.client.delete(f"/api/v1/safety/events/{self.event.id}/unacknowledge/")
+        response = api_client.delete(f"/api/v1/safety/events/{self.event.id}/unacknowledge/")
         data = response.json()
 
-        self.assertFalse(data["acknowledged"])
-        self.assertIsNone(data["acknowledged_at"])
+        assert not data["acknowledged"]
+        assert data["acknowledged_at"] is None
 
-    def test_unacknowledge_nonexistent_event(self):
+    def test_unacknowledge_nonexistent_event(self, api_client):
         """Test unacknowledging non-existent event returns 404."""
-        response = self.client.delete("/api/v1/safety/events/99999/unacknowledge/")
-        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        response = api_client.delete("/api/v1/safety/events/99999/unacknowledge/")
+        assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
-class SafetyEventDeleteViewTests(APITestCase):
-    """Tests for deleting safety events."""
+@pytest.mark.django_db
+class TestSafetyEventDeleteView:
+    """Tests for deleting safety events.
 
-    def setUp(self):
+    Deletes always require authentication (even in public mode) - safety
+    events are system-generated emergency records.
+    """
+
+    @pytest.fixture(autouse=True)
+    def setup_event(self):
         """Set up test fixtures."""
-        self.client = APIClient()
-        SafetyEvent.objects.all().delete()
+        from django.contrib.auth.models import User
+
         self.event = SafetyEvent.objects.create(
             event_type="tcas_ra",
             icao_hex="ABC123",
         )
+        self.user = User.objects.create_user(username="safety_deleter", password="testpass")
 
-    def tearDown(self):
-        """Clean up after tests."""
-        SafetyEvent.objects.all().delete()
-
-    def test_delete_event(self):
+    def test_delete_event(self, api_client):
         """Test deleting an event."""
-        response = self.client.delete(f"/api/v1/safety/events/{self.event.id}/")
-        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        api_client.force_authenticate(user=self.user)
+        response = api_client.delete(f"/api/v1/safety/events/{self.event.id}/")
+        assert response.status_code == status.HTTP_204_NO_CONTENT
 
-    def test_delete_removes_from_db(self):
+    def test_delete_removes_from_db(self, api_client):
         """Test that delete removes event from database."""
+        api_client.force_authenticate(user=self.user)
         event_id = self.event.id
-        self.client.delete(f"/api/v1/safety/events/{event_id}/")
+        api_client.delete(f"/api/v1/safety/events/{event_id}/")
 
-        self.assertFalse(SafetyEvent.objects.filter(id=event_id).exists())
+        assert not SafetyEvent.objects.filter(id=event_id).exists()
 
-    def test_delete_nonexistent_event(self):
+    def test_delete_nonexistent_event(self, api_client):
         """Test deleting non-existent event returns 404."""
-        response = self.client.delete("/api/v1/safety/events/99999/")
-        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        api_client.force_authenticate(user=self.user)
+        response = api_client.delete("/api/v1/safety/events/99999/")
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_delete_requires_authentication(self, api_client):
+        """Test that anonymous clients cannot delete safety events."""
+        response = api_client.delete(f"/api/v1/safety/events/{self.event.id}/")
+        assert response.status_code in (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN)
+        assert SafetyEvent.objects.filter(id=self.event.id).exists()
 
 
-class SafetyEventValidationTests(APITestCase):
+@pytest.mark.django_db
+class TestSafetyEventValidation:
     """Tests for safety event validation."""
-
-    def setUp(self):
-        """Set up test fixtures."""
-        self.client = APIClient()
-        SafetyEvent.objects.all().delete()
-
-    def tearDown(self):
-        """Clean up after tests."""
-        SafetyEvent.objects.all().delete()
 
     def test_event_types(self):
         """Test that all event types are valid."""
@@ -677,7 +645,7 @@ class SafetyEventValidationTests(APITestCase):
                 event_type=event_type,
                 icao_hex="TEST123",
             )
-            self.assertEqual(event.event_type, event_type)
+            assert event.event_type == event_type
 
     def test_severity_levels(self):
         """Test that all severity levels are valid."""
@@ -689,22 +657,14 @@ class SafetyEventValidationTests(APITestCase):
                 severity=severity,
                 icao_hex="TEST123",
             )
-            self.assertEqual(event.severity, severity)
+            assert event.severity == severity
 
 
-class SafetyEventsIntegrationTests(APITestCase):
+@pytest.mark.django_db
+class TestSafetyEventsIntegration:
     """Integration tests for safety events endpoints."""
 
-    def setUp(self):
-        """Set up test fixtures."""
-        self.client = APIClient()
-        SafetyEvent.objects.all().delete()
-
-    def tearDown(self):
-        """Clean up after tests."""
-        SafetyEvent.objects.all().delete()
-
-    def test_acknowledge_workflow(self):
+    def test_acknowledge_workflow(self, api_client):
         """Test complete acknowledge/unacknowledge workflow."""
         # Create event
         event = SafetyEvent.objects.create(
@@ -714,38 +674,38 @@ class SafetyEventsIntegrationTests(APITestCase):
         )
 
         # Acknowledge
-        ack_response = self.client.post(f"/api/v1/safety/events/{event.id}/acknowledge/")
-        self.assertEqual(ack_response.status_code, status.HTTP_200_OK)
-        self.assertTrue(ack_response.json()["acknowledged"])
+        ack_response = api_client.post(f"/api/v1/safety/events/{event.id}/acknowledge/")
+        assert ack_response.status_code == status.HTTP_200_OK
+        assert ack_response.json()["acknowledged"]
 
         # Verify in list
-        list_response = self.client.get("/api/v1/safety/events/?acknowledged=true")
-        self.assertEqual(list_response.json()["count"], 1)
+        list_response = api_client.get("/api/v1/safety/events/?acknowledged=true")
+        assert list_response.json()["count"] == 1
 
         # Unacknowledge
-        unack_response = self.client.delete(f"/api/v1/safety/events/{event.id}/unacknowledge/")
-        self.assertEqual(unack_response.status_code, status.HTTP_200_OK)
-        self.assertFalse(unack_response.json()["acknowledged"])
+        unack_response = api_client.delete(f"/api/v1/safety/events/{event.id}/unacknowledge/")
+        assert unack_response.status_code == status.HTTP_200_OK
+        assert not unack_response.json()["acknowledged"]
 
         # Verify in list
-        list_response = self.client.get("/api/v1/safety/events/?acknowledged=false")
-        self.assertEqual(list_response.json()["count"], 1)
+        list_response = api_client.get("/api/v1/safety/events/?acknowledged=false")
+        assert list_response.json()["count"] == 1
 
-    def test_stats_consistency(self):
+    def test_stats_consistency(self, api_client):
         """Test that stats are consistent with list data."""
         SafetyEvent.objects.create(event_type="tcas_ra", icao_hex="A")
         SafetyEvent.objects.create(event_type="extreme_vs", icao_hex="B")
         SafetyEvent.objects.create(event_type="tcas_ra", icao_hex="C")
 
-        list_response = self.client.get("/api/v1/safety/events/")
-        stats_response = self.client.get("/api/v1/safety/events/stats/")
+        list_response = api_client.get("/api/v1/safety/events/")
+        stats_response = api_client.get("/api/v1/safety/events/stats/")
 
         list_count = list_response.json()["count"]
         stats_total = stats_response.json()["total_events"]
 
-        self.assertEqual(list_count, stats_total)
+        assert list_count == stats_total
 
-    def test_all_endpoints_return_json(self):
+    def test_all_endpoints_return_json(self, api_client):
         """Test that all endpoints return JSON."""
         event = SafetyEvent.objects.create(event_type="tcas_ra", icao_hex="ABC123")
 
@@ -757,12 +717,12 @@ class SafetyEventsIntegrationTests(APITestCase):
         ]
 
         for endpoint in endpoints:
-            response = self.client.get(endpoint)
-            self.assertEqual(response["Content-Type"], "application/json", f"Endpoint {endpoint} should return JSON")
+            response = api_client.get(endpoint)
+            assert response["Content-Type"] == "application/json", f"Endpoint {endpoint} should return JSON"
 
-    def test_no_authentication_required(self):
+    def test_no_authentication_required(self, api_client):
         """Test that no authentication is required."""
-        self.client.credentials()
+        api_client.credentials()
 
         event = SafetyEvent.objects.create(event_type="tcas_ra", icao_hex="ABC123")
 
@@ -774,14 +734,13 @@ class SafetyEventsIntegrationTests(APITestCase):
         ]
 
         for endpoint in endpoints:
-            response = self.client.get(endpoint)
-            self.assertNotIn(
-                response.status_code,
-                [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN],
-                f"{endpoint} should not require authentication",
-            )
+            response = api_client.get(endpoint)
+            assert response.status_code not in [
+                status.HTTP_401_UNAUTHORIZED,
+                status.HTTP_403_FORBIDDEN,
+            ], f"{endpoint} should not require authentication"
 
-    def test_http_methods_restricted(self):
+    def test_http_methods_restricted(self, api_client):
         """Test that only allowed HTTP methods work."""
         # POST should not be allowed on list endpoint (events are created by system)
         # Note: SafetyEventViewSet has http_method_names = ['get', 'post', 'delete']
@@ -789,5 +748,5 @@ class SafetyEventsIntegrationTests(APITestCase):
         event = SafetyEvent.objects.create(event_type="tcas_ra", icao_hex="ABC123")
 
         # PUT should not be allowed
-        response = self.client.put(f"/api/v1/safety/events/{event.id}/", {"event_type": "extreme_vs"}, format="json")
-        self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+        response = api_client.put(f"/api/v1/safety/events/{event.id}/", {"event_type": "extreme_vs"}, format="json")
+        assert response.status_code == status.HTTP_405_METHOD_NOT_ALLOWED

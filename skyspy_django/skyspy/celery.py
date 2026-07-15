@@ -78,40 +78,40 @@ app.conf.beat_schedule = {
     "poll-aircraft-every-2s": {
         "task": "skyspy.tasks.aircraft.poll_aircraft",
         "schedule": 1.0,
-        "options": {"expires": 1.0},  # Don't queue if missed
+        "options": {"expire_seconds": 1.0},  # Don't queue if missed
     },
     # Aircraft streaming - check/start every 30 seconds
     # (actual stream runs continuously, this just ensures it's running)
     "start-aircraft-stream-every-30s": {
         "task": "skyspy.tasks.aircraft_stream.start_aircraft_stream",
         "schedule": 30.0,
-        "options": {"expires": 30.0},
+        "options": {"expire_seconds": 30.0},
     },
     # Aircraft stream cold path - flush buffered data to database every 5 seconds
     # (non-blocking, doesn't affect client latency)
     "flush-stream-to-database-every-5s": {
         "task": "skyspy.tasks.aircraft_stream.flush_stream_to_database",
         "schedule": 5.0,
-        "options": {"expires": 5.0},
+        "options": {"expire_seconds": 5.0},
     },
     # Aircraft stream cold path - process new aircraft info lookups every 10 seconds
     "process-new-aircraft-lookups-every-10s": {
         "task": "skyspy.tasks.aircraft_stream.process_new_aircraft_lookups",
         "schedule": 10.0,
-        "options": {"expires": 10.0},
+        "options": {"expire_seconds": 10.0},
     },
     # Aircraft stream cold path - periodic cleanup of stale aircraft every 30 seconds
     # Safety net that catches aircraft that slip through normal batch-based removal
     "cleanup-stale-aircraft-every-30s": {
         "task": "skyspy.tasks.aircraft_stream.cleanup_stale_aircraft",
         "schedule": 30.0,
-        "options": {"expires": 30.0},
+        "options": {"expire_seconds": 30.0},
     },
     # Update aircraft sessions - every 5 seconds
     "update-aircraft-sessions-every-5s": {
         "task": "skyspy.tasks.aircraft.update_aircraft_sessions_from_cache",
         "schedule": 5.0,
-        "options": {"expires": 5.0},
+        "options": {"expire_seconds": 5.0},
     },
     # Session cleanup - every 5 minutes
     "cleanup-sessions-every-5m": {
@@ -191,7 +191,7 @@ app.conf.beat_schedule = {
     "aggregate-all-stats-every-60s": {
         "task": "skyspy.tasks.analytics.aggregate_all_stats",
         "schedule": 60.0,
-        "options": {"expires": 60.0},
+        "options": {"expire_seconds": 60.0},
     },
     # --------------------------------------------------------------------------
     # Legacy individual stats tasks (commented out - replaced by aggregate_all_stats)
@@ -241,14 +241,14 @@ app.conf.beat_schedule = {
     "process-transcription-queue-every-10s": {
         "task": "skyspy.tasks.transcription.process_transcription_queue",
         "schedule": 10.0,
-        "options": {"expires": 10.0},
+        "options": {"expire_seconds": 10.0},
     },
     # ACARS decode queue processing - every 30 seconds
     # Picks up messages that need libacars decoding
     "process-acars-decode-queue-every-30s": {
         "task": "skyspy.tasks.acars.process_acars_decode_queue",
         "schedule": 30.0,
-        "options": {"expires": 30.0},
+        "options": {"expire_seconds": 30.0},
     },
     # Hourly antenna analytics aggregation - every hour
     "aggregate-hourly-antenna-analytics": {
@@ -329,7 +329,7 @@ app.conf.beat_schedule = {
     "analyze-aircraft-patterns-every-5s": {
         "task": "skyspy.tasks.cannonball.analyze_aircraft_patterns",
         "schedule": 5.0,
-        "options": {"expires": 5.0},
+        "options": {"expire_seconds": 5.0},
     },
     # Cannonball session cleanup - every 5 minutes
     "cleanup-cannonball-sessions-every-5m": {
@@ -382,6 +382,14 @@ app.conf.beat_schedule = {
         "task": "skyspy.tasks.cleanup.vacuum_analyze_tables",
         "schedule": crontab(hour=4, minute=0, day_of_week=0),
     },
+    # ==========================================================================
+    # Law Enforcement Data Sync
+    # ==========================================================================
+    # Sync LE aircraft database from external sources - daily at 4:45 AM UTC
+    "sync-le-external-sources-daily": {
+        "task": "skyspy.tasks.le_data_sync.sync_le_external_sources",
+        "schedule": crontab(hour=4, minute=45),
+    },
     # Cooldown key cleanup - daily at 4:30 AM UTC
     # Removes Redis cooldown keys for deleted alert rules
     "cleanup-orphan-cooldown-keys-daily": {
@@ -401,13 +409,13 @@ app.conf.beat_schedule = {
     "update-queue-metrics-every-30s": {
         "task": "skyspy.tasks.monitoring.update_queue_metrics",
         "schedule": 30.0,
-        "options": {"expires": 30.0},
+        "options": {"expire_seconds": 30.0},
     },
     # Check for stale/failing tasks - every 60 seconds
     "check-task-health-every-60s": {
         "task": "skyspy.tasks.monitoring.check_task_health",
         "schedule": 60.0,
-        "options": {"expires": 60.0},
+        "options": {"expire_seconds": 60.0},
     },
     # Collect worker statistics - every 5 minutes
     "collect-worker-stats-every-5m": {
@@ -435,12 +443,12 @@ if _is_rpi_mode():
     # Override polling interval
     polling_interval = getattr(django_settings, "POLLING_INTERVAL", 2)
     app.conf.beat_schedule["poll-aircraft-every-2s"]["schedule"] = float(polling_interval)
-    app.conf.beat_schedule["poll-aircraft-every-2s"]["options"]["expires"] = float(polling_interval)
+    app.conf.beat_schedule["poll-aircraft-every-2s"]["options"]["expire_seconds"] = float(polling_interval)
 
     # Override unified stats aggregation task frequency for RPi
     # Uses a longer interval (90s instead of 60s) to reduce CPU load
     app.conf.beat_schedule["aggregate-all-stats-every-60s"]["schedule"] = rpi_intervals.get("stats_cache", 90.0)
-    app.conf.beat_schedule["aggregate-all-stats-every-60s"]["options"]["expires"] = rpi_intervals.get(
+    app.conf.beat_schedule["aggregate-all-stats-every-60s"]["options"]["expire_seconds"] = rpi_intervals.get(
         "stats_cache", 90.0
     )
 
@@ -492,6 +500,8 @@ app.conf.task_routes = {
     "skyspy.tasks.analytics.cleanup_memory_cache": {"queue": "default"},
     # Cleanup tasks (low-priority, can run slowly)
     "skyspy.tasks.cleanup.*": {"queue": "low_priority"},
+    # Law enforcement data sync (external downloads + DB writes)
+    "skyspy.tasks.le_data_sync.*": {"queue": "database"},
     # Long-running transcription tasks
     "skyspy.tasks.transcription.*": {"queue": "transcription"},
     # ACARS decoding tasks (can be slow with libacars)

@@ -3,9 +3,14 @@ Message batcher for Socket.IO.
 
 Batches messages for efficient sending, reducing the number of
 individual emissions while maintaining responsiveness.
+
+NOTE: ``MessageBatcher`` is currently not instantiated anywhere in the
+codebase — the documented 50ms message batching is not actually wired
+into the Socket.IO emit path. This module is kept for future use.
 """
 
 import asyncio
+import contextlib
 import json
 import logging
 from collections import deque
@@ -86,8 +91,10 @@ class MessageBatcher:
             # Check if batch is full (by count OR by bytes)
             max_bytes = self._config.get("max_bytes", 1024 * 1024)
             if len(self._batch) >= self._config["max_size"] or self._batch_size_bytes >= max_bytes:
-                if self._batch_task and not self._batch_task.done():
-                    self._batch_task.cancel()
+                # Do NOT cancel the timer task here: cancelling it while it
+                # is mid-_flush (after messages were popped, while awaiting
+                # the send callback) would drop those messages. The timer
+                # simply finds an empty batch later and exits.
                 should_flush = True
 
         # Flush outside the lock to avoid deadlock (since _flush acquires the lock)
@@ -100,12 +107,24 @@ class MessageBatcher:
                 logger.error(f"Error flushing message batch: {e}", exc_info=True)
 
     async def _flush_after_delay(self):
-        """Wait for batch window then flush."""
+        """Wait for batch window then flush.
+
+        Loops until the batch is empty at the end of a window: a message can
+        be added while a flush is mid-send (after the batch was drained but
+        before this task finished), in which case ``add()`` sees this task as
+        still running and does not start a new timer — without the re-check
+        that message would sit in the batch forever.
+        """
         try:
-            await asyncio.sleep(self._config["window_ms"] / 1000.0)
-            await self._flush()
+            while True:
+                await asyncio.sleep(self._config["window_ms"] / 1000.0)
+                await self._flush()
+                async with self._lock:
+                    if not self._batch:
+                        return
         except asyncio.CancelledError:
-            # Task was cancelled (likely due to immediate flush), this is expected
+            # Task was cancelled externally; any pending messages will be
+            # picked up by the next add()/flush_now() call
             pass
         except Exception as e:
             # Log error to prevent silent message loss
@@ -119,27 +138,43 @@ class MessageBatcher:
 
             # Group messages by type for combined sending
             messages = list(self._batch)
+            batch_bytes = self._batch_size_bytes
             self._batch.clear()
             self._batch_size_bytes = 0  # Reset byte counter
 
-        if len(messages) == 1:
-            # Single message, send directly
-            await self._send_callback(messages[0])
-        else:
-            # Multiple messages, send as batch
-            await self._send_callback(
-                {
-                    "type": "batch",
-                    "messages": messages,
-                    "count": len(messages),
-                    "timestamp": datetime.utcnow().isoformat() + "Z",
-                }
-            )
+        try:
+            if len(messages) == 1:
+                # Single message, send directly
+                await self._send_callback(messages[0])
+            else:
+                # Multiple messages, send as batch
+                await self._send_callback(
+                    {
+                        "type": "batch",
+                        "messages": messages,
+                        "count": len(messages),
+                        "timestamp": datetime.utcnow().isoformat() + "Z",
+                    }
+                )
+        except asyncio.CancelledError:
+            # Cancelled mid-send: re-queue the popped messages so they are
+            # not silently dropped — the next flush will send them
+            async with self._lock:
+                self._batch.extendleft(reversed(messages))
+                self._batch_size_bytes += batch_bytes
+            raise
 
     async def flush_now(self):
-        """Force flush any pending messages."""
-        if self._batch_task and not self._batch_task.done():
-            self._batch_task.cancel()
+        """Force flush any pending messages.
+
+        Cancels the timer task and waits for it to finish before flushing,
+        so any messages a cancelled mid-send flush re-queued are included.
+        """
+        task = self._batch_task
+        if task and not task.done():
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
         try:
             await self._flush()
         except Exception as e:

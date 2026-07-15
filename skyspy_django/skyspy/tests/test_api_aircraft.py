@@ -9,50 +9,46 @@ Tests for:
 - AircraftViewSet.uat_list (GET /api/v1/uat/aircraft/)
 """
 
+import pytest
 from django.core.cache import cache
 from rest_framework import status
-from rest_framework.test import APIClient, APITestCase
+
+# =============================================================================
+# Aircraft List View Tests
+# =============================================================================
 
 
-class AircraftListViewTests(APITestCase):
+@pytest.mark.django_db
+class TestAircraftListView:
     """Tests for the aircraft list endpoint."""
 
-    def setUp(self):
-        """Set up test fixtures."""
-        self.client = APIClient()
-        cache.clear()
-
-    def tearDown(self):
-        """Clean up after tests."""
-        cache.clear()
-
-    def test_list_returns_200(self):
+    def test_list_returns_200(self, api_client):
         """Test that aircraft list returns 200 OK."""
-        response = self.client.get("/api/v1/aircraft/")
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        response = api_client.get("/api/v1/aircraft/")
+        assert response.status_code == status.HTTP_200_OK
 
-    def test_list_empty_cache(self):
+    def test_list_empty_cache(self, api_client):
         """Test list response when cache is empty."""
-        response = self.client.get("/api/v1/aircraft/")
+        response = api_client.get("/api/v1/aircraft/")
         data = response.json()
 
-        self.assertIn("aircraft", data)
-        self.assertIn("count", data)
-        self.assertEqual(data["aircraft"], [])
-        self.assertEqual(data["count"], 0)
+        assert "aircraft" in data
+        assert "count" in data
+        assert data["aircraft"] == []
+        assert data["count"] == 0
 
-    def test_list_response_structure(self):
+    def test_list_response_structure(self, api_client):
         """Test that list response has correct structure."""
-        response = self.client.get("/api/v1/aircraft/")
+        response = api_client.get("/api/v1/aircraft/")
         data = response.json()
 
-        self.assertIn("aircraft", data)
-        self.assertIn("count", data)
-        self.assertIn("now", data)
-        self.assertIn("messages", data)
-        self.assertIn("timestamp", data)
+        assert "aircraft" in data
+        assert "count" in data
+        assert "now" in data
+        assert "messages" in data
+        assert "timestamp" in data
 
-    def test_list_with_cached_aircraft(self):
+    def test_list_with_cached_aircraft(self, api_client):
         """Test list with aircraft data in cache."""
         aircraft_list = [
             {
@@ -85,14 +81,14 @@ class AircraftListViewTests(APITestCase):
         cache.set("current_aircraft", aircraft_list)
         cache.set("aircraft_messages", 12345)
 
-        response = self.client.get("/api/v1/aircraft/")
+        response = api_client.get("/api/v1/aircraft/")
         data = response.json()
 
-        self.assertEqual(data["count"], 2)
-        self.assertEqual(len(data["aircraft"]), 2)
-        self.assertEqual(data["messages"], 12345)
+        assert data["count"] == 2
+        assert len(data["aircraft"]) == 2
+        assert data["messages"] == 12345
 
-    def test_list_aircraft_data_preserved(self):
+    def test_list_aircraft_data_preserved(self, api_client):
         """Test that aircraft data is returned correctly."""
         aircraft = {
             "hex": "ABC123",
@@ -105,37 +101,34 @@ class AircraftListViewTests(APITestCase):
         }
         cache.set("current_aircraft", [aircraft])
 
-        response = self.client.get("/api/v1/aircraft/")
+        response = api_client.get("/api/v1/aircraft/")
         data = response.json()
 
         returned_aircraft = data["aircraft"][0]
-        self.assertEqual(returned_aircraft["hex"], "ABC123")
-        self.assertEqual(returned_aircraft["flight"], "UAL123")
-        self.assertEqual(returned_aircraft["lat"], 47.5)
-        self.assertEqual(returned_aircraft["alt"], 35000)
+        assert returned_aircraft["hex"] == "ABC123"
+        assert returned_aircraft["flight"] == "UAL123"
+        assert returned_aircraft["lat"] == 47.5
+        assert returned_aircraft["alt"] == 35000
 
-    def test_list_timestamp_format(self):
+    def test_list_timestamp_format(self, api_client):
         """Test that timestamp is in ISO format."""
-        response = self.client.get("/api/v1/aircraft/")
+        response = api_client.get("/api/v1/aircraft/")
         data = response.json()
 
-        self.assertTrue(data["timestamp"].endswith("Z"))
-        self.assertIn("T", data["timestamp"])
+        assert data["timestamp"].endswith("Z")
+        assert "T" in data["timestamp"]
 
 
-class AircraftRetrieveViewTests(APITestCase):
+# =============================================================================
+# Aircraft Retrieve View Tests
+# =============================================================================
+
+
+@pytest.mark.django_db
+class TestAircraftRetrieveView:
     """Tests for the aircraft retrieve (detail) endpoint."""
 
-    def setUp(self):
-        """Set up test fixtures."""
-        self.client = APIClient()
-        cache.clear()
-
-    def tearDown(self):
-        """Clean up after tests."""
-        cache.clear()
-
-    def test_retrieve_existing_aircraft(self):
+    def test_retrieve_existing_aircraft(self, api_client):
         """Test retrieving an existing aircraft by hex code."""
         aircraft = {
             "hex": "ABC123",
@@ -147,10 +140,10 @@ class AircraftRetrieveViewTests(APITestCase):
         }
         cache.set("current_aircraft", [aircraft])
 
-        response = self.client.get("/api/v1/aircraft/ABC123/")
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        response = api_client.get("/api/v1/aircraft/ABC123/")
+        assert response.status_code == status.HTTP_200_OK
 
-    def test_retrieve_aircraft_data(self):
+    def test_retrieve_aircraft_data(self, api_client):
         """Test that retrieved aircraft has correct data."""
         aircraft = {
             "hex": "ABC123",
@@ -163,14 +156,14 @@ class AircraftRetrieveViewTests(APITestCase):
         }
         cache.set("current_aircraft", [aircraft])
 
-        response = self.client.get("/api/v1/aircraft/ABC123/")
+        response = api_client.get("/api/v1/aircraft/ABC123/")
         data = response.json()
 
-        self.assertEqual(data["hex"], "ABC123")
-        self.assertEqual(data["flight"], "UAL123")
-        self.assertEqual(data["alt"], 35000)
+        assert data["hex"] == "ABC123"
+        assert data["flight"] == "UAL123"
+        assert data["alt"] == 35000
 
-    def test_retrieve_by_icao_hex(self):
+    def test_retrieve_by_icao_hex(self, api_client):
         """Test retrieving aircraft by icao_hex field."""
         aircraft = {
             "hex": "ABC123",
@@ -179,36 +172,36 @@ class AircraftRetrieveViewTests(APITestCase):
         }
         cache.set("current_aircraft", [aircraft])
 
-        response = self.client.get("/api/v1/aircraft/ABC123/")
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        response = api_client.get("/api/v1/aircraft/ABC123/")
+        assert response.status_code == status.HTTP_200_OK
 
-    def test_retrieve_nonexistent_aircraft(self):
+    def test_retrieve_nonexistent_aircraft(self, api_client):
         """Test retrieving a non-existent aircraft returns 404."""
         cache.set("current_aircraft", [])
 
-        response = self.client.get("/api/v1/aircraft/NOTFOUND/")
-        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        response = api_client.get("/api/v1/aircraft/NOTFOUND/")
+        assert response.status_code == status.HTTP_404_NOT_FOUND
 
-    def test_retrieve_404_error_message(self):
+    def test_retrieve_404_error_message(self, api_client):
         """Test that 404 includes error message."""
         cache.set("current_aircraft", [])
 
-        response = self.client.get("/api/v1/aircraft/NOTFOUND/")
+        response = api_client.get("/api/v1/aircraft/NOTFOUND/")
         data = response.json()
 
-        self.assertIn("error", data)
-        self.assertIn("not found", data["error"].lower())
+        assert "error" in data
+        assert "not found" in data["error"].lower()
 
-    def test_retrieve_case_sensitive(self):
+    def test_retrieve_case_sensitive(self, api_client):
         """Test that hex code lookup is case-sensitive."""
         aircraft = {"hex": "ABC123", "icao_hex": "ABC123"}
         cache.set("current_aircraft", [aircraft])
 
         # Lowercase should not match
-        response = self.client.get("/api/v1/aircraft/abc123/")
-        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        response = api_client.get("/api/v1/aircraft/abc123/")
+        assert response.status_code == status.HTTP_404_NOT_FOUND
 
-    def test_retrieve_from_multiple_aircraft(self):
+    def test_retrieve_from_multiple_aircraft(self, api_client):
         """Test retrieving one aircraft from multiple in cache."""
         aircraft_list = [
             {"hex": "ABC123", "icao_hex": "ABC123", "flight": "UAL123"},
@@ -217,52 +210,49 @@ class AircraftRetrieveViewTests(APITestCase):
         ]
         cache.set("current_aircraft", aircraft_list)
 
-        response = self.client.get("/api/v1/aircraft/DEF456/")
+        response = api_client.get("/api/v1/aircraft/DEF456/")
         data = response.json()
 
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(data["flight"], "DAL456")
+        assert response.status_code == status.HTTP_200_OK
+        assert data["flight"] == "DAL456"
 
 
-class AircraftTopViewTests(APITestCase):
+# =============================================================================
+# Aircraft Top View Tests
+# =============================================================================
+
+
+@pytest.mark.django_db
+class TestAircraftTopView:
     """Tests for the aircraft top endpoint."""
 
-    def setUp(self):
-        """Set up test fixtures."""
-        self.client = APIClient()
-        cache.clear()
-
-    def tearDown(self):
-        """Clean up after tests."""
-        cache.clear()
-
-    def test_top_returns_200(self):
+    def test_top_returns_200(self, api_client):
         """Test that top endpoint returns 200 OK."""
-        response = self.client.get("/api/v1/aircraft/top/")
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        response = api_client.get("/api/v1/aircraft/top/")
+        assert response.status_code == status.HTTP_200_OK
 
-    def test_top_response_structure(self):
+    def test_top_response_structure(self, api_client):
         """Test that top response has all categories."""
-        response = self.client.get("/api/v1/aircraft/top/")
+        response = api_client.get("/api/v1/aircraft/top/")
         data = response.json()
 
         expected_categories = ["closest", "highest", "fastest", "climbing", "military"]
         for category in expected_categories:
-            self.assertIn(category, data)
+            assert category in data
 
-        self.assertIn("total", data)
-        self.assertIn("timestamp", data)
+        assert "total" in data
+        assert "timestamp" in data
 
-    def test_top_empty_cache(self):
+    def test_top_empty_cache(self, api_client):
         """Test top with empty cache."""
-        response = self.client.get("/api/v1/aircraft/top/")
+        response = api_client.get("/api/v1/aircraft/top/")
         data = response.json()
 
-        self.assertEqual(data["closest"], [])
-        self.assertEqual(data["highest"], [])
-        self.assertEqual(data["total"], 0)
+        assert data["closest"] == []
+        assert data["highest"] == []
+        assert data["total"] == 0
 
-    def test_top_closest_sorted(self):
+    def test_top_closest_sorted(self, api_client):
         """Test that closest are sorted by distance."""
         aircraft_list = [
             {"hex": "A", "lat": 47.0, "lon": -122.0, "distance_nm": 10.0},
@@ -271,15 +261,15 @@ class AircraftTopViewTests(APITestCase):
         ]
         cache.set("current_aircraft", aircraft_list)
 
-        response = self.client.get("/api/v1/aircraft/top/")
+        response = api_client.get("/api/v1/aircraft/top/")
         data = response.json()
 
         closest = data["closest"]
-        self.assertEqual(closest[0]["hex"], "B")  # 5nm
-        self.assertEqual(closest[1]["hex"], "A")  # 10nm
-        self.assertEqual(closest[2]["hex"], "C")  # 15nm
+        assert closest[0]["hex"] == "B"  # 5nm
+        assert closest[1]["hex"] == "A"  # 10nm
+        assert closest[2]["hex"] == "C"  # 15nm
 
-    def test_top_highest_sorted(self):
+    def test_top_highest_sorted(self, api_client):
         """Test that highest are sorted by altitude descending."""
         aircraft_list = [
             {"hex": "A", "lat": 47.0, "lon": -122.0, "alt": 30000},
@@ -288,15 +278,15 @@ class AircraftTopViewTests(APITestCase):
         ]
         cache.set("current_aircraft", aircraft_list)
 
-        response = self.client.get("/api/v1/aircraft/top/")
+        response = api_client.get("/api/v1/aircraft/top/")
         data = response.json()
 
         highest = data["highest"]
-        self.assertEqual(highest[0]["hex"], "B")  # 45000
-        self.assertEqual(highest[1]["hex"], "C")  # 35000
-        self.assertEqual(highest[2]["hex"], "A")  # 30000
+        assert highest[0]["hex"] == "B"  # 45000
+        assert highest[1]["hex"] == "C"  # 35000
+        assert highest[2]["hex"] == "A"  # 30000
 
-    def test_top_fastest_sorted(self):
+    def test_top_fastest_sorted(self, api_client):
         """Test that fastest are sorted by ground speed descending."""
         aircraft_list = [
             {"hex": "A", "lat": 47.0, "lon": -122.0, "gs": 400},
@@ -305,15 +295,15 @@ class AircraftTopViewTests(APITestCase):
         ]
         cache.set("current_aircraft", aircraft_list)
 
-        response = self.client.get("/api/v1/aircraft/top/")
+        response = api_client.get("/api/v1/aircraft/top/")
         data = response.json()
 
         fastest = data["fastest"]
-        self.assertEqual(fastest[0]["hex"], "B")  # 550
-        self.assertEqual(fastest[1]["hex"], "C")  # 450
-        self.assertEqual(fastest[2]["hex"], "A")  # 400
+        assert fastest[0]["hex"] == "B"  # 550
+        assert fastest[1]["hex"] == "C"  # 450
+        assert fastest[2]["hex"] == "A"  # 400
 
-    def test_top_climbing_only_positive(self):
+    def test_top_climbing_only_positive(self, api_client):
         """Test that climbing only includes positive vertical rate."""
         aircraft_list = [
             {"hex": "A", "lat": 47.0, "lon": -122.0, "vr": 2000},
@@ -322,16 +312,16 @@ class AircraftTopViewTests(APITestCase):
         ]
         cache.set("current_aircraft", aircraft_list)
 
-        response = self.client.get("/api/v1/aircraft/top/")
+        response = api_client.get("/api/v1/aircraft/top/")
         data = response.json()
 
         climbing = data["climbing"]
         hex_codes = [ac["hex"] for ac in climbing]
-        self.assertIn("A", hex_codes)
-        self.assertIn("C", hex_codes)
-        self.assertNotIn("B", hex_codes)  # Negative vr
+        assert "A" in hex_codes
+        assert "C" in hex_codes
+        assert "B" not in hex_codes  # Negative vr
 
-    def test_top_military_filtered(self):
+    def test_top_military_filtered(self, api_client):
         """Test that military filter works."""
         aircraft_list = [
             {"hex": "A", "lat": 47.0, "lon": -122.0, "military": True},
@@ -340,36 +330,36 @@ class AircraftTopViewTests(APITestCase):
         ]
         cache.set("current_aircraft", aircraft_list)
 
-        response = self.client.get("/api/v1/aircraft/top/")
+        response = api_client.get("/api/v1/aircraft/top/")
         data = response.json()
 
         military = data["military"]
         hex_codes = [ac["hex"] for ac in military]
-        self.assertIn("A", hex_codes)
-        self.assertIn("C", hex_codes)
-        self.assertNotIn("B", hex_codes)
+        assert "A" in hex_codes
+        assert "C" in hex_codes
+        assert "B" not in hex_codes
 
-    def test_top_limit_parameter(self):
+    def test_top_limit_parameter(self, api_client):
         """Test limit query parameter."""
         aircraft_list = [{"hex": f"AC{i}", "lat": 47.0, "lon": -122.0, "alt": 30000 + i * 1000} for i in range(10)]
         cache.set("current_aircraft", aircraft_list)
 
-        response = self.client.get("/api/v1/aircraft/top/?limit=3")
+        response = api_client.get("/api/v1/aircraft/top/?limit=3")
         data = response.json()
 
-        self.assertEqual(len(data["highest"]), 3)
+        assert len(data["highest"]) == 3
 
-    def test_top_default_limit(self):
+    def test_top_default_limit(self, api_client):
         """Test default limit is 5."""
         aircraft_list = [{"hex": f"AC{i}", "lat": 47.0, "lon": -122.0, "alt": 30000 + i * 1000} for i in range(10)]
         cache.set("current_aircraft", aircraft_list)
 
-        response = self.client.get("/api/v1/aircraft/top/")
+        response = api_client.get("/api/v1/aircraft/top/")
         data = response.json()
 
-        self.assertLessEqual(len(data["highest"]), 5)
+        assert len(data["highest"]) <= 5
 
-    def test_top_requires_position(self):
+    def test_top_requires_position(self, api_client):
         """Test that aircraft without position are excluded."""
         aircraft_list = [
             {"hex": "A", "lat": 47.0, "lon": -122.0, "alt": 35000},
@@ -378,37 +368,34 @@ class AircraftTopViewTests(APITestCase):
         ]
         cache.set("current_aircraft", aircraft_list)
 
-        response = self.client.get("/api/v1/aircraft/top/")
+        response = api_client.get("/api/v1/aircraft/top/")
         data = response.json()
 
         # Only 'A' has valid position
         highest = data["highest"]
         hex_codes = [ac["hex"] for ac in highest]
-        self.assertIn("A", hex_codes)
-        self.assertNotIn("B", hex_codes)
-        self.assertNotIn("C", hex_codes)
+        assert "A" in hex_codes
+        assert "B" not in hex_codes
+        assert "C" not in hex_codes
 
 
-class AircraftStatsViewTests(APITestCase):
+# =============================================================================
+# Aircraft Stats View Tests
+# =============================================================================
+
+
+@pytest.mark.django_db
+class TestAircraftStatsView:
     """Tests for the aircraft stats endpoint."""
 
-    def setUp(self):
-        """Set up test fixtures."""
-        self.client = APIClient()
-        cache.clear()
-
-    def tearDown(self):
-        """Clean up after tests."""
-        cache.clear()
-
-    def test_stats_returns_200(self):
+    def test_stats_returns_200(self, api_client):
         """Test that stats endpoint returns 200 OK."""
-        response = self.client.get("/api/v1/aircraft/stats/")
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        response = api_client.get("/api/v1/aircraft/stats/")
+        assert response.status_code == status.HTTP_200_OK
 
-    def test_stats_response_structure(self):
+    def test_stats_response_structure(self, api_client):
         """Test that stats response has expected fields."""
-        response = self.client.get("/api/v1/aircraft/stats/")
+        response = api_client.get("/api/v1/aircraft/stats/")
         data = response.json()
 
         expected_fields = [
@@ -422,18 +409,18 @@ class AircraftStatsViewTests(APITestCase):
             "timestamp",
         ]
         for field in expected_fields:
-            self.assertIn(field, data)
+            assert field in data
 
-    def test_stats_empty_cache(self):
+    def test_stats_empty_cache(self, api_client):
         """Test stats with empty cache."""
-        response = self.client.get("/api/v1/aircraft/stats/")
+        response = api_client.get("/api/v1/aircraft/stats/")
         data = response.json()
 
-        self.assertEqual(data["total"], 0)
-        self.assertEqual(data["with_position"], 0)
-        self.assertEqual(data["military"], 0)
+        assert data["total"] == 0
+        assert data["with_position"] == 0
+        assert data["military"] == 0
 
-    def test_stats_counts(self):
+    def test_stats_counts(self, api_client):
         """Test that stats counts are accurate."""
         aircraft_list = [
             {"hex": "A", "lat": 47.0, "lon": -122.0, "military": True},
@@ -443,14 +430,14 @@ class AircraftStatsViewTests(APITestCase):
         ]
         cache.set("current_aircraft", aircraft_list)
 
-        response = self.client.get("/api/v1/aircraft/stats/")
+        response = api_client.get("/api/v1/aircraft/stats/")
         data = response.json()
 
-        self.assertEqual(data["total"], 4)
-        self.assertEqual(data["with_position"], 3)
-        self.assertEqual(data["military"], 2)
+        assert data["total"] == 4
+        assert data["with_position"] == 3
+        assert data["military"] == 2
 
-    def test_stats_emergency_squawks(self):
+    def test_stats_emergency_squawks(self, api_client):
         """Test that emergency squawks are detected."""
         aircraft_list = [
             {"hex": "A", "squawk": "7500"},  # Hijack
@@ -460,12 +447,12 @@ class AircraftStatsViewTests(APITestCase):
         ]
         cache.set("current_aircraft", aircraft_list)
 
-        response = self.client.get("/api/v1/aircraft/stats/")
+        response = api_client.get("/api/v1/aircraft/stats/")
         data = response.json()
 
-        self.assertEqual(len(data["emergency"]), 3)
+        assert len(data["emergency"]) == 3
 
-    def test_stats_altitude_bands(self):
+    def test_stats_altitude_bands(self, api_client):
         """Test that altitude bands are calculated correctly."""
         aircraft_list = [
             {"hex": "A", "alt": 50},  # ground
@@ -476,16 +463,16 @@ class AircraftStatsViewTests(APITestCase):
         ]
         cache.set("current_aircraft", aircraft_list)
 
-        response = self.client.get("/api/v1/aircraft/stats/")
+        response = api_client.get("/api/v1/aircraft/stats/")
         data = response.json()
 
         altitude = data["altitude"]
-        self.assertEqual(altitude["ground"], 2)
-        self.assertEqual(altitude["low"], 1)
-        self.assertEqual(altitude["medium"], 1)
-        self.assertEqual(altitude["high"], 1)
+        assert altitude["ground"] == 2
+        assert altitude["low"] == 1
+        assert altitude["medium"] == 1
+        assert altitude["high"] == 1
 
-    def test_stats_categories(self):
+    def test_stats_categories(self, api_client):
         """Test that categories are counted."""
         aircraft_list = [
             {"hex": "A", "category": "A3"},
@@ -495,62 +482,59 @@ class AircraftStatsViewTests(APITestCase):
         ]
         cache.set("current_aircraft", aircraft_list)
 
-        response = self.client.get("/api/v1/aircraft/stats/")
+        response = api_client.get("/api/v1/aircraft/stats/")
         data = response.json()
 
         categories = data["categories"]
-        self.assertEqual(categories["A3"], 2)
-        self.assertEqual(categories["A5"], 1)
-        self.assertEqual(categories["B2"], 1)
+        assert categories["A3"] == 2
+        assert categories["A5"] == 1
+        assert categories["B2"] == 1
 
-    def test_stats_messages_count(self):
+    def test_stats_messages_count(self, api_client):
         """Test that messages count is returned."""
         cache.set("current_aircraft", [])
         cache.set("aircraft_messages", 54321)
 
-        response = self.client.get("/api/v1/aircraft/stats/")
+        response = api_client.get("/api/v1/aircraft/stats/")
         data = response.json()
 
-        self.assertEqual(data["messages"], 54321)
+        assert data["messages"] == 54321
 
 
-class UATAircraftViewTests(APITestCase):
+# =============================================================================
+# UAT Aircraft View Tests
+# =============================================================================
+
+
+@pytest.mark.django_db
+class TestUATAircraftView:
     """Tests for the UAT aircraft list endpoint."""
 
-    def setUp(self):
-        """Set up test fixtures."""
-        self.client = APIClient()
-        cache.clear()
-
-    def tearDown(self):
-        """Clean up after tests."""
-        cache.clear()
-
-    def test_uat_returns_200(self):
+    def test_uat_returns_200(self, api_client):
         """Test that UAT endpoint returns 200 OK."""
-        response = self.client.get("/api/v1/uat/aircraft/")
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        response = api_client.get("/api/v1/uat/aircraft/")
+        assert response.status_code == status.HTTP_200_OK
 
-    def test_uat_response_structure(self):
+    def test_uat_response_structure(self, api_client):
         """Test that UAT response has expected structure."""
-        response = self.client.get("/api/v1/uat/aircraft/")
+        response = api_client.get("/api/v1/uat/aircraft/")
         data = response.json()
 
-        self.assertIn("aircraft", data)
-        self.assertIn("count", data)
-        self.assertIn("now", data)
-        self.assertIn("messages", data)
-        self.assertIn("timestamp", data)
+        assert "aircraft" in data
+        assert "count" in data
+        assert "now" in data
+        assert "messages" in data
+        assert "timestamp" in data
 
-    def test_uat_empty_cache(self):
+    def test_uat_empty_cache(self, api_client):
         """Test UAT with empty cache."""
-        response = self.client.get("/api/v1/uat/aircraft/")
+        response = api_client.get("/api/v1/uat/aircraft/")
         data = response.json()
 
-        self.assertEqual(data["aircraft"], [])
-        self.assertEqual(data["count"], 0)
+        assert data["aircraft"] == []
+        assert data["count"] == 0
 
-    def test_uat_with_cached_aircraft(self):
+    def test_uat_with_cached_aircraft(self, api_client):
         """Test UAT with cached aircraft data."""
         uat_aircraft = [
             {"hex": "~UAT001", "lat": 47.5, "lon": -122.3, "alt": 5000},
@@ -558,116 +542,117 @@ class UATAircraftViewTests(APITestCase):
         ]
         cache.set("uat_aircraft", uat_aircraft)
 
-        response = self.client.get("/api/v1/uat/aircraft/")
+        response = api_client.get("/api/v1/uat/aircraft/")
         data = response.json()
 
-        self.assertEqual(data["count"], 2)
-        self.assertEqual(len(data["aircraft"]), 2)
+        assert data["count"] == 2
+        assert len(data["aircraft"]) == 2
 
-    def test_uat_separate_from_1090(self):
+    def test_uat_separate_from_1090(self, api_client):
         """Test that UAT and 1090 aircraft are separate."""
         cache.set("current_aircraft", [{"hex": "ABC123"}])
         cache.set("uat_aircraft", [{"hex": "~UAT001"}])
 
         # Check 1090
-        response_1090 = self.client.get("/api/v1/aircraft/")
+        response_1090 = api_client.get("/api/v1/aircraft/")
         data_1090 = response_1090.json()
-        self.assertEqual(data_1090["count"], 1)
-        self.assertEqual(data_1090["aircraft"][0]["hex"], "ABC123")
+        assert data_1090["count"] == 1
+        assert data_1090["aircraft"][0]["hex"] == "ABC123"
 
         # Check UAT
-        response_uat = self.client.get("/api/v1/uat/aircraft/")
+        response_uat = api_client.get("/api/v1/uat/aircraft/")
         data_uat = response_uat.json()
-        self.assertEqual(data_uat["count"], 1)
-        self.assertEqual(data_uat["aircraft"][0]["hex"], "~UAT001")
+        assert data_uat["count"] == 1
+        assert data_uat["aircraft"][0]["hex"] == "~UAT001"
 
 
-class AircraftEndpointsIntegrationTests(APITestCase):
+# =============================================================================
+# Aircraft Endpoints Integration Tests
+# =============================================================================
+
+
+@pytest.fixture
+def integration_aircraft_data():
+    """Set up realistic test data for integration tests."""
+    aircraft_list = [
+        {
+            "hex": "ABC123",
+            "icao_hex": "ABC123",
+            "flight": "UAL123",
+            "lat": 47.5,
+            "lon": -122.3,
+            "alt": 35000,
+            "gs": 450,
+            "track": 180,
+            "vr": 500,
+            "distance_nm": 15.5,
+            "squawk": "1234",
+            "category": "A3",
+            "military": False,
+        },
+        {
+            "hex": "MIL001",
+            "icao_hex": "MIL001",
+            "flight": "EVAC01",
+            "lat": 47.6,
+            "lon": -122.4,
+            "alt": 25000,
+            "gs": 350,
+            "track": 90,
+            "vr": 2500,
+            "distance_nm": 8.2,
+            "squawk": "7700",
+            "category": "A5",
+            "military": True,
+        },
+    ]
+    cache.set("current_aircraft", aircraft_list)
+    cache.set("aircraft_messages", 99999)
+    return aircraft_list
+
+
+@pytest.mark.django_db
+class TestAircraftEndpointsIntegration:
     """Integration tests for aircraft endpoints."""
 
-    def setUp(self):
-        """Set up test fixtures."""
-        self.client = APIClient()
-        cache.clear()
-
-        # Set up realistic test data
-        self.aircraft_list = [
-            {
-                "hex": "ABC123",
-                "icao_hex": "ABC123",
-                "flight": "UAL123",
-                "lat": 47.5,
-                "lon": -122.3,
-                "alt": 35000,
-                "gs": 450,
-                "track": 180,
-                "vr": 500,
-                "distance_nm": 15.5,
-                "squawk": "1234",
-                "category": "A3",
-                "military": False,
-            },
-            {
-                "hex": "MIL001",
-                "icao_hex": "MIL001",
-                "flight": "EVAC01",
-                "lat": 47.6,
-                "lon": -122.4,
-                "alt": 25000,
-                "gs": 350,
-                "track": 90,
-                "vr": 2500,
-                "distance_nm": 8.2,
-                "squawk": "7700",
-                "category": "A5",
-                "military": True,
-            },
-        ]
-        cache.set("current_aircraft", self.aircraft_list)
-        cache.set("aircraft_messages", 99999)
-
-    def tearDown(self):
-        """Clean up after tests."""
-        cache.clear()
-
-    def test_list_and_retrieve_consistency(self):
+    def test_list_and_retrieve_consistency(self, api_client, integration_aircraft_data):
         """Test that list and retrieve return consistent data."""
-        list_response = self.client.get("/api/v1/aircraft/")
+        list_response = api_client.get("/api/v1/aircraft/")
         list_data = list_response.json()
 
         for aircraft in list_data["aircraft"]:
             hex_code = aircraft["hex"]
-            detail_response = self.client.get(f"/api/v1/aircraft/{hex_code}/")
+            detail_response = api_client.get(f"/api/v1/aircraft/{hex_code}/")
             detail_data = detail_response.json()
 
-            self.assertEqual(aircraft["hex"], detail_data["hex"])
-            self.assertEqual(aircraft["flight"], detail_data["flight"])
+            assert aircraft["hex"] == detail_data["hex"]
+            assert aircraft["flight"] == detail_data["flight"]
 
-    def test_stats_matches_list(self):
+    def test_stats_matches_list(self, api_client, integration_aircraft_data):
         """Test that stats counts match list data."""
-        list_response = self.client.get("/api/v1/aircraft/")
+        list_response = api_client.get("/api/v1/aircraft/")
         list_data = list_response.json()
 
-        stats_response = self.client.get("/api/v1/aircraft/stats/")
+        stats_response = api_client.get("/api/v1/aircraft/stats/")
         stats_data = stats_response.json()
 
-        self.assertEqual(stats_data["total"], list_data["count"])
+        assert stats_data["total"] == list_data["count"]
 
-    def test_top_aircraft_in_list(self):
+    def test_top_aircraft_in_list(self, api_client, integration_aircraft_data):
         """Test that top aircraft appear in list."""
-        top_response = self.client.get("/api/v1/aircraft/top/")
+        top_response = api_client.get("/api/v1/aircraft/top/")
         top_data = top_response.json()
 
-        list_response = self.client.get("/api/v1/aircraft/")
+        list_response = api_client.get("/api/v1/aircraft/")
         list_data = list_response.json()
         list_hex_codes = [ac["hex"] for ac in list_data["aircraft"]]
 
         # Check that top aircraft are in the list
         for category in ["closest", "highest", "fastest"]:
             for aircraft in top_data[category]:
-                self.assertIn(aircraft["hex"], list_hex_codes)
+                assert aircraft["hex"] in list_hex_codes
 
-    def test_all_endpoints_return_json(self):
+    def test_all_endpoints_return_json(self, api_client, integration_aircraft_data):
         """Test that all endpoints return JSON."""
         endpoints = [
             "/api/v1/aircraft/",
@@ -678,15 +663,13 @@ class AircraftEndpointsIntegrationTests(APITestCase):
         ]
 
         for endpoint in endpoints:
-            response = self.client.get(endpoint)
+            response = api_client.get(endpoint)
             if response.status_code == status.HTTP_200_OK:
-                self.assertEqual(
-                    response["Content-Type"], "application/json", f"Endpoint {endpoint} should return JSON"
-                )
+                assert response["Content-Type"] == "application/json", f"Endpoint {endpoint} should return JSON"
 
-    def test_no_authentication_required(self):
+    def test_no_authentication_required(self, api_client, integration_aircraft_data):
         """Test that no authentication is required."""
-        self.client.credentials()
+        api_client.credentials()
 
         endpoints = [
             "/api/v1/aircraft/",
@@ -695,5 +678,5 @@ class AircraftEndpointsIntegrationTests(APITestCase):
         ]
 
         for endpoint in endpoints:
-            response = self.client.get(endpoint)
-            self.assertNotIn(response.status_code, [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN])
+            response = api_client.get(endpoint)
+            assert response.status_code not in [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN]

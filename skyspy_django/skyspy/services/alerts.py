@@ -15,7 +15,7 @@ import logging
 import re
 import time
 
-from django.db import transaction
+from django.db import DatabaseError, transaction
 from django.utils import timezone
 
 # Maximum allowed regex pattern length to prevent ReDoS attacks
@@ -66,6 +66,14 @@ class AlertService:
         self._legacy_cooldowns: dict = {}  # Fallback for testing
         self._default_cooldown_seconds = 300  # 5 minutes
 
+    @staticmethod
+    def _is_military_aircraft(ac: dict) -> bool:
+        """Check if aircraft is military via 'military' key or dbFlags bit 0."""
+        if ac.get("military"):
+            return True
+        db_flags = ac.get("dbFlags", 0)
+        return bool(db_flags & 1) if isinstance(db_flags, int) else False
+
     def check_alerts(self, aircraft_list: list) -> list:
         """
         Check all active alert rules against aircraft.
@@ -104,11 +112,7 @@ class AlertService:
                         # Apply pre-filtering based on aircraft capabilities
                         if rule.requires_military:
                             # Check both 'military' key and 'dbFlags' bit 0
-                            is_military = ac.get("military")
-                            if not is_military:
-                                db_flags = ac.get("dbFlags", 0)
-                                is_military = bool(db_flags & 1) if isinstance(db_flags, int) else False
-                            if not is_military:
+                            if not self._is_military_aircraft(ac):
                                 continue
                         elif (
                             rule.requires_position
@@ -132,8 +136,8 @@ class AlertService:
                                 triggered.append(alert)
                                 timer.add_trigger()
 
-            except Exception as e:
-                logger.warning(f"Segmented lookup failed, falling back to full iteration: {e}")
+            except (KeyError, TypeError, AttributeError, ValueError, ConnectionError, OSError) as e:
+                logger.warning(f"Segmented lookup failed, falling back to full iteration: {type(e).__name__}: {e}")
                 timer.set_cache_hit(False)
                 # Fallback to original algorithm
                 triggered = self._check_alerts_full_iteration(aircraft_list, now, timer)
@@ -154,7 +158,8 @@ class AlertService:
         for rule in active_rules:
             # Pre-filter aircraft using optimization hints
             if rule.requires_military:
-                candidates = [ac for ac in aircraft_list if ac.get("military")]
+                # Check both 'military' key and 'dbFlags' bit 0 (same as segmented path)
+                candidates = [ac for ac in aircraft_list if self._is_military_aircraft(ac)]
             elif rule.requires_position:
                 candidates = [ac for ac in aircraft_list if ac.get("distance_nm") is not None]
             elif rule.requires_altitude:
@@ -402,16 +407,14 @@ class AlertService:
         duration_ms = (time.perf_counter() - start_time) * 1000
         alert_metrics.record_trigger(rule.id, rule.name, rule.priority, duration_ms)
 
-        # Broadcast alert via WebSocket after transaction commits
+        # Broadcast alert via WebSocket after transaction commits.
+        # Subscribers join "topic_alerts" (see socketio/namespaces/main.py on_subscribe);
+        # there is no per-user room convention, so a single topic emit reaches everyone.
         def emit_alert():
             try:
                 sync_emit("alert:triggered", alert_data, room="topic_alerts")
-
-                # Also broadcast to owner-specific channel if rule has owner
-                if rule.owner_id:
-                    sync_emit("alert:triggered", alert_data, room=f"user_{rule.owner_id}")
-            except Exception as e:
-                logger.warning(f"Failed to broadcast alert: {e}")
+            except (ConnectionError, OSError, RuntimeError) as e:
+                logger.warning(f"Failed to broadcast alert: {type(e).__name__}: {e}")
 
         transaction.on_commit(emit_alert)
 
@@ -498,10 +501,12 @@ class AlertService:
             for url, _ in url_channel_pairs:
                 apobj.add(url)
 
-            # Send notification
-            apobj.notify(
+            # Send notification (apprise returns False if delivery failed)
+            success = apobj.notify(
                 title=f"SkysPy Alert: {alert_data['rule_name']}", body=alert_data["message"], notify_type=notify_type
             )
+            if not success:
+                logger.warning(f"Apprise notification failed for alert rule '{alert_data['rule_name']}'")
 
             # Log notification for each channel
             for url, channel_id in url_channel_pairs:
@@ -513,13 +518,13 @@ class AlertService:
                     details=alert_data,
                     channel_id=channel_id,
                     channel_url=url,
-                    status="sent",
+                    status="sent" if success else "failed",
                 )
 
         except ImportError:
             logger.debug("Apprise not installed, skipping notification")
-        except Exception as e:
-            logger.error(f"Failed to send notification: {e}")
+        except (DatabaseError, ConnectionError, OSError, ValueError, TypeError) as e:
+            logger.error(f"Failed to send notification: {type(e).__name__}: {e}")
 
     def _call_webhook(self, url: str, data: dict, rule: CompiledRule):
         """
@@ -544,8 +549,8 @@ class AlertService:
                 rule_name=rule.name,
             )
             logger.debug(f"Queued webhook for rule {rule.id}")
-        except Exception as e:
-            logger.error(f"Failed to queue webhook for rule {rule.id}: {e}")
+        except (ConnectionError, OSError, RuntimeError) as e:
+            logger.error(f"Failed to queue webhook for rule {rule.id}: {type(e).__name__}: {e}")
 
     # Public methods for rule testing and management
 

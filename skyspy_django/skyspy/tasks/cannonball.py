@@ -111,6 +111,10 @@ def analyze_aircraft_patterns(self):
             cache.set("cannonball_threats", [], timeout=30)
             cache.set("cannonball_threat_count", 0, timeout=30)
 
+        # Trigger a server-push refresh so connected Cannonball clients
+        # re-request their (position-personalized) threat lists
+        _broadcast_threat_refresh()
+
         elapsed = (datetime.now() - start_time).total_seconds()
         logger.debug(f"Cannonball analysis completed in {elapsed:.2f}s")
 
@@ -121,7 +125,7 @@ def analyze_aircraft_patterns(self):
 def _update_cannonball_session(threat: dict, user_lat: float = None, user_lon: float = None):
     """Update or create a Cannonball session for a detected threat."""
     try:
-        icao = threat.get("icao_hex")
+        icao = threat.get("hex")
         if not icao:
             return
 
@@ -180,7 +184,7 @@ def _update_cannonball_session(threat: dict, user_lat: float = None, user_lon: f
 def _record_pattern(session: CannonballSession, pattern: dict, threat: dict):
     """Record a detected pattern."""
     try:
-        pattern_type = pattern.get("type")
+        pattern_type = pattern.get("pattern_type")
         confidence = pattern.get("confidence", 0.5)
 
         # Determine confidence level
@@ -202,12 +206,12 @@ def _record_pattern(session: CannonballSession, pattern: dict, threat: dict):
             # Update existing pattern
             existing.confidence_score = confidence
             existing.confidence = confidence_level
-            existing.pattern_data = pattern.get("data", {})
+            existing.pattern_data = pattern.get("metadata", {})
             existing.save()
         else:
             # Create new pattern
             CannonballPattern.objects.create(
-                icao_hex=threat.get("icao_hex"),
+                icao_hex=threat.get("hex"),
                 callsign=threat.get("callsign"),
                 pattern_type=pattern_type,
                 confidence=confidence_level,
@@ -215,7 +219,7 @@ def _record_pattern(session: CannonballSession, pattern: dict, threat: dict):
                 center_lat=pattern.get("center_lat", threat.get("lat", 0)),
                 center_lon=pattern.get("center_lon", threat.get("lon", 0)),
                 radius_nm=pattern.get("radius_nm"),
-                pattern_data=pattern.get("data", {}),
+                pattern_data=pattern.get("metadata", {}),
                 started_at=timezone.now(),
                 session=session,
             )
@@ -244,7 +248,7 @@ def _check_and_generate_alerts(session: CannonballSession, threat: dict):
                     session=session,
                     alert_type="threat_escalated",
                     priority="critical",
-                    title=f"Critical: {threat.get('callsign') or threat.get('icao_hex')}",
+                    title=f"Critical: {threat.get('callsign') or threat.get('hex')}",
                     message=f"Law enforcement aircraft at {threat.get('distance_nm', '?')}nm, "
                     f"bearing {threat.get('bearing', '?')}°",
                     threat=threat,
@@ -264,7 +268,7 @@ def _check_and_generate_alerts(session: CannonballSession, threat: dict):
                     session=session,
                     alert_type="closing_fast",
                     priority="warning",
-                    title=f"Closing: {threat.get('callsign') or threat.get('icao_hex')}",
+                    title=f"Closing: {threat.get('callsign') or threat.get('hex')}",
                     message=f"Aircraft closing at {closing_speed:.0f} kts",
                     threat=threat,
                 )
@@ -283,7 +287,7 @@ def _check_and_generate_alerts(session: CannonballSession, threat: dict):
                     session=session,
                     alert_type="overhead",
                     priority="critical",
-                    title=f"Overhead: {threat.get('callsign') or threat.get('icao_hex')}",
+                    title=f"Overhead: {threat.get('callsign') or threat.get('hex')}",
                     message=f"Aircraft is directly overhead at {threat.get('altitude', '?')}ft",
                     threat=threat,
                 )
@@ -346,6 +350,25 @@ def _broadcast_threats(threats: list):
         )
     except Exception as e:
         logger.debug(f"Failed to broadcast threats: {e}")
+
+
+def _broadcast_threat_refresh():
+    """
+    Broadcast a `threat_refresh` event to all connected Cannonball clients.
+
+    Synchronous counterpart of
+    skyspy.socketio.namespaces.cannonball.broadcast_threat_update (async),
+    emitting the same event via Redis pub/sub so it can be called from
+    Celery tasks. Each client refreshes its threat list on receipt.
+    """
+    try:
+        sync_emit(
+            "threat_refresh",
+            {"timestamp": timezone.now().isoformat().replace("+00:00", "Z")},
+            namespace="/cannonball",
+        )
+    except Exception as e:
+        logger.debug(f"Failed to broadcast threat refresh: {e}")
 
 
 def _broadcast_alert(alert: CannonballAlert, threat: dict):
@@ -427,9 +450,11 @@ def aggregate_cannonball_stats():
 
     Creates hourly stats records for trending and analysis.
     """
+    # Aggregate the previous full hour (this task runs shortly after the
+    # top of the hour, so the current hour is still incomplete)
     now = timezone.now()
-    hour_start = now.replace(minute=0, second=0, microsecond=0)
-    hour_end = hour_start + timedelta(hours=1)
+    hour_end = now.replace(minute=0, second=0, microsecond=0)
+    hour_start = hour_end - timedelta(hours=1)
 
     # Check if we already have stats for this hour
     existing = CannonballStats.objects.filter(

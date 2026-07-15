@@ -601,8 +601,12 @@ class EdgeCaseTests(TestCase):
 
     def test_calculate_flight_category_edge_values(self):
         """Test flight category at boundary values."""
-        # Exactly at VFR/MVFR boundary
+        # Exactly 3000 ft / 5 SM is MVFR (FAA: MVFR is inclusive of both boundaries)
         result = avwx._calculate_flight_category(3000, 5)
+        self.assertEqual(result, "MVFR")
+
+        # Just above the MVFR boundary
+        result = avwx._calculate_flight_category(3001, 6)
         self.assertEqual(result, "VFR")
 
         # Just below VFR threshold

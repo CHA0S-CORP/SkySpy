@@ -15,6 +15,8 @@ from datetime import datetime
 from threading import Lock
 
 import httpx
+from django.db import DatabaseError
+from kombu.exceptions import OperationalError as KombuOperationalError
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from skyspy.models import AircraftInfo
@@ -109,8 +111,8 @@ def get_aircraft_info(icao_hex: str, include_photo: bool = True) -> dict | None:
             info = _serialize_db_info(db_info)
             _update_cache(icao, info)
             return info
-    except Exception as e:
-        logger.debug(f"Database lookup failed for {icao}: {e}")
+    except DatabaseError as e:
+        logger.debug(f"Database lookup failed for {icao}: {type(e).__name__}: {e}")
 
     # 3. Check in-memory databases
     data = external_db.lookup_all(icao)
@@ -170,8 +172,8 @@ def get_bulk_aircraft_info(icao_list: list[str]) -> dict[str, dict]:
 
             # Update missing_icaos to exclude found ones (safe - local variable)
             missing_icaos = [icao for icao in missing_icaos if icao not in found_icaos]
-        except Exception as e:
-            logger.debug(f"Bulk database lookup failed: {e}")
+        except DatabaseError as e:
+            logger.debug(f"Bulk database lookup failed: {type(e).__name__}: {e}")
 
     # Remaining from in-memory databases
     for icao in missing_icaos:
@@ -207,8 +209,10 @@ def queue_aircraft_lookup(icao_hex: str) -> bool:
 
         fetch_aircraft_info.delay(icao)
         return True
-    except Exception as e:
-        logger.debug(f"Failed to queue lookup for {icao}: {e}")
+    except (ConnectionError, OSError, RuntimeError, KombuOperationalError) as e:
+        # KombuOperationalError: broker unavailable - must release the pending
+        # slot or repeated failures permanently exhaust MAX_PENDING
+        logger.debug(f"Failed to queue lookup for {icao}: {type(e).__name__}: {e}")
         with _pending_lock:
             _pending_lookups.discard(icao)
         return False
@@ -317,7 +321,7 @@ def get_aircraft_photo(icao_hex: str, prefer_thumbnail: bool = False) -> str | N
             # Queue photo fetch if we have info but no photo
             if not info.fetch_failed:
                 _queue_photo_fetch(icao)
-    except Exception:
+    except DatabaseError:
         pass
 
     return None
@@ -329,8 +333,8 @@ def _queue_photo_fetch(icao_hex: str):
         from skyspy.tasks.external_db import fetch_aircraft_photos
 
         fetch_aircraft_photos.delay(icao_hex)
-    except Exception as e:
-        logger.debug(f"Failed to queue photo fetch for {icao_hex}: {e}")
+    except (ConnectionError, OSError, RuntimeError) as e:
+        logger.debug(f"Failed to queue photo fetch for {icao_hex}: {type(e).__name__}: {e}")
 
 
 # =============================================================================
@@ -425,11 +429,11 @@ def _fetch_from_external_apis(icao: str) -> dict | None:
                         info["photo_url"] = photo_url
                         info["photo_thumbnail_url"] = f"https://hexdb.io/hex-image-thumb?hex={icao.lower()}"
                         info["photo_source"] = "hexdb.io"
-            except Exception:
+            except (httpx.HTTPError, ConnectionError, OSError):
                 pass
 
-    except Exception as e:
-        logger.debug(f"HexDB lookup failed for {icao}: {e}")
+    except (httpx.HTTPError, ConnectionError, OSError, ValueError) as e:
+        logger.debug(f"HexDB lookup failed for {icao}: {type(e).__name__}: {e}")
 
     # Try adsb.lol if no info yet
     if not info:
@@ -442,8 +446,8 @@ def _fetch_from_external_apis(icao: str) -> dict | None:
                     "type_code": lol_data.get("t"),
                 }
                 sources.append("adsb.lol")
-        except Exception as e:
-            logger.debug(f"adsb.lol lookup failed for {icao}: {e}")
+        except (httpx.HTTPError, ConnectionError, OSError, ValueError) as e:
+            logger.debug(f"adsb.lol lookup failed for {icao}: {type(e).__name__}: {e}")
 
     # Try planespotters for photo if we don't have one
     if info and not info.get("photo_url"):
@@ -463,8 +467,8 @@ def _fetch_from_external_apis(icao: str) -> dict | None:
                     info["photo_page_link"] = photo.get("link")
                     info["photo_photographer"] = photo.get("photographer")
                     info["photo_source"] = "planespotters.net"
-        except Exception as e:
-            logger.debug(f"Planespotters lookup failed for {icao}: {e}")
+        except (httpx.HTTPError, ConnectionError, OSError, ValueError) as e:
+            logger.debug(f"Planespotters lookup failed for {icao}: {type(e).__name__}: {e}")
 
     if info:
         info["sources"] = sources
@@ -556,8 +560,8 @@ def _save_to_database(icao: str, info: dict):
                 "fetch_failed": False,
             },
         )
-    except Exception as e:
-        logger.debug(f"Failed to save aircraft info for {icao}: {e}")
+    except DatabaseError as e:
+        logger.debug(f"Failed to save aircraft info for {icao}: {type(e).__name__}: {e}")
 
 
 # =============================================================================
@@ -575,5 +579,5 @@ def broadcast_aircraft_info(icao_hex: str, info: dict):
             {"icao": icao_hex, "info": info, "timestamp": datetime.utcnow().isoformat() + "Z"},
             room="topic_aircraft",
         )
-    except Exception as e:
-        logger.warning(f"Failed to broadcast aircraft info: {e}")
+    except (ConnectionError, OSError, RuntimeError) as e:
+        logger.warning(f"Failed to broadcast aircraft info: {type(e).__name__}: {e}")

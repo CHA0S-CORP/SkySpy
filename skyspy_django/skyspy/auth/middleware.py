@@ -57,11 +57,39 @@ class AuthModeMiddleware:
             return self.get_response(request)
 
         elif self.auth_mode == "private" and not request.user.is_authenticated:
-            # Everything requires authentication
-            return JsonResponse({"error": "Authentication required"}, status=401)
+            # Session auth has already run, but DRF's JWT/API-key authentication
+            # only happens inside the view - after this middleware. Try those
+            # authenticators here so token clients aren't locked out.
+            user = self._authenticate_token(request)
+            if user is None:
+                # Everything requires authentication
+                return JsonResponse({"error": "Authentication required"}, status=401)
+            request.user = user
 
         # For 'hybrid' mode, let the permission classes handle it
         return self.get_response(request)
+
+    def _authenticate_token(self, request):
+        """Attempt DRF token authenticators (JWT, API key) on the raw request.
+
+        Returns the authenticated user, or None if no valid credentials were
+        provided. DRF re-runs its own authenticators inside the view, so this
+        is only a gate - not the source of truth for request.user in views.
+        """
+        from rest_framework.exceptions import AuthenticationFailed
+        from rest_framework_simplejwt.authentication import JWTAuthentication
+        from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
+
+        from skyspy.auth.authentication import APIKeyAuthentication
+
+        for authenticator in (JWTAuthentication(), APIKeyAuthentication()):
+            try:
+                result = authenticator.authenticate(request)
+            except (AuthenticationFailed, InvalidToken, TokenError):
+                continue
+            if result is not None:
+                return result[0]
+        return None
 
     def _is_public_path(self, path):
         """Check if path is in the public paths list."""

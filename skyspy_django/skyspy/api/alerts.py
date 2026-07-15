@@ -721,6 +721,21 @@ class AlertHistoryViewSet(viewsets.ReadOnlyModelViewSet):
             }
         )
 
+    def _acknowledgeable_queryset(self):
+        """Rows the requesting user may acknowledge.
+
+        get_queryset() includes rows from public-visibility rules so everyone
+        can read them, but acknowledgement must not mutate other users' rows -
+        restrict mutations to own alerts, own rules, and subscribed rules.
+        """
+        user = self.request.user
+        queryset = self.get_queryset()
+        if user.is_superuser:
+            return queryset
+
+        subscribed_rule_ids = AlertSubscription.objects.filter(user=user).values_list("rule_id", flat=True)
+        return queryset.filter(Q(user=user) | Q(rule__owner=user) | Q(rule_id__in=subscribed_rule_ids))
+
     @extend_schema(summary="Acknowledge an alert", responses={200: AlertHistorySerializer})
     @action(detail=True, methods=["post"])
     def acknowledge(self, request, pk=None):
@@ -730,17 +745,20 @@ class AlertHistoryViewSet(viewsets.ReadOnlyModelViewSet):
         if not request.user.is_authenticated:
             return Response({"error": "Authentication required"}, status=status.HTTP_401_UNAUTHORIZED)
 
+        if not self._acknowledgeable_queryset().filter(pk=alert.pk).exists():
+            return Response({"error": "Permission denied"}, status=status.HTTP_403_FORBIDDEN)
+
         alert.acknowledge(request.user)
         return Response(AlertHistorySerializer(alert).data)
 
     @extend_schema(summary="Acknowledge all unacknowledged alerts", responses={200: dict})
     @action(detail=False, methods=["post"], url_path="acknowledge-all")
     def acknowledge_all(self, request):
-        """Acknowledge all unacknowledged alerts visible to user."""
+        """Acknowledge all unacknowledged alerts owned by or subscribed to by the user."""
         if not request.user.is_authenticated:
             return Response({"error": "Authentication required"}, status=status.HTTP_401_UNAUTHORIZED)
 
-        queryset = self.get_queryset().filter(acknowledged=False)
+        queryset = self._acknowledgeable_queryset().filter(acknowledged=False)
         updated = queryset.update(acknowledged=True, acknowledged_by=request.user, acknowledged_at=timezone.now())
 
         return Response(

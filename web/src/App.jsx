@@ -229,13 +229,6 @@ export default function App() {
     clearAirframeError,
   } = useSocketIOData(true, config.apiBaseUrl, 'all');
 
-  // Debug: Log aircraft data received from useSocketIOData
-  useEffect(() => {
-    if (aircraft?.length > 0) {
-      console.log('[App] Aircraft from useSocketIOData:', aircraft.length, 'aircraft');
-    }
-  }, [aircraft]);
-
   // High-frequency position updates for smooth map rendering
   // Uses refs instead of state to avoid 60Hz re-renders
   const { positionsRef, connected: positionSocketConnected } = useSocketIOPositions(
@@ -253,7 +246,7 @@ export default function App() {
           const data = await wsRequest('status', {});
           if (data && !data.error) setStatus(data);
         } catch (err) {
-          console.log('App status WS request error:', err.message);
+          console.warn('App status WS request error:', err.message);
         }
       } else {
         try {
@@ -261,7 +254,7 @@ export default function App() {
           const data = await safeJson(res);
           if (data) setStatus(data);
         } catch (err) {
-          console.log('App status HTTP fetch error:', err.message);
+          console.warn('App status HTTP fetch error:', err.message);
         }
       }
     };
@@ -316,73 +309,71 @@ export default function App() {
   }, [config.apiBaseUrl]);
 
   // Lookup ICAO hex from tail/registration when on airframe page with tail param
+  // Side effects run in the effect body (never inside a setState updater, which
+  // must stay pure and can run twice under StrictMode)
   useEffect(() => {
     if (activeTab !== 'airframe' || !hashParams.tail) return;
 
     const tail = hashParams.tail.trim().toUpperCase();
 
-    // Check if already in cache or lookup in progress (use functional check to avoid stale closure)
-    setTailHexLookup((prev) => {
-      if (tail in prev) return prev; // Already cached, no change needed
+    // Already cached or lookup in progress - nothing to do
+    if (tail in tailHexLookup) return;
+    if (tailLookupInProgressRef.current.has(tail)) return;
 
-      // Check if lookup already in progress
-      if (tailLookupInProgressRef.current.has(tail)) return prev;
+    // Check if live aircraft has this tail
+    const liveAircraft = aircraft.find((a) => a.r?.toUpperCase() === tail);
+    if (liveAircraft?.hex) {
+      setTailHexLookup((prev) => (tail in prev ? prev : { ...prev, [tail]: liveAircraft.hex }));
+      return;
+    }
 
-      // Check if live aircraft has this tail
-      const liveAircraft = aircraft.find((a) => a.r?.toUpperCase() === tail);
-      if (liveAircraft?.hex) {
-        return { ...prev, [tail]: liveAircraft.hex };
-      }
+    // Mark lookup in progress and trigger async lookup
+    tailLookupInProgressRef.current.add(tail);
 
-      // Mark lookup in progress and trigger async lookup
-      tailLookupInProgressRef.current.add(tail);
+    // Look up from sightings API (prefer WebSocket)
+    // Uses refs to read current values at execution time, avoiding stale closures
+    const lookupTail = async () => {
+      try {
+        let data;
+        // Read current values from refs at execution time
+        const currentWsRequest = wsRequestRef.current;
+        const currentConnected = connectedRef.current;
+        const currentApiBaseUrl = apiBaseUrlRef.current;
 
-      // Look up from sightings API (prefer WebSocket)
-      // Uses refs to read current values at execution time, avoiding stale closures
-      const lookupTail = async () => {
-        try {
-          let data;
-          // Read current values from refs at execution time
-          const currentWsRequest = wsRequestRef.current;
-          const currentConnected = connectedRef.current;
-          const currentApiBaseUrl = apiBaseUrlRef.current;
-
-          if (currentWsRequest && currentConnected) {
-            const result = await currentWsRequest('sightings', {
-              registration: tail,
-              hours: 168,
-              limit: 1,
-            });
-            if (result && (result.sightings || result.results)) {
-              data = result;
-            } else {
-              throw new Error('Invalid sightings response');
-            }
+        if (currentWsRequest && currentConnected) {
+          const result = await currentWsRequest('sightings', {
+            registration: tail,
+            hours: 168,
+            limit: 1,
+          });
+          if (result && (result.sightings || result.results)) {
+            data = result;
           } else {
-            // Django API uses /api/v1/sightings (was /api/v1/history/sightings)
-            const res = await fetch(
-              `${currentApiBaseUrl}/api/v1/sightings?registration=${encodeURIComponent(tail)}&hours=168&limit=1`
-            );
-            data = await safeJson(res);
-            if (!data) throw new Error('HTTP request failed');
+            throw new Error('Invalid sightings response');
           }
-          const sightings = data?.sightings || data?.results || [];
-          if (sightings.length > 0 && sightings[0].icao_hex) {
-            setTailHexLookup((p) => ({ ...p, [tail]: sightings[0].icao_hex }));
-          } else {
-            setTailHexLookup((p) => ({ ...p, [tail]: null }));
-          }
-        } catch (err) {
-          setTailHexLookup((p) => ({ ...p, [tail]: null }));
-        } finally {
-          tailLookupInProgressRef.current.delete(tail);
+        } else {
+          // Django API uses /api/v1/sightings (was /api/v1/history/sightings)
+          const res = await fetch(
+            `${currentApiBaseUrl}/api/v1/sightings?registration=${encodeURIComponent(tail)}&hours=168&limit=1`
+          );
+          data = await safeJson(res);
+          if (!data) throw new Error('HTTP request failed');
         }
-      };
+        const sightings = data?.sightings || data?.results || [];
+        if (sightings.length > 0 && sightings[0].icao_hex) {
+          setTailHexLookup((p) => ({ ...p, [tail]: sightings[0].icao_hex }));
+        } else {
+          setTailHexLookup((p) => ({ ...p, [tail]: null }));
+        }
+      } catch (err) {
+        setTailHexLookup((p) => ({ ...p, [tail]: null }));
+      } finally {
+        tailLookupInProgressRef.current.delete(tail);
+      }
+    };
 
-      lookupTail();
-      return prev; // Return unchanged for now, async will update
-    });
-  }, [activeTab, hashParams.tail, aircraft]);
+    lookupTail();
+  }, [activeTab, hashParams.tail, aircraft, tailHexLookup]);
 
   // Show login page if on login tab
   if (activeTab === 'login') {

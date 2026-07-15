@@ -424,7 +424,9 @@ def get_cached_airports(
             longitude__range=(lon - lon_range, lon + lon_range),
         )
 
-    airports = list(queryset[: limit * 2])
+    # When filtering by location, the bounding-box filter already limits the row count;
+    # slicing an unordered queryset here would drop nearby airports nondeterministically.
+    airports = list(queryset) if lat is not None and lon is not None else list(queryset[:limit])
 
     results = []
     for apt in airports:
@@ -473,7 +475,9 @@ def get_cached_navaids(
             longitude__range=(lon - lon_range, lon + lon_range),
         )
 
-    navaids = list(queryset[: limit * 2])
+    # When filtering by location, the bounding-box filter already limits the row count;
+    # slicing an unordered queryset here would drop nearby navaids nondeterministically.
+    navaids = list(queryset) if lat is not None and lon is not None else list(queryset[:limit])
 
     results = []
     for nav in navaids:

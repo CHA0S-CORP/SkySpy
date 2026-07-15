@@ -319,3 +319,289 @@ class TestSocketIOServer:
 
         # Should not raise any exceptions
         register_all_namespaces()
+
+
+class TestRequestPermissionDefaultDeny:
+    """Tests for default-deny request permission checking."""
+
+    @pytest.mark.asyncio
+    async def test_unlisted_request_type_denied_in_private_mode(self):
+        """Unlisted request types must be denied outside public mode."""
+        from django.test import override_settings
+
+        from skyspy.socketio.namespaces.main import MainNamespace
+
+        namespace = MainNamespace("/")
+
+        mock_sio = MagicMock()
+        mock_sio.get_session = AsyncMock(return_value={"user": AnonymousUser()})
+
+        with override_settings(AUTH_MODE="private"):
+            with patch("skyspy.socketio.namespaces.main.sio", mock_sio):
+                allowed = await namespace._check_request_permission("test-sid", "generic_request")
+                assert allowed is False
+
+    @pytest.mark.asyncio
+    async def test_unlisted_request_type_allowed_in_public_mode(self):
+        """Public mode still allows everything (permission checks bypassed)."""
+        from django.test import override_settings
+
+        from skyspy.socketio.namespaces.main import MainNamespace
+
+        namespace = MainNamespace("/")
+
+        with override_settings(AUTH_MODE="public"):
+            allowed = await namespace._check_request_permission("test-sid", "anything-at-all")
+            assert allowed is True
+
+    def test_request_permissions_cover_known_read_types(self):
+        """Legitimate read/refresh request types must be listed (not default-denied)."""
+        from skyspy.socketio.namespaces.main import MainNamespace
+
+        for request_type in (
+            "aircraft-snapshot",
+            "aircraft-list",
+            "acars-snapshot",
+            "safety-snapshot",
+            "alert-snapshot",
+            "notam-snapshot",
+            "history-stats",
+            "refresh",
+            "metars",
+            "status",
+            "ws-status",
+            "stats-flight-patterns",
+        ):
+            assert request_type in MainNamespace.REQUEST_PERMISSIONS, f"{request_type} missing"
+
+    @pytest.mark.asyncio
+    async def test_cannonball_unlisted_request_type_denied(self):
+        """Cannonball namespace also default-denies unlisted request types."""
+        from django.test import override_settings
+
+        from skyspy.socketio.namespaces.cannonball import CannonballNamespace
+
+        namespace = CannonballNamespace()
+
+        mock_sio = MagicMock()
+        mock_sio.get_session = AsyncMock(return_value={"user": AnonymousUser()})
+
+        with override_settings(AUTH_MODE="private"):
+            with patch("skyspy.socketio.namespaces.cannonball.sio", mock_sio):
+                allowed = await namespace._check_request_permission("test-sid", "not-a-real-type")
+                assert allowed is False
+
+
+class TestCannonballBroadcastRooms:
+    """Tests that cannonball clients join the rooms Celery tasks broadcast to."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.django_db
+    async def test_connect_joins_threat_and_alert_rooms(self):
+        """on_connect must join cannonball_threats and cannonball_alerts."""
+        from skyspy.socketio.namespaces.cannonball import CannonballNamespace
+
+        namespace = CannonballNamespace()
+
+        mock_sio = MagicMock()
+        mock_sio.save_session = AsyncMock()
+
+        with patch(
+            "skyspy.socketio.namespaces.cannonball.authenticate_socket",
+            AsyncMock(return_value=(AnonymousUser(), None)),
+        ):
+            with patch(
+                "skyspy.socketio.namespaces.cannonball.check_topic_permission",
+                AsyncMock(return_value=True),
+            ):
+                with patch("skyspy.socketio.namespaces.cannonball.sio", mock_sio):
+                    with patch.object(namespace, "enter_room", AsyncMock()) as mock_enter:
+                        with patch.object(namespace, "emit", AsyncMock()):
+                            result = await namespace.on_connect("test-sid", {})
+
+                            assert result is True
+                            joined_rooms = [c[0][1] for c in mock_enter.call_args_list]
+                            assert "cannonball_threats" in joined_rooms
+                            assert "cannonball_alerts" in joined_rooms
+
+
+class TestMilitaryFilter:
+    """Tests for the military_only aircraft list filter."""
+
+    @pytest.mark.asyncio
+    async def test_military_only_uses_military_key(self):
+        """Filter must match the 'military' key set by the cache writers."""
+        from skyspy.socketio.namespaces.main import MainNamespace
+
+        namespace = MainNamespace("/")
+
+        aircraft = [
+            {"hex": "AE0000", "military": True, "alt_baro": 10000},
+            {"hex": "A00001", "military": False, "alt_baro": 20000},
+        ]
+
+        with patch("skyspy.socketio.namespaces.mixins.aircraft.cache") as mock_cache:
+            mock_cache.get.return_value = aircraft
+            result = await namespace._get_aircraft_list({"military_only": True})
+
+        assert len(result) == 1
+        assert result[0]["hex"] == "AE0000"
+
+
+class TestNonDictPayloads:
+    """Tests that handlers reject non-dict payloads with an error response."""
+
+    @pytest.mark.asyncio
+    async def test_main_on_request_rejects_string_payload(self):
+        from skyspy.socketio.namespaces.main import MainNamespace
+
+        namespace = MainNamespace("/")
+
+        mock_sio = MagicMock()
+        mock_sio.emit = AsyncMock()
+
+        with patch("skyspy.socketio.namespaces.main.sio", mock_sio):
+            await namespace.on_request("test-sid", "not-a-dict")
+
+        mock_sio.emit.assert_called_once()
+        assert mock_sio.emit.call_args[0][0] == "error"
+
+    @pytest.mark.asyncio
+    async def test_main_on_unsubscribe_rejects_none_payload(self):
+        from skyspy.socketio.namespaces.main import MainNamespace
+
+        namespace = MainNamespace("/")
+
+        mock_sio = MagicMock()
+        mock_sio.emit = AsyncMock()
+
+        with patch("skyspy.socketio.namespaces.main.sio", mock_sio):
+            await namespace.on_unsubscribe("test-sid", None)
+
+        mock_sio.emit.assert_called_once()
+        assert mock_sio.emit.call_args[0][0] == "error"
+
+    @pytest.mark.asyncio
+    async def test_audio_on_request_rejects_list_payload(self):
+        from skyspy.socketio.namespaces.audio import AudioNamespace
+
+        namespace = AudioNamespace()
+
+        with patch.object(namespace, "emit", AsyncMock()) as mock_emit:
+            await namespace.on_request("test-sid", ["not", "a", "dict"])
+
+        mock_emit.assert_called_once()
+        assert mock_emit.call_args[0][0] == "error"
+
+    @pytest.mark.asyncio
+    async def test_cannonball_on_position_update_rejects_string_payload(self):
+        from skyspy.socketio.namespaces.cannonball import CannonballNamespace
+
+        namespace = CannonballNamespace()
+
+        with patch.object(namespace, "emit", AsyncMock()) as mock_emit:
+            await namespace.on_position_update("test-sid", "34.05,-118.25")
+
+        mock_emit.assert_called_once()
+        assert mock_emit.call_args[0][0] == "error"
+
+
+class TestRequestRateLimiting:
+    """Tests that on_request enforces the per-session rate limiter."""
+
+    @pytest.mark.asyncio
+    async def test_main_on_request_rejects_when_rate_limited(self):
+        from skyspy.socketio.namespaces.main import MainNamespace
+        from skyspy.socketio.utils.rate_limiter import RateLimiter
+
+        namespace = MainNamespace("/")
+
+        limiter = RateLimiter({"request": 10})
+        assert limiter.can_send("request") is True  # consume the allowance
+
+        mock_sio = MagicMock()
+        mock_sio.emit = AsyncMock()
+        mock_sio.get_session = AsyncMock(return_value={"user": AnonymousUser(), "rate_limiter": limiter})
+
+        with patch("skyspy.socketio.namespaces.main.sio", mock_sio):
+            await namespace.on_request("test-sid", {"type": "status", "request_id": "r1"})
+
+        mock_sio.emit.assert_called_once()
+        event, payload = mock_sio.emit.call_args[0][0], mock_sio.emit.call_args[0][1]
+        assert event == "error"
+        assert "Rate limit" in payload["message"]
+
+
+class TestBatcherFlushRaces:
+    """Tests for MessageBatcher flush race fixes."""
+
+    @pytest.mark.asyncio
+    async def test_message_added_during_flush_is_not_stuck(self):
+        """A message added while a flush is mid-send must still be flushed."""
+        import asyncio
+
+        from skyspy.socketio.utils.batcher import MessageBatcher
+
+        sent = []
+        first_send_started = asyncio.Event()
+        release_first_send = asyncio.Event()
+
+        async def callback(message):
+            sent.append(message)
+            if len(sent) == 1:
+                first_send_started.set()
+                await release_first_send.wait()
+
+        batcher = MessageBatcher(
+            callback,
+            config={"window_ms": 10, "max_size": 50, "max_bytes": 1024 * 1024, "immediate_types": []},
+        )
+
+        await batcher.add({"type": "test", "n": 1})
+        await asyncio.wait_for(first_send_started.wait(), timeout=2)
+
+        # Timer task is now mid-send; batch is drained but task not done,
+        # so this message gets no new timer under the old implementation
+        await batcher.add({"type": "test", "n": 2})
+        release_first_send.set()
+
+        for _ in range(100):
+            if len(sent) >= 2:
+                break
+            await asyncio.sleep(0.02)
+
+        assert len(sent) >= 2
+        assert batcher.pending_count == 0
+
+    @pytest.mark.asyncio
+    async def test_flush_now_does_not_drop_messages_cancelled_mid_send(self):
+        """Messages popped by a flush that gets cancelled mid-send are re-sent."""
+        import asyncio
+
+        from skyspy.socketio.utils.batcher import MessageBatcher
+
+        calls = []
+        first_send_started = asyncio.Event()
+        block_forever = asyncio.Event()
+
+        async def callback(message):
+            calls.append(message)
+            if len(calls) == 1:
+                first_send_started.set()
+                await block_forever.wait()  # cancelled by flush_now
+
+        batcher = MessageBatcher(
+            callback,
+            config={"window_ms": 10, "max_size": 50, "max_bytes": 1024 * 1024, "immediate_types": []},
+        )
+
+        await batcher.add({"type": "test", "n": 1})
+        await asyncio.wait_for(first_send_started.wait(), timeout=2)
+
+        # Cancels the mid-send timer flush; the popped message must be
+        # re-queued and delivered by flush_now itself
+        await asyncio.wait_for(batcher.flush_now(), timeout=2)
+
+        assert len(calls) == 2
+        assert calls[1] == {"type": "test", "n": 1}
+        assert batcher.pending_count == 0

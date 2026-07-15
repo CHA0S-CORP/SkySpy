@@ -13,7 +13,7 @@ from typing import Any
 import httpx
 from django.conf import settings
 from django.core.cache import cache
-from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
+from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +62,37 @@ AIRSPACE_TYPES = {
     33: "LMA",
 }
 
+# OpenAIP vertical limit unit enums (per Core API airspace schema):
+# 0 = Meter, 1 = Feet, 6 = Flight Level
+ALTITUDE_UNITS = {0: "m", 1: "ft", 6: "fl"}
+
+# OpenAIP reference datum enums: 0 = GND, 1 = MSL, 2 = STD
+REFERENCE_DATUMS = {0: "GND", 1: "MSL", 2: "STD"}
+
+
+def _limit_to_ft(limit: dict) -> int | None:
+    """Convert an OpenAIP vertical limit ({value, unit, referenceDatum}) to feet."""
+    value = limit.get("value", 0)
+    unit = limit.get("unit", "ft")
+    # Map numeric enum to unit string (API returns integers; strings kept for compat)
+    if isinstance(unit, int):
+        unit = ALTITUDE_UNITS.get(unit, "ft")
+    unit = str(unit).lower()
+
+    if unit == "m":
+        return int(value * 3.281)
+    if unit == "fl":
+        return int(value * 100)  # Flight level = hundreds of feet
+    return int(value)
+
+
+def _limit_reference(limit: dict) -> str:
+    """Get the reference datum string (GND/MSL/STD) for an OpenAIP vertical limit."""
+    ref = limit.get("referenceDatum", "MSL")
+    if isinstance(ref, int):
+        return REFERENCE_DATUMS.get(ref, "MSL")
+    return ref
+
 
 def _get_api_key() -> str | None:
     """Get OpenAIP API key from settings."""
@@ -70,13 +101,21 @@ def _get_api_key() -> str | None:
 
 def _is_enabled() -> bool:
     """Check if OpenAIP is enabled."""
-    return getattr(settings, "OPENAIP_ENABLED", False) and _get_api_key()
+    return bool(getattr(settings, "OPENAIP_ENABLED", False) and _get_api_key())
+
+
+def _is_retryable_http_error(exc: BaseException) -> bool:
+    """Retry on network/timeout errors and 5xx responses, but not 4xx (auth, rate limit)."""
+    if isinstance(exc, httpx.HTTPStatusError):
+        return exc.response.status_code >= 500
+    return isinstance(exc, (httpx.HTTPError, httpx.TimeoutException))
 
 
 @retry(
     stop=stop_after_attempt(3),
     wait=wait_exponential(multiplier=1, min=1, max=10),
-    retry=retry_if_exception_type((httpx.HTTPError, httpx.TimeoutException)),
+    retry=retry_if_exception(_is_retryable_http_error),
+    reraise=True,
 )
 def _http_get_openaip(url: str, params: dict | None, api_key: str, timeout: float = 15.0) -> httpx.Response:
     """HTTP GET with retry logic for OpenAIP API."""
@@ -204,14 +243,10 @@ def _parse_airspace(item: dict[str, Any]) -> dict[str, Any] | None:
         ceiling_ft = None
 
         if isinstance(lower_limit, dict):
-            floor_value = lower_limit.get("value", 0)
-            floor_unit = lower_limit.get("unit", "ft")
-            floor_ft = int(floor_value * 3.281) if floor_unit == "m" else int(floor_value)
+            floor_ft = _limit_to_ft(lower_limit)
 
         if isinstance(upper_limit, dict):
-            ceiling_value = upper_limit.get("value", 0)
-            ceiling_unit = upper_limit.get("unit", "ft")
-            ceiling_ft = int(ceiling_value * 3.281) if ceiling_unit == "m" else int(ceiling_value)
+            ceiling_ft = _limit_to_ft(upper_limit)
 
         # Parse geometry
         geometry = item.get("geometry")
@@ -226,8 +261,8 @@ def _parse_airspace(item: dict[str, Any]) -> dict[str, Any] | None:
             "country": item.get("country", ""),
             "floor_ft": floor_ft,
             "ceiling_ft": ceiling_ft,
-            "floor_ref": lower_limit.get("referenceDatum", "MSL") if isinstance(lower_limit, dict) else "MSL",
-            "ceiling_ref": upper_limit.get("referenceDatum", "MSL") if isinstance(upper_limit, dict) else "MSL",
+            "floor_ref": _limit_reference(lower_limit) if isinstance(lower_limit, dict) else "MSL",
+            "ceiling_ref": _limit_reference(upper_limit) if isinstance(upper_limit, dict) else "MSL",
             "geometry": geometry,
             "source": "openaip",
         }

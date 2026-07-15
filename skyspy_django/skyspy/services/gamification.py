@@ -159,6 +159,11 @@ DEFAULT_RARE_TYPES = [
 ]
 
 
+# TTL for the in-process pattern caches below (module singleton is long-lived,
+# so without a TTL, edits to Notable*/RareAircraftType rows would never be picked up)
+PATTERN_CACHE_TTL_SECONDS = 300
+
+
 class GamificationService:
     """Service for managing gamification features."""
 
@@ -166,6 +171,18 @@ class GamificationService:
         self._notable_registrations_cache = None
         self._notable_callsigns_cache = None
         self._rare_types_cache = None
+        self._pattern_caches_loaded_at = None
+
+    def _maybe_expire_pattern_caches(self):
+        """Drop the in-process pattern caches once their TTL has elapsed."""
+        if (
+            self._pattern_caches_loaded_at is not None
+            and (timezone.now() - self._pattern_caches_loaded_at).total_seconds() > PATTERN_CACHE_TTL_SECONDS
+        ):
+            self._notable_registrations_cache = None
+            self._notable_callsigns_cache = None
+            self._rare_types_cache = None
+            self._pattern_caches_loaded_at = None
 
     # ==========================================================================
     # Personal Records
@@ -179,7 +196,7 @@ class GamificationService:
                 return cached
 
         records = PersonalRecord.objects.all()
-        result = {"records": [], "timestamp": timezone.now().isoformat() + "Z"}
+        result = {"records": [], "timestamp": timezone.now().isoformat().replace("+00:00", "Z")}
 
         for record in records:
             result["records"].append(
@@ -192,7 +209,9 @@ class GamificationService:
                     "registration": record.registration,
                     "operator": record.operator,
                     "value": record.value,
-                    "achieved_at": record.achieved_at.isoformat() + "Z" if record.achieved_at else None,
+                    "achieved_at": record.achieved_at.isoformat().replace("+00:00", "Z")
+                    if record.achieved_at
+                    else None,
                     "previous_value": record.previous_value,
                     "previous_icao_hex": record.previous_icao_hex,
                 }
@@ -387,13 +406,15 @@ class GamificationService:
         if not include_acknowledged:
             qs = qs.filter(is_acknowledged=False)
 
+        # Count before slicing - counting the sliced queryset would cap at `limit`
+        total_count = qs.count()
         qs = qs.order_by("-rarity_score", "-sighted_at")[:limit]
 
         result = {
             "sightings": [],
-            "total_count": qs.count(),
+            "total_count": total_count,
             "time_range_hours": hours,
-            "timestamp": timezone.now().isoformat() + "Z",
+            "timestamp": timezone.now().isoformat().replace("+00:00", "Z"),
         }
 
         for sighting in qs:
@@ -407,7 +428,9 @@ class GamificationService:
                     "registration": sighting.registration,
                     "aircraft_type": sighting.aircraft_type,
                     "operator": sighting.operator,
-                    "sighted_at": sighting.sighted_at.isoformat() + "Z" if sighting.sighted_at else None,
+                    "sighted_at": sighting.sighted_at.isoformat().replace("+00:00", "Z")
+                    if sighting.sighted_at
+                    else None,
                     "description": sighting.description,
                     "rarity_score": sighting.rarity_score,
                     "times_seen": sighting.times_seen,
@@ -548,7 +571,8 @@ class GamificationService:
         return None
 
     def _get_notable_registrations(self) -> list:
-        """Get notable registration patterns (cached)."""
+        """Get notable registration patterns (cached with TTL)."""
+        self._maybe_expire_pattern_caches()
         if self._notable_registrations_cache is None:
             db_patterns = list(
                 NotableRegistration.objects.filter(is_active=True).values(
@@ -559,10 +583,13 @@ class GamificationService:
                 self._notable_registrations_cache = db_patterns
             else:
                 self._notable_registrations_cache = DEFAULT_NOTABLE_REGISTRATIONS
+            if self._pattern_caches_loaded_at is None:
+                self._pattern_caches_loaded_at = timezone.now()
         return self._notable_registrations_cache
 
     def _get_notable_callsigns(self) -> list:
-        """Get notable callsign patterns (cached)."""
+        """Get notable callsign patterns (cached with TTL)."""
+        self._maybe_expire_pattern_caches()
         if self._notable_callsigns_cache is None:
             db_patterns = list(
                 NotableCallsign.objects.filter(is_active=True).values(
@@ -573,10 +600,13 @@ class GamificationService:
                 self._notable_callsigns_cache = db_patterns
             else:
                 self._notable_callsigns_cache = DEFAULT_NOTABLE_CALLSIGNS
+            if self._pattern_caches_loaded_at is None:
+                self._pattern_caches_loaded_at = timezone.now()
         return self._notable_callsigns_cache
 
     def _get_rare_types(self) -> list:
-        """Get rare aircraft types (cached)."""
+        """Get rare aircraft types (cached with TTL)."""
+        self._maybe_expire_pattern_caches()
         if self._rare_types_cache is None:
             db_types = list(
                 RareAircraftType.objects.filter(is_active=True).values(
@@ -587,6 +617,8 @@ class GamificationService:
                 self._rare_types_cache = db_types
             else:
                 self._rare_types_cache = DEFAULT_RARE_TYPES
+            if self._pattern_caches_loaded_at is None:
+                self._pattern_caches_loaded_at = timezone.now()
         return self._rare_types_cache
 
     def _create_rare_sighting(
@@ -702,14 +734,16 @@ class GamificationService:
             "first_aircraft": {
                 "icao_hex": first_ever.icao_hex,
                 "registration": first_ever.registration,
-                "first_seen": first_ever.first_seen.isoformat() + "Z" if first_ever.first_seen else None,
+                "first_seen": first_ever.first_seen.isoformat().replace("+00:00", "Z")
+                if first_ever.first_seen
+                else None,
             }
             if first_ever
             else None,
             "last_aircraft": {
                 "icao_hex": last_seen.icao_hex,
                 "registration": last_seen.registration,
-                "last_seen": last_seen.last_seen.isoformat() + "Z" if last_seen.last_seen else None,
+                "last_seen": last_seen.last_seen.isoformat().replace("+00:00", "Z") if last_seen.last_seen else None,
             }
             if last_seen
             else None,
@@ -722,7 +756,7 @@ class GamificationService:
                 }
                 for ac in most_seen
             ],
-            "timestamp": timezone.now().isoformat() + "Z",
+            "timestamp": timezone.now().isoformat().replace("+00:00", "Z"),
         }
 
         cache.set(CACHE_KEY_COLLECTION_STATS, result, timeout=COLLECTION_STATS_TIMEOUT)
@@ -747,13 +781,13 @@ class GamificationService:
                     "unique_aircraft": c.unique_aircraft,
                     "total_sightings": c.total_sightings,
                     "total_sessions": c.total_sessions,
-                    "first_seen": c.first_seen.isoformat() + "Z" if c.first_seen else None,
-                    "last_seen": c.last_seen.isoformat() + "Z" if c.last_seen else None,
+                    "first_seen": c.first_seen.isoformat().replace("+00:00", "Z") if c.first_seen else None,
+                    "last_seen": c.last_seen.isoformat().replace("+00:00", "Z") if c.last_seen else None,
                 }
                 for c in counts
             ],
             "total_types": SpottedCount.objects.filter(count_type="aircraft_type").count(),
-            "timestamp": timezone.now().isoformat() + "Z",
+            "timestamp": timezone.now().isoformat().replace("+00:00", "Z"),
         }
 
         cache.set(cache_key, result, timeout=COLLECTION_STATS_TIMEOUT)
@@ -778,13 +812,13 @@ class GamificationService:
                     "unique_aircraft": c.unique_aircraft,
                     "total_sightings": c.total_sightings,
                     "total_sessions": c.total_sessions,
-                    "first_seen": c.first_seen.isoformat() + "Z" if c.first_seen else None,
-                    "last_seen": c.last_seen.isoformat() + "Z" if c.last_seen else None,
+                    "first_seen": c.first_seen.isoformat().replace("+00:00", "Z") if c.first_seen else None,
+                    "last_seen": c.last_seen.isoformat().replace("+00:00", "Z") if c.last_seen else None,
                 }
                 for c in counts
             ],
             "total_operators": SpottedCount.objects.filter(count_type="operator").count(),
-            "timestamp": timezone.now().isoformat() + "Z",
+            "timestamp": timezone.now().isoformat().replace("+00:00", "Z"),
         }
 
         cache.set(cache_key, result, timeout=COLLECTION_STATS_TIMEOUT)
@@ -936,16 +970,21 @@ class GamificationService:
                 return cached
 
         streaks = SightingStreak.objects.all()
-        result = {"streaks": [], "timestamp": timezone.now().isoformat() + "Z"}
+        result = {"streaks": [], "timestamp": timezone.now().isoformat().replace("+00:00", "Z")}
 
+        yesterday = timezone.now().date() - timedelta(days=1)
         for streak in streaks:
+            # A streak is broken once a full day passes without a qualifying sighting.
+            # The DB row is only rewritten on the next qualifying sighting, so report
+            # lapsed streaks as 0 here instead of showing the stale count forever.
+            is_active = streak.last_qualifying_date is not None and streak.last_qualifying_date >= yesterday
             result["streaks"].append(
                 {
                     "streak_type": streak.streak_type,
                     "streak_type_display": streak.get_streak_type_display(),
-                    "current_streak_days": streak.current_streak_days,
+                    "current_streak_days": streak.current_streak_days if is_active else 0,
                     "current_streak_start": streak.current_streak_start.isoformat()
-                    if streak.current_streak_start
+                    if is_active and streak.current_streak_start
                     else None,
                     "last_qualifying_date": streak.last_qualifying_date.isoformat()
                     if streak.last_qualifying_date
@@ -1065,7 +1104,7 @@ class GamificationService:
                 for s in stats
             ],
             "total_days": stats.count(),
-            "timestamp": timezone.now().isoformat() + "Z",
+            "timestamp": timezone.now().isoformat().replace("+00:00", "Z"),
         }
 
         cache.set(cache_key, result, timeout=DAILY_STATS_TIMEOUT)
@@ -1192,7 +1231,7 @@ class GamificationService:
                 "value": r.value,
                 "icao_hex": r.icao_hex,
                 "callsign": r.callsign,
-                "achieved_at": r.achieved_at.isoformat() + "Z" if r.achieved_at else None,
+                "achieved_at": r.achieved_at.isoformat().replace("+00:00", "Z") if r.achieved_at else None,
             }
             for r in records
         }
@@ -1203,7 +1242,7 @@ class GamificationService:
             {
                 "icao_hex": first_session.icao_hex,
                 "callsign": first_session.callsign,
-                "timestamp": first_session.first_seen.isoformat() + "Z" if first_session else None,
+                "timestamp": first_session.first_seen.isoformat().replace("+00:00", "Z") if first_session else None,
             }
             if first_session
             else None
@@ -1226,7 +1265,7 @@ class GamificationService:
             "total_rare_sightings": total_rare,
             "all_time_records": all_time_records,
             "first_sighting": first_sighting,
-            "timestamp": timezone.now().isoformat() + "Z",
+            "timestamp": timezone.now().isoformat().replace("+00:00", "Z"),
         }
 
         cache.set(CACHE_KEY_LIFETIME_STATS, result, timeout=LIFETIME_STATS_TIMEOUT)

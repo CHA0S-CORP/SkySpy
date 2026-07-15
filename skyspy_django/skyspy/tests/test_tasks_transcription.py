@@ -90,6 +90,24 @@ class ProcessTranscriptionQueueTaskTest(TestCase):
 
     @patch("skyspy.tasks.transcription.transcribe_audio.delay")
     @override_settings(TRANSCRIPTION_ENABLED=True, WHISPER_ENABLED=False)
+    def test_process_queue_claims_rows(self, mock_transcribe_delay):
+        """Queued rows are claimed so repeated scans don't re-dispatch them."""
+        transmission = AudioTransmission.objects.create(
+            filename="test.mp3",
+            transcription_status="queued",
+            transcription_queued_at=timezone.now(),
+        )
+
+        process_transcription_queue()
+        process_transcription_queue()  # Second scan before transcription finishes
+
+        # Dispatched exactly once, row claimed as processing
+        self.assertEqual(mock_transcribe_delay.call_count, 1)
+        transmission.refresh_from_db()
+        self.assertEqual(transmission.transcription_status, "processing")
+
+    @patch("skyspy.tasks.transcription.transcribe_audio.delay")
+    @override_settings(TRANSCRIPTION_ENABLED=True, WHISPER_ENABLED=False)
     def test_process_queue_respects_limit(self, mock_transcribe_delay):
         """Test that only 5 transmissions are processed at a time."""
         # Create 7 queued transmissions
@@ -359,69 +377,6 @@ class TranscribeAudioRetryTest(TestCase):
     def test_transcribe_task_has_max_retries(self):
         """Verify transcribe_audio has retry configuration."""
         self.assertEqual(transcribe_audio.max_retries, 3)
-
-
-@pytest.mark.skip(reason="_transcribe_with_whisper helper was removed/refactored")
-@override_settings(**CELERY_TEST_SETTINGS)
-class TranscribeWithWhisperTest(TestCase):
-    """Tests for _transcribe_with_whisper helper function."""
-
-    @patch("skyspy.tasks.transcription.httpx.post")
-    @override_settings(WHISPER_URL="http://whisper:9000")
-    def test_whisper_api_call(self, mock_post):
-        """Test Whisper API call format."""
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {"text": "Test transcript"}
-        mock_post.return_value = mock_response
-
-        with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
-            f.write(b"fake audio data")
-            temp_path = f.name
-
-        try:
-            result = _transcribe_with_whisper(temp_path)
-
-            mock_post.assert_called_once()
-            call_args = mock_post.call_args
-            self.assertIn("http://whisper:9000/asr", call_args[0][0])
-            self.assertEqual(call_args[1]["params"], {"output": "json"})
-            self.assertEqual(result["text"], "Test transcript")
-        finally:
-            os.unlink(temp_path)
-
-
-@pytest.mark.skip(reason="_transcribe_with_service helper was removed/refactored")
-@override_settings(**CELERY_TEST_SETTINGS)
-class TranscribeWithServiceTest(TestCase):
-    """Tests for _transcribe_with_service helper function."""
-
-    @patch("skyspy.tasks.transcription.httpx.post")
-    @override_settings(
-        TRANSCRIPTION_SERVICE_URL="http://transcription:8080/transcribe",
-        TRANSCRIPTION_API_KEY="test-api-key",
-        TRANSCRIPTION_MODEL="whisper-large",
-    )
-    def test_service_api_call_with_auth(self, mock_post):
-        """Test external service API call with authentication."""
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {"text": "Test transcript"}
-        mock_post.return_value = mock_response
-
-        with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
-            f.write(b"fake audio data")
-            temp_path = f.name
-
-        try:
-            _transcribe_with_service(temp_path)
-
-            mock_post.assert_called_once()
-            call_args = mock_post.call_args
-            self.assertEqual(call_args[1]["headers"]["Authorization"], "Bearer test-api-key")
-            self.assertEqual(call_args[1]["data"]["model"], "whisper-large")
-        finally:
-            os.unlink(temp_path)
 
 
 @override_settings(**CELERY_TEST_SETTINGS)

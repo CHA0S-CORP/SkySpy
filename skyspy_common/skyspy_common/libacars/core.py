@@ -18,16 +18,19 @@ logger = logging.getLogger(__name__)
 _lib = None
 _ffi = None
 _backend = "unavailable"  # Fixed: Default matches API expectation
+_load_failed = False  # Negative cache: don't retry a failed load on every call
 _load_lock = threading.Lock()
 
 
 def load_libacars() -> bool:
     """Load the libacars library (CFFI with ctypes fallback)."""
-    global _lib, _ffi, _backend
+    global _lib, _ffi, _backend, _load_failed
 
     with _load_lock:
         if _backend != "unavailable":
             return True
+        if _load_failed:
+            return False
 
         paths = [
             "libacars-2.so",
@@ -62,14 +65,20 @@ def load_libacars() -> bool:
         # 2. Try ctypes
         for path in paths:
             try:
-                _lib = ctypes.CDLL(path)
-                _setup_ctypes(_lib)
-                _backend = "ctypes"
-                logger.info(f"Loaded libacars via ctypes from {path}")
-                return True
-            except OSError:
+                # Use a local so a failure (e.g. AttributeError from a missing
+                # symbol in _setup_ctypes) never leaves _lib set while
+                # _backend stays "unavailable".
+                lib = ctypes.CDLL(path)
+                _setup_ctypes(lib)
+            except (OSError, AttributeError):
                 continue
+            _lib = lib
+            _backend = "ctypes"
+            logger.info(f"Loaded libacars via ctypes from {path}")
+            return True
 
+        _load_failed = True
+        logger.warning("libacars could not be loaded; further load attempts are disabled")
         return False
 
 

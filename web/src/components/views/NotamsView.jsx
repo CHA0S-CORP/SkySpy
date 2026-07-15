@@ -207,7 +207,7 @@ export function NotamsView({ apiBase }) {
     if (connected && loading && notams.length === 0) {
       const timeout = setTimeout(() => {
         if (notams.length === 0 && !httpFallbackAttempted) {
-          console.log('WebSocket connected but no NOTAMs received, trying HTTP fallback');
+          // WebSocket connected but no NOTAMs received, trying HTTP fallback
           fetchNotamsHttp();
         }
       }, 5000);

@@ -73,6 +73,14 @@ let transmissionLock = false;
 const pendingTransmissions = [];
 
 /**
+ * IDs of transmissions already queued for autoplay (or played), so that
+ * transcript updates and audio:snapshot replays on reconnect don't re-queue
+ * transmissions that were already handled.
+ */
+const autoplayHandledIds = new Set();
+const AUTOPLAY_HANDLED_IDS_MAX = 500;
+
+/**
  * Process pending transmissions one at a time
  */
 const processPendingTransmissions = () => {
@@ -162,20 +170,11 @@ const processTransmission = (transmission) => {
 
       // Skip if transmission is older than max age threshold
       if (transmissionAge > AUTOPLAY_MAX_AGE_MS) {
-        console.log(
-          '[useSocketIOAudio] Skipping stale transmission for autoplay:',
-          enrichedTransmission.id,
-          `(${Math.round(transmissionAge / 1000)}s old)`
-        );
         return;
       }
 
       // Skip if transmission was created before autoplay was enabled
       if (transmissionTime < globalAudioState.autoplayEnabledAt) {
-        console.log(
-          '[useSocketIOAudio] Skipping pre-autoplay transmission:',
-          enrichedTransmission.id
-        );
         return;
       }
     }
@@ -196,9 +195,29 @@ const processTransmission = (transmission) => {
     }
 
     if (matchesFilter) {
+      // Dedup: skip transmissions already queued (updates re-process the same
+      // transmission, and audio:snapshot on reconnect replays recent ones)
+      const txId = enrichedTransmission.id;
+      if (txId != null) {
+        if (autoplayHandledIds.has(txId)) {
+          return;
+        }
+        autoplayHandledIds.add(txId);
+        // Prune oldest entries to keep the set bounded
+        if (autoplayHandledIds.size > AUTOPLAY_HANDLED_IDS_MAX) {
+          const iterator = autoplayHandledIds.values();
+          while (autoplayHandledIds.size > AUTOPLAY_HANDLED_IDS_MAX / 2) {
+            autoplayHandledIds.delete(iterator.next().value);
+          }
+        }
+      }
+
       // Add to end of queue (oldest first, play in chronological order)
-      globalAudioState.autoplayQueue.push(enrichedTransmission);
-      globalAudioState.autoplayQueue = globalAudioState.autoplayQueue.slice(-10);
+      globalAudioState.autoplayQueue = [
+        ...globalAudioState.autoplayQueue,
+        enrichedTransmission,
+      ].slice(-10);
+      notifySubscribers({ autoplayQueue: globalAudioState.autoplayQueue });
 
       // Process queue if nothing is currently playing
       if (!globalAudioState.playingId) {
@@ -235,7 +254,7 @@ export function useSocketIOAudio(apiBase) {
    * Handle Socket.IO connection
    */
   const handleConnect = useCallback(() => {
-    console.log('[useSocketIOAudio] Socket.IO connected to /audio namespace');
+    // Connected to /audio namespace
     globalAudioState.socketConnected = true;
     globalAudioState.socketReconnectFailed = false;
     audioSocketManager.reconnectFailed = false;
@@ -246,7 +265,7 @@ export function useSocketIOAudio(apiBase) {
    * Handle Socket.IO disconnection
    */
   const handleDisconnect = useCallback((reason) => {
-    console.log('[useSocketIOAudio] Socket.IO disconnected:', reason);
+    // Disconnected from /audio namespace
     globalAudioState.socketConnected = false;
     notifySubscribers({ socketConnected: false });
   }, []);
@@ -293,14 +312,12 @@ export function useSocketIOAudio(apiBase) {
 
     const unsubscribers = audioEvents.map((eventType) => {
       return on(eventType, (data) => {
-        console.log('[useSocketIOAudio] New audio transmission via Socket.IO:', data);
         handleNewTransmissionRef.current(data);
       });
     });
 
     // Handle audio:snapshot sent on connect - provides recent transmissions
     const snapshotUnsub = on('audio:snapshot', (data) => {
-      console.log('[useSocketIOAudio] Audio snapshot received:', data);
       if (data?.transmissions && Array.isArray(data.transmissions)) {
         // Process each transmission from the snapshot
         data.transmissions.forEach((transmission) => {
@@ -314,7 +331,6 @@ export function useSocketIOAudio(apiBase) {
 
     const transcriptUnsubscribers = transcriptEvents.map((eventType) => {
       return on(eventType, (data) => {
-        console.log('[useSocketIOAudio] Transcript update via Socket.IO:', data);
         handleNewTransmissionRef.current(data);
       });
     });
@@ -322,7 +338,6 @@ export function useSocketIOAudio(apiBase) {
     // Handle transcription state events from backend
     // These provide real-time status updates for transcription progress
     const transcriptionStartedUnsub = on('audio:transcription_started', (data) => {
-      console.log('[useSocketIOAudio] Transcription started:', data);
       if (data?.id) {
         // Update existing transmission with 'transcribing' status
         const existingIndex = globalAudioState.recentTransmissions.findIndex(
@@ -342,7 +357,6 @@ export function useSocketIOAudio(apiBase) {
     });
 
     const transcriptionCompletedUnsub = on('audio:transcription_completed', (data) => {
-      console.log('[useSocketIOAudio] Transcription completed:', data);
       if (data?.id) {
         // Update existing transmission with completed transcription
         const existingIndex = globalAudioState.recentTransmissions.findIndex(
@@ -380,7 +394,6 @@ export function useSocketIOAudio(apiBase) {
     });
 
     const transcriptionFailedUnsub = on('audio:transcription_failed', (data) => {
-      console.log('[useSocketIOAudio] Transcription failed:', data);
       if (data?.id) {
         // Update existing transmission with failed status
         const existingIndex = globalAudioState.recentTransmissions.findIndex(

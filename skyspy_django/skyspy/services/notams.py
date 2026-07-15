@@ -8,7 +8,7 @@ Includes support for TFR (Temporary Flight Restriction) boundaries.
 import contextlib
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from math import atan2, cos, radians, sin, sqrt
 from typing import Any
 
@@ -287,6 +287,36 @@ def fetch_tfrs_from_api(
         return []
 
 
+def _parse_notam_datetime(dt_str: str | None) -> datetime | None:
+    """
+    Parse a NOTAM timestamp into an aware datetime.
+
+    Handles ISO 8601 (with or without Z suffix) and the FAA NOTAM Search
+    format "MM/DD/YYYY HHMM" (with optional colon in the time).
+
+    Returns:
+        Aware datetime (UTC assumed if not specified) or None if unparseable
+    """
+    if not dt_str or not isinstance(dt_str, str):
+        return None
+
+    dt_str = dt_str.strip()
+
+    # ISO 8601
+    with contextlib.suppress(ValueError):
+        dt = datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=UTC)
+        return dt
+
+    # FAA NOTAM Search format: MM/DD/YYYY HHMM (times are UTC)
+    for fmt in ("%m/%d/%Y %H%M", "%m/%d/%Y %H:%M", "%m/%d/%Y"):
+        with contextlib.suppress(ValueError):
+            return datetime.strptime(dt_str, fmt).replace(tzinfo=UTC)
+
+    return None
+
+
 def parse_notam(raw_notam: dict[str, Any]) -> dict[str, Any] | None:
     """
     Parse a raw NOTAM from the API into a normalized format.
@@ -330,19 +360,21 @@ def parse_notam(raw_notam: dict[str, Any]) -> dict[str, Any] | None:
         end_str = raw_notam.get("effectiveEnd") or raw_notam.get("endValidity")
 
         if start_str:
-            try:
-                effective_start = datetime.fromisoformat(start_str.replace("Z", "+00:00"))
-            except (ValueError, TypeError):
+            effective_start = _parse_notam_datetime(start_str)
+            if effective_start is None:
+                logger.warning(f"Unparseable NOTAM start time {start_str!r} for {notam_id}; defaulting to now")
                 effective_start = timezone.now()
         else:
             effective_start = timezone.now()
 
         if end_str:
-            if end_str.upper() in ("PERM", "PERMANENT"):
+            if str(end_str).upper() in ("PERM", "PERMANENT"):
                 is_permanent = True
             else:
-                with contextlib.suppress(ValueError, TypeError):
-                    effective_end = datetime.fromisoformat(end_str.replace("Z", "+00:00"))
+                effective_end = _parse_notam_datetime(end_str)
+                if effective_end is None:
+                    # Unknown expiration - leave null (treated as ongoing) but flag it
+                    logger.warning(f"Unparseable NOTAM end time {end_str!r} for {notam_id}; expiration unknown")
 
         # Parse altitude restrictions
         floor_ft = raw_notam.get("floorFt") or raw_notam.get("floor")
@@ -384,7 +416,20 @@ def parse_notam(raw_notam: dict[str, Any]) -> dict[str, Any] | None:
         return None
 
 
-@transaction.atomic
+def _notam_broadcast_payload(notam_id: str, notam_data: dict[str, Any], now) -> dict[str, Any]:
+    """Build a JSON-serializable Socket.IO payload for a NOTAM."""
+    payload = {
+        "notam_id": notam_id,
+        **notam_data,
+        "timestamp": now.isoformat().replace("+00:00", "Z"),
+    }
+    for field in ("effective_start", "effective_end"):
+        value = payload.get(field)
+        if isinstance(value, datetime):
+            payload[field] = value.isoformat().replace("+00:00", "Z")
+    return payload
+
+
 def refresh_notams(
     bbox: str | None = None,
     icao_list: list[str] | None = None,
@@ -452,34 +497,62 @@ def refresh_notams(
 
     logger.info(f"Parsed {len(parsed_notams)} unique NOTAMs")
 
-    # Upsert NOTAMs and track changes for broadcasting
+    # Upsert NOTAMs and track changes for broadcasting.
+    # All fetching/parsing happened above; keep the transaction short so slow
+    # HTTP calls never hold a database transaction open.
     now = timezone.now()
     updated_count = 0
     new_notams = []
     updated_notams = []
 
-    for notam_data in parsed_notams.values():
-        notam_id = notam_data.pop("notam_id")
+    with transaction.atomic():
+        for notam_data in parsed_notams.values():
+            notam_id = notam_data.pop("notam_id")
 
-        obj, created = CachedNotam.objects.update_or_create(
-            notam_id=notam_id,
-            defaults={
-                **notam_data,
-                "fetched_at": now,
-            },
+            obj, created = CachedNotam.objects.update_or_create(
+                notam_id=notam_id,
+                defaults={
+                    **notam_data,
+                    "fetched_at": now,
+                },
+            )
+            updated_count += 1
+
+            # Track for broadcasting (datetimes ISO-formatted for JSON emit)
+            notam_broadcast_data = _notam_broadcast_payload(notam_id, notam_data, now)
+            if created:
+                new_notams.append(notam_broadcast_data)
+            else:
+                updated_notams.append(notam_broadcast_data)
+
+        # Soft archive expired NOTAMs (7+ days past expiration, not yet archived)
+        archive_cutoff = now - timedelta(days=7)
+
+        # Get NOTAMs that will be archived for broadcasting
+        expiring_notams = list(
+            CachedNotam.objects.filter(
+                effective_end__lt=archive_cutoff,
+                is_permanent=False,
+                is_archived=False,
+            ).values_list("notam_id", "notam_type")
         )
-        updated_count += 1
 
-        # Track for broadcasting
-        notam_broadcast_data = {
-            "notam_id": notam_id,
-            **notam_data,
-            "timestamp": now.isoformat().replace("+00:00", "Z"),
-        }
-        if created:
-            new_notams.append(notam_broadcast_data)
-        else:
-            updated_notams.append(notam_broadcast_data)
+        archived_count = CachedNotam.objects.filter(
+            effective_end__lt=archive_cutoff,
+            is_permanent=False,
+            is_archived=False,
+        ).update(
+            is_archived=True,
+            archived_at=now,
+            archive_reason="expired",
+        )
+
+        # Hard delete NOTAMs that have been archived for 90+ days
+        hard_delete_cutoff = now - timedelta(days=90)
+        deleted, _ = CachedNotam.objects.filter(
+            is_archived=True,
+            archived_at__lt=hard_delete_cutoff,
+        ).delete()
 
     # Broadcast new NOTAMs
     if new_notams:
@@ -502,28 +575,6 @@ def refresh_notams(
             except Exception as e:
                 logger.warning(f"Failed to broadcast NOTAM update: {e}")
 
-    # Soft archive expired NOTAMs (7+ days past expiration, not yet archived)
-    archive_cutoff = now - timedelta(days=7)
-
-    # Get NOTAMs that will be archived for broadcasting
-    expiring_notams = list(
-        CachedNotam.objects.filter(
-            effective_end__lt=archive_cutoff,
-            is_permanent=False,
-            is_archived=False,
-        ).values_list("notam_id", "notam_type")
-    )
-
-    archived_count = CachedNotam.objects.filter(
-        effective_end__lt=archive_cutoff,
-        is_permanent=False,
-        is_archived=False,
-    ).update(
-        is_archived=True,
-        archived_at=now,
-        archive_reason="expired",
-    )
-
     if archived_count:
         logger.info(f"Archived {archived_count} expired NOTAMs")
 
@@ -543,13 +594,6 @@ def refresh_notams(
                 )
             except Exception as e:
                 logger.warning(f"Failed to broadcast expired NOTAM: {e}")
-
-    # Hard delete NOTAMs that have been archived for 90+ days
-    hard_delete_cutoff = now - timedelta(days=90)
-    deleted, _ = CachedNotam.objects.filter(
-        is_archived=True,
-        archived_at__lt=hard_delete_cutoff,
-    ).delete()
 
     if deleted:
         logger.info(f"Hard deleted {deleted} old archived NOTAMs")

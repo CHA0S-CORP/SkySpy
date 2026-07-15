@@ -214,13 +214,17 @@ def refresh_airspace_boundaries(self):
 
         total_stored = 0
 
-        with transaction.atomic():
-            for lat, lon, radius_nm in regions:
-                logger.debug(f"Fetching airspaces for region ({lat}, {lon})")
+        # Fetch all regions first, keeping the slow HTTP calls out of any
+        # database transaction (holding a transaction open for minutes
+        # would pin a PgBouncer backend connection for the whole fetch)
+        fetched_regions = []
+        for lat, lon, radius_nm in regions:
+            logger.debug(f"Fetching airspaces for region ({lat}, {lon})")
+            fetched_regions.append(openaip.get_airspaces(lat, lon, radius_nm))
 
-                # Fetch airspaces from OpenAIP
-                airspaces = openaip.get_airspaces(lat, lon, radius_nm)
-
+        # Then write per-region in short transactions
+        for airspaces in fetched_regions:
+            with transaction.atomic():
                 for airspace in airspaces:
                     # Skip if no geometry
                     geometry = airspace.get("geometry")

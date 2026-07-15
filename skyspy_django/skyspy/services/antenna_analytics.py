@@ -14,12 +14,13 @@ import logging
 import statistics
 from datetime import datetime, timedelta
 
+from django.conf import settings
 from django.core.cache import cache
-from django.db.models import Avg, Count, F, Max, Min
-from django.db.models.functions import Floor
+from django.db.models import Avg, Count, Max, Min
 from django.utils import timezone
 
 from skyspy.models import AircraftSighting
+from skyspy.services.law_enforcement_db import calculate_bearing
 
 logger = logging.getLogger(__name__)
 
@@ -33,60 +34,68 @@ CACHE_KEY_LAST_UPDATED = "antenna_last_updated"
 CACHE_TIMEOUT = 600
 
 
+def _sighting_sector(lat: float, lon: float) -> int:
+    """Get the 10-degree sector index (0-35) for the bearing from the receiver to a position."""
+    bearing = calculate_bearing(settings.FEEDER_LAT, settings.FEEDER_LON, lat, lon)
+    return int(bearing // 10) % 36
+
+
 def calculate_polar_data(hours: int = 24) -> dict:
     """
     Calculate antenna polar coverage data.
 
     Returns bearing-grouped data (36 sectors of 10 degrees each).
+    Sectors are bucketed by the bearing from the receiver (FEEDER_LAT/LON) to the
+    aircraft position — NOT by the aircraft's own heading (track).
     """
     cutoff = timezone.now() - timedelta(hours=hours)
 
-    sightings = AircraftSighting.objects.filter(timestamp__gte=cutoff, track__isnull=False, distance_nm__isnull=False)
+    sightings = AircraftSighting.objects.filter(
+        timestamp__gte=cutoff,
+        latitude__isnull=False,
+        longitude__isnull=False,
+        distance_nm__isnull=False,
+    )
 
-    if not sightings.exists():
-        return {
-            "bearing_data": [
-                {
-                    "bearing_start": sector,
-                    "bearing_end": (sector + 10) % 360,
-                    "count": 0,
-                    "avg_rssi": None,
-                    "min_rssi": None,
-                    "max_rssi": None,
-                    "avg_distance_nm": None,
-                    "max_distance_nm": None,
-                    "unique_aircraft": 0,
-                }
-                for sector in range(0, 360, 10)
-            ],
-            "summary": {
-                "total_sightings": 0,
-                "sectors_with_data": 0,
-                "coverage_pct": 0,
-            },
-            "time_range_hours": hours,
+    # Per-sector accumulators
+    sector_stats = [
+        {
+            "count": 0,
+            "rssi_sum": 0.0,
+            "rssi_count": 0,
+            "min_rssi": None,
+            "max_rssi": None,
+            "distance_sum": 0.0,
+            "max_distance": None,
+            "aircraft": set(),
         }
-
-    # Query with bearing sectors
-    bearing_data = []
+        for _ in range(36)
+    ]
     total_count = 0
+
+    rows = sightings.values_list("latitude", "longitude", "rssi", "distance_nm", "icao_hex").iterator()
+    for lat, lon, rssi, distance_nm, icao_hex in rows:
+        stats = sector_stats[_sighting_sector(lat, lon)]
+        stats["count"] += 1
+        total_count += 1
+        stats["distance_sum"] += distance_nm
+        if stats["max_distance"] is None or distance_nm > stats["max_distance"]:
+            stats["max_distance"] = distance_nm
+        if rssi is not None:
+            stats["rssi_sum"] += rssi
+            stats["rssi_count"] += 1
+            if stats["min_rssi"] is None or rssi < stats["min_rssi"]:
+                stats["min_rssi"] = rssi
+            if stats["max_rssi"] is None or rssi > stats["max_rssi"]:
+                stats["max_rssi"] = rssi
+        stats["aircraft"].add(icao_hex)
+
+    bearing_data = []
     sectors_with_data = 0
 
     for sector in range(0, 360, 10):
-        sector_sightings = sightings.filter(track__gte=sector, track__lt=sector + 10)
-
-        stats = sector_sightings.aggregate(
-            count=Count("id"),
-            avg_rssi=Avg("rssi"),
-            min_rssi=Min("rssi"),
-            max_rssi=Max("rssi"),
-            avg_distance=Avg("distance_nm"),
-            max_distance=Max("distance_nm"),
-            unique_aircraft=Count("icao_hex", distinct=True),
-        )
-
-        count = stats["count"] or 0
-        total_count += count
+        stats = sector_stats[sector // 10]
+        count = stats["count"]
         if count > 0:
             sectors_with_data += 1
 
@@ -95,12 +104,12 @@ def calculate_polar_data(hours: int = 24) -> dict:
                 "bearing_start": sector,
                 "bearing_end": (sector + 10) % 360,
                 "count": count,
-                "avg_rssi": round(stats["avg_rssi"], 1) if stats["avg_rssi"] else None,
-                "min_rssi": round(stats["min_rssi"], 1) if stats["min_rssi"] else None,
-                "max_rssi": round(stats["max_rssi"], 1) if stats["max_rssi"] else None,
-                "avg_distance_nm": round(stats["avg_distance"], 1) if stats["avg_distance"] else None,
-                "max_distance_nm": round(stats["max_distance"], 1) if stats["max_distance"] else None,
-                "unique_aircraft": stats["unique_aircraft"] or 0,
+                "avg_rssi": round(stats["rssi_sum"] / stats["rssi_count"], 1) if stats["rssi_count"] else None,
+                "min_rssi": round(stats["min_rssi"], 1) if stats["min_rssi"] is not None else None,
+                "max_rssi": round(stats["max_rssi"], 1) if stats["max_rssi"] is not None else None,
+                "avg_distance_nm": round(stats["distance_sum"] / count, 1) if count else None,
+                "max_distance_nm": round(stats["max_distance"], 1) if stats["max_distance"] is not None else None,
+                "unique_aircraft": len(stats["aircraft"]),
             }
         )
 
@@ -162,7 +171,6 @@ def calculate_rssi_data(hours: int = 24, sample_size: int = 500) -> dict:
 
     band_statistics = []
     total_count = 0
-    all_rssi = []
 
     for band_name, min_dist, max_dist in band_definitions:
         band_queryset = base_queryset.filter(distance_nm__gte=min_dist, distance_nm__lt=max_dist)
@@ -178,9 +186,6 @@ def calculate_rssi_data(hours: int = 24, sample_size: int = 500) -> dict:
         count = stats["count"] or 0
         total_count += count
 
-        if stats["avg_rssi"]:
-            all_rssi.extend([stats["avg_rssi"]] * min(count, 100))
-
         band_statistics.append(
             {
                 "band": band_name,
@@ -192,13 +197,15 @@ def calculate_rssi_data(hours: int = 24, sample_size: int = 500) -> dict:
             }
         )
 
-    # Calculate overall statistics
+    # Calculate overall statistics from actual RSSI samples
+    # (band means duplicated per-band would skew the median toward band averages)
+    sample_rssi = [d["rssi"] for d in scatter_data]
     overall_stats = {}
-    if all_rssi:
+    if sample_rssi:
         overall_stats = {
             "count": total_count,
-            "avg_rssi": round(statistics.mean(all_rssi), 1),
-            "median_rssi": round(statistics.median(all_rssi), 1),
+            "avg_rssi": round(statistics.mean(sample_rssi), 1),
+            "median_rssi": round(statistics.median(sample_rssi), 1),
         }
 
     # Calculate linear regression trend line
@@ -280,14 +287,16 @@ def calculate_summary(hours: int = 24) -> dict:
         max_rssi=Max("rssi"),
     )
 
-    # Get coverage by bearing (count distinct 10-degree sectors)
-    sectors_with_data = (
-        base_queryset.filter(track__isnull=False)
-        .annotate(sector=Floor(F("track") / 10))
-        .values("sector")
-        .distinct()
-        .count()
+    # Get coverage by bearing from the receiver to each position (count distinct 10-degree sectors)
+    active_sectors = set()
+    position_rows = (
+        base_queryset.filter(latitude__isnull=False, longitude__isnull=False)
+        .values_list("latitude", "longitude")
+        .iterator()
     )
+    for lat, lon in position_rows:
+        active_sectors.add(_sighting_sector(lat, lon))
+    sectors_with_data = len(active_sectors)
 
     # Calculate percentiles
     percentiles = {}
@@ -339,7 +348,7 @@ def refresh_cache(hours: int = 24) -> dict:
         polar = calculate_polar_data(hours)
         rssi = calculate_rssi_data(hours)
         summary = calculate_summary(hours)
-        last_updated = datetime.utcnow().isoformat() + "Z"
+        last_updated = timezone.now().isoformat().replace("+00:00", "Z")
 
         # Update cache
         cache.set(CACHE_KEY_POLAR, polar, timeout=CACHE_TIMEOUT)

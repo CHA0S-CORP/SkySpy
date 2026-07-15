@@ -355,7 +355,9 @@ def extract_condition(text: str) -> dict | None:
     text_upper = text.upper()
 
     for code, label in CONDITION_PATTERNS.items():
-        if code in text_upper:
+        # Word-boundary match: bare substring matching gives false positives
+        # (e.g. "OTS" in "PILOTS", "AVBL" in "UNAVBL")
+        if re.search(rf"\b{re.escape(code)}\b", text_upper):
             return {"code": code, "label": label}
 
     return None
@@ -366,7 +368,9 @@ def extract_reason(text: str) -> dict | None:
     text_upper = text.upper()
 
     for code, label in REASON_PATTERNS.items():
-        if code in text_upper:
+        # Word-boundary match: bare substring matching gives false positives
+        # (e.g. "ICE" in "OFFICE", "CONST" in "CONSTANT")
+        if re.search(rf"\b{re.escape(code)}\b", text_upper):
             return {"code": code, "label": label}
 
     return None

@@ -26,6 +26,48 @@ BOUNDARY_CACHE_KEY = "airspace_boundaries"
 CACHE_TTL = 600  # 10 minutes
 
 
+def _polygon_bounds(polygon) -> tuple[float, float, float, float] | None:
+    """
+    Extract a (min_lon, min_lat, max_lon, max_lat) bounding box from an
+    advisory polygon (GeoJSON dict or nested coordinate lists).
+
+    Returns None if no coordinates can be found.
+    """
+    coords: list[tuple[float, float]] = []
+
+    def _collect(node):
+        if isinstance(node, dict):
+            _collect(node.get("coordinates"))
+        elif isinstance(node, (list, tuple)):
+            if len(node) >= 2 and all(isinstance(v, (int, float)) for v in node[:2]):
+                coords.append((float(node[0]), float(node[1])))
+            else:
+                for item in node:
+                    _collect(item)
+
+    _collect(polygon)
+
+    if not coords:
+        return None
+
+    lons = [c[0] for c in coords]
+    lats = [c[1] for c in coords]
+    return min(lons), min(lats), max(lons), max(lats)
+
+
+def _advisory_covers_point(advisory: dict, lat: float, lon: float) -> bool:
+    """
+    Check whether an advisory's polygon bounding box contains a point.
+
+    Advisories without usable geometry are included (can't rule them out).
+    """
+    bounds = _polygon_bounds(advisory.get("polygon"))
+    if bounds is None:
+        return True
+    min_lon, min_lat, max_lon, max_lat = bounds
+    return min_lat <= lat <= max_lat and min_lon <= lon <= max_lon
+
+
 def get_advisories(
     lat: float | None = None,
     lon: float | None = None,
@@ -69,6 +111,11 @@ def get_advisories(
                 advisories = [a for a in advisories if a.get("hazard") == hazard]
             if advisory_type:
                 advisories = [a for a in advisories if a.get("advisory_type") == advisory_type]
+
+    # Location filter: keep advisories whose polygon bounding box contains the
+    # point (advisories without geometry are kept to avoid hiding hazards)
+    if lat is not None and lon is not None:
+        advisories = [a for a in advisories if _advisory_covers_point(a, lat, lon)]
 
     return advisories
 

@@ -227,7 +227,7 @@ export function useAviationOverlays({
           console.warn('Some aviation data requests failed:', errors);
         }
       } catch (err) {
-        console.log('Aviation data fetch error:', err.message);
+        console.warn('Aviation data fetch error:', err.message);
       }
     };
 
@@ -322,7 +322,7 @@ export function useAviationOverlays({
 
     const fetchTerrain = async (type, url) => {
       try {
-        console.log(`Fetching ${type} terrain data from:`, url);
+        // Fetching terrain data
         const resp = await fetch(url);
         if (!resp.ok) {
           console.warn(`Failed to fetch ${type}: HTTP ${resp.status}`);
@@ -336,7 +336,7 @@ export function useAviationOverlays({
           return [];
         }
         const processed = processGeoJSON(geojson, filterBounds);
-        console.log(`Processed ${type}: ${processed.length} features`);
+        // Terrain data processed
         return processed;
       } catch (err) {
         console.warn(`Failed to fetch ${type} terrain data:`, err.message);
@@ -358,13 +358,13 @@ export function useAviationOverlays({
           fetchTerrain('rivers', dataUrls.rivers),
         ]);
         updates.water = [...lakes, ...rivers];
-        console.log(`Combined water features: ${updates.water.length}`);
+        // Water features combined
       }
       if (overlays.counties && !terrainData.counties) {
         updates.counties = await fetchTerrain('counties', dataUrls.counties);
       }
       if (Object.keys(updates).length > 0) {
-        console.log('Updating terrain data:', Object.keys(updates));
+        // Updating terrain data
         setTerrainData((prev) => ({ ...prev, ...updates }));
       }
     };
@@ -484,19 +484,19 @@ export function useAviationOverlays({
       if (overlays.usArtcc && !aviationOverlayData.usArtcc) {
         const features = await fetchAviationGeoJSON(['us_artcc']);
         updates.usArtcc = processFeatures(features, filterBounds);
-        console.log(`Loaded US ARTCC: ${updates.usArtcc.length} features`);
+        // US ARTCC data loaded
       }
 
       if (overlays.usRefueling && !aviationOverlayData.usRefueling) {
         const features = await fetchAviationGeoJSON(['us_a2a_refueling']);
         updates.usRefueling = processFeatures(features, filterBounds);
-        console.log(`Loaded US Refueling: ${updates.usRefueling.length} features`);
+        // US Refueling data loaded
       }
 
       if (overlays.ukMilZones && !aviationOverlayData.ukMilZones) {
         const features = await fetchAviationGeoJSON(['uk_mil_awacs', 'uk_mil_aar', 'uk_mil_rc']);
         updates.ukMilZones = processFeatures(features, filterBounds);
-        console.log(`Loaded UK Mil Zones: ${updates.ukMilZones.length} features`);
+        // UK Mil Zones data loaded
       }
 
       if (overlays.euMilAwacs && !aviationOverlayData.euMilAwacs) {
@@ -506,7 +506,7 @@ export function useAviationOverlays({
           'pl_mil_awacs',
         ]);
         updates.euMilAwacs = processFeatures(features, filterBounds);
-        console.log(`Loaded EU AWACS: ${updates.euMilAwacs.length} features`);
+        // EU AWACS data loaded
       }
 
       if (overlays.trainingAreas && !aviationOverlayData.trainingAreas) {
@@ -516,11 +516,11 @@ export function useAviationOverlays({
           'usafa_training_areas',
         ]);
         updates.trainingAreas = processFeatures(features, filterBounds);
-        console.log(`Loaded Training Areas: ${updates.trainingAreas.length} features`);
+        // Training Areas data loaded
       }
 
       if (Object.keys(updates).length > 0) {
-        console.log('Updating aviation overlay data:', Object.keys(updates));
+        // Updating aviation overlay data
         setAviationOverlayData((prev) => ({ ...prev, ...updates }));
       }
     };

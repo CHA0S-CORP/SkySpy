@@ -2,16 +2,56 @@
 Notification configuration, channel, and log serializers.
 """
 
+from urllib.parse import urlsplit
+
 from rest_framework import serializers
 
 from skyspy.models import NotificationChannel, NotificationConfig, NotificationLog
 
+APPRISE_URL_MASK = "****"
+
+
+def mask_apprise_url(url):
+    """Mask credentials/tokens in an Apprise URL for API responses.
+
+    Apprise URLs embed secrets (webhook tokens, SMTP passwords, API keys) in
+    the userinfo, path, and query segments. Keep only the scheme and host so
+    the channel stays identifiable, and redact everything else. Some schemes
+    put a token where the host would be (e.g. ``ntfy://{topic}``,
+    ``discord://{webhook_id}/...``), so the host is only kept when it looks
+    like a real hostname. Raw values are write-only (accepted via
+    create/update serializers, never echoed).
+    """
+    if not url:
+        return url
+    try:
+        parsed = urlsplit(url)
+        if not parsed.scheme:
+            return APPRISE_URL_MASK
+        host = parsed.hostname or ""
+        # Only keep hosts that look like real hostnames - for several apprise
+        # schemes the netloc is itself a secret (topic, webhook id, user key)
+        if "." not in host and host != "localhost":
+            host = ""
+        if host and parsed.port:
+            host = f"{host}:{parsed.port}"
+    except ValueError:
+        return APPRISE_URL_MASK
+    if not host:
+        return f"{parsed.scheme}://{APPRISE_URL_MASK}"
+    return f"{parsed.scheme}://{host}/{APPRISE_URL_MASK}"
+
 
 class NotificationChannelSerializer(serializers.ModelSerializer):
-    """Full notification channel representation."""
+    """Full notification channel representation.
+
+    The Apprise URL is masked on read - raw values are only accepted via the
+    create/update serializers and never returned by the API.
+    """
 
     owner_username = serializers.CharField(source="owner.username", read_only=True)
     alert_rule_count = serializers.SerializerMethodField()
+    apprise_url = serializers.SerializerMethodField(help_text="Masked Apprise URL (credentials redacted)")
 
     class Meta:
         model = NotificationChannel
@@ -52,6 +92,9 @@ class NotificationChannelSerializer(serializers.ModelSerializer):
         if hasattr(obj, "_alert_rule_count"):
             return obj._alert_rule_count
         return obj.alert_rules.count()
+
+    def get_apprise_url(self, obj) -> str:
+        return mask_apprise_url(obj.apprise_url)
 
 
 class NotificationChannelCreateSerializer(serializers.Serializer):
@@ -119,6 +162,10 @@ class NotificationChannelUpdateSerializer(serializers.Serializer):
     enabled = serializers.BooleanField(required=False, help_text="Whether channel is active")
 
     def update(self, instance, validated_data):
+        # Round-trip convention: the API returns masked URLs, so a client that
+        # echoes the masked value back (or omits the field) keeps the stored URL.
+        if APPRISE_URL_MASK in validated_data.get("apprise_url", ""):
+            validated_data.pop("apprise_url")
         # Explicit field whitelist - excludes owner, is_global, verified
         allowed_fields = {"name", "channel_type", "apprise_url", "description", "supports_rich", "enabled"}
         for field in allowed_fields:
@@ -143,9 +190,14 @@ class NotificationChannelListSerializer(serializers.Serializer):
 
 
 class NotificationConfigSerializer(serializers.ModelSerializer):
-    """Notification configuration response."""
+    """Notification configuration response.
+
+    Apprise URLs are masked on read - raw values are only accepted via
+    NotificationConfigUpdateSerializer and never returned by the API.
+    """
 
     server_count = serializers.SerializerMethodField()
+    apprise_urls = serializers.SerializerMethodField(help_text="Masked Apprise URLs (credentials redacted)")
 
     class Meta:
         model = NotificationConfig
@@ -156,6 +208,11 @@ class NotificationConfigSerializer(serializers.ModelSerializer):
         if obj.apprise_urls:
             return len([u for u in obj.apprise_urls.split(";") if u.strip()])
         return 0
+
+    def get_apprise_urls(self, obj) -> str:
+        if not obj.apprise_urls:
+            return obj.apprise_urls
+        return ";".join(mask_apprise_url(u.strip()) for u in obj.apprise_urls.split(";") if u.strip())
 
 
 class NotificationConfigUpdateSerializer(serializers.Serializer):
@@ -169,6 +226,10 @@ class NotificationConfigUpdateSerializer(serializers.Serializer):
 
     def update(self, instance, validated_data):
         """Update notification config."""
+        # Round-trip convention: masked URLs echoed back keep the stored value
+        # (blank still clears). See mask_apprise_url.
+        if APPRISE_URL_MASK in validated_data.get("apprise_urls", ""):
+            validated_data.pop("apprise_urls")
         # Explicit field whitelist
         allowed_fields = {"apprise_urls", "cooldown_seconds", "enabled"}
         for field in allowed_fields:
@@ -179,9 +240,13 @@ class NotificationConfigUpdateSerializer(serializers.Serializer):
 
 
 class NotificationLogSerializer(serializers.ModelSerializer):
-    """Notification log entry."""
+    """Notification log entry.
+
+    The channel URL is masked on read since it may embed credentials.
+    """
 
     channel_name = serializers.CharField(source="channel.name", read_only=True)
+    channel_url = serializers.SerializerMethodField(help_text="Masked channel URL (credentials redacted)")
 
     class Meta:
         model = NotificationLog
@@ -202,6 +267,9 @@ class NotificationLogSerializer(serializers.ModelSerializer):
             "sent_at",
             "duration_ms",
         ]
+
+    def get_channel_url(self, obj) -> str:
+        return mask_apprise_url(obj.channel_url)
 
 
 class NotificationTestSerializer(serializers.Serializer):

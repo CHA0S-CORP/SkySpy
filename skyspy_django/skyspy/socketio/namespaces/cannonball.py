@@ -124,6 +124,11 @@ class CannonballNamespace(socketio.AsyncNamespace):
             namespace="/cannonball",
         )
 
+        # Join broadcast rooms so server-pushed threat/alert updates from
+        # Celery tasks (tasks/cannonball.py) reach this client
+        await self.enter_room(sid, "cannonball_threats")
+        await self.enter_room(sid, "cannonball_alerts")
+
         logger.info(f"Client connected to /cannonball: {sid} (session: {session_id})")
 
         # Send session started event
@@ -176,6 +181,16 @@ class CannonballNamespace(socketio.AsyncNamespace):
             "accuracy": 10   // optional, in meters
         }
         """
+        if not isinstance(data, dict):
+            await self.emit(
+                "error",
+                {
+                    "message": "Invalid position update: expected dict payload",
+                },
+                room=sid,
+            )
+            return
+
         lat = data.get("lat")
         lon = data.get("lon")
         heading = data.get("heading")
@@ -267,6 +282,16 @@ class CannonballNamespace(socketio.AsyncNamespace):
         Expected data:
         {"radius_nm": 25.0}
         """
+        if not isinstance(data, dict):
+            await self.emit(
+                "error",
+                {
+                    "message": "Invalid radius request: expected dict payload",
+                },
+                room=sid,
+            )
+            return
+
         radius_nm = data.get("radius_nm", 25.0)
 
         try:
@@ -336,6 +361,17 @@ class CannonballNamespace(socketio.AsyncNamespace):
             "params": {...}
         }
         """
+        if not isinstance(data, dict):
+            await self.emit(
+                "error",
+                {
+                    "request_id": None,
+                    "message": "Invalid request: expected dict payload",
+                },
+                room=sid,
+            )
+            return
+
         request_type = data.get("type")
         request_id = data.get("request_id")
         params = data.get("params", {})
@@ -534,8 +570,9 @@ class CannonballNamespace(socketio.AsyncNamespace):
         # Get permission required for this request type
         permission = self.REQUEST_PERMISSIONS.get(request_type)
         if not permission:
-            # Unknown request type - allow by default (will be caught by handler)
-            return True
+            # Unknown request type - deny by default
+            logger.warning(f"Denying unlisted cannonball request type: {request_type}")
+            return False
 
         session = await sio.get_session(sid, namespace="/cannonball")
         user = session.get("user")

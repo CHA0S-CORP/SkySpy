@@ -687,15 +687,15 @@ class AlertServiceTriggerTests(TestCase):
             # Only one history record
             self.assertEqual(AlertHistory.objects.count(), 1)
 
-    @pytest.mark.skip(reason="_trigger_alert expects CompiledRule, not AlertRule - needs refactoring")
     def test_trigger_alert_different_aircraft_no_cooldown(self):
         """Test that different aircraft don't share cooldown."""
-        rule = AlertRule.objects.create(
+        db_rule = AlertRule.objects.create(
             name="Multi Aircraft Test",
             rule_type="callsign",
             operator="startswith",
             value="UAL",
         )
+        rule = create_compiled_rule(db_rule)
 
         with patch("skyspy.services.alerts.sync_emit") as mock_sync_emit:
             mock_sync_emit.return_value = True
@@ -994,7 +994,8 @@ class AlertServiceWebhookTests(TestCase):
         """Test that task queue failures are logged but don't raise."""
         from skyspy.services.alert_rule_cache import CompiledRule
 
-        mock_task.delay.side_effect = Exception("Redis connection failed")
+        # _call_webhook catches (ConnectionError, OSError, RuntimeError)
+        mock_task.delay.side_effect = ConnectionError("Redis connection failed")
 
         mock_rule = CompiledRule(
             id=1,

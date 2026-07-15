@@ -32,7 +32,7 @@ def _get_api_key() -> str | None:
 
 def _is_enabled() -> bool:
     """Check if Aviationstack is enabled."""
-    return getattr(settings, "AVIATIONSTACK_ENABLED", False) and _get_api_key()
+    return bool(getattr(settings, "AVIATIONSTACK_ENABLED", False) and _get_api_key())
 
 
 def _make_request(endpoint: str, params: dict | None = None, timeout: int = 30) -> dict[str, Any] | None:
@@ -102,7 +102,7 @@ def get_flight_by_callsign(
     cache_key = f"aviationstack_flight_{flight_iata or flight_icao}"
 
     cached = cache.get(cache_key)
-    if cached:
+    if cached is not None:
         return cached
 
     params = {}
@@ -153,7 +153,7 @@ def get_flights_for_route(
     cache_key = f"aviationstack_route_{departure_iata}_{arrival_iata}_{date_str}"
 
     cached = cache.get(cache_key)
-    if cached:
+    if cached is not None:
         return cached
 
     params = {
@@ -198,10 +198,10 @@ def get_departures(
         return []
 
     date_str = flight_date.isoformat() if flight_date else date.today().isoformat()
-    cache_key = f"aviationstack_dep_{airport_iata}_{date_str}"
+    cache_key = f"aviationstack_dep_{airport_iata}_{date_str}_{limit}"
 
     cached = cache.get(cache_key)
-    if cached:
+    if cached is not None:
         return cached[:limit]
 
     params = {
@@ -246,10 +246,10 @@ def get_arrivals(
         return []
 
     date_str = flight_date.isoformat() if flight_date else date.today().isoformat()
-    cache_key = f"aviationstack_arr_{airport_iata}_{date_str}"
+    cache_key = f"aviationstack_arr_{airport_iata}_{date_str}_{limit}"
 
     cached = cache.get(cache_key)
-    if cached:
+    if cached is not None:
         return cached[:limit]
 
     params = {
@@ -294,7 +294,7 @@ def get_airline_info(
     cache_key = f"aviationstack_airline_{airline_iata or airline_icao}"
 
     cached = cache.get(cache_key)
-    if cached:
+    if cached is not None:
         return cached
 
     params = {}
@@ -413,11 +413,11 @@ def correlate_with_live_aircraft(
         if result:
             return result
 
-    # Try IATA format (AA123)
-    if len(callsign) >= 3:
-        # Try with first 2 chars as airline code
-        iata_callsign = callsign[:2] + callsign[3:] if len(callsign) > 3 else callsign
-        result = get_flight_by_callsign(flight_iata=iata_callsign)
+    # Try IATA format (AA123) - only when the callsign already looks like an
+    # IATA flight designator (2-letter airline code + flight number). ICAO
+    # airline codes cannot be reliably converted to IATA by dropping letters.
+    if len(callsign) >= 3 and callsign[:2].isalpha() and callsign[2].isdigit():
+        result = get_flight_by_callsign(flight_iata=callsign)
         if result:
             return result
 

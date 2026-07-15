@@ -27,7 +27,8 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.core.cache import cache
-from django.db.models import Avg, Count, F, Max, Min, Q, Sum
+from django.db import DatabaseError
+from django.db.models import Avg, Case, Count, F, IntegerField, Max, Min, Q, Sum, Value, When
 from django.db.models.functions import Extract, ExtractHour, TruncDay, TruncHour
 from django.utils import timezone
 
@@ -210,7 +211,7 @@ def calculate_aircraft_stats(aircraft_list: list[dict]) -> dict:
         "altitude": {"ground": alt_ground, "low": alt_low, "medium": alt_med, "high": alt_high},
         "distance": {"close": dist_close, "near": dist_near, "mid": dist_mid, "far": dist_far},
         "speed": {"slow": speed_slow, "medium": speed_med, "fast": speed_fast},
-        "timestamp": now.isoformat() + "Z",
+        "timestamp": now.isoformat().replace("+00:00", "Z"),
     }
 
 
@@ -249,7 +250,7 @@ def calculate_top_aircraft(aircraft_list: list[dict]) -> dict:
         "climbing": [_simplify_aircraft(a, a.get("distance_nm")) for a in climbing],
         "military": [_simplify_aircraft(a, a.get("distance_nm")) for a in military],
         "total": len(aircraft_list),
-        "timestamp": now.isoformat() + "Z",
+        "timestamp": now.isoformat().replace("+00:00", "Z"),
     }
 
 
@@ -304,7 +305,7 @@ def calculate_history_stats(hours: int = 24) -> dict:
         "max_distance_nm": round(sighting_stats["max_dist"], 1) if sighting_stats["max_dist"] else None,
         "avg_speed": round(sighting_stats["avg_speed"]) if sighting_stats["avg_speed"] else None,
         "max_speed": round(sighting_stats["max_speed"]) if sighting_stats["max_speed"] else None,
-        "timestamp": timezone.now().isoformat() + "Z",
+        "timestamp": timezone.now().isoformat().replace("+00:00", "Z"),
     }
 
 
@@ -344,7 +345,9 @@ def calculate_history_trends(hours: int = 24, interval: str = "hour") -> dict:
 
         intervals.append(
             {
-                "timestamp": row["interval_start"].isoformat() + "Z" if row["interval_start"] else None,
+                "timestamp": row["interval_start"].isoformat().replace("+00:00", "Z")
+                if row["interval_start"]
+                else None,
                 "position_count": row["position_count"] or 0,
                 "unique_aircraft": unique,
                 "military_count": row["military_count"] or 0,
@@ -366,10 +369,10 @@ def calculate_history_trends(hours: int = 24, interval: str = "hour") -> dict:
         "summary": {
             "total_unique_aircraft": total_unique,
             "peak_concurrent": peak_concurrent,
-            "peak_interval": peak_interval.isoformat() + "Z" if peak_interval else None,
+            "peak_interval": peak_interval.isoformat().replace("+00:00", "Z") if peak_interval else None,
             "total_intervals": len(intervals),
         },
-        "timestamp": timezone.now().isoformat() + "Z",
+        "timestamp": timezone.now().isoformat().replace("+00:00", "Z"),
     }
 
 
@@ -384,8 +387,8 @@ def calculate_history_top(hours: int = 24, limit: int = 10) -> dict:
             "callsign": s.callsign,
             "aircraft_type": s.aircraft_type,
             "is_military": s.is_military,
-            "first_seen": s.first_seen.isoformat() + "Z" if s.first_seen else None,
-            "last_seen": s.last_seen.isoformat() + "Z" if s.last_seen else None,
+            "first_seen": s.first_seen.isoformat().replace("+00:00", "Z") if s.first_seen else None,
+            "last_seen": s.last_seen.isoformat().replace("+00:00", "Z") if s.last_seen else None,
             "duration_min": round(duration, 1),
             "positions": s.total_positions,
             "min_distance_nm": round(s.min_distance_nm, 1) if s.min_distance_nm else None,
@@ -428,7 +431,7 @@ def calculate_history_top(hours: int = 24, limit: int = 10) -> dict:
         "closest_approach": closest_approach,
         "time_range_hours": hours,
         "limit": limit,
-        "timestamp": timezone.now().isoformat() + "Z",
+        "timestamp": timezone.now().isoformat().replace("+00:00", "Z"),
     }
 
 
@@ -474,7 +477,7 @@ def calculate_safety_stats(hours: int = 24) -> dict:
 
     events_by_hour_formatted = [
         {
-            "hour": row["hour"].isoformat() + "Z" if row["hour"] else None,
+            "hour": row["hour"].isoformat().replace("+00:00", "Z") if row["hour"] else None,
             "count": row["count"] or 0,
             "critical": row["critical"] or 0,
             "warning": row["warning"] or 0,
@@ -484,23 +487,34 @@ def calculate_safety_stats(hours: int = 24) -> dict:
     ]
 
     # Top aircraft by event count
+    # Max("severity") on the raw string would rank alphabetically ("warning" > "critical"),
+    # so rank severities numerically and map back to labels.
+    severity_rank = Case(
+        When(severity="critical", then=Value(3)),
+        When(severity="warning", then=Value(2)),
+        default=Value(1),
+        output_field=IntegerField(),
+    )
     top_aircraft_data = (
         base_qs.values("icao_hex", "callsign")
-        .annotate(count=Count("id"), worst_severity=Max("severity"))
+        .annotate(count=Count("id"), worst_severity_rank=Max(severity_rank))
         .order_by("-count")[:10]
     )
 
-    severity_order = {"critical": 3, "warning": 2, "low": 1}
+    rank_to_severity = {3: "critical", 2: "warning"}
     top_aircraft = [
         {
             "icao": row["icao_hex"],
             "callsign": row["callsign"],
             "count": row["count"],
-            "worst_severity": row["worst_severity"],
+            "worst_severity": rank_to_severity.get(row["worst_severity_rank"], "info"),
+            "_rank": row["worst_severity_rank"],
         }
         for row in top_aircraft_data
     ]
-    top_aircraft.sort(key=lambda x: (-severity_order.get(x["worst_severity"], 0), -x["count"]))
+    top_aircraft.sort(key=lambda x: (-x["_rank"], -x["count"]))
+    for row in top_aircraft:
+        del row["_rank"]
 
     # Recent events
     recent_events = [
@@ -511,7 +525,7 @@ def calculate_safety_stats(hours: int = 24) -> dict:
             "icao": e.icao_hex,
             "callsign": e.callsign,
             "message": e.message,
-            "timestamp": e.timestamp.isoformat() + "Z",
+            "timestamp": e.timestamp.isoformat().replace("+00:00", "Z"),
         }
         for e in base_qs.order_by("-timestamp")[:10]
     ]
@@ -541,7 +555,7 @@ def calculate_safety_stats(hours: int = 24) -> dict:
         "events_by_hour": events_by_hour_formatted,
         "top_aircraft": top_aircraft,
         "recent_events": recent_events,
-        "timestamp": now.isoformat() + "Z",
+        "timestamp": now.isoformat().replace("+00:00", "Z"),
     }
 
 
@@ -857,7 +871,7 @@ def calculate_flight_patterns_stats(hours: int = 24) -> dict:
         "common_aircraft_types": common_aircraft_types,
         "frequent_routes": frequent_routes,
         "time_range_hours": hours,
-        "timestamp": now.isoformat() + "Z",
+        "timestamp": now.isoformat().replace("+00:00", "Z"),
     }
 
 
@@ -1023,7 +1037,7 @@ def calculate_geographic_stats(hours: int = 24) -> dict:
             "total_operators": total_operators,
         },
         "time_range_hours": hours,
-        "timestamp": now.isoformat() + "Z",
+        "timestamp": now.isoformat().replace("+00:00", "Z"),
     }
 
 
@@ -1034,8 +1048,8 @@ def broadcast_stats_update(stat_type: str, data: dict) -> None:
     try:
         sync_emit("stats:update", {"stat_type": stat_type, "stats": data}, room="topic_stats")
         logger.debug(f"Broadcast stats update: {stat_type}")
-    except Exception as e:
-        logger.warning(f"Failed to broadcast stats update: {e}")
+    except (ConnectionError, OSError, RuntimeError) as e:
+        logger.warning(f"Failed to broadcast stats update: {type(e).__name__}: {e}")
 
 
 def refresh_history_cache(broadcast: bool = True) -> None:
@@ -1059,8 +1073,8 @@ def refresh_history_cache(broadcast: bool = True) -> None:
             broadcast_stats_update("trends", trends)
             broadcast_stats_update("top_performers", top)
 
-    except Exception as e:
-        logger.error(f"Error refreshing history cache: {e}")
+    except (DatabaseError, ConnectionError, OSError) as e:
+        logger.error(f"Error refreshing history cache: {type(e).__name__}: {e}")
 
 
 def refresh_safety_cache(broadcast: bool = True) -> None:
@@ -1076,8 +1090,8 @@ def refresh_safety_cache(broadcast: bool = True) -> None:
         if broadcast:
             broadcast_stats_update("safety", stats)
 
-    except Exception as e:
-        logger.error(f"Error refreshing safety cache: {e}")
+    except (DatabaseError, ConnectionError, OSError) as e:
+        logger.error(f"Error refreshing safety cache: {type(e).__name__}: {e}")
 
 
 def refresh_flight_patterns_cache(broadcast: bool = True) -> None:
@@ -1092,8 +1106,8 @@ def refresh_flight_patterns_cache(broadcast: bool = True) -> None:
         if broadcast:
             broadcast_stats_update("flight_patterns", stats)
 
-    except Exception as e:
-        logger.error(f"Error refreshing flight patterns cache: {e}")
+    except (DatabaseError, ConnectionError, OSError) as e:
+        logger.error(f"Error refreshing flight patterns cache: {type(e).__name__}: {e}")
 
 
 def refresh_geographic_cache(broadcast: bool = True) -> None:
@@ -1108,8 +1122,8 @@ def refresh_geographic_cache(broadcast: bool = True) -> None:
         if broadcast:
             broadcast_stats_update("geographic", stats)
 
-    except Exception as e:
-        logger.error(f"Error refreshing geographic cache: {e}")
+    except (DatabaseError, ConnectionError, OSError) as e:
+        logger.error(f"Error refreshing geographic cache: {type(e).__name__}: {e}")
 
 
 # Public API - Get Cached Data
@@ -1261,7 +1275,7 @@ def calculate_tracking_quality_stats(hours: int = 24) -> dict:
             },
             "top_quality_sessions": [],
             "worst_quality_sessions": [],
-            "timestamp": now.isoformat() + "Z",
+            "timestamp": now.isoformat().replace("+00:00", "Z"),
         }
 
     # Calculate update rates
@@ -1304,20 +1318,21 @@ def calculate_tracking_quality_stats(hours: int = 24) -> dict:
                     "update_rate": round(rate, 2),
                     "completeness": round(completeness, 1),
                     "quality_grade": grade,
-                    "first_seen": session.first_seen.isoformat() + "Z" if session.first_seen else None,
-                    "last_seen": session.last_seen.isoformat() + "Z" if session.last_seen else None,
+                    "first_seen": session.first_seen.isoformat().replace("+00:00", "Z") if session.first_seen else None,
+                    "last_seen": session.last_seen.isoformat().replace("+00:00", "Z") if session.last_seen else None,
                 }
             )
 
     # Calculate statistics
     total_analyzed = len(update_rates)
     sorted_rates = sorted(update_rates)
-    sorted(completeness_scores)
+    sorted_completeness = sorted(completeness_scores)
 
     avg_rate = sum(update_rates) / total_analyzed if total_analyzed else None
     median_rate = sorted_rates[total_analyzed // 2] if total_analyzed else None
 
     avg_completeness = sum(completeness_scores) / total_analyzed if total_analyzed else None
+    median_completeness = sorted_completeness[len(sorted_completeness) // 2] if sorted_completeness else None
 
     # Update rate distribution
     rate_distribution = {
@@ -1335,6 +1350,7 @@ def calculate_tracking_quality_stats(hours: int = 24) -> dict:
         "fair_count": sum(1 for c in completeness_scores if 50 <= c < 70),
         "poor_count": sum(1 for c in completeness_scores if c < 50),
         "avg_score": round(avg_completeness, 1) if avg_completeness else None,
+        "median_score": round(median_completeness, 1) if median_completeness is not None else None,
     }
 
     # Sort sessions by quality metrics
@@ -1356,7 +1372,7 @@ def calculate_tracking_quality_stats(hours: int = 24) -> dict:
         "quality_breakdown": quality_grades,
         "top_quality_sessions": top_quality,
         "worst_quality_sessions": worst_quality,
-        "timestamp": now.isoformat() + "Z",
+        "timestamp": now.isoformat().replace("+00:00", "Z"),
     }
 
 
@@ -1400,8 +1416,8 @@ def calculate_coverage_gaps_analysis(hours: int = 24, limit: int = 100) -> dict:
             if gap_seconds > COVERAGE_GAP_THRESHOLD:
                 gaps.append(
                     {
-                        "start": sighting_times[i - 1].isoformat() + "Z",
-                        "end": sighting_times[i].isoformat() + "Z",
+                        "start": sighting_times[i - 1].isoformat().replace("+00:00", "Z"),
+                        "end": sighting_times[i].isoformat().replace("+00:00", "Z"),
                         "duration_seconds": int(gap_seconds),
                     }
                 )
@@ -1445,7 +1461,7 @@ def calculate_coverage_gaps_analysis(hours: int = 24, limit: int = 100) -> dict:
             "600s+": sum(1 for g in all_gaps if g >= 600),
         },
         "worst_sessions": gap_analysis[:20],
-        "timestamp": now.isoformat() + "Z",
+        "timestamp": now.isoformat().replace("+00:00", "Z"),
     }
 
 
@@ -1512,7 +1528,7 @@ def calculate_engagement_stats(hours: int = 24) -> dict:
     peak_data = hourly_data.first() if hourly_data.exists() else None
     peak_concurrent = {
         "max_aircraft": peak_data["unique_aircraft"] if peak_data else 0,
-        "peak_hour": peak_data["hour"].isoformat() + "Z" if peak_data and peak_data["hour"] else None,
+        "peak_hour": peak_data["hour"].isoformat().replace("+00:00", "Z") if peak_data and peak_data["hour"] else None,
         "positions_in_peak": peak_data["position_count"] if peak_data else 0,
     }
 
@@ -1549,8 +1565,10 @@ def calculate_engagement_stats(hours: int = 24) -> dict:
                 "registration": info.registration if info else None,
                 "session_count": rv["session_count"],
                 "total_positions": rv["total_positions"],
-                "first_session": rv["first_session"].isoformat() + "Z" if rv["first_session"] else None,
-                "last_session": rv["last_session"].isoformat() + "Z" if rv["last_session"] else None,
+                "first_session": rv["first_session"].isoformat().replace("+00:00", "Z")
+                if rv["first_session"]
+                else None,
+                "last_session": rv["last_session"].isoformat().replace("+00:00", "Z") if rv["last_session"] else None,
                 "aircraft_type": info.type_code if info else None,
                 "operator": info.operator if info else None,
             }
@@ -1593,7 +1611,7 @@ def calculate_engagement_stats(hours: int = 24) -> dict:
             "recent_favorites": recent_favorites,
             "active_favoriting_users": active_users,
         },
-        "timestamp": now.isoformat() + "Z",
+        "timestamp": now.isoformat().replace("+00:00", "Z"),
     }
 
 
@@ -1609,8 +1627,8 @@ def refresh_tracking_quality_cache(broadcast: bool = True) -> None:
         if broadcast:
             broadcast_stats_update("tracking_quality", stats)
 
-    except Exception as e:
-        logger.error(f"Error refreshing tracking quality cache: {e}")
+    except (DatabaseError, ConnectionError, OSError) as e:
+        logger.error(f"Error refreshing tracking quality cache: {type(e).__name__}: {e}")
 
 
 def refresh_engagement_cache(broadcast: bool = True) -> None:
@@ -1625,8 +1643,8 @@ def refresh_engagement_cache(broadcast: bool = True) -> None:
         if broadcast:
             broadcast_stats_update("engagement", stats)
 
-    except Exception as e:
-        logger.error(f"Error refreshing engagement cache: {e}")
+    except (DatabaseError, ConnectionError, OSError) as e:
+        logger.error(f"Error refreshing engagement cache: {type(e).__name__}: {e}")
 
 
 def get_tracking_quality_stats() -> dict | None:

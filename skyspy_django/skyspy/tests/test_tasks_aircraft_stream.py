@@ -473,15 +473,33 @@ class GetStreamTaskStatusTest(TestCase):
 
     @patch("skyspy.celery.app")
     def test_get_status_inspect_returns_none(self, mock_app):
-        """Test that get_stream_task_status handles None from inspect."""
+        """Test that None from inspect (no worker replies) falls back to cache.
+
+        A None reply means status is unknown (inspect timeout/broker issue),
+        not "not running" - assuming not running could spawn a duplicate stream.
+        """
         mock_inspect = MagicMock()
         mock_inspect.active.return_value = None
         mock_app.control.inspect.return_value = mock_inspect
+        cache.delete(CACHE_KEY_STREAM_ACTIVE)
 
         result = get_stream_task_status()
 
         self.assertFalse(result["running"])
-        self.assertEqual(result["source"], "inspect")
+        self.assertEqual(result["source"], "cache")
+
+    @patch("skyspy.celery.app")
+    def test_get_status_inspect_returns_none_stream_active_in_cache(self, mock_app):
+        """Test that None from inspect + active cache flag reports running."""
+        mock_inspect = MagicMock()
+        mock_inspect.active.return_value = None
+        mock_app.control.inspect.return_value = mock_inspect
+        cache.set(CACHE_KEY_STREAM_ACTIVE, True, timeout=30)
+
+        result = get_stream_task_status()
+
+        self.assertTrue(result["running"])
+        self.assertEqual(result["source"], "cache")
 
     @patch("skyspy.celery.app")
     def test_get_status_falls_back_to_cache_on_error(self, mock_app):

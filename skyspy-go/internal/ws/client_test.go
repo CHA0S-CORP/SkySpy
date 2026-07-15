@@ -1737,7 +1737,7 @@ func TestClient_StopDuringInitialSelectCheck(t *testing.T) {
 
 	// Run the connection loop - it should exit immediately due to closed stopCh
 	go func() {
-		client.runConnection("ws://localhost:9999/test", client.aircraftMsgCh, "test")
+		client.runConnection("ws://localhost:9999/test", client.aircraftMsgCh, "test", client.setAircraftState)
 		done <- true
 	}()
 

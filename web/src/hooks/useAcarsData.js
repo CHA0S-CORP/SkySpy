@@ -60,7 +60,7 @@ export function useAcarsData({ apiBase, timeRange, wsRequest, wsConnected, viewT
           labelsFetchedRef.current = true;
         }
       } catch (err) {
-        console.log('Labels fetch error:', err.message);
+        console.warn('Labels fetch error:', err.message);
       }
     };
     fetchLabels();
@@ -118,7 +118,7 @@ export function useAcarsData({ apiBase, timeRange, wsRequest, wsConnected, viewT
       } catch (err) {
         // Ignore abort errors
         if (err.name === 'AbortError') return;
-        console.log('ACARS fetch error:', err.message);
+        console.warn('ACARS fetch error:', err.message);
       }
     };
     fetchAcars();
@@ -129,7 +129,12 @@ export function useAcarsData({ apiBase, timeRange, wsRequest, wsConnected, viewT
     };
   }, [viewType, timeRange, acarsSource, acarsAirlineFilter, acarsSelectedLabels, apiBase]);
 
+  // Track lookups already in flight so re-runs don't duplicate work
+  const callsignLookupInProgressRef = useRef(new Set());
+  const regLookupInProgressRef = useRef(new Set());
+
   // Lookup hex values from sightings for ACARS messages with callsign but no icao_hex
+  // Keyed on acarsMessages content (not .length, which stays constant at the fetch limit)
   useEffect(() => {
     if (viewType !== 'acars' || acarsMessages.length === 0) return;
 
@@ -137,7 +142,7 @@ export function useAcarsData({ apiBase, timeRange, wsRequest, wsConnected, viewT
     for (const msg of acarsMessages) {
       if (msg.callsign && !msg.icao_hex) {
         const cs = msg.callsign.trim().toUpperCase();
-        if (!(cs in callsignHexCache)) {
+        if (!(cs in callsignHexCache) && !callsignLookupInProgressRef.current.has(cs)) {
           callsignsToLookup.add(cs);
         }
       }
@@ -147,9 +152,11 @@ export function useAcarsData({ apiBase, timeRange, wsRequest, wsConnected, viewT
 
     let isMounted = true;
 
-    const lookupCallsigns = async () => {
-      const lookups = Array.from(callsignsToLookup).slice(0, 10);
+    // Process all pending lookups (sequentially, one request at a time)
+    const lookups = Array.from(callsignsToLookup);
+    lookups.forEach((cs) => callsignLookupInProgressRef.current.add(cs));
 
+    const lookupCallsigns = async () => {
       for (const callsign of lookups) {
         if (!isMounted) return;
         try {
@@ -189,6 +196,8 @@ export function useAcarsData({ apiBase, timeRange, wsRequest, wsConnected, viewT
           if (isMounted) {
             setCallsignHexCache((prev) => ({ ...prev, [callsign]: null }));
           }
+        } finally {
+          callsignLookupInProgressRef.current.delete(callsign);
         }
       }
     };
@@ -197,8 +206,10 @@ export function useAcarsData({ apiBase, timeRange, wsRequest, wsConnected, viewT
 
     return () => {
       isMounted = false;
+      // Release in-flight markers so interrupted lookups can retry on the next run
+      lookups.forEach((cs) => callsignLookupInProgressRef.current.delete(cs));
     };
-  }, [viewType, acarsMessages.length, apiBase, wsRequest, wsConnected]);
+  }, [viewType, acarsMessages, apiBase, wsRequest, wsConnected]);
 
   // Lookup ICAO hex from registration for ACARS messages
   useEffect(() => {
@@ -208,7 +219,7 @@ export function useAcarsData({ apiBase, timeRange, wsRequest, wsConnected, viewT
     for (const msg of acarsMessages) {
       if (msg.registration && !msg.icao_hex) {
         const reg = msg.registration.trim().toUpperCase();
-        if (!(reg in regHexCache)) {
+        if (!(reg in regHexCache) && !regLookupInProgressRef.current.has(reg)) {
           regsToLookup.add(reg);
         }
       }
@@ -218,9 +229,11 @@ export function useAcarsData({ apiBase, timeRange, wsRequest, wsConnected, viewT
 
     let isMounted = true;
 
-    const lookupRegs = async () => {
-      const lookups = Array.from(regsToLookup).slice(0, 10);
+    // Process all pending lookups (sequentially, one request at a time)
+    const lookups = Array.from(regsToLookup);
+    lookups.forEach((reg) => regLookupInProgressRef.current.add(reg));
 
+    const lookupRegs = async () => {
       for (const reg of lookups) {
         if (!isMounted) return;
         try {
@@ -260,6 +273,8 @@ export function useAcarsData({ apiBase, timeRange, wsRequest, wsConnected, viewT
           if (isMounted) {
             setRegHexCache((prev) => ({ ...prev, [reg]: null }));
           }
+        } finally {
+          regLookupInProgressRef.current.delete(reg);
         }
       }
     };
@@ -268,8 +283,10 @@ export function useAcarsData({ apiBase, timeRange, wsRequest, wsConnected, viewT
 
     return () => {
       isMounted = false;
+      // Release in-flight markers so interrupted lookups can retry on the next run
+      lookups.forEach((reg) => regLookupInProgressRef.current.delete(reg));
     };
-  }, [viewType, acarsMessages.length, apiBase, wsRequest, wsConnected]);
+  }, [viewType, acarsMessages, apiBase, wsRequest, wsConnected]);
 
   // Close label dropdown when clicking outside
   useEffect(() => {

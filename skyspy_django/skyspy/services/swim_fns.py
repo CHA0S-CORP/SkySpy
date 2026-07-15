@@ -16,7 +16,7 @@ import threading
 import time
 import xml.etree.ElementTree as ET
 from collections.abc import Callable
-from datetime import datetime, timezone as dt_timezone
+from datetime import UTC, datetime
 from typing import Any, Optional
 
 from django.conf import settings
@@ -247,8 +247,8 @@ def parse_aixm_notam(xml_payload: str) -> dict[str, Any] | None:
         if notam_elem is None:
             notam_elem = root.find(".//event:Event", AIXM_NAMESPACES)
         if notam_elem is None:
-            # Try without namespace
-            notam_elem = root.find('.//*[local-name()="NOTAM"]')
+            # Try without namespace (ElementTree does not support local-name())
+            notam_elem = _find_by_local_name(root, "NOTAM")
 
         if notam_elem is None:
             logger.debug("No NOTAM element found in message")
@@ -260,8 +260,8 @@ def parse_aixm_notam(xml_payload: str) -> dict[str, Any] | None:
             [
                 ".//aixm:designator",
                 ".//aixm:id",
-                './/*[local-name()="designator"]',
-                './/*[local-name()="id"]',
+                "local:designator",
+                "local:id",
             ],
         )
 
@@ -270,7 +270,7 @@ def parse_aixm_notam(xml_payload: str) -> dict[str, Any] | None:
             [
                 ".//aixm:locationIndicator",
                 ".//aixm:location",
-                './/*[local-name()="locationIndicator"]',
+                "local:locationIndicator",
             ],
         )
 
@@ -279,8 +279,8 @@ def parse_aixm_notam(xml_payload: str) -> dict[str, Any] | None:
             [
                 ".//aixm:text",
                 ".//aixm:description",
-                './/*[local-name()="text"]',
-                './/*[local-name()="description"]',
+                "local:text",
+                "local:description",
             ],
         )
 
@@ -290,7 +290,7 @@ def parse_aixm_notam(xml_payload: str) -> dict[str, Any] | None:
             [
                 ".//aixm:classification",
                 ".//aixm:series",
-                './/*[local-name()="classification"]',
+                "local:classification",
             ],
         )
         notam["notam_type"] = _map_classification(classification)
@@ -301,8 +301,8 @@ def parse_aixm_notam(xml_payload: str) -> dict[str, Any] | None:
             [
                 ".//aixm:effectiveStart",
                 ".//gml:beginPosition",
-                './/*[local-name()="effectiveStart"]',
-                './/*[local-name()="beginPosition"]',
+                "local:effectiveStart",
+                "local:beginPosition",
             ],
         )
         end_time = _get_text(
@@ -310,8 +310,8 @@ def parse_aixm_notam(xml_payload: str) -> dict[str, Any] | None:
             [
                 ".//aixm:effectiveEnd",
                 ".//gml:endPosition",
-                './/*[local-name()="effectiveEnd"]',
-                './/*[local-name()="endPosition"]',
+                "local:effectiveEnd",
+                "local:endPosition",
             ],
         )
 
@@ -325,7 +325,7 @@ def parse_aixm_notam(xml_payload: str) -> dict[str, Any] | None:
             [
                 ".//gml:pos",
                 ".//aixm:position//gml:pos",
-                './/*[local-name()="pos"]',
+                "local:pos",
             ],
         )
         if pos:
@@ -342,14 +342,14 @@ def parse_aixm_notam(xml_payload: str) -> dict[str, Any] | None:
             notam_elem,
             [
                 ".//aixm:lowerLimit",
-                './/*[local-name()="lowerLimit"]',
+                "local:lowerLimit",
             ],
         )
         notam["ceiling_ft"] = _get_int(
             notam_elem,
             [
                 ".//aixm:upperLimit",
-                './/*[local-name()="upperLimit"]',
+                "local:upperLimit",
             ],
         )
 
@@ -358,7 +358,7 @@ def parse_aixm_notam(xml_payload: str) -> dict[str, Any] | None:
             notam_elem,
             [
                 ".//aixm:radius",
-                './/*[local-name()="radius"]',
+                "local:radius",
             ],
         )
         if radius:
@@ -374,7 +374,7 @@ def parse_aixm_notam(xml_payload: str) -> dict[str, Any] | None:
             [
                 ".//aixm:purpose",
                 ".//aixm:reason",
-                './/*[local-name()="purpose"]',
+                "local:purpose",
             ],
         )
 
@@ -396,14 +396,36 @@ def parse_aixm_notam(xml_payload: str) -> dict[str, Any] | None:
         return None
 
 
+def _find_by_local_name(elem: ET.Element, name: str) -> ET.Element | None:
+    """
+    Find the first descendant whose tag local name matches, ignoring namespaces.
+
+    ElementTree's XPath support does not include local-name(), so this iterates
+    and compares the tag's local part instead.
+    """
+    for child in elem.iter():
+        tag = child.tag
+        if isinstance(tag, str) and tag.rpartition("}")[2] == name:
+            return child
+    return None
+
+
 def _get_text(elem: ET.Element, paths: list) -> str | None:
-    """Get text from first matching path."""
+    """
+    Get text from the first matching path.
+
+    Paths are either namespaced XPath expressions or "local:<name>" entries,
+    which match any descendant by tag local name regardless of namespace.
+    """
     for path in paths:
         try:
-            found = elem.find(path, AIXM_NAMESPACES)
+            if path.startswith("local:"):
+                found = _find_by_local_name(elem, path[len("local:") :])
+            else:
+                found = elem.find(path, AIXM_NAMESPACES)
             if found is not None and found.text:
                 return found.text.strip()
-        except Exception:
+        except (SyntaxError, KeyError):
             continue
     return None
 
@@ -441,7 +463,7 @@ def _parse_datetime(dt_str: str | None) -> datetime | None:
         try:
             dt = datetime.strptime(dt_str, fmt)
             if dt.tzinfo is None:
-                dt = dt.replace(tzinfo=dt_timezone.utc)
+                dt = dt.replace(tzinfo=UTC)
             return dt
         except ValueError:
             continue

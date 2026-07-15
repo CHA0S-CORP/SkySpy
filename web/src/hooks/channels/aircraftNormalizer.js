@@ -23,33 +23,33 @@ export function normalizeAircraft(data) {
     aircraft_type: data.aircraft_type || data.t || null,
     // Database flags for aircraft characteristics (military, etc.)
     dbFlags: data.dbFlags || data.db_flags || data.flags || 0,
-    // Altitude fields
-    alt: data.alt || data.altitude || data.alt_baro || data.alt_geom || null,
-    alt_baro: data.alt_baro || data.baro_alt || null,
-    alt_geom: data.alt_geom || data.geom_alt || null,
+    // Altitude fields (?? preserves legitimate zero values)
+    alt: data.alt ?? data.altitude ?? data.alt_baro ?? data.alt_geom ?? null,
+    alt_baro: data.alt_baro ?? data.baro_alt ?? null,
+    alt_geom: data.alt_geom ?? data.geom_alt ?? null,
     // Speed fields
-    gs: data.gs || data.ground_speed || data.speed || null,
-    tas: data.tas || null,
-    ias: data.ias || null,
-    mach: data.mach || null,
+    gs: data.gs ?? data.ground_speed ?? data.speed ?? null,
+    tas: data.tas ?? null,
+    ias: data.ias ?? null,
+    mach: data.mach ?? null,
     // Heading/track fields
-    track: data.track || data.heading || data.trk || null,
-    true_heading: data.true_heading || null,
-    mag_heading: data.mag_heading || null,
+    track: data.track ?? data.heading ?? data.trk ?? null,
+    true_heading: data.true_heading ?? null,
+    mag_heading: data.mag_heading ?? null,
     // Vertical rate fields
-    vr: data.vr || data.vertical_rate || data.baro_rate || data.geom_rate || null,
-    baro_rate: data.baro_rate || null,
-    geom_rate: data.geom_rate || null,
-    // Position fields
-    lat: data.lat || data.latitude || null,
-    lon: data.lon || data.longitude || data.lng || null,
+    vr: data.vr ?? data.vertical_rate ?? data.baro_rate ?? data.geom_rate ?? null,
+    baro_rate: data.baro_rate ?? null,
+    geom_rate: data.geom_rate ?? null,
+    // Position fields (lat/lon of 0 are valid coordinates)
+    lat: data.lat ?? data.latitude ?? null,
+    lon: data.lon ?? data.longitude ?? data.lng ?? null,
     // Transponder/identification
-    squawk: data.squawk || null,
-    seen: data.seen || 0,
-    seen_pos: data.seen_pos || null,
+    squawk: data.squawk ?? null,
+    seen: data.seen ?? 0,
+    seen_pos: data.seen_pos ?? null,
     // Computed/derived fields
-    distance_nm: data.distance_nm || data.distance || null,
-    bearing: data.bearing || null,
+    distance_nm: data.distance_nm ?? data.distance ?? null,
+    bearing: data.bearing ?? null,
     // Status flags
     military: data.military || ((data.dbFlags || data.db_flags || 0) & 1) !== 0,
     emergency:

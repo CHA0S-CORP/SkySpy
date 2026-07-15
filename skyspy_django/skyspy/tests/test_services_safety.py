@@ -675,7 +675,8 @@ class SafetyMonitorIntegrationTests(TestCase):
     @patch("skyspy.socketio.utils.sync_emit")
     def test_broadcast_failure_does_not_break_workflow(self, mock_sync_emit):
         """Test that broadcast failures don't prevent event storage."""
-        mock_sync_emit.side_effect = Exception("Socket.IO emit error")
+        # _broadcast_event catches (ConnectionError, OSError, RuntimeError)
+        mock_sync_emit.side_effect = ConnectionError("Socket.IO emit error")
 
         aircraft_list = [
             {

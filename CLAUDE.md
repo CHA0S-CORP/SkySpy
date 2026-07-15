@@ -12,8 +12,12 @@ Monorepo with four components:
 
 - **skyspy_django/** - Django backend API with Socket.IO real-time streaming
 - **web/** - React frontend dashboard (Vite, JSX, Tailwind CSS 4.1)
-- **skyspy-go/** - Go CLI TUI radar client (Bubble Tea + Cobra)
+- **skyspy-go/** - Go CLI TUI radar client (Bubble Tea + Cobra, Go 1.23+). Has its own `Makefile` with full build/test/lint targets. Provides the `skyspy` binary with `radio`, `radio-pro` (airband), and radar TUI commands under `skyspy-go/cmd/skyspy/`.
 - **skyspy_common/** - Shared Python package: libacars CFFI bindings for ACARS message decoding
+
+(The former `skyspy-cli/` Python CLI package was removed; its `skyspy-radio`/`skyspy-radio-pro`/`skyspy-radar` commands were replaced by the Go client.)
+
+Additional resources: `docs/` (guides 00-19), `web/src/STRUCTURE.md` (frontend architecture)
 
 ## Development Commands
 
@@ -23,9 +27,13 @@ Monorepo with four components:
 make dev              # Start all services with mock data
 make dev-down         # Stop services
 make dev-logs         # View logs
+make clean            # Stop containers, remove volumes, clear caches
+make lint             # Run all linters (Python + Go + Frontend)
 ```
 
-Services: Dashboard :3000, Django API :8000, Django Admin :8000/admin/ (admin/admin), Mock Ultrafeeder :18080, Mock Dump978 :18081
+Services: Dashboard :3000, Django API :8000, Django Admin :8000/admin/ (admin/admin), Mock Ultrafeeder :18080, Mock Dump978 :18081, PgBouncer :5432, Redis :6379, Celery worker + beat also start.
+
+API docs (dev): Swagger UI at `/api/docs/`, ReDoc at `/api/redoc/`, OpenAPI schema at `/api/schema/`
 
 ### Running Tests
 
@@ -35,15 +43,24 @@ make test
 
 # Python package tests
 make test-common      # skyspy_common tests
-make test-cli         # CLI tests
-make test-python      # All Python tests
+make test-python      # All Python package tests (currently just skyspy_common)
 
 # Frontend tests (from web/)
 npm run test:unit           # Unit tests
 npm run test:unit:watch     # Watch mode
+npm run test:unit:coverage  # With v8 coverage
 npm run test:e2e            # Playwright E2E tests (Chromium)
 npm run test:e2e:all-browsers
+
+# Go CLI tests (from skyspy-go/)
+make test             # All tests
+make test-unit        # Unit tests only
+make test-race        # With race detector
+make test-coverage    # With HTML coverage report
+make ci               # Full CI: fmt-check + vet + lint + test-race + test-coverage
 ```
+
+**Note**: Django pytest uses `--reuse-db` by default (see `skyspy_django/pytest.ini`), so the test database persists between runs for faster iteration.
 
 ### Running a Single Test
 
@@ -65,16 +82,23 @@ npm run test:e2e -- --grep "should display aircraft list"
 ### Linting and Formatting
 
 ```bash
-# Python (from repo root)
+# Python (from repo root — CI uses `uv tool run ruff`)
 ruff check .                # Lint
 ruff check --fix .          # Auto-fix
-black .                     # Format
+ruff format .               # Format (CI checks with `ruff format --check .`)
+black .                     # Alternative formatter
 
 # Frontend (from web/)
 npm run lint                # ESLint
 npm run lint:fix
 npm run format              # Prettier
+npm run format:check        # Check without modifying
 npm run type-check          # TypeScript checking (JSDoc types, not strict)
+
+# Go (from skyspy-go/)
+make lint                   # golangci-lint
+make fmt-check              # Check formatting
+make vet                    # go vet
 ```
 
 ### Building
@@ -130,7 +154,8 @@ React Frontend (Vite) / Go TUI Client
 - **Path aliases**: `@/*` maps to `src/*`
 - **Build**: Vite with manual chunking (vendor, Radix UI, TanStack, Leaflet, Framer Motion). Production base path `/static/`.
 - **Dev proxy**: Vite proxies `/api`, `/socket.io`, `/ws`, `/health` to backend at :8000
-- **Testing**: Vitest with jsdom, react-leaflet mocked. Coverage threshold 80%.
+- **Testing**: Vitest with jsdom, react-leaflet mocked. Coverage target 80% (currently relaxed to 40% in CI — TODO to restore). Go CLI target is 70%.
+- **Storybook**: Available via `npm run storybook` on port 6006.
 
 ### Authentication
 
@@ -140,9 +165,9 @@ React Frontend (Vite) / Go TUI Client
 
 ### Docker Profiles
 
-- `dev` profile: Full dev environment with mock feeders, PgBouncer, dashboard
+- `dev` profile: Full dev environment with mock feeders, PgBouncer, Celery worker/beat, dashboard
 - `test` profile: Pytest runner with test database
-- Production compose: `docker-compose.yml` (no profile needed)
+- Production compose: `docker-compose.yml` (no profile needed). Use `--profile acars` to include the ACARS UDP listener.
 
 ## Key Configuration
 
@@ -156,7 +181,7 @@ FEEDER_LAT/LON                 # Antenna location for distance calc
 
 # Feature toggles
 AUTH_MODE=public|private|hybrid
-AIRCRAFT_STREAM_MODE=sse|tcp|adsbx
+AIRCRAFT_STREAM_MODE=sse|tcp|adsbx|auto
 SAFETY_MONITORING_ENABLED, ACARS_ENABLED
 ```
 
@@ -169,5 +194,121 @@ SAFETY_MONITORING_ENABLED, ACARS_ENABLED
 
 - Python: Ruff + Black, 120 char lines, Python 3.12+. Config in `pyproject.toml`.
 - Frontend: ESLint + Prettier, React 18, Tailwind CSS 4.1, JSX (not TSX — TypeScript via JSDoc, strict mode off)
-- Python tests: pytest with factory_boy fixtures. Test conftest at `skyspy_django/skyspy/tests/conftest.py`. Skip list in `tests/skip_failing.txt`.
+- Python: `uv` for dependency management in CI and local venvs.
+- Python tests: pytest with factory_boy fixtures. Test conftest at `skyspy_django/skyspy/tests/conftest.py`. Skip list in `tests/skip_failing.txt`. Django tests have multiple layers: `tests/` (unit/API), `tests/e2e/` (Django-level E2E), `tests/integration/`, `tests/performance/`. CI ignores e2e, integration, and performance directories.
 - Frontend tests: Vitest (unit) + Playwright (E2E). Vitest uses forks pool (1-3 workers).
+
+## Known Issues and Tech Debt
+
+### API Tests (Re-enabled)
+The 4 API test files (`test_api_aircraft.py`, `test_api_alerts.py`, `test_api_history.py`, `test_api_safety.py`) were previously excluded from CI due to PgBouncer deadlocks. They have been converted from `APITestCase` to pytest-style and are now included in CI. Coverage target set to 55% (`--cov-fail-under=55`). Target: restore to 80%.
+
+### Broad Exception Handlers
+~140 `except Exception` handlers remain across ~34 service files. The 5 most critical files have been fixed with specific exception types:
+- `services/safety.py` — 2 handlers → `DatabaseError`, `(ConnectionError, OSError, RuntimeError)`
+- `services/alerts.py` — 4 handlers → specific types per operation
+- `services/external_db.py` — 15 handlers → `httpx.HTTPError`, `DatabaseError`, `OSError`, etc.
+- `services/aircraft_info.py` — 11 handlers → `DatabaseError`, `httpx.HTTPError`, etc.
+- `services/stats_cache.py` — 7 handlers → `(DatabaseError, ConnectionError, OSError)`
+
+Remaining top offenders (not yet fixed): `swim_fns.py` (12), `flight_pattern_stats.py` (11), `storage.py` (9), `audio.py` (9).
+
+### Frontend Tech Debt
+- `MapView.jsx` — ~12,240 lines, no test coverage (keyboard shortcuts extracted to `useProKeyboardShortcuts` hook)
+- `react-hooks/exhaustive-deps` ESLint rule is `'off'` ("too many false positives with complex hooks")
+- ESLint `no-console` now set to `['warn', { allow: ['warn', 'error'] }]`, max-warnings lowered from 250 to 150
+
+## Danger Zones
+
+**Do not modify these without running their full test suites:**
+
+### `services/safety.py` (1,253 lines)
+Safety-critical emergency detection: squawks 7500/7600/7700, TCAS RA, vertical rate monitoring. Errors here mean missed emergency alerts. Run both `test_services_safety.py` AND `test_api_safety.py`.
+
+### `socketio/namespaces/main.py` (577 lines) + `mixins/` (7 files)
+MainNamespace composes 7 handler mixins via multiple inheritance. `main.py` is the thin router (connection, subscription, request dispatch). Handler logic lives in `mixins/aircraft.py`, `safety.py`, `alerts.py`, `aviation_data.py`, `stats.py`, `notifications.py`, `system.py`. When modifying a handler, edit the mixin — only touch main.py for connection/routing changes. Adding a new request type requires adding it to `_handle_generic_request()` in main.py.
+
+### Cache-Dependent Code
+Many services depend on Redis cache state. The `clear_cache` fixture in conftest.py is `autouse=True` — it clears cache before AND after every test. If you add a test that depends on cache state from setUp, be aware the autouse fixture runs first.
+
+### FeatureAccess Migration Gotcha
+The `django_db_setup` fixture (session-scoped) deletes all `FeatureAccess` records after migration because the migration creates records with `read_access='authenticated'` which overrides `AUTH_MODE='public'` in test settings. If you add a test that needs FeatureAccess records, create them in the test itself.
+
+### PgBouncer + APITestCase
+Never use `APITestCase` for new tests. PgBouncer transaction pooling + Django's test transaction wrapping = deadlocks. Always use pytest functions/classes with the `api_client` fixture from conftest.py.
+
+## Service Dependency Map
+
+```
+CORE DATA FLOW:
+  cache.py (in-memory TTL cache, RPi optimized)
+    ← aircraft_info.py (unified aircraft lookup, photo integration)
+      ← external_db.py (ADS-B Exchange, tar1090, FAA, OpenSky)
+        ← military_db.py (hex ranges, callsigns)
+        ← law_enforcement_db.py (LE detection, surveillance types)
+
+ALERT PIPELINE:
+  alerts.py (rule evaluation, cooldowns)
+    → alert_rule_cache.py (compiled rule caching)
+    → alert_cooldowns.py (Redis distributed cooldowns)
+    → alert_metrics.py (evaluation timing, trigger rates)
+    → notification_router.py (channel routing, quiet hours)
+      → notification_dispatcher.py (templating, delivery)
+        → notifications.py (Apprise multi-platform, SSRF prevention)
+        → rich_formatters.py (Discord/Slack embeds)
+        → template_engine.py (variable substitution)
+
+SAFETY PIPELINE:
+  safety.py (TCAS/emergency monitoring)
+    → SafetyEvent model (DB)
+    → Socket.IO emission (via broadcast.py)
+
+EXTERNAL APIs (network-dependent, may timeout/fail):
+  avwx.py (METAR/TAF)          checkwx.py (weather + flight categories)
+  aviationstack.py (schedules)   opensky_live.py (live state vectors)
+  adsbx_live.py (RapidAPI)      swim_fns.py (FAA SWIM NOTAM XML)
+  openaip.py (airspace/navaids)  openflights.py (airport DB)
+  weather_cache.py (caching layer for weather APIs)
+
+STATELESS UTILITIES (safe to modify independently):
+  template_engine.py    pirep_decoder.py    notam_decoder.py
+  acars_decoder.py      rich_formatters.py  registration_analysis.py
+  geodata.py            terrain_elevation.py
+```
+
+## Common Mistakes
+
+1. **Forgetting cache invalidation** — When changing model fields that are cached (aircraft info, alert rules, stats), you must also invalidate the relevant cache keys. Check `cache.py` and `stats_cache.py` for key patterns.
+
+2. **Using `APITestCase` for new tests** — Causes PgBouncer deadlocks. Use pytest functions with `api_client` fixture instead. See `conftest.py` for available fixtures.
+
+3. **Adding env vars without documenting** — New environment variables must be added to: `test_settings.py`, `.env.test`, `.env.example`, and this CLAUDE.md file.
+
+4. **Breaking safety without full test coverage** — Always run BOTH `test_services_safety.py` (unit) and `test_api_safety.py` (API) after any change to the safety pipeline.
+
+5. **Adding `console.log` to frontend** — Currently 108 instances across the codebase. Don't add more. Use conditional debug logging or remove after debugging.
+
+6. **Circular imports in services** — Socket.IO namespaces use lazy imports (`from skyspy.services.X import Y` inside methods) to avoid circular deps. Follow this pattern if adding new service dependencies in socketio/.
+
+7. **Direct model queries in views** — Views should delegate to services. Don't add ORM queries directly in ViewSet methods.
+
+## What Tests to Run After Changes
+
+| Changed files/dirs | Test command |
+|---|---|
+| `services/safety.py` | `pytest skyspy/tests/test_services_safety.py skyspy/tests/test_api_safety.py -v` |
+| `services/alerts.py`, `alert_*.py` | `pytest skyspy/tests/test_services_alerts.py skyspy/tests/test_api_alerts.py -v` |
+| `services/acars*.py` | `pytest skyspy/tests/test_services_acars.py -v` |
+| `services/audio.py` | `pytest skyspy/tests/test_services_audio.py skyspy/tests/test_tasks_transcription.py -v` |
+| `services/aircraft_info.py`, `external_db.py` | `pytest skyspy/tests/test_services_aircraft_info.py -v` |
+| `services/notifications.py`, `notification_*.py` | `pytest skyspy/tests/test_services_notifications.py -v` |
+| `api/*.py` (any ViewSet) | `pytest skyspy/tests/test_api_*.py -v` |
+| `models/*.py` | `pytest skyspy/tests/ -v` (run all — model changes can break anything) |
+| `socketio/` | `pytest skyspy/tests/test_socketio_*.py -v` |
+| `tasks/*.py` | `pytest skyspy/tests/test_tasks_*.py -v` |
+| `web/src/hooks/` | `cd web && npm run test:unit -- src/hooks/` |
+| `web/src/components/map/` | `cd web && npm run test:unit -- src/components/map/` |
+| `web/src/components/views/` | `cd web && npm run test:unit -- src/components/views/` |
+| Any Python file | `ruff check . && ruff format --check .` |
+| Any frontend file | `cd web && npm run lint && npm run format:check` |
+| Go files | `cd skyspy-go && make ci` |

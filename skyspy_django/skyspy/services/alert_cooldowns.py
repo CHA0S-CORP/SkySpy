@@ -31,7 +31,9 @@ if existing then
 else
     -- Key doesn't exist or expired, set it atomically
     redis.call('SETEX', key, cooldown_seconds, now_ts)
-    return {1, nil}
+    -- Note: use false (converted to a nil reply element), never a Lua nil,
+    -- which would truncate the returned table to a single element
+    return {1, false}
 end
 """
 
@@ -127,7 +129,8 @@ class DistributedCooldownManager:
     preventing duplicate alerts when processing aircraft data in parallel.
     """
 
-    KEY_PREFIX = "alert:cooldown"
+    # Prefixed with "skyspy:" to namespace keys in the shared Redis instance
+    KEY_PREFIX = "skyspy:alert:cooldown"
 
     def __init__(self):
         self._redis = None
@@ -187,8 +190,9 @@ class DistributedCooldownManager:
                 script = self._get_lua_script()
                 result = script(keys=[key], args=[str(now_ts), cooldown_seconds])
 
-                can_trigger = bool(result[0])
-                last_ts = result[1]
+                # Guard against short replies (Lua nil truncates returned tables)
+                can_trigger = bool(result[0]) if result else False
+                last_ts = result[1] if len(result) > 1 else None
 
                 if can_trigger:
                     # Key was set - cooldown passed (or first trigger)

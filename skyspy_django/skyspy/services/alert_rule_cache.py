@@ -90,8 +90,8 @@ class CompiledRule:
             if not is_military:
                 return False
 
-        # Position filter (for distance rules)
-        if self.requires_position and not aircraft.get("distance_nm"):
+        # Position filter (for distance rules) - 0.0 nm (directly overhead) is valid
+        if self.requires_position and aircraft.get("distance_nm") is None:
             return False
 
         # Altitude filter - check both 'alt' and 'alt_baro'
@@ -225,8 +225,9 @@ class AlertRuleCache:
     - Segmented indexes for O(1) rule lookup by ICAO, squawk, and callsign prefix
     """
 
-    REDIS_KEY = "alert:rules:cache"
-    VERSION_KEY = "alert:rules:version"
+    # Prefixed with "skyspy:" to namespace keys in the shared Redis instance
+    REDIS_KEY = "skyspy:alert:rules:cache"
+    VERSION_KEY = "skyspy:alert:rules:version"
     DEFAULT_TTL = 300  # 5 minutes
 
     def __init__(self):
@@ -573,19 +574,25 @@ rule_cache = AlertRuleCache()
 
 def _connect_signals():
     """Connect Django signals for cache invalidation."""
+    from django.db import transaction
+
     from skyspy.models import AlertRule
+
+    # post_save/post_delete fire before the surrounding transaction commits, so
+    # invalidate on commit - otherwise a concurrent refresh can re-read the old
+    # rows and pin stale rules under a fresh cache version.
 
     @receiver(post_save, sender=AlertRule)
     def invalidate_on_save(sender, instance, **kwargs):
-        """Invalidate cache when a rule is saved."""
-        rule_cache.invalidate()
-        logger.debug(f"Rule cache invalidated after save of rule {instance.id}")
+        """Invalidate cache when a rule is saved (after the transaction commits)."""
+        transaction.on_commit(rule_cache.invalidate)
+        logger.debug(f"Rule cache invalidation scheduled after save of rule {instance.id}")
 
     @receiver(post_delete, sender=AlertRule)
     def invalidate_on_delete(sender, instance, **kwargs):
-        """Invalidate cache when a rule is deleted."""
-        rule_cache.invalidate()
-        logger.debug(f"Rule cache invalidated after delete of rule {instance.id}")
+        """Invalidate cache when a rule is deleted (after the transaction commits)."""
+        transaction.on_commit(rule_cache.invalidate)
+        logger.debug(f"Rule cache invalidation scheduled after delete of rule {instance.id}")
 
 
 # Connect signals when module loads

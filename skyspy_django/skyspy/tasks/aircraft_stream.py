@@ -36,6 +36,15 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 # In-memory buffers (for low-latency operation)
 # ============================================================================
+#
+# IMPORTANT DEPLOYMENT CONSTRAINT: these module-level buffers are shared
+# between the producer (stream_aircraft on the `polling` queue) and the
+# consumers (flush_stream_to_database / process_new_aircraft_lookups on the
+# `database` queue, cleanup_stale_aircraft on `default`). This only works
+# because a single gevent worker process consumes all queues. If the queues
+# are ever split across multiple worker processes, the cold-path tasks will
+# see empty buffers and DB persistence/lookups will silently stop - move the
+# buffers to Redis before splitting workers.
 
 # Current aircraft state (hot path - updated on every message)
 _aircraft_state: dict[str, dict] = {}  # icao -> aircraft data
@@ -63,6 +72,11 @@ _aircraft_last_updated_lock = Lock()
 
 # Stale aircraft threshold (seconds since last update)
 STALE_AIRCRAFT_THRESHOLD = 60
+
+# SSE read timeout (seconds). Ultrafeeder pushes updates continuously
+# (typically sub-second), so if no bytes arrive for this long the connection
+# has stalled (e.g., half-open TCP) and we raise to trigger a reconnect.
+SSE_READ_TIMEOUT = 60
 
 # ============================================================================
 # Differential Update State Tracking (P2 optimization)
@@ -108,39 +122,48 @@ def get_stream_task_status() -> dict[str, Any]:
 
     try:
         inspect = app.control.inspect()
-        active = inspect.active() or {}
+        active = inspect.active()
 
-        for worker, tasks in active.items():
-            for task in tasks:
-                task_name = task.get("name", "")
-                # Check for both full module path and short name
-                if "stream_aircraft" in task_name:
-                    return {
-                        "running": True,
-                        "worker": worker,
-                        "task_id": task.get("id", ""),
-                        "source": "inspect",
-                    }
+        if active is None:
+            # No worker replied (inspect timeout, broker hiccup, workers busy).
+            # This means status is UNKNOWN, not "not running" - fall through to
+            # the cache heartbeat check rather than risking a duplicate stream.
+            logger.warning("Celery inspect returned no worker replies, falling back to cache check")
+        else:
+            for worker, tasks in active.items():
+                for task in tasks:
+                    task_name = task.get("name", "")
+                    # Check for both full module path and short name
+                    if "stream_aircraft" in task_name:
+                        return {
+                            "running": True,
+                            "worker": worker,
+                            "task_id": task.get("id", ""),
+                            "source": "inspect",
+                        }
 
-        # No stream task found in active tasks
-        return {
-            "running": False,
-            "worker": "",
-            "task_id": "",
-            "source": "inspect",
-        }
+            # Workers replied and no stream task found in active tasks
+            return {
+                "running": False,
+                "worker": "",
+                "task_id": "",
+                "source": "inspect",
+            }
 
     except Exception as e:
         # Fall back to cache check if Celery inspect fails
         # This can happen if the broker is temporarily unavailable
         logger.warning(f"Failed to inspect tasks via Celery, falling back to cache check: {e}")
-        is_active = cache.get(CACHE_KEY_STREAM_ACTIVE, False)
-        return {
-            "running": bool(is_active),
-            "worker": "",
-            "task_id": "",
-            "source": "cache",
-        }
+
+    # Cache fallback: the stream task heartbeats CACHE_KEY_STREAM_ACTIVE
+    # every 10s (30s TTL), so this flag is a reliable liveness signal.
+    is_active = cache.get(CACHE_KEY_STREAM_ACTIVE, False)
+    return {
+        "running": bool(is_active),
+        "worker": "",
+        "task_id": "",
+        "source": "cache",
+    }
 
 
 # ============================================================================
@@ -546,7 +569,11 @@ def sync_cache_state():
     """
     Sync in-memory state to Django cache and broadcast heartbeat.
 
-    Called periodically, not on every update, to reduce cache overhead.
+    Called periodically (once per second), not on every update, to reduce
+    cache overhead. Also runs safety monitoring and alert rule evaluation
+    here since this is the one place in the stream path where the full
+    aircraft list is assembled each cycle (proximity detection needs the
+    full list, not per-batch deltas).
     """
     with _aircraft_state_lock:
         aircraft_list = list(_aircraft_state.values())
@@ -562,6 +589,13 @@ def sync_cache_state():
         },
         timeout=30,
     )
+
+    # Run safety monitoring and alert rule evaluation against live data.
+    # Lazy import to avoid circular deps; internally guarded so a
+    # safety/alert failure can never kill the stream loop.
+    from skyspy.tasks.aircraft import run_safety_and_alert_checks
+
+    run_safety_and_alert_checks(aircraft_list)
 
     # Broadcast heartbeat with current aircraft count
     try:
@@ -598,7 +632,7 @@ def flush_stream_to_database(self):
 
     This runs on a separate schedule, not blocking the streaming hot path.
     """
-    from django.db import transaction
+    from django.db import IntegrityError, transaction
 
     from skyspy.models import AircraftSighting
 
@@ -641,9 +675,12 @@ def flush_stream_to_database(self):
 
             if sightings:
                 try:
-                    AircraftSighting.objects.bulk_create(sightings, batch_size=500)
-                except Exception:
-                    # Fallback to ignore_conflicts only on error (e.g., duplicate key)
+                    # Nested atomic() creates a savepoint so a failed insert
+                    # doesn't poison the outer transaction for the fallback
+                    with transaction.atomic():
+                        AircraftSighting.objects.bulk_create(sightings, batch_size=500)
+                except IntegrityError:
+                    # Fallback to ignore_conflicts on integrity errors (e.g., duplicate key)
                     AircraftSighting.objects.bulk_create(sightings, ignore_conflicts=True, batch_size=500)
                 logger.debug(f"Flushed {len(sightings)} stream sightings to database")
 
@@ -792,7 +829,9 @@ def stream_sse(url: str, feeder_lat: float, feeder_lon: float, batch_ms: int):
                 "Accept": "text/event-stream",
                 "Cache-Control": "no-cache",
             },
-            timeout=(10, None),  # 10s connect timeout, no read timeout
+            # 10s connect timeout; read timeout detects stalled/half-open
+            # connections so iter_lines() can't block forever
+            timeout=(10, SSE_READ_TIMEOUT),
         )
         response.raise_for_status()
 
@@ -1091,7 +1130,12 @@ def stream_adsbx(feeder_lat: float, feeder_lon: float, poll_interval: float, rad
 # ============================================================================
 
 
-@shared_task(bind=True, max_retries=0, ignore_result=True)
+# acks_late=False (overriding the global task_acks_late=True): this task runs
+# an infinite loop and never completes, so with late acks the broker would
+# redeliver it after the visibility timeout (~1h) and spawn a duplicate stream.
+# Acking on receipt means it never gets redelivered; the start_aircraft_stream
+# beat task restarts it if it dies.
+@shared_task(bind=True, max_retries=0, ignore_result=True, acks_late=False)
 def stream_aircraft(self):
     """
     Main aircraft streaming task.

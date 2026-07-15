@@ -56,7 +56,8 @@ def _make_request(endpoint: str, params: dict | None = None, timeout: int = 30) 
     if not _is_enabled():
         return None
 
-    # Check rate limit
+    # Check rate limit (rejected requests must not touch the key, so the
+    # window can expire and unblock further requests)
     rate_key = "opensky_rate_limit"
     rate_count = cache.get(rate_key, 0)
     if rate_count >= MAX_REQUESTS_PER_MINUTE:
@@ -73,8 +74,15 @@ def _make_request(endpoint: str, params: dict | None = None, timeout: int = 30) 
             )
             response.raise_for_status()
 
-            # Update rate limit counter
-            cache.set(rate_key, rate_count + 1, 60)
+            # Update rate limit counter without refreshing the TTL of an
+            # existing window (cache.set would restart the 60s window on
+            # every request, so a steady trickle could never expire it)
+            if not cache.add(rate_key, 1, 60):
+                try:
+                    cache.incr(rate_key)
+                except ValueError:
+                    # Key expired between add() and incr(); start a new window
+                    cache.add(rate_key, 1, 60)
 
             return response.json()
 
@@ -180,20 +188,20 @@ def _parse_state_vector(state: list) -> dict[str, Any] | None:
         if lat is None or lon is None:
             return None
 
-        # Convert m/s to knots for velocity
+        # Convert m/s to knots for velocity (0 is a valid value; only None is missing)
         velocity_ms = state[9]
-        velocity_kt = round(velocity_ms * 1.944, 1) if velocity_ms else None
+        velocity_kt = round(velocity_ms * 1.944, 1) if velocity_ms is not None else None
 
         # Convert m/s to ft/min for vertical rate
         vert_rate_ms = state[11]
-        vert_rate_fpm = round(vert_rate_ms * 196.85, 0) if vert_rate_ms else None
+        vert_rate_fpm = round(vert_rate_ms * 196.85, 0) if vert_rate_ms is not None else None
 
         # Convert meters to feet for altitude
         baro_alt_m = state[7]
-        baro_alt_ft = round(baro_alt_m * 3.281, 0) if baro_alt_m else None
+        baro_alt_ft = round(baro_alt_m * 3.281, 0) if baro_alt_m is not None else None
 
         geo_alt_m = state[13]
-        geo_alt_ft = round(geo_alt_m * 3.281, 0) if geo_alt_m else None
+        geo_alt_ft = round(geo_alt_m * 3.281, 0) if geo_alt_m is not None else None
 
         position_sources = {
             0: "ADS-B",
@@ -296,7 +304,7 @@ def get_aircraft_track(icao_hex: str, time: int | None = None) -> list[dict[str,
                     "time": point[0],
                     "latitude": point[1],
                     "longitude": point[2],
-                    "altitude_baro_ft": round(point[3] * 3.281, 0) if point[3] else None,
+                    "altitude_baro_ft": round(point[3] * 3.281, 0) if point[3] is not None else None,
                     "track": point[4],
                     "on_ground": point[5],
                 }

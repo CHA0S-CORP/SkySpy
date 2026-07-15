@@ -164,7 +164,7 @@ def calculate_acars_message_stats(hours: int = 24) -> dict:
         "top_frequencies": top_frequencies,
         "messages_with_content": with_decoded,
         "content_percentage": round(with_decoded / total_messages * 100, 1) if total_messages > 0 else 0,
-        "timestamp": timezone.now().isoformat() + "Z",
+        "timestamp": timezone.now().isoformat().replace("+00:00", "Z"),
     }
 
 
@@ -241,7 +241,7 @@ def calculate_acars_airline_stats(hours: int = 24, limit: int = 20) -> dict:
         "total_with_airline_info": total_with_airline,
         "total_messages": total_messages,
         "time_range_hours": hours,
-        "timestamp": timezone.now().isoformat() + "Z",
+        "timestamp": timezone.now().isoformat().replace("+00:00", "Z"),
     }
 
 
@@ -286,7 +286,9 @@ def calculate_acars_trends(hours: int = 24, interval: str = "hour") -> dict:
 
         intervals.append(
             {
-                "timestamp": row["interval_start"].isoformat() + "Z" if row["interval_start"] else None,
+                "timestamp": row["interval_start"].isoformat().replace("+00:00", "Z")
+                if row["interval_start"]
+                else None,
                 "total": count,
                 "acars": row["acars_count"],
                 "vdl2": row["vdl2_count"],
@@ -316,13 +318,13 @@ def calculate_acars_trends(hours: int = 24, interval: str = "hour") -> dict:
         "time_range_hours": hours,
         "total_messages": total_messages,
         "peak_interval": {
-            "timestamp": peak_interval.isoformat() + "Z" if peak_interval else None,
+            "timestamp": peak_interval.isoformat().replace("+00:00", "Z") if peak_interval else None,
             "count": peak_count,
         },
         "hourly_distribution": hourly_data,
         "peak_hour": peak_hour,
         "quietest_hour": quietest_hour,
-        "timestamp": timezone.now().isoformat() + "Z",
+        "timestamp": timezone.now().isoformat().replace("+00:00", "Z"),
     }
 
 
@@ -375,7 +377,7 @@ def calculate_acars_category_trends(hours: int = 24) -> dict:
         "hourly_category_trends": category_trends,
         "category_totals": dict(category_totals),
         "time_range_hours": hours,
-        "timestamp": timezone.now().isoformat() + "Z",
+        "timestamp": timezone.now().isoformat().replace("+00:00", "Z"),
     }
 
 
@@ -450,7 +452,7 @@ def calculate_free_text_analysis(hours: int = 24, limit: int = 20) -> dict:
         "message_patterns": dict(message_patterns),
         "total_analyzed": len(list(messages)),
         "time_range_hours": hours,
-        "timestamp": timezone.now().isoformat() + "Z",
+        "timestamp": timezone.now().isoformat().replace("+00:00", "Z"),
     }
 
 
@@ -489,7 +491,7 @@ def get_acars_summary_stats(hours: int = 24) -> dict:
         "messages_per_hour": round(hourly_avg, 1),
         "top_label": top_label["label"] if top_label else None,
         "top_label_count": top_label["count"] if top_label else 0,
-        "timestamp": timezone.now().isoformat() + "Z",
+        "timestamp": timezone.now().isoformat().replace("+00:00", "Z"),
     }
 
 

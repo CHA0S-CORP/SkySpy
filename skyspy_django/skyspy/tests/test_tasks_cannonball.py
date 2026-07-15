@@ -99,7 +99,7 @@ class AnalyzeAircraftPatternsTaskTest(TestCase):
         mock_threat = MagicMock()
         mock_threat.hex = "A12345"
         mock_threat.to_dict.return_value = {
-            "icao_hex": "A12345",
+            "hex": "A12345",
             "callsign": "N12345",
             "lat": 47.51,
             "lon": -122.01,
@@ -156,7 +156,7 @@ class AnalyzeAircraftPatternsTaskTest(TestCase):
         mock_threat = MagicMock()
         mock_threat.hex = "A12345"
         mock_threat.to_dict.return_value = {
-            "icao_hex": "A12345",
+            "hex": "A12345",
             "threat_level": "info",
             "urgency_score": 30,
             "identification_method": "database",
@@ -190,7 +190,7 @@ class AnalyzeAircraftPatternsTaskTest(TestCase):
         mock_threat = MagicMock()
         mock_threat.hex = "A12345"
         mock_threat.to_dict.return_value = {
-            "icao_hex": "A12345",
+            "hex": "A12345",
             "callsign": "N12345",
             "lat": 47.5,
             "lon": -122.0,
@@ -361,18 +361,19 @@ class AggregateCannonballStatsTaskTest(TestCase):
         CannonballPattern.objects.all().delete()
 
     def test_aggregate_stats_creates_hourly_record(self):
-        """Test that hourly stats record is created."""
+        """Test that hourly stats record is created for the previous hour."""
         now = timezone.now()
-        hour_start = now.replace(minute=0, second=0, microsecond=0)
+        hour_end = now.replace(minute=0, second=0, microsecond=0)
+        hour_start = hour_end - timedelta(hours=1)
 
-        # Create session in current hour
+        # Create session in the previous (full) hour
         session = CannonballSession.objects.create(
             icao_hex="TEST01",
             is_active=True,
         )
         CannonballSession.objects.filter(pk=session.pk).update(
             first_seen=hour_start,
-            last_seen=now,
+            last_seen=hour_start + timedelta(minutes=30),
         )
 
         aggregate_cannonball_stats()
@@ -389,7 +390,7 @@ class AggregateCannonballStatsTaskTest(TestCase):
     def test_aggregate_stats_skips_duplicate(self):
         """Test that duplicate stats are not created."""
         now = timezone.now()
-        hour_start = now.replace(minute=0, second=0, microsecond=0)
+        hour_start = now.replace(minute=0, second=0, microsecond=0) - timedelta(hours=1)
 
         # Create existing stats
         CannonballStats.objects.create(
@@ -413,32 +414,36 @@ class AggregateCannonballStatsTaskTest(TestCase):
     def test_aggregate_stats_counts_alerts(self):
         """Test that alerts are counted correctly."""
         now = timezone.now()
-        hour_start = now.replace(minute=0, second=0, microsecond=0)
+        hour_end = now.replace(minute=0, second=0, microsecond=0)
+        hour_start = hour_end - timedelta(hours=1)
 
-        # Create session
+        # Create session in the previous (full) hour
         session = CannonballSession.objects.create(
             icao_hex="TEST01",
             is_active=True,
         )
         CannonballSession.objects.filter(pk=session.pk).update(
             first_seen=hour_start,
-            last_seen=now,
+            last_seen=hour_start + timedelta(minutes=30),
         )
 
-        # Create alerts
-        CannonballAlert.objects.create(
+        # Create alerts in the previous hour
+        critical = CannonballAlert.objects.create(
             session=session,
             alert_type="threat_escalated",
             priority="critical",
             title="Critical Alert",
             message="Test",
         )
-        CannonballAlert.objects.create(
+        warning = CannonballAlert.objects.create(
             session=session,
             alert_type="closing_fast",
             priority="warning",
             title="Warning Alert",
             message="Test",
+        )
+        CannonballAlert.objects.filter(pk__in=[critical.pk, warning.pk]).update(
+            created_at=hour_start + timedelta(minutes=15)
         )
 
         aggregate_cannonball_stats()
@@ -607,7 +612,7 @@ class CannonballPatternRecordingTest(TestCase):
         mock_threat = MagicMock()
         mock_threat.hex = "A12345"
         mock_threat.to_dict.return_value = {
-            "icao_hex": "A12345",
+            "hex": "A12345",
             "lat": 47.51,
             "lon": -122.01,
             "threat_level": "warning",
@@ -615,12 +620,12 @@ class CannonballPatternRecordingTest(TestCase):
             "identification_method": "pattern",
             "patterns": [
                 {
-                    "type": "circling",
+                    "pattern_type": "circling",
                     "confidence": 0.85,
                     "center_lat": 47.51,
                     "center_lon": -122.01,
                     "radius_nm": 2.0,
-                    "data": {"orbit_count": 3},
+                    "metadata": {"orbit_count": 3},
                 }
             ],
         }
@@ -681,7 +686,7 @@ class CannonballAlertCooldownTest(TestCase):
         mock_threat = MagicMock()
         mock_threat.hex = "A12345"
         mock_threat.to_dict.return_value = {
-            "icao_hex": "A12345",
+            "hex": "A12345",
             "lat": 47.5,
             "lon": -122.0,
             "threat_level": "critical",

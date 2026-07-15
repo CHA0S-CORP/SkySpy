@@ -43,7 +43,7 @@ LAW_ENFORCEMENT_CALLSIGN_PATTERNS: list[tuple[str, str, str]] = [
     (r"^BORDER\d*", "Federal Law Enforcement", "Border Patrol"),
     (r"^USMS\d*", "Federal Law Enforcement", "US Marshals Service"),
     (r"^JPATS\d*", "Federal Law Enforcement", "Justice Prisoner & Alien Transport"),
-    (r"^ICE\d*", "Federal Law Enforcement", "Immigration & Customs Enforcement"),
+    # NOTE: no ^ICE pattern here - "ICE" is Icelandair's ICAO callsign prefix
     (r"^DEA\d*", "Federal Law Enforcement", "Drug Enforcement Admin"),
     (r"^ATF\d*", "Federal Law Enforcement", "Bureau of Alcohol Tobacco Firearms"),
     (r"^FBI\d*", "Federal Law Enforcement", "Federal Bureau of Investigation"),
@@ -64,7 +64,7 @@ LAW_ENFORCEMENT_CALLSIGN_PATTERNS: list[tuple[str, str, str]] = [
     # News helicopters (often follow enforcement activity)
     (r"^NEWS\d+", "News Media", "News Helicopter"),
     (r"^CHOPPER\d+", "News Media", "News Helicopter"),
-    (r"^SKY\d+", "News Media", "Sky News"),
+    # NOTE: no ^SKY pattern here - "SKY" is Skymark Airlines' ICAO callsign prefix
     (r"^KOMO\d*", "News Media", "KOMO News"),
     (r"^KIRO\d*", "News Media", "KIRO News"),
     (r"^KTLA\d*", "News Media", "KTLA News"),

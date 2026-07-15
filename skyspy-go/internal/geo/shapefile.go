@@ -139,7 +139,7 @@ func ParseShapefile(path string) (*GeoOverlay, error) {
 		offset += 8
 
 		contentBytes := int(recHeader.ContentLength) * 2 // Convert from 16-bit words to bytes
-		if offset+contentBytes > len(data) {
+		if contentBytes < 0 || offset+contentBytes > len(data) {
 			break
 		}
 

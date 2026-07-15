@@ -14,7 +14,7 @@ import httpx
 from celery import shared_task
 from django.conf import settings
 from django.core.cache import cache
-from django.db import transaction
+from django.db import DatabaseError, transaction
 from django.utils import timezone
 
 from skyspy.models import AircraftSession, AircraftSighting
@@ -55,22 +55,27 @@ def queue_new_aircraft_for_lookup(aircraft_list: list):
         logger.info("Cleared seen aircraft cache")
 
     new_aircraft = []
+    batch_icaos: set = set()
     for ac in aircraft_list:
         icao = ac.get("hex", "").upper()
         if not icao or icao.startswith("~"):  # Skip TIS-B
             continue
 
-        if icao not in _seen_aircraft:
-            _seen_aircraft.add(icao)
+        if icao not in _seen_aircraft and icao not in batch_icaos:
+            batch_icaos.add(icao)
             new_aircraft.append(icao)
 
     # Queue lookups for new aircraft (batch to reduce task overhead)
     if new_aircraft:
         from skyspy.tasks.external_db import fetch_aircraft_info
 
-        for icao in new_aircraft[:20]:  # Limit batch size
+        dispatched = new_aircraft[:20]  # Limit batch size
+        for icao in dispatched:
             fetch_aircraft_info.delay(icao)
-        logger.debug(f"Queued {len(new_aircraft)} new aircraft for lookup")
+        # Only mark dispatched aircraft as seen - the remainder will be
+        # picked up and dispatched on subsequent cycles
+        _seen_aircraft.update(dispatched)
+        logger.debug(f"Queued {len(dispatched)} of {len(new_aircraft)} new aircraft for lookup")
 
 
 def calculate_distance_nm(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -88,6 +93,40 @@ def calculate_distance_nm(lat1: float, lon1: float, lat2: float, lon2: float) ->
     # Earth radius in nautical miles
     r = 3440.065
     return r * c
+
+
+def run_safety_and_alert_checks(aircraft_list: list):
+    """
+    Run safety monitoring and alert rule evaluation against the current aircraft list.
+
+    Called once per cycle from the poll path (poll_aircraft) and the stream path
+    (sync_cache_state in aircraft_stream.py) with the full aircraft list, so
+    emergency squawks, TCAS/proximity conflicts, and custom alert rules are
+    evaluated against live data.
+
+    Uses lazy imports to avoid circular dependencies. All failures are logged
+    and swallowed so a safety/alert error can never break the data pipeline.
+    """
+    if not aircraft_list:
+        return
+
+    try:
+        from skyspy.services.safety import safety_monitor
+
+        safety_monitor.update_aircraft(aircraft_list)
+    except (DatabaseError, ConnectionError, OSError, RuntimeError) as e:
+        logger.error(f"Safety monitoring failed: {e}")
+    except Exception:  # Never let safety failures kill the polling/streaming loop
+        logger.exception("Unexpected error in safety monitoring")
+
+    try:
+        from skyspy.services.alerts import alert_service
+
+        alert_service.check_alerts(aircraft_list)
+    except (DatabaseError, ConnectionError, OSError, RuntimeError) as e:
+        logger.error(f"Alert evaluation failed: {e}")
+    except Exception:  # Never let alert failures kill the polling/streaming loop
+        logger.exception("Unexpected error in alert evaluation")
 
 
 @shared_task(bind=True, max_retries=0)
@@ -152,6 +191,10 @@ def poll_aircraft(self):
             queue_new_aircraft_for_lookup(aircraft_list)
         except Exception as e:
             logger.debug(f"Failed to queue aircraft lookups: {e}")
+
+        # Run safety monitoring and alert rule evaluation against live data
+        # (internally guarded - failures are logged, never raised)
+        run_safety_and_alert_checks(aircraft_list)
 
         # Detect aircraft changes (new/removed)
         global _previous_aircraft, _previous_count
@@ -255,10 +298,13 @@ def poll_aircraft(self):
 @shared_task
 def cleanup_sessions():
     """
-    Clean up stale aircraft sessions.
+    Report-only helper: count and log stale aircraft sessions.
 
-    Marks sessions as complete when aircraft haven't been seen
-    for the session timeout period.
+    This task intentionally does NOT delete anything - stale sessions simply
+    stop being updated once their last_seen falls outside the session window.
+    Actual data retention (deleting old sessions) is handled by
+    skyspy.tasks.cleanup.cleanup_old_sessions, run daily via
+    run_all_cleanup_tasks.
     """
     timeout_minutes = settings.SESSION_TIMEOUT_MINUTES
     cutoff = timezone.now() - timedelta(minutes=timeout_minutes)
@@ -266,10 +312,7 @@ def cleanup_sessions():
     # Find stale sessions (last_seen older than cutoff)
     stale_count = AircraftSession.objects.filter(last_seen__lt=cutoff).count()
 
-    logger.info(f"Found {stale_count} stale sessions (older than {timeout_minutes}min)")
-
-    # Note: In the original system, sessions are kept but not updated
-    # We could delete very old sessions if needed
+    logger.info(f"Found {stale_count} stale sessions (older than {timeout_minutes}min) - report only, no deletion")
 
 
 @shared_task
@@ -343,25 +386,54 @@ def _safe_altitude(value):
     return None
 
 
+# Cache lock to prevent overlapping session update runs (which would create
+# duplicate sessions - there is no unique constraint on icao_hex+window)
+_SESSION_UPDATE_LOCK_KEY = "update_aircraft_sessions_lock"
+_SESSION_UPDATE_LOCK_TIMEOUT = 60  # seconds - safety net if a run dies mid-way
+
+
 @shared_task
 def update_aircraft_sessions(aircraft_data: list):
     """
     Update or create aircraft tracking sessions.
+
+    Guarded by a cache-based lock so overlapping runs (beat schedules this
+    every 5s and a slow run can exceed that) don't race the SELECT-then-save
+    logic and create duplicate sessions. Each aircraft is committed in its own
+    short transaction instead of one long transaction over the whole list.
     """
     if not aircraft_data:
         return
 
+    # cache.add is atomic: returns False if the lock is already held
+    if not cache.add(_SESSION_UPDATE_LOCK_KEY, True, timeout=_SESSION_UPDATE_LOCK_TIMEOUT):
+        logger.debug("update_aircraft_sessions already running, skipping overlapping run")
+        return
+
+    try:
+        _update_aircraft_sessions(aircraft_data)
+    finally:
+        cache.delete(_SESSION_UPDATE_LOCK_KEY)
+
+
+def _update_aircraft_sessions(aircraft_data: list):
+    """Inner implementation of session updates (called with the lock held)."""
     now = timezone.now()
     session_cutoff = now - timedelta(minutes=5)  # 5 min session gap
 
-    with transaction.atomic():
-        for ac in aircraft_data:
-            icao = ac.get("hex", "").upper()
-            if not icao:
-                continue
+    for ac in aircraft_data:
+        icao = ac.get("hex", "").upper()
+        if not icao:
+            continue
 
-            # Find or create session
-            session = AircraftSession.objects.filter(icao_hex=icao, last_seen__gte=session_cutoff).first()
+        # Short per-aircraft transaction instead of one long transaction
+        with transaction.atomic():
+            # Find or create session (most recent matching session wins)
+            session = (
+                AircraftSession.objects.filter(icao_hex=icao, last_seen__gte=session_cutoff)
+                .order_by("-last_seen")
+                .first()
+            )
 
             alt = _safe_altitude(ac.get("alt_baro") or ac.get("alt_geom"))
             distance = ac.get("distance_nm")

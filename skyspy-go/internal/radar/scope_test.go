@@ -1278,7 +1278,8 @@ func TestScope_DrawTrails_AgeColors(t *testing.T) {
 
 func TestScope_DrawTrails_NewestThird(t *testing.T) {
 	th := theme.Get("classic")
-	scope := NewScope(th, 200.0, 4, false) // Larger range to fit all points
+	// Range chosen so trail points ~7nm apart land on distinct radar cells
+	scope := NewScope(th, 50.0, 4, false)
 
 	// Create a trail with specific points designed to hit the newest third branch
 	// The newest third branch is: i >= 2*len(trail)/3 && i < len(trail)-1
@@ -1346,7 +1347,6 @@ func TestScope_DrawTrails_OutOfRange(t *testing.T) {
 
 func TestScope_DrawCompass_CardinalLabels(t *testing.T) {
 	th := theme.Get("classic")
-	// Test with different scope sizes to ensure cardinal labels are drawn
 	scope := NewScope(th, 100.0, 4, true)
 	scope.Clear()
 	scope.DrawCompass()
@@ -1361,9 +1361,58 @@ func TestScope_DrawCompass_CardinalLabels(t *testing.T) {
 		}
 	}
 
-	// At least some cardinals should be visible (depends on radar dimensions)
-	// N and S are on vertical axis, E and W on horizontal
-	// Note: Some may be out of bounds depending on maxRadius calculation
+	// All four cardinal labels must be within radar bounds
+	for cardinal, found := range cardinalFound {
+		if !found {
+			t.Errorf("cardinal label '%c' was not drawn within radar bounds", cardinal)
+		}
+	}
+}
+
+func TestScope_TargetNearMaxRange_Cardinals(t *testing.T) {
+	// A target at 0.9x range on each cardinal bearing must map to an
+	// in-bounds radar cell (regression test for radius being computed in
+	// x-cell units but applied to rows, which clipped targets past ~half range)
+	maxRange := 100.0
+	distance := 0.9 * maxRange
+
+	cardinals := []struct {
+		bearing float64
+		desc    string
+	}{
+		{0, "north"},
+		{90, "east"},
+		{180, "south"},
+		{270, "west"},
+	}
+
+	for _, tc := range cardinals {
+		x, y := TargetToRadarPos(distance, tc.bearing, maxRange)
+		if x < 0 || x >= RadarWidth || y < 0 || y >= RadarHeight {
+			t.Errorf("%s at 0.9x range: position (%d, %d) out of bounds (%dx%d)",
+				tc.desc, x, y, RadarWidth, RadarHeight)
+		}
+	}
+
+	// And the targets must actually render on the scope
+	th := theme.Get("classic")
+	scope := NewScope(th, maxRange, 4, false)
+	for _, tc := range cardinals {
+		scope.Clear()
+		targets := map[string]*Target{
+			"t1": {
+				Hex:      "t1",
+				Distance: distance,
+				Bearing:  tc.bearing,
+				HasLat:   true,
+				HasLon:   true,
+			},
+		}
+		sortedHexes := scope.DrawTargets(targets, "", false, false, false, false)
+		if len(sortedHexes) != 1 {
+			t.Errorf("%s at 0.9x range: target was not rendered on scope", tc.desc)
+		}
+	}
 }
 
 func TestMin(t *testing.T) {

@@ -421,7 +421,9 @@ class AcarsService:
                         "mode": acars_data.get("mode"),
                         "text": acars_data.get("msg_text", ""),
                         "signal_level": vdl2.get("sig_level"),
-                        "error_count": vdl2.get("noise_level"),
+                        # dumpvdl2's noise_level is a dBm float, not an error count
+                        "noise_level": vdl2.get("noise_level"),
+                        "error_count": None,
                         "station_id": station_id,
                         "libacars": msg.get("libacars") or vdl2.get("libacars"),
                     }
@@ -506,6 +508,7 @@ class AcarsService:
                     text=msg.get("text"),
                     decoded=None,  # Decoded in background via Celery
                     signal_level=msg.get("signal_level"),
+                    noise_level=msg.get("noise_level"),
                     error_count=msg.get("error_count"),
                     station_id=msg.get("station_id"),
                 )

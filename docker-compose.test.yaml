@@ -298,6 +298,8 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: skyspy_celery_beat_dev
+    # Beat can lose the race with initial migrations on first boot - restart instead of staying dead
+    restart: unless-stopped
     profiles: ["dev"]
     env_file:
       - .env.test

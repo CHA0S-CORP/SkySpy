@@ -17,26 +17,22 @@ logger = logging.getLogger(__name__)
 
 # Military ICAO hex ranges by country
 # Format: (start, end, country, service)
+# NOTE: Ranges must be military sub-allocations only. Do NOT add whole-country
+# allocations (e.g. all of 0x7C0000-0x7FFFFF is Australia civil + military) or
+# every airline flight from that country gets flagged as military.
 MILITARY_HEX_RANGES: list[tuple[int, int, str, str]] = [
-    # United States
-    (0xADF7C7, 0xAFFFFF, "USA", "US Military"),
-    (0xAE0000, 0xAFFFFF, "USA", "US Air Force"),
+    # United States (military block starts at 0xADF7C8)
+    (0xADF7C8, 0xAFFFFF, "USA", "US Military"),
     # United Kingdom
     (0x43C000, 0x43CFFF, "UK", "Royal Air Force"),
     # Germany
     (0x3F4000, 0x3F7FFF, "Germany", "German Air Force"),
     # France
     (0x3B0000, 0x3BFFFF, "France", "French Air Force"),
-    # Australia
-    (0x7C0000, 0x7FFFFF, "Australia", "Australian Military"),
-    # Canada
-    (0xC00000, 0xC3FFFF, "Canada", "Canadian Armed Forces"),
+    # Canada (military sub-range of the 0xC00000-0xC3FFFF national allocation)
+    (0xC20000, 0xC3FFFF, "Canada", "Canadian Armed Forces"),
     # NATO AWACS
     (0x478100, 0x4781FF, "NATO", "NATO AWACS"),
-    # Russia
-    (0x140000, 0x15FFFF, "Russia", "Russian Air Force"),
-    # China
-    (0x780000, 0x7BFFFF, "China", "Chinese Air Force"),
 ]
 
 # Military callsign patterns

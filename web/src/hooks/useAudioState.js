@@ -159,6 +159,9 @@ export const processGlobalAutoplayQueue = () => {
 
   isProcessingQueue = true;
   const next = globalAudioState.autoplayQueue.shift();
+  // Reassign to a new array and notify so queue UIs stay in sync
+  globalAudioState.autoplayQueue = [...globalAudioState.autoplayQueue];
+  notifySubscribers({ autoplayQueue: globalAudioState.autoplayQueue });
   if (!next || !next.s3_url) {
     // Try next item
     isProcessingQueue = false;
@@ -176,11 +179,6 @@ export const processGlobalAutoplayQueue = () => {
 
   if (transmissionAge > AUTOPLAY_MAX_AGE_MS * 2) {
     // Skip stale queued items (use 2x threshold since it already passed initial check)
-    console.log(
-      'Skipping stale queued transmission:',
-      next.id,
-      `(${Math.round(transmissionAge / 1000)}s old)`
-    );
     // Try next item
     isProcessingQueue = false;
     if (globalAudioState.autoplayQueue.length > 0) {
@@ -260,6 +258,31 @@ export const removeAudioHandlers = (audio) => {
   }
 };
 
+// Maximum number of cached Audio elements before pruning old ones
+const AUDIO_REFS_MAX = 25;
+
+// Prune old audio elements/progress/durations so audioRefs doesn't grow unbounded
+const pruneAudioRefs = (keepId) => {
+  const refIds = Object.keys(globalAudioState.audioRefs);
+  if (refIds.length <= AUDIO_REFS_MAX) return;
+
+  const removable = refIds.filter(
+    (refId) => refId !== String(keepId) && refId !== String(globalAudioState.playingId)
+  );
+  const removeCount = refIds.length - AUDIO_REFS_MAX;
+  removable.slice(0, removeCount).forEach((refId) => {
+    const audio = globalAudioState.audioRefs[refId];
+    if (audio) {
+      audio.pause();
+      audio.src = '';
+      removeAudioHandlers(audio);
+    }
+    delete globalAudioState.audioRefs[refId];
+    delete globalAudioState.audioProgress[refId];
+    delete globalAudioState.audioDurations[refId];
+  });
+};
+
 // Play audio from global state (used by autoplay)
 export const playAudioFromGlobal = (transmission) => {
   const id = transmission.id;
@@ -289,6 +312,8 @@ export const playAudioFromGlobal = (transmission) => {
     audio = new Audio(audioUrl);
     audio.volume = 1;
     globalAudioState.audioRefs[id] = audio;
+    // Keep the cached audio elements bounded
+    pruneAudioRefs(id);
 
     // Create named handlers that can be removed later
     const handlers = createAudioHandlers(audio, id);

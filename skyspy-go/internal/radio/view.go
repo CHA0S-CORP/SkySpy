@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/skyspy/skyspy-go/internal/ui"
 )
 
@@ -596,7 +597,8 @@ func (m *Model) renderFrequencyPanel() string {
 	sb.WriteString(textDim.Render("  "))
 	compact := m.Spectrum.RenderCompact()
 	if lipgloss.Width(compact) > 20 {
-		compact = compact[:20]
+		// ANSI-aware truncation so escape sequences aren't cut mid-sequence
+		compact = ansi.Truncate(compact, 20, "")
 	}
 	sb.WriteString(compact)
 	sb.WriteString(strings.Repeat(" ", 22-lipgloss.Width(compact)))

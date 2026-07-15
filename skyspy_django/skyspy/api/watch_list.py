@@ -7,9 +7,10 @@ import logging
 from drf_spectacular.utils import extend_schema
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
-from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
+from skyspy.auth.authentication import APIKeyAuthentication, OptionalJWTAuthentication
+from skyspy.auth.permissions import FeatureBasedPermission
 from skyspy.models.watch_list import WatchedAircraft
 from skyspy.serializers.watch_list import WatchedAircraftSerializer, WatchListImportSerializer
 
@@ -17,10 +18,15 @@ logger = logging.getLogger(__name__)
 
 
 class WatchListViewSet(viewsets.ViewSet):
-    """ViewSet for aircraft watch list management."""
+    """ViewSet for aircraft watch list management.
 
-    authentication_classes = []
-    permission_classes = [AllowAny]
+    Reads follow AUTH_MODE (public in public/hybrid mode); writes
+    (create/destroy/import/clear) require authentication outside public mode
+    via FeatureBasedPermission (mapped to the 'aircraft' feature).
+    """
+
+    authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
+    permission_classes = [FeatureBasedPermission]
 
     @extend_schema(
         summary="List watched aircraft",

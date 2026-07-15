@@ -5,6 +5,7 @@ Django settings for SkysPy project.
 import os
 import warnings
 from pathlib import Path
+from urllib.parse import urlsplit, urlunsplit
 
 from django.core.exceptions import ImproperlyConfigured
 
@@ -456,13 +457,17 @@ if BUILD_MODE:
         }
     }
 else:
+    # Force the cache onto Redis DB 1 - DB 0 is reserved for the Celery broker.
+    # NOTE: redis-py gives the URL path (e.g. "/0") precedence over a "db" kwarg,
+    # so an OPTIONS {"db": "1"} entry is silently ignored when REDIS_URL includes
+    # a database path. Rewrite the URL path instead; otherwise the cache lands in
+    # DB 0 and cache.clear() would wipe the Celery broker.
+    _redis_parts = urlsplit(REDIS_URL)
+    _cache_redis_url = urlunsplit((_redis_parts.scheme, _redis_parts.netloc, "/1", _redis_parts.query, ""))
     CACHES = {
         "default": {
             "BACKEND": "django.core.cache.backends.redis.RedisCache",
-            "LOCATION": REDIS_URL,
-            "OPTIONS": {
-                "db": "1",  # Use DB 1 for cache (DB 0 used by Celery)
-            },
+            "LOCATION": _cache_redis_url,
             "KEY_PREFIX": "skyspy",
             "TIMEOUT": 300,  # 5 minute default timeout
         }

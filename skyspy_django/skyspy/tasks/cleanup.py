@@ -93,7 +93,7 @@ def cleanup_old_sightings():
 
     except Exception as e:
         logger.error(f"Error cleaning up old sightings: {e}")
-        return {"error": str(e)}
+        raise
 
 
 @shared_task
@@ -118,7 +118,7 @@ def cleanup_old_sessions():
 
     except Exception as e:
         logger.error(f"Error cleaning up old sessions: {e}")
-        return {"error": str(e)}
+        raise
 
 
 @shared_task
@@ -143,7 +143,7 @@ def cleanup_old_alert_history():
 
     except Exception as e:
         logger.error(f"Error cleaning up old alert history: {e}")
-        return {"error": str(e)}
+        raise
 
 
 @shared_task
@@ -168,7 +168,7 @@ def cleanup_old_safety_events():
 
     except Exception as e:
         logger.error(f"Error cleaning up old safety events: {e}")
-        return {"error": str(e)}
+        raise
 
 
 @shared_task
@@ -193,7 +193,7 @@ def cleanup_old_notification_logs():
 
     except Exception as e:
         logger.error(f"Error cleaning up old notification logs: {e}")
-        return {"error": str(e)}
+        raise
 
 
 @shared_task
@@ -249,7 +249,7 @@ def cleanup_old_antenna_snapshots():
 
     except Exception as e:
         logger.error(f"Error cleaning up old antenna snapshots: {e}")
-        return {"error": str(e)}
+        raise
 
 
 @shared_task
@@ -274,7 +274,7 @@ def cleanup_old_acars_messages():
 
     except Exception as e:
         logger.error(f"Error cleaning up old ACARS messages: {e}")
-        return {"error": str(e)}
+        raise
 
 
 @shared_task
@@ -404,7 +404,7 @@ def cleanup_orphan_cooldown_keys():
         return {"error": "redis_not_available"}
     except Exception as e:
         logger.error(f"Failed to cleanup orphan cooldown keys: {e}")
-        return {"error": str(e)}
+        raise
 
 
 @shared_task
@@ -461,7 +461,7 @@ def cleanup_stale_cooldown_keys(max_age_hours: int = 24):
         return {"error": "redis_not_available"}
     except Exception as e:
         logger.error(f"Failed to cleanup stale cooldown keys: {e}")
-        return {"error": str(e)}
+        raise
 
 
 @shared_task
@@ -474,15 +474,27 @@ def vacuum_analyze_tables():
 
     Note: This is PostgreSQL-specific.
     """
+    from skyspy.models import (
+        AircraftSession,
+        AircraftSighting,
+        AlertHistory,
+        AntennaAnalyticsSnapshot,
+        SafetyEvent,
+    )
+
     tables = [
-        "skyspy_aircraftsighting",
-        "skyspy_aircraftsession",
-        "skyspy_alerthistory",
-        "skyspy_safetyevent",
-        "skyspy_antennaanalyticssnapshot",
+        model._meta.db_table
+        for model in (
+            AircraftSighting,
+            AircraftSession,
+            AlertHistory,
+            SafetyEvent,
+            AntennaAnalyticsSnapshot,
+        )
     ]
 
     results = {}
+    errors = []
 
     for table in tables:
         try:
@@ -493,7 +505,14 @@ def vacuum_analyze_tables():
             logger.debug(f"VACUUM ANALYZE completed for {table}")
         except Exception as e:
             results[table] = f"error: {str(e)}"
+            errors.append(f"{table}: {e}")
             logger.warning(f"VACUUM ANALYZE failed for {table}: {e}")
 
     logger.info(f"VACUUM ANALYZE completed for {len([r for r in results.values() if r == 'success'])} tables")
+
+    # Surface failures to Celery so beat/metrics see the task as failed
+    # (all tables are still attempted before raising)
+    if errors:
+        raise RuntimeError(f"VACUUM ANALYZE failed for {len(errors)} table(s): {'; '.join(errors)}")
+
     return results

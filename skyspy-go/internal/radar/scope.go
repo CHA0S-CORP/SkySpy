@@ -111,7 +111,7 @@ func (s *Scope) SetRangeRings(rings int) {
 // DrawRangeRings draws the range rings
 func (s *Scope) DrawRangeRings() {
 	cx, cy := RadarCenterX, RadarCenterY
-	maxRadius := min(RadarWidth/2, RadarHeight) - 1
+	maxRadius := geo.MaxRadarRadius(RadarWidth, RadarHeight)
 
 	for ring := 1; ring <= s.rangeRings; ring++ {
 		ringRadius := float64(ring) / float64(s.rangeRings) * float64(maxRadius)
@@ -135,7 +135,7 @@ func (s *Scope) DrawCompass() {
 	}
 
 	cx, cy := RadarCenterX, RadarCenterY
-	maxRadius := min(RadarWidth/2, RadarHeight) - 1
+	maxRadius := geo.MaxRadarRadius(RadarWidth, RadarHeight)
 
 	// Draw axes
 	for i := 1; i < maxRadius; i++ {
@@ -179,7 +179,7 @@ func (s *Scope) DrawCompass() {
 // DrawSweep draws the radar sweep line
 func (s *Scope) DrawSweep(sweepAngle float64) {
 	cx, cy := RadarCenterX, RadarCenterY
-	maxRadius := min(RadarWidth/2, RadarHeight) - 1
+	maxRadius := geo.MaxRadarRadius(RadarWidth, RadarHeight)
 	sweepRad := (sweepAngle - 90) * math.Pi / 180
 
 	for i := 1; i <= maxRadius; i++ {
@@ -429,7 +429,9 @@ func TargetToRadarPos(distance, bearing, maxRange float64) (int, int) {
 	if distance > maxRange {
 		return -1, -1
 	}
-	radius := (distance / maxRange) * float64(min(RadarWidth, RadarHeight*2)/2-2)
+	// Radius is in rows (y cells); x offsets are doubled below to compensate
+	// for the ~2:1 aspect ratio of terminal cells.
+	radius := (distance / maxRange) * float64(geo.MaxRadarRadius(RadarWidth, RadarHeight))
 	angleRad := (bearing - 90) * math.Pi / 180
 	x := int(float64(RadarCenterX) + radius*math.Cos(angleRad)*2)
 	y := int(float64(RadarCenterY) + radius*math.Sin(angleRad))

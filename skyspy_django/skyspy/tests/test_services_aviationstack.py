@@ -374,7 +374,7 @@ class GetDeparturesTests(TestCase):
         mock_enabled.return_value = True
         cached_data = [{"flight_iata": f"AA{i}"} for i in range(100)]
         today = date.today().isoformat()
-        cache.set(f"aviationstack_dep_LAX_{today}", cached_data)
+        cache.set(f"aviationstack_dep_LAX_{today}_10", cached_data)
 
         result = aviationstack.get_departures("LAX", limit=10)
 

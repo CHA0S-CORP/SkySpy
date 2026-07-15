@@ -217,8 +217,6 @@ export function useAlertNotifications(options = {}) {
     (alertData) => {
       if (!mountedRef.current) return;
 
-      console.log('Alert notification received:', alertData);
-
       // Update unacknowledged count
       setUnacknowledgedCount((prev) => prev + 1);
 

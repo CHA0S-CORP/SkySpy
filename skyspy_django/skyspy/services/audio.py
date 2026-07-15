@@ -12,7 +12,6 @@ Handles:
 import io
 import logging
 import re
-from datetime import datetime
 from pathlib import Path
 
 import httpx
@@ -818,8 +817,10 @@ def _parse_wav_duration(audio_data: bytes) -> float | None:
             chunk_size = int.from_bytes(audio_data[pos + 4 : pos + 8], "little")
 
             if chunk_id == b"fmt ":
-                num_channels = int.from_bytes(audio_data[pos + 8 : pos + 10], "little")
-                sample_rate = int.from_bytes(audio_data[pos + 10 : pos + 14], "little")
+                # fmt chunk layout: wFormatTag @ +8, nChannels @ +10, nSamplesPerSec @ +12,
+                # nAvgBytesPerSec @ +16, nBlockAlign @ +20, wBitsPerSample @ +22
+                num_channels = int.from_bytes(audio_data[pos + 10 : pos + 12], "little")
+                sample_rate = int.from_bytes(audio_data[pos + 12 : pos + 16], "little")
                 bytes_per_sample = int.from_bytes(audio_data[pos + 22 : pos + 24], "little") // 8
 
                 if num_channels == 0 or sample_rate == 0 or bytes_per_sample == 0:
@@ -1397,7 +1398,7 @@ def get_matched_radio_calls(
                 matched_calls.append(
                     {
                         "id": tx.id,
-                        "created_at": tx.created_at.isoformat() + "Z" if tx.created_at else None,
+                        "created_at": tx.created_at.isoformat().replace("+00:00", "Z") if tx.created_at else None,
                         "transcript": tx.transcript,
                         "frequency_mhz": tx.frequency_mhz,
                         "channel_name": tx.channel_name,
@@ -1480,7 +1481,7 @@ def _broadcast_transcription_event(transmission: AudioTransmission, status: str,
             "id": transmission.id,
             "filename": transmission.filename,
             "status": status,
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": timezone.now().isoformat().replace("+00:00", "Z"),
         }
 
         if status == "completed":
@@ -1520,7 +1521,7 @@ def broadcast_new_transmission(transmission: AudioTransmission):
             "id": transmission.id,
             "filename": transmission.filename,
             "status": "new",
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": timezone.now().isoformat().replace("+00:00", "Z"),
             "duration_seconds": transmission.duration_seconds,
             "frequency_mhz": transmission.frequency_mhz,
             "channel_name": transmission.channel_name,

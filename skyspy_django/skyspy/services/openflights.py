@@ -80,12 +80,8 @@ def refresh_airlines() -> int:
         logger.error("Failed to fetch airline data")
         return 0
 
-    # Clear existing data
-    CachedAirline.objects.all().delete()
-
     airlines = []
     seen_icao = set()
-    datetime.utcnow()
 
     for row in rows:
         if len(row) < 8:
@@ -123,9 +119,16 @@ def refresh_airlines() -> int:
             logger.warning(f"Failed to parse airline row: {e}")
             continue
 
-    if airlines:
-        CachedAirline.objects.bulk_create(airlines)
-        logger.info(f"Cached {len(airlines)} airlines")
+    if not airlines:
+        # Don't wipe existing data if the fetched file parsed to nothing
+        logger.error("No valid airline rows parsed; keeping existing data")
+        return 0
+
+    # Replace existing data atomically (parse happened above, so a bad fetch
+    # can never leave the table empty)
+    CachedAirline.objects.all().delete()
+    CachedAirline.objects.bulk_create(airlines)
+    logger.info(f"Cached {len(airlines)} airlines")
 
     return len(airlines)
 
@@ -150,12 +153,8 @@ def refresh_aircraft_types() -> int:
         logger.error("Failed to fetch aircraft type data")
         return 0
 
-    # Clear existing data
-    CachedAircraftType.objects.all().delete()
-
     aircraft_types = []
     seen_icao = set()
-    datetime.utcnow()
 
     for row in rows:
         if len(row) < 3:
@@ -215,9 +214,16 @@ def refresh_aircraft_types() -> int:
             logger.warning(f"Failed to parse aircraft type row: {e}")
             continue
 
-    if aircraft_types:
-        CachedAircraftType.objects.bulk_create(aircraft_types)
-        logger.info(f"Cached {len(aircraft_types)} aircraft types")
+    if not aircraft_types:
+        # Don't wipe existing data if the fetched file parsed to nothing
+        logger.error("No valid aircraft type rows parsed; keeping existing data")
+        return 0
+
+    # Replace existing data atomically (parse happened above, so a bad fetch
+    # can never leave the table empty)
+    CachedAircraftType.objects.all().delete()
+    CachedAircraftType.objects.bulk_create(aircraft_types)
+    logger.info(f"Cached {len(aircraft_types)} aircraft types")
 
     return len(aircraft_types)
 
@@ -248,18 +254,19 @@ def get_airline_by_icao(icao_code: str) -> dict[str, Any] | None:
     Returns:
         Airline data dictionary or None if not found
     """
-    try:
-        airline = CachedAirline.objects.get(icao_code__iexact=icao_code)
-        return {
-            "icao_code": airline.icao_code,
-            "iata_code": airline.iata_code,
-            "name": airline.name,
-            "callsign": airline.callsign,
-            "country": airline.country,
-            "active": airline.active,
-        }
-    except CachedAirline.DoesNotExist:
+    # filter().first() also tolerates case-insensitive duplicates, which
+    # objects.get() would raise MultipleObjectsReturned for
+    airline = CachedAirline.objects.filter(icao_code__iexact=icao_code).first()
+    if airline is None:
         return None
+    return {
+        "icao_code": airline.icao_code,
+        "iata_code": airline.iata_code,
+        "name": airline.name,
+        "callsign": airline.callsign,
+        "country": airline.country,
+        "active": airline.active,
+    }
 
 
 def get_airline_by_callsign(callsign: str) -> dict[str, Any] | None:
@@ -272,18 +279,18 @@ def get_airline_by_callsign(callsign: str) -> dict[str, Any] | None:
     Returns:
         Airline data dictionary or None if not found
     """
-    try:
-        airline = CachedAirline.objects.get(callsign__iexact=callsign)
-        return {
-            "icao_code": airline.icao_code,
-            "iata_code": airline.iata_code,
-            "name": airline.name,
-            "callsign": airline.callsign,
-            "country": airline.country,
-            "active": airline.active,
-        }
-    except CachedAirline.DoesNotExist:
+    # Callsigns are not unique in the source data; take the first match
+    airline = CachedAirline.objects.filter(callsign__iexact=callsign).first()
+    if airline is None:
         return None
+    return {
+        "icao_code": airline.icao_code,
+        "iata_code": airline.iata_code,
+        "name": airline.name,
+        "callsign": airline.callsign,
+        "country": airline.country,
+        "active": airline.active,
+    }
 
 
 def get_airline_from_flight_callsign(flight_callsign: str) -> dict[str, Any] | None:
@@ -308,10 +315,10 @@ def get_airline_from_flight_callsign(flight_callsign: str) -> dict[str, Any] | N
     if airline:
         return airline
 
-    # Try 2-character IATA prefix
+    # Try 2-character IATA prefix (IATA codes are not unique; take first match)
     iata_prefix = flight_callsign[:2].upper()
-    try:
-        airline = CachedAirline.objects.get(iata_code__iexact=iata_prefix)
+    airline = CachedAirline.objects.filter(iata_code__iexact=iata_prefix).first()
+    if airline is not None:
         return {
             "icao_code": airline.icao_code,
             "iata_code": airline.iata_code,
@@ -320,8 +327,6 @@ def get_airline_from_flight_callsign(flight_callsign: str) -> dict[str, Any] | N
             "country": airline.country,
             "active": airline.active,
         }
-    except CachedAirline.DoesNotExist:
-        pass
 
     return None
 
@@ -336,16 +341,15 @@ def get_aircraft_type_by_icao(icao_code: str) -> dict[str, Any] | None:
     Returns:
         Aircraft type data dictionary or None if not found
     """
-    try:
-        ac_type = CachedAircraftType.objects.get(icao_code__iexact=icao_code)
-        return {
-            "icao_code": ac_type.icao_code,
-            "iata_code": ac_type.iata_code,
-            "name": ac_type.name,
-            "manufacturer": ac_type.manufacturer,
-        }
-    except CachedAircraftType.DoesNotExist:
+    ac_type = CachedAircraftType.objects.filter(icao_code__iexact=icao_code).first()
+    if ac_type is None:
         return None
+    return {
+        "icao_code": ac_type.icao_code,
+        "iata_code": ac_type.iata_code,
+        "name": ac_type.name,
+        "manufacturer": ac_type.manufacturer,
+    }
 
 
 def search_airlines(query: str, limit: int = 20) -> list[dict[str, Any]]:

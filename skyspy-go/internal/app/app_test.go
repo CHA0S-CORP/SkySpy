@@ -2191,7 +2191,7 @@ func TestModel_TriggerAudioAlerts_NilPlayer(t *testing.T) {
 	}
 
 	// Should not panic with nil player
-	m.triggerAudioAlerts(target, true)
+	m.triggerAudioAlerts(target, nil, true)
 }
 
 func TestModel_CheckAlertRules_NilState(t *testing.T) {
@@ -2205,7 +2205,7 @@ func TestModel_CheckAlertRules_NilState(t *testing.T) {
 	}
 
 	// Should not panic with nil alert state
-	m.checkAlertRules(target)
+	m.checkAlertRules(target, nil)
 }
 
 func TestModel_UpdateVUMeters_NoAircraft(t *testing.T) {
@@ -3431,7 +3431,7 @@ func TestModel_TriggerAudioAlerts_AllPaths(t *testing.T) {
 		Hex:      "NEW01",
 		Military: false,
 	}
-	m.triggerAudioAlerts(target, true)
+	m.triggerAudioAlerts(target, nil, true)
 
 	// Mark as alerted
 	if !m.alertedAircraft["NEW01"] {
@@ -3443,14 +3443,14 @@ func TestModel_TriggerAudioAlerts_AllPaths(t *testing.T) {
 		Hex:    "EMERG01",
 		Squawk: "7700",
 	}
-	m.triggerAudioAlerts(emergencyTarget, false)
+	m.triggerAudioAlerts(emergencyTarget, nil, false)
 
 	// Military aircraft (first time)
 	militaryTarget := &radar.Target{
 		Hex:      "MIL01",
 		Military: true,
 	}
-	m.triggerAudioAlerts(militaryTarget, false)
+	m.triggerAudioAlerts(militaryTarget, nil, false)
 
 	// Military aircraft (already alerted)
 	m.alertedAircraft["MIL02"] = true
@@ -3458,7 +3458,7 @@ func TestModel_TriggerAudioAlerts_AllPaths(t *testing.T) {
 		Hex:      "MIL02",
 		Military: true,
 	}
-	m.triggerAudioAlerts(militaryTarget2, false)
+	m.triggerAudioAlerts(militaryTarget2, nil, false)
 }
 
 func TestModel_CheckAlertRules_WithTriggeredAlerts(t *testing.T) {
@@ -3476,7 +3476,7 @@ func TestModel_CheckAlertRules_WithTriggeredAlerts(t *testing.T) {
 	}
 
 	target := m.aircraft["EMERG"]
-	m.checkAlertRules(target)
+	m.checkAlertRules(target, nil)
 
 	// Check if notification was shown
 	// This depends on the alert rules configuration
@@ -3504,7 +3504,7 @@ func TestModel_CheckAlertRules_WithSoundAction(t *testing.T) {
 		Squawk: "7700",
 	}
 
-	m.checkAlertRules(target)
+	m.checkAlertRules(target, nil)
 }
 
 func TestModel_UpdateVUMeters_Clamping(t *testing.T) {

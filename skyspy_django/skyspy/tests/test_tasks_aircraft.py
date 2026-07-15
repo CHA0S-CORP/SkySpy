@@ -610,10 +610,10 @@ class TaskAtomicityTest(TestCase):
         self.assertIn("transaction.atomic", source)
 
     def test_update_sessions_atomic(self):
-        """Test that update_aircraft_sessions uses atomic transactions."""
+        """Test that session updates use atomic transactions (per aircraft)."""
         import inspect
 
-        from skyspy.tasks.aircraft import update_aircraft_sessions
+        from skyspy.tasks.aircraft import _update_aircraft_sessions
 
-        source = inspect.getsource(update_aircraft_sessions)
+        source = inspect.getsource(_update_aircraft_sessions)
         self.assertIn("transaction.atomic", source)

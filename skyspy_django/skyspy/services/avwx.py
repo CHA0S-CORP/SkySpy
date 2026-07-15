@@ -213,17 +213,24 @@ def _normalize_metar(metar: dict[str, Any]) -> dict[str, Any]:
         result["wind_gust_kt"] = wind_gust.get("value")
 
     # Visibility
+    # AVWX reports visibility in the station's units (statute miles for US
+    # METARs, meters elsewhere) - the response's "units" block says which.
     visibility = metar.get("visibility", {})
+    units = metar.get("units", {})
+    vis_unit = str(units.get("visibility", "m")).lower() if isinstance(units, dict) else "m"
     if isinstance(visibility, dict):
         vis_value = visibility.get("value")
         if vis_value is not None:
-            # AVWX returns visibility in meters by default
-            result["visibility_meters"] = vis_value
-            # Convert to statute miles
-            if vis_value >= 9999:
-                result["visibility_sm"] = 10
+            if vis_unit in ("sm", "mi"):
+                result["visibility_sm"] = vis_value
+                result["visibility_meters"] = round(vis_value * 1609.34)
             else:
-                result["visibility_sm"] = round(vis_value / 1609.34, 1)
+                result["visibility_meters"] = vis_value
+                # Convert to statute miles (9999m = 10+ km, unlimited)
+                if vis_value >= 9999:
+                    result["visibility_sm"] = 10
+                else:
+                    result["visibility_sm"] = round(vis_value / 1609.34, 1)
 
     # Clouds and ceiling
     clouds = metar.get("clouds", [])
@@ -314,7 +321,8 @@ def _calculate_flight_category(ceiling_ft: int | None, visibility_sm: float | No
         return "LIFR"
     elif ceiling < 1000 or visibility < 3:
         return "IFR"
-    elif ceiling < 3000 or visibility < 5:
+    elif ceiling <= 3000 or visibility <= 5:
+        # MVFR is inclusive of exactly 3000 ft / 5 SM per FAA definition
         return "MVFR"
     else:
         return "VFR"

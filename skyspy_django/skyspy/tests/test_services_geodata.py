@@ -32,9 +32,9 @@ class HaversineDistanceTests(TestCase):
         # Seattle: 47.6062, -122.3321
         # Portland: 45.5152, -122.6784
         result = geodata.haversine_nm(47.6062, -122.3321, 45.5152, -122.6784)
-        # Approximately 126 nm
+        # Approximately 126 nm (about 145 statute miles)
         self.assertGreater(result, 120)
-        self.assertLess(result, 135)
+        self.assertLess(result, 132)
 
     def test_distance_is_symmetric(self):
         """Test that distance A to B equals distance B to A."""

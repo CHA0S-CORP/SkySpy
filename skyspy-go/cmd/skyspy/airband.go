@@ -148,10 +148,12 @@ func runAirband(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			logger.Warn("could not connect to server for auth check", "err", err)
 		}
-		if apiKey != "" {
-			authMgr.SetAPIKey(apiKey)
+		if authMgr != nil {
+			if apiKey != "" {
+				authMgr.SetAPIKey(apiKey)
+			}
+			authProvider = authMgr.GetAuthHeader
 		}
-		authProvider = authMgr.GetAuthHeader
 	}
 
 	// Prometheus metrics

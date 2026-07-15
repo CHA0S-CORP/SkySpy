@@ -1,18 +1,16 @@
-.PHONY: test test-docker test-local test-verbose clean build help test-cli test-common test-python install-cli lint lint-python lint-go lint-frontend
+.PHONY: test test-docker test-local test-verbose clean build help test-common test-python lint lint-python lint-go lint-frontend
 
 # Default target
 help:
 	@echo "SkySpy Test Commands:"
 	@echo ""
 	@echo "  make test          - Run tests in Docker (recommended)"
-	@echo "  make test-cli      - Run CLI package tests"
 	@echo "  make test-common   - Run common package tests"
-	@echo "  make test-python   - Run all Python package tests (CLI + common)"
+	@echo "  make test-python   - Run all Python package tests"
 	@echo "  make lint          - Run all linters (Python + Go + Frontend)"
 	@echo "  make lint-python   - Run Python linter (ruff)"
 	@echo "  make lint-go       - Run Go linter (go vet)"
 	@echo "  make lint-frontend - Run frontend linter (eslint)"
-	@echo "  make install-cli   - Install CLI package locally"
 	@echo "  make dev           - Start dev services"
 	@echo "  make dev-down      - Remove dev services"
 	@echo "  make build         - Build Docker images only"
@@ -81,31 +79,16 @@ logs:
 	docker compose --env-file ./.env.test -f ./docker-compose.test.yaml --profile test logs -f test
 
 # =============================================================================
-# Python Package Installation
-# =============================================================================
-
-# Install CLI package
-install-cli:
-	@echo "📦 Installing CLI package..."
-	pip install -e ./skyspy-cli
-	@echo "✅ CLI installed. Available commands: skyspy-radio, skyspy-radio-pro, skyspy-radar"
-
-# =============================================================================
 # Python Package Tests
 # =============================================================================
-
-# Run CLI tests
-test-cli:
-	@echo "🧪 Running CLI tests..."
-	cd skyspy-cli && pip install -e . && pytest -v
 
 # Run common package tests
 test-common:
 	@echo "🧪 Running common package tests..."
 	cd skyspy_common && pip install -e ".[dev]" && pytest -v
 
-# Run all Python package tests (CLI + common)
-test-python: test-common test-cli
+# Run all Python package tests
+test-python: test-common
 	@echo "✅ All Python package tests completed"
 
 # =============================================================================

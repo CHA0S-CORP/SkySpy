@@ -14,8 +14,10 @@ from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import viewsets
 from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from skyspy.auth.authentication import APIKeyAuthentication, OptionalJWTAuthentication
 from skyspy.models import SafetyEvent
 from skyspy.serializers.safety import (
     AircraftSafetyStatsSerializer,
@@ -31,9 +33,22 @@ class SafetyEventViewSet(viewsets.ModelViewSet):
 
     queryset = SafetyEvent.objects.all()
     serializer_class = SafetyEventSerializer
+    authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ["event_type", "severity", "icao_hex", "acknowledged"]
     http_method_names = ["get", "post", "delete"]
+
+    def get_permissions(self):
+        """Creating or deleting safety events always requires authentication.
+
+        Safety events are system-generated emergency records; anonymous
+        clients must not be able to fabricate or remove them, even when
+        AUTH_MODE is 'public'. Reads (and acknowledge/unacknowledge) keep
+        the existing AUTH_MODE-based behavior.
+        """
+        if self.action in ("create", "destroy"):
+            return [IsAuthenticated()]
+        return super().get_permissions()
 
     def get_queryset(self):
         """Apply query filters."""

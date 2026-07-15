@@ -17,7 +17,13 @@ from .c_defs import MsgDir, timeval
 from .cache import get_decode_cache, get_label_cache
 from .circuit_breaker import CircuitState, ErrorCategory, get_circuit_breaker
 from .core import get_lib, load_libacars, vstring_context
-from .exceptions import LibacarsDecodeError, LibacarsDisabledError, LibacarsLoadError, LibacarsValidationError
+from .exceptions import (
+    LibacarsDecodeError,
+    LibacarsDisabledError,
+    LibacarsLoadError,
+    LibacarsMemoryError,
+    LibacarsValidationError,
+)
 from .metrics import (
     get_metrics_collector,
     record_cache_hit,
@@ -185,13 +191,20 @@ class ReassemblyContext:
     _instances: weakref.WeakSet = weakref.WeakSet()
 
     def __init__(self):
+        # Initialize attributes first so __del__ is safe if __init__ raises
+        self._ptr = None
+        self._lib = None
+        self._destroyed = False
         lib, _, _ = get_lib()
         if not lib:
             raise LibacarsDisabledError("libacars not available")
-        self._ptr = lib.la_reasm_ctx_new()
+        ptr = lib.la_reasm_ctx_new()
+        # NULL pointers are falsy for both CFFI cdata and ctypes pointers
+        if not ptr:
+            raise LibacarsMemoryError("la_reasm_ctx_new() returned NULL")
+        self._ptr = ptr
         # Store reference to lib to avoid relying on get_lib() in __del__
         self._lib = lib
-        self._destroyed = False
         ReassemblyContext._instances.add(self)
 
     def destroy(self) -> None:
@@ -298,7 +311,17 @@ def decode_acars_apps(
             raise LibacarsDisabledError(reason="circuit_open", consecutive_errors=breaker._consecutive_failures)
         return None
 
-    # Check cache before validation (cached results were already validated)
+    # Validate before touching the cache: cache key construction requires
+    # non-None label/text, so invalid input must be rejected first.
+    validation = validate_acars_message(label, text)
+    if not validation.is_valid:
+        _record_skip()
+        if raise_on_error:
+            raise LibacarsValidationError(
+                message=validation.error_message or "Validation failed", field=validation.field, value=text
+            )
+        return None
+
     if use_cache and CACHE_ENABLED and not reassembly_ctx:
         cache = get_decode_cache(maxsize=CACHE_MAX_SIZE, ttl=CACHE_TTL)
         cached_result = cache.get(label, text, int(direction))
@@ -308,15 +331,6 @@ def decode_acars_apps(
         with _stats_lock:
             _stats.cache_misses += 1
         record_cache_miss()
-
-    validation = validate_acars_message(label, text)
-    if not validation.is_valid:
-        _record_skip()
-        if raise_on_error:
-            raise LibacarsValidationError(
-                message=validation.error_message or "Validation failed", field=validation.field, value=text
-            )
-        return None
 
     if get_label_cache().is_supported(label) is False:
         _record_skip()
@@ -337,7 +351,7 @@ def decode_acars_apps(
 
         node = None
 
-        if reassembly_ctx and reg_b and timestamp:
+        if reassembly_ctx and reg_b and timestamp is not None:
             tv_sec = int(timestamp)
             tv_usec = int((timestamp - tv_sec) * 1_000_000)
             if backend == "cffi":
@@ -355,8 +369,10 @@ def decode_acars_apps(
 
         if not node or (backend == "cffi" and node == ffi.NULL):
             _record_op(True, (time.perf_counter() - start_t) * 1000)
-            if not reassembly_ctx:
-                get_label_cache().mark_unsupported(label)
+            # NULL means libacars found no decoder for THIS message's content;
+            # it does not mean the label itself is unsupported. Do not mark the
+            # label unsupported here — doing so would permanently disable
+            # decoding for labels (e.g. H1) that mix free-text and CPDLC/ADS-C.
             return None
 
         try:
@@ -365,10 +381,10 @@ def decode_acars_apps(
                 raw_json = None
                 if be == "cffi":
                     if vstr.str != ffi.NULL:
-                        raw_json = ffi.string(vstr.str).decode("utf-8")
+                        raw_json = ffi.string(vstr.str).decode("utf-8", errors="replace")
                 else:
                     if vstr.contents.str:
-                        raw_json = vstr.contents.str.decode("utf-8")
+                        raw_json = vstr.contents.str.decode("utf-8", errors="replace")
 
                 if raw_json:
                     result = json.loads(raw_json)
@@ -447,10 +463,10 @@ def decode_acars_apps_text(
                 res = None
                 if be == "cffi":
                     if vstr.str != ffi.NULL:
-                        res = ffi.string(vstr.str).decode("utf-8")
+                        res = ffi.string(vstr.str).decode("utf-8", errors="replace")
                 else:
                     if vstr.contents.str:
-                        res = vstr.contents.str.decode("utf-8")
+                        res = vstr.contents.str.decode("utf-8", errors="replace")
 
                 if res:
                     _record_op(True, (time.perf_counter() - start_t) * 1000)
@@ -518,7 +534,7 @@ async def decode_acars_apps_async(
             loop.run_in_executor(_get_executor(), lambda: decode_acars_apps(label, text, direction, **kwargs)),
             timeout=eff_timeout,
         )
-    except TimeoutError:
+    except (TimeoutError, asyncio.TimeoutError):  # noqa: UP041 - asyncio.TimeoutError is distinct on Python 3.10
         if kwargs.get("raise_on_error"):
             raise LibacarsDecodeError(
                 message=f"Timed out after {eff_timeout}s",
@@ -541,7 +557,7 @@ async def decode_acars_apps_text_async(
             loop.run_in_executor(_get_executor(), lambda: decode_acars_apps_text(label, text, direction, **kwargs)),
             timeout=eff_timeout,
         )
-    except TimeoutError:
+    except (TimeoutError, asyncio.TimeoutError):  # noqa: UP041 - asyncio.TimeoutError is distinct on Python 3.10
         if kwargs.get("raise_on_error"):
             raise LibacarsDecodeError(
                 message=f"Timed out after {eff_timeout}s",
@@ -553,7 +569,10 @@ async def decode_acars_apps_text_async(
 
 
 def decode_batch(
-    messages: list[BatchMessage], output_format: str = "json", use_cache: bool = True
+    messages: list[BatchMessage],
+    output_format: str = "json",
+    use_cache: bool = True,
+    reassembly_ctx: ReassemblyContext | None = None,
 ) -> list[BatchResult]:
     results = []
     func = decode_acars_apps if output_format == "json" else decode_acars_apps_text
@@ -564,7 +583,11 @@ def decode_batch(
             cached = False
             data = None
 
-            if output_format == "json" and use_cache and CACHE_ENABLED and not (msg.reg and msg.timestamp):
+            # Reassembly only happens when a context is provided along with
+            # reg + timestamp; skip the cache pre-check for those messages.
+            will_reassemble = reassembly_ctx is not None and msg.reg and msg.timestamp is not None
+
+            if output_format == "json" and use_cache and CACHE_ENABLED and not will_reassemble:
                 cache = get_decode_cache()
                 data = cache.get(msg.label, msg.text, int(msg.direction))
                 if data:
@@ -573,7 +596,12 @@ def decode_batch(
             if not data:
                 kwargs = {}
                 if output_format == "json":
-                    kwargs = {"reg": msg.reg, "timestamp": msg.timestamp, "use_cache": use_cache}
+                    kwargs = {
+                        "reg": msg.reg,
+                        "timestamp": msg.timestamp,
+                        "use_cache": use_cache,
+                        "reassembly_ctx": reassembly_ctx,
+                    }
                 data = func(msg.label, msg.text, msg.direction, **kwargs)
 
             results.append(
@@ -593,7 +621,10 @@ def decode_batch(
 
 
 async def decode_batch_async(
-    messages: list[BatchMessage], output_format: str = "json", max_concurrency: int = 4
+    messages: list[BatchMessage],
+    output_format: str = "json",
+    max_concurrency: int = 4,
+    reassembly_ctx: ReassemblyContext | None = None,
 ) -> list[BatchResult]:
     sem = asyncio.Semaphore(max_concurrency)
 
@@ -603,7 +634,12 @@ async def decode_batch_async(
             try:
                 if output_format == "json":
                     data = await decode_acars_apps_async(
-                        msg.label, msg.text, msg.direction, reg=msg.reg, timestamp=msg.timestamp
+                        msg.label,
+                        msg.text,
+                        msg.direction,
+                        reg=msg.reg,
+                        timestamp=msg.timestamp,
+                        reassembly_ctx=reassembly_ctx,
                     )
                 else:
                     data = await decode_acars_apps_text_async(msg.label, msg.text, msg.direction)

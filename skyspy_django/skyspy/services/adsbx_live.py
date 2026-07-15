@@ -14,7 +14,7 @@ from typing import Any
 import httpx
 from django.conf import settings
 from django.core.cache import cache
-from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
+from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
 logger = logging.getLogger(__name__)
 
@@ -33,13 +33,21 @@ def _get_api_key() -> str | None:
 
 def _is_enabled() -> bool:
     """Check if ADS-B Exchange Live API is enabled."""
-    return getattr(settings, "ADSBX_LIVE_ENABLED", False) and _get_api_key()
+    return bool(getattr(settings, "ADSBX_LIVE_ENABLED", False) and _get_api_key())
+
+
+def _is_retryable_http_error(exc: BaseException) -> bool:
+    """Retry on network/timeout errors and 5xx responses, but not 4xx (auth, rate limit)."""
+    if isinstance(exc, httpx.HTTPStatusError):
+        return exc.response.status_code >= 500
+    return isinstance(exc, (httpx.HTTPError, httpx.TimeoutException))
 
 
 @retry(
     stop=stop_after_attempt(3),
     wait=wait_exponential(multiplier=1, min=1, max=10),
-    retry=retry_if_exception_type((httpx.HTTPError, httpx.TimeoutException)),
+    retry=retry_if_exception(_is_retryable_http_error),
+    reraise=True,
 )
 def _http_get_adsbx(url: str, params: dict | None, api_key: str, timeout: float = 15.0) -> httpx.Response:
     """HTTP GET with retry logic for ADS-B Exchange API."""

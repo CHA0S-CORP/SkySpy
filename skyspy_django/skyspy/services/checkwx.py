@@ -40,7 +40,7 @@ def _get_api_key() -> str | None:
 
 def _is_enabled() -> bool:
     """Check if CheckWX is enabled."""
-    return getattr(settings, "CHECKWX_ENABLED", False) and _get_api_key()
+    return bool(getattr(settings, "CHECKWX_ENABLED", False) and _get_api_key())
 
 
 def _make_request(endpoint: str, params: dict | None = None) -> dict[str, Any] | None:
@@ -265,7 +265,8 @@ def calculate_flight_category(ceiling_ft: int | None, visibility_sm: float | Non
         return "LIFR"
     elif ceiling < 1000 or visibility < 3:
         return "IFR"
-    elif ceiling < 3000 or visibility < 5:
+    elif ceiling <= 3000 or visibility <= 5:
+        # MVFR is inclusive of exactly 3000 ft / 5 SM per FAA definition
         return "MVFR"
     else:
         return "VFR"

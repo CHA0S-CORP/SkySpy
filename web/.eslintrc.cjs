@@ -39,7 +39,7 @@ module.exports = {
         ignoreRestSiblings: true,
       },
     ],
-    'no-console': 'off', // Allow console for debugging aviation data
+    'no-console': ['warn', { allow: ['warn', 'error'] }],
     'prefer-const': 'warn',
     'no-var': 'error',
     'eqeqeq': ['warn', 'always', { null: 'ignore' }],

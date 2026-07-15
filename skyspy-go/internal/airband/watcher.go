@@ -74,6 +74,8 @@ func (w *Watcher) Run(ctx context.Context) {
 	// Ensure directories exist
 	if err := os.MkdirAll(w.recordingsDir, 0o755); err != nil {
 		w.logger.Error("failed to create recordings directory", "dir", w.recordingsDir, "err", err)
+		// Close the event channel so consumers waiting on Events() don't block forever
+		close(w.eventCh)
 		return
 	}
 	_ = w.failedQueue.EnsureDir()

@@ -136,7 +136,7 @@ func (s *CallbackServer) handleCallback(w http.ResponseWriter, r *http.Request) 
 		if errDesc != "" {
 			errMsg = errMsg + ": " + errDesc
 		}
-		s.resultCh <- CallbackResult{Error: errMsg}
+		s.deliverResult(CallbackResult{Error: errMsg})
 		s.renderError(w, errMsg)
 		return
 	}
@@ -145,17 +145,28 @@ func (s *CallbackServer) handleCallback(w http.ResponseWriter, r *http.Request) 
 	state := query.Get("state")
 
 	if code == "" {
-		s.resultCh <- CallbackResult{Error: "no authorization code received"}
+		s.deliverResult(CallbackResult{Error: "no authorization code received"})
 		s.renderError(w, "No authorization code received")
 		return
 	}
 
-	s.resultCh <- CallbackResult{
+	s.deliverResult(CallbackResult{
 		Code:  code,
 		State: state,
-	}
+	})
 
 	s.renderSuccess(w)
+}
+
+// deliverResult sends a callback result without blocking. Only the first
+// result is delivered; duplicate callbacks are dropped so a second request
+// to /callback can never wedge the handler.
+func (s *CallbackServer) deliverResult(result CallbackResult) {
+	select {
+	case s.resultCh <- result:
+	default:
+		// A result was already delivered; ignore duplicates
+	}
 }
 
 func (s *CallbackServer) handleRoot(w http.ResponseWriter, r *http.Request) {

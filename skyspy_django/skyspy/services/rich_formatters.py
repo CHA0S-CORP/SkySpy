@@ -30,6 +30,28 @@ EVENT_TYPE_ICONS = {
 }
 
 
+def _format_altitude(altitude: Any) -> str | None:
+    """
+    Format an altitude value for display.
+
+    Handles the ADS-B "ground" string (aircraft on the ground) and other
+    non-numeric values without raising. Returns None if there is nothing
+    sensible to display.
+    """
+    if altitude is None:
+        return None
+    if isinstance(altitude, str):
+        if altitude.strip().lower() == "ground":
+            return "Ground"
+        try:
+            altitude = float(altitude)
+        except ValueError:
+            return None
+    if isinstance(altitude, (int, float)):
+        return f"{int(altitude):,} ft"
+    return None
+
+
 class DiscordFormatter:
     """
     Formats notifications as Discord embeds.
@@ -94,12 +116,12 @@ class DiscordFormatter:
             )
 
         # Altitude
-        altitude = aircraft.get("alt")
+        altitude = _format_altitude(aircraft.get("alt"))
         if altitude is not None:
             fields.append(
                 {
                     "name": "Altitude",
-                    "value": f"{altitude:,} ft",
+                    "value": altitude,
                     "inline": True,
                 }
             )
@@ -215,12 +237,12 @@ class DiscordFormatter:
                 )
 
         # Altitude
-        altitude = aircraft.get("alt")
+        altitude = _format_altitude(aircraft.get("alt"))
         if altitude is not None:
             fields.append(
                 {
                     "name": "Altitude",
-                    "value": f"{altitude:,} ft",
+                    "value": altitude,
                     "inline": True,
                 }
             )
@@ -321,12 +343,12 @@ class SlackFormatter:
                 }
             )
 
-        altitude = aircraft.get("alt")
+        altitude = _format_altitude(aircraft.get("alt"))
         if altitude is not None:
             fields.append(
                 {
                     "type": "mrkdwn",
-                    "text": f"*Altitude:* {altitude:,} ft",
+                    "text": f"*Altitude:* {altitude}",
                 }
             )
 
@@ -447,12 +469,12 @@ class SlackFormatter:
                 }
             )
 
-        altitude = aircraft.get("alt")
+        altitude = _format_altitude(aircraft.get("alt"))
         if altitude is not None:
             fields.append(
                 {
                     "type": "mrkdwn",
-                    "text": f"*Altitude:* {altitude:,} ft",
+                    "text": f"*Altitude:* {altitude}",
                 }
             )
 

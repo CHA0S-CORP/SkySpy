@@ -10,6 +10,7 @@ Supports:
 
 import ipaddress
 import logging
+import socket
 import threading
 import time
 from urllib.parse import urlparse
@@ -38,6 +39,13 @@ _BLOCKED_IP_RANGES = [
 ]
 
 
+def _is_blocked_ip(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    """Check whether an IP address is private/loopback/link-local/reserved."""
+    if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast or ip.is_unspecified:
+        return True
+    return any(ip in blocked_range for blocked_range in _BLOCKED_IP_RANGES)
+
+
 def _is_safe_url(url: str) -> bool:
     """
     Validate that a URL is safe to use as a webhook destination.
@@ -45,6 +53,8 @@ def _is_safe_url(url: str) -> bool:
     Checks:
     - URL scheme is http or https
     - Host is not a private/internal IP address (SSRF prevention)
+    - Hostnames are resolved via DNS and blocked if any resolved address
+      is private/internal (fail-closed on resolution errors)
 
     Args:
         url: The URL to validate
@@ -65,19 +75,35 @@ def _is_safe_url(url: str) -> bool:
             logger.warning("Blocked URL with no hostname")
             return False
 
-        # Try to parse the hostname as an IP address
+        # Try to parse the hostname as a literal IP address
         try:
             ip = ipaddress.ip_address(parsed.hostname)
-            # Check against blocked ranges
-            for blocked_range in _BLOCKED_IP_RANGES:
-                if ip in blocked_range:
-                    logger.warning(f"Blocked URL targeting private IP: {parsed.hostname}")
-                    return False
         except ValueError:
-            # Not an IP address, it's a hostname - that's fine
-            # Note: We don't resolve DNS here to avoid blocking,
-            # but this could be enhanced with async DNS resolution
-            pass
+            # Not a literal IP - resolve the hostname and check every resolved
+            # address so names like "localhost" or "redis" can't bypass the filter.
+            try:
+                addr_info = socket.getaddrinfo(parsed.hostname, None)
+            except (socket.gaierror, OSError) as e:
+                # Fail closed: if we can't resolve it, we can't validate it
+                logger.warning(f"Blocked URL with unresolvable hostname {parsed.hostname}: {e}")
+                return False
+
+            for _family, _type, _proto, _canonname, sockaddr in addr_info:
+                try:
+                    resolved = ipaddress.ip_address(sockaddr[0])
+                except ValueError:
+                    logger.warning(f"Blocked URL: unparseable resolved address for {parsed.hostname}")
+                    return False
+                if _is_blocked_ip(resolved):
+                    logger.warning(f"Blocked URL: hostname {parsed.hostname} resolves to private IP {resolved}")
+                    return False
+
+            return True
+
+        # Literal IP address - check against blocked ranges
+        if _is_blocked_ip(ip):
+            logger.warning(f"Blocked URL targeting private IP: {parsed.hostname}")
+            return False
 
         return True
 
@@ -108,7 +134,9 @@ class NotificationManager:
             config = NotificationConfig.get_config()
             if config and config.apprise_urls:
                 self.apprise.clear()
-                for url in config.apprise_urls.split(","):
+                # NotificationConfig.apprise_urls uses ";" as the canonical delimiter
+                # (see serializers/notifications.py, api/notifications.py)
+                for url in config.apprise_urls.split(";"):
                     url = url.strip()
                     if url:
                         self.apprise.add(url)
@@ -321,8 +349,15 @@ def send_safety_notification(
 def cleanup_cooldowns():
     """Clean up old cooldown entries to prevent memory growth."""
     now = time.time()
-    # Default cooldown is 5 minutes, keep entries for 2x that
-    cutoff = now - 600
+    # Keep entries for 2x the configured cooldown (minimum 10 minutes) so
+    # cooldowns longer than the old fixed 600s cutoff remain enforceable
+    try:
+        config = NotificationConfig.get_config()
+        cooldown = (config.cooldown_seconds if config else None) or getattr(settings, "NOTIFICATION_COOLDOWN", 300)
+    except Exception as e:
+        logger.warning(f"Failed to read notification config for cooldown cleanup: {e}")
+        cooldown = getattr(settings, "NOTIFICATION_COOLDOWN", 300)
+    cutoff = now - max(600, cooldown * 2)
     with _notification_cooldown_lock:
         stale_keys = [k for k, v in _notification_cooldown.items() if v < cutoff]
         for k in stale_keys:

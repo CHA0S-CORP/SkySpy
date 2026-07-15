@@ -123,8 +123,8 @@ def calculate_week_over_week_comparison() -> dict:
             "military_sessions": session_stats["military_sessions"] or 0,
             "avg_altitude": round(sighting_stats["avg_altitude"]) if sighting_stats["avg_altitude"] else None,
             "avg_distance_nm": round(sighting_stats["avg_distance"], 1) if sighting_stats["avg_distance"] else None,
-            "start": start.isoformat() + "Z",
-            "end": effective_end.isoformat() + "Z",
+            "start": start.isoformat().replace("+00:00", "Z"),
+            "end": effective_end.isoformat().replace("+00:00", "Z"),
         }
 
     this_week = get_week_stats(this_week_start, this_week_end)
@@ -148,7 +148,7 @@ def calculate_week_over_week_comparison() -> dict:
             "total_sessions": calc_change(this_week["total_sessions"], last_week["total_sessions"]),
             "military_aircraft": calc_change(this_week["military_aircraft"], last_week["military_aircraft"]),
         },
-        "timestamp": now.isoformat() + "Z",
+        "timestamp": now.isoformat().replace("+00:00", "Z"),
     }
 
 
@@ -185,8 +185,8 @@ def calculate_seasonal_trends(months: int = 12) -> dict:
                 "total_positions": sighting_stats["total_positions"] or 0,
                 "unique_aircraft": sighting_stats["unique_aircraft"] or 0,
                 "total_sessions": session_count,
-                "start": start.isoformat() + "Z",
-                "end": effective_end.isoformat() + "Z",
+                "start": start.isoformat().replace("+00:00", "Z"),
+                "end": effective_end.isoformat().replace("+00:00", "Z"),
             }
         )
 
@@ -212,7 +212,7 @@ def calculate_seasonal_trends(months: int = 12) -> dict:
         "monthly_data": monthly_data,
         "by_month_name": by_month_name,
         "months_included": months,
-        "timestamp": now.isoformat() + "Z",
+        "timestamp": now.isoformat().replace("+00:00", "Z"),
     }
 
 
@@ -318,7 +318,7 @@ def calculate_day_night_ratio(days: int = 30) -> dict:
         },
         "hourly_breakdown": hourly_breakdown,
         "days_analyzed": days,
-        "timestamp": now.isoformat() + "Z",
+        "timestamp": now.isoformat().replace("+00:00", "Z"),
     }
 
 
@@ -424,7 +424,7 @@ def calculate_weekend_weekday_patterns(weeks: int = 4) -> dict:
         },
         "by_day_of_week": daily_breakdown,
         "weeks_analyzed": weeks,
-        "timestamp": now.isoformat() + "Z",
+        "timestamp": now.isoformat().replace("+00:00", "Z"),
     }
 
 
@@ -507,7 +507,7 @@ def calculate_daily_totals(days: int = 30) -> dict:
             "lowest_positions": lowest_day["total_positions"] if lowest_day else 0,
         },
         "days_requested": days,
-        "timestamp": now.isoformat() + "Z",
+        "timestamp": now.isoformat().replace("+00:00", "Z"),
     }
 
 
@@ -591,7 +591,7 @@ def calculate_weekly_totals(weeks: int = 12) -> dict:
             "lowest_positions": lowest_week["total_positions"] if lowest_week else 0,
         },
         "weeks_requested": weeks,
-        "timestamp": now.isoformat() + "Z",
+        "timestamp": now.isoformat().replace("+00:00", "Z"),
     }
 
 
@@ -693,7 +693,7 @@ def calculate_monthly_totals(months: int = 12) -> dict:
             "lowest_positions": lowest_month["total_positions"] if lowest_month else 0,
         },
         "months_requested": months,
-        "timestamp": now.isoformat() + "Z",
+        "timestamp": now.isoformat().replace("+00:00", "Z"),
     }
 
 
@@ -732,7 +732,7 @@ def refresh_time_comparison_cache(broadcast: bool = True) -> dict:
             "daily_totals": daily,
             "weekly_totals": weekly,
             "monthly_totals": monthly,
-            "timestamp": timezone.now().isoformat() + "Z",
+            "timestamp": timezone.now().isoformat().replace("+00:00", "Z"),
         }
         cache.set(CACHE_KEY_TIME_COMPARISON_ALL, all_stats, timeout=CACHE_TIMEOUT)
 

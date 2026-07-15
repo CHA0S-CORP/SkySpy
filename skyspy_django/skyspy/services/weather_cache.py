@@ -68,7 +68,8 @@ def get_cached_metar(station: str, hours: int = 2) -> list | None:
     key = _make_metar_key(station, hours)
     data = cache.get(key)
 
-    if data:
+    # An empty list is a valid cached result (no METARs); only None is a miss
+    if data is not None:
         logger.debug(f"Cache hit for METAR {station}")
         _metar_stats["cache_hits"] += 1
         return data
@@ -92,7 +93,8 @@ def get_cached_metars_bbox(bbox: str, hours: int = 2) -> list | None:
     key = _make_metar_bbox_key(bbox, hours)
     data = cache.get(key)
 
-    if data:
+    # An empty list is a valid cached result (no METARs); only None is a miss
+    if data is not None:
         logger.debug("Cache hit for METAR bbox query")
         _metar_stats["cache_hits"] += 1
         return data
@@ -494,13 +496,12 @@ def fetch_and_cache_metars(bbox: str = "24,-130,50,-60", hours: int = 2, ttl: in
     """
     global _metar_stats
 
-    # Check cache first
+    # Check cache first (empty list is a valid cached result)
     cached = get_cached_metars_bbox(bbox, hours)
-    if cached:
+    if cached is not None:
         return cached
 
     logger.info(f"Fetching METARs from AWC (bbox={bbox}, hours={hours})")
-    record_metar_api_request(success=True)
 
     data = _fetch_awc_data(
         "metar",
@@ -515,6 +516,8 @@ def fetch_and_cache_metars(bbox: str = "24,-130,50,-60", hours: int = 2, ttl: in
         logger.warning(f"Failed to fetch METARs: {data.get('error')}")
         record_metar_api_request(success=False)
         return []
+
+    record_metar_api_request(success=True)
 
     if not isinstance(data, list):
         logger.warning(f"Unexpected METAR data format: {type(data)}")
@@ -539,13 +542,12 @@ def fetch_metar_by_station(station: str, hours: int = 2, ttl: int = 300) -> list
     Returns:
         List of METAR data for the station
     """
-    # Check cache first
+    # Check cache first (empty list is a valid cached result)
     cached = get_cached_metar(station, hours)
-    if cached:
+    if cached is not None:
         return cached
 
     logger.debug(f"Fetching METARs for station {station}")
-    record_metar_api_request(success=True)
 
     data = _fetch_awc_data(
         "metar",
@@ -560,6 +562,8 @@ def fetch_metar_by_station(station: str, hours: int = 2, ttl: int = 300) -> list
         logger.warning(f"Failed to fetch METARs for {station}: {data.get('error')}")
         record_metar_api_request(success=False)
         return []
+
+    record_metar_api_request(success=True)
 
     if not isinstance(data, list):
         return []
@@ -582,9 +586,9 @@ def fetch_and_cache_tafs(bbox: str = "24,-130,50,-60", ttl: int = 1800) -> list[
     """
     cache_key = f"taf:bbox:{hashlib.md5(bbox.encode(), usedforsecurity=False).hexdigest()[:12]}"
 
-    # Check cache first
+    # Check cache first (empty list is a valid cached result)
     cached = cache.get(cache_key)
-    if cached:
+    if cached is not None:
         return cached
 
     logger.info(f"Fetching TAFs from AWC (bbox={bbox})")
@@ -645,7 +649,8 @@ def get_cached_aviation_data(data_type: str, bbox: str) -> list | None:
     key = _make_aviation_cache_key(data_type, bbox)
     data = cache.get(key)
 
-    if data:
+    # An empty list is a valid cached result; only None is a miss
+    if data is not None:
         logger.debug(f"Cache hit for {data_type} bbox query")
         return data
 

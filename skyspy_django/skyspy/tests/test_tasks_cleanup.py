@@ -535,13 +535,13 @@ class VacuumAnalyzeTablesTaskTest(TestCase):
 
         result = vacuum_analyze_tables()
 
-        # Verify expected tables were processed
+        # Verify expected tables were processed (real db_table names)
         expected_tables = [
-            "skyspy_aircraftsighting",
-            "skyspy_aircraftsession",
-            "skyspy_alerthistory",
-            "skyspy_safetyevent",
-            "skyspy_antennaanalyticssnapshot",
+            "aircraft_sightings",
+            "aircraft_sessions",
+            "alert_history",
+            "safety_events",
+            "antenna_analytics_snapshots",
         ]
 
         for table in expected_tables:
@@ -549,16 +549,17 @@ class VacuumAnalyzeTablesTaskTest(TestCase):
 
     @patch("skyspy.tasks.cleanup.connection")
     def test_vacuum_handles_errors(self, mock_connection):
-        """Test that VACUUM handles errors gracefully."""
+        """Test that VACUUM attempts all tables, then raises on failure."""
         mock_cursor = MagicMock()
         mock_cursor.execute.side_effect = Exception("VACUUM failed")
         mock_connection.cursor.return_value.__enter__.return_value = mock_cursor
 
-        result = vacuum_analyze_tables()
+        # Failures must be surfaced so beat/metrics see the task as failed
+        with self.assertRaises(RuntimeError):
+            vacuum_analyze_tables()
 
-        # All tables should have error results
-        for _table, status in result.items():
-            self.assertIn("error:", status)
+        # All 5 tables should still have been attempted before raising
+        self.assertEqual(mock_cursor.execute.call_count, 5)
 
     @patch("skyspy.tasks.cleanup.connection")
     def test_vacuum_returns_success_status(self, mock_connection):
@@ -608,29 +609,25 @@ class CleanupErrorHandlingTest(TestCase):
     """Tests for cleanup task error handling."""
 
     @patch("skyspy.models.AircraftSighting.objects")
-    def test_cleanup_sightings_returns_error_on_exception(self, mock_objects):
-        """Test that cleanup returns error dict on exception."""
+    def test_cleanup_sightings_raises_on_exception(self, mock_objects):
+        """Test that cleanup re-raises so the task is marked as failed."""
         mock_objects.filter.side_effect = Exception("Database error")
 
-        result = cleanup_old_sightings()
-
-        self.assertIn("error", result)
-        self.assertIn("Database error", result["error"])
+        with self.assertRaisesMessage(Exception, "Database error"):
+            cleanup_old_sightings()
 
     @patch("skyspy.models.AircraftSession.objects")
-    def test_cleanup_sessions_returns_error_on_exception(self, mock_objects):
-        """Test that cleanup returns error dict on exception."""
+    def test_cleanup_sessions_raises_on_exception(self, mock_objects):
+        """Test that cleanup re-raises so the task is marked as failed."""
         mock_objects.filter.side_effect = Exception("Database error")
 
-        result = cleanup_old_sessions()
-
-        self.assertIn("error", result)
+        with self.assertRaises(Exception):
+            cleanup_old_sessions()
 
     @patch("skyspy.models.SafetyEvent.objects")
-    def test_cleanup_safety_events_returns_error_on_exception(self, mock_objects):
-        """Test that cleanup returns error dict on exception."""
+    def test_cleanup_safety_events_raises_on_exception(self, mock_objects):
+        """Test that cleanup re-raises so the task is marked as failed."""
         mock_objects.filter.side_effect = Exception("Database error")
 
-        result = cleanup_old_safety_events()
-
-        self.assertIn("error", result)
+        with self.assertRaises(Exception):
+            cleanup_old_safety_events()

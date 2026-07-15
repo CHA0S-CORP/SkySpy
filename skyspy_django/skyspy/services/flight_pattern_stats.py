@@ -859,7 +859,7 @@ def calculate_flight_pattern_stats(hours: int = 24) -> dict:
                 "night_positions": busiest_hours_data["night_positions"],
             },
             "time_range_hours": hours,
-            "timestamp": now.isoformat() + "Z",
+            "timestamp": now.isoformat().replace("+00:00", "Z"),
         }
     except Exception as e:
         logger.error(f"Error calculating flight pattern stats: {e}")
@@ -874,7 +874,7 @@ def calculate_flight_pattern_stats(hours: int = 24) -> dict:
             "common_aircraft_types": [],
             "summary": {},
             "time_range_hours": hours,
-            "timestamp": now.isoformat() + "Z",
+            "timestamp": now.isoformat().replace("+00:00", "Z"),
             "error": str(e),
         }
 
@@ -911,7 +911,7 @@ def calculate_geographic_stats(hours: int = 24) -> dict:
                 "top_airport": airports[0]["icao_id"] if airports else None,
             },
             "time_range_hours": hours,
-            "timestamp": now.isoformat() + "Z",
+            "timestamp": now.isoformat().replace("+00:00", "Z"),
         }
     except Exception as e:
         logger.error(f"Error calculating geographic stats: {e}")
@@ -922,7 +922,7 @@ def calculate_geographic_stats(hours: int = 24) -> dict:
             "military_breakdown": [],
             "summary": {},
             "time_range_hours": hours,
-            "timestamp": now.isoformat() + "Z",
+            "timestamp": now.isoformat().replace("+00:00", "Z"),
             "error": str(e),
         }
 
@@ -942,7 +942,7 @@ def calculate_all_stats(hours: int = 24) -> dict:
         "flight_patterns": flight_patterns,
         "geographic": geographic,
         "time_range_hours": hours,
-        "timestamp": now.isoformat() + "Z",
+        "timestamp": now.isoformat().replace("+00:00", "Z"),
     }
 
 
@@ -1001,7 +1001,7 @@ def refresh_all_stats_cache(broadcast: bool = True) -> dict:
         all_stats = {
             "flight_patterns": flight_patterns,
             "geographic": geographic,
-            "timestamp": timezone.now().isoformat() + "Z",
+            "timestamp": timezone.now().isoformat().replace("+00:00", "Z"),
         }
         cache.set(CACHE_KEY_ALL_STATS, all_stats, timeout=CACHE_TIMEOUT)
 

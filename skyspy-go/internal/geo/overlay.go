@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode/utf8"
 )
 
 // OverlayType represents the type of geographic feature
@@ -432,6 +433,15 @@ func DestinationPoint(lat, lon, bearing, distanceNM float64) (float64, float64) 
 }
 
 // GeoToRadar converts distance/bearing to radar screen coordinates
+// MaxRadarRadius returns the maximum plot radius in rows (y cells) for a
+// radar grid of the given dimensions. Horizontal offsets are doubled when
+// plotting to compensate for the ~2:1 aspect ratio of terminal cells, so the
+// radius must fit both vertically (height/2 rows) and horizontally (width/2
+// x-cells, i.e. width/4 doubled rows).
+func MaxRadarRadius(width, height int) int {
+	return minInt(width/4, height/2) - 1
+}
+
 func GeoToRadar(distance, bearing, maxRange float64, centerX, centerY, maxRadius int) (int, int) {
 	if distance > maxRange {
 		distance = maxRange
@@ -506,7 +516,7 @@ func RenderOverlayToRadar(overlay *GeoOverlay, centerLat, centerLon, maxRange fl
 
 	centerX := radarWidth / 2
 	centerY := radarHeight / 2
-	maxRadius := minInt(radarWidth/2, radarHeight) - 1
+	maxRadius := MaxRadarRadius(radarWidth, radarHeight)
 
 	for _, feature := range overlay.Features {
 		switch feature.Type {
@@ -519,7 +529,7 @@ func RenderOverlayToRadar(overlay *GeoOverlay, centerLat, centerLon, maxRange fl
 					if x >= 0 && x < radarWidth && y >= 0 && y < radarHeight {
 						char := '◇'
 						if point.Label != "" {
-							char = rune(point.Label[0])
+							char, _ = utf8.DecodeRuneInString(point.Label)
 						}
 						points = append(points, RenderPoint{X: x, Y: y, Char: char, Color: color})
 					}
@@ -573,10 +583,14 @@ func CreateRangeRingOverlay(centerLat, centerLon float64, ranges []float64, poin
 		Color:   "cyan",
 	}
 
+	if pointsPerRing <= 0 {
+		pointsPerRing = 36
+	}
+
 	for _, rangeNM := range ranges {
 		var ringPoints []GeoPoint
 		for i := 0; i <= pointsPerRing; i++ {
-			bearing := float64(360/pointsPerRing) * float64(i)
+			bearing := 360.0 / float64(pointsPerRing) * float64(i)
 			lat, lon := DestinationPoint(centerLat, centerLon, bearing, rangeNM)
 			ringPoints = append(ringPoints, GeoPoint{Lat: lat, Lon: lon})
 		}

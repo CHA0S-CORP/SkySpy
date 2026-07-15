@@ -1,5 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 
+// Severity ranking used to decide when an alarm loop must escalate
+const SEVERITY_RANK = { low: 0, warning: 1, critical: 2 };
+
 /**
  * Hook for managing map alarms and notifications
  * Handles audio alerts for safety events and browser notifications
@@ -12,6 +15,7 @@ export function useMapAlarms() {
   const audioContextRef = useRef(null);
   const alarmPlayingRef = useRef(false);
   const alarmIntervalRef = useRef(null);
+  const alarmSeverityRef = useRef(null);
   const alarmTimeoutRef = useRef(null);
   const notifiedEventsRef = useRef(new Set());
   const notifiedEmergenciesRef = useRef(new Set());
@@ -36,7 +40,7 @@ export function useMapAlarms() {
 
   // Send browser notification
   const sendNotification = useCallback((title, body, tag, urgent = false) => {
-    console.log(`[SkySpy Notification] ${title}: ${body}`);
+    // Notification triggered
 
     if (typeof Notification === 'undefined') {
       console.warn('Notifications not supported in this browser');
@@ -292,10 +296,22 @@ export function useMapAlarms() {
     return 'low';
   }, []);
 
-  // Start looping alarm
+  // Start looping alarm. If a loop is already running at a lower severity,
+  // restart it at the new (faster) cadence so escalation is never missed.
   const startAlarmLoop = useCallback(
     (severity = 'low') => {
-      if (alarmIntervalRef.current || soundMuted) return;
+      if (alarmIntervalRef.current) {
+        // Already looping: only restart if the new severity is higher
+        if ((SEVERITY_RANK[severity] ?? 0) <= (SEVERITY_RANK[alarmSeverityRef.current] ?? 0)) {
+          return;
+        }
+        clearInterval(alarmIntervalRef.current);
+        alarmIntervalRef.current = null;
+      }
+
+      // Remember the requested severity so the loop can resume after unmute
+      alarmSeverityRef.current = severity;
+      if (soundMuted) return;
 
       playConflictAlarm(severity);
 
@@ -313,18 +329,27 @@ export function useMapAlarms() {
 
   // Stop the alarm loop
   const stopAlarmLoop = useCallback(() => {
+    alarmSeverityRef.current = null;
     if (alarmIntervalRef.current) {
       clearInterval(alarmIntervalRef.current);
       alarmIntervalRef.current = null;
     }
   }, []);
 
-  // Stop alarm when muted
+  // Pause alarm when muted; resume at the remembered severity on unmute
   useEffect(() => {
     if (soundMuted) {
-      stopAlarmLoop();
+      // Pause without clearing alarmSeverityRef so unmute can resume
+      if (alarmIntervalRef.current) {
+        clearInterval(alarmIntervalRef.current);
+        alarmIntervalRef.current = null;
+      }
+    } else if (alarmSeverityRef.current) {
+      const severity = alarmSeverityRef.current;
+      alarmSeverityRef.current = null;
+      startAlarmLoop(severity);
     }
-  }, [soundMuted, stopAlarmLoop]);
+  }, [soundMuted, startAlarmLoop]);
 
   // Cleanup on unmount
   useEffect(() => {

@@ -16,7 +16,7 @@ from pathlib import Path
 
 import httpx
 from django.conf import settings
-from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
+from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
 from skyspy.models import AircraftInfo
 
@@ -44,10 +44,18 @@ RETRY_DELAY = 0.5
 # =============================================================================
 
 
+def _is_retryable_photo_error(exc: BaseException) -> bool:
+    """Retry network/timeout errors and 5xx responses, never other 4xx (401/403/404/429)."""
+    if isinstance(exc, httpx.HTTPStatusError):
+        return exc.response.status_code >= 500
+    return isinstance(exc, (httpx.TimeoutException, httpx.TransportError))
+
+
 @retry(
     stop=stop_after_attempt(3),
     wait=wait_exponential(multiplier=1, min=1, max=10),
-    retry=retry_if_exception_type((httpx.HTTPError, httpx.TimeoutException)),
+    retry=retry_if_exception(_is_retryable_photo_error),
+    reraise=True,
 )
 def _http_get_with_retry(
     url: str, headers: dict, timeout: float = 15.0, follow_redirects: bool = True
@@ -432,11 +440,16 @@ def cache_aircraft_photos(
 
 
 def update_photo_paths(icao_hex: str, photo_path: str | None = None, thumb_path: str | None = None):
-    """Update database with cached photo paths."""
+    """Update database with cached photo paths (only the columns that changed)."""
+    updates = {}
+    if photo_path is not None:
+        updates["photo_local_path"] = photo_path
+    if thumb_path is not None:
+        updates["photo_thumbnail_local_path"] = thumb_path
+    if not updates:
+        return
     try:
-        AircraftInfo.objects.filter(icao_hex=icao_hex).update(
-            photo_local_path=photo_path, photo_thumbnail_local_path=thumb_path
-        )
+        AircraftInfo.objects.filter(icao_hex=icao_hex).update(**updates)
     except Exception as e:
         logger.error(f"Error updating photo cache paths for {icao_hex}: {e}")
 

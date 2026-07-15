@@ -105,9 +105,14 @@ class Command(BaseCommand):
                 "enabled": True,
             }
 
-            # Add expires if specified
-            if "expires" in task_options:
-                task_defaults["expires"] = None  # PeriodicTask doesn't support expires directly
+            # Add expiration if specified. django_celery_beat only honors the
+            # expire_seconds field for relative expiry ("expires" must be an
+            # absolute datetime), so map both option spellings to expire_seconds.
+            expire_seconds = task_options.get("expire_seconds", task_options.get("expires"))
+            if expire_seconds is not None:
+                task_defaults["expire_seconds"] = int(expire_seconds)
+            else:
+                task_defaults["expire_seconds"] = None
 
             # Set the appropriate schedule foreign key
             if schedule_type == "interval":

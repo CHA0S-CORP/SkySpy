@@ -409,6 +409,7 @@ class LabelFormatCache:
 # Global cache instances (can be replaced/configured)
 _decode_cache: DecodeCache | None = None
 _label_cache: LabelFormatCache | None = None
+_cache_singleton_lock = threading.Lock()
 
 
 def get_decode_cache(
@@ -416,7 +417,7 @@ def get_decode_cache(
     ttl: float = 300.0,
 ) -> DecodeCache:
     """
-    Get or create the global decode cache instance.
+    Get or create the global decode cache instance (thread-safe).
 
     Args:
         maxsize: Maximum cache size (only used on first call)
@@ -427,13 +428,15 @@ def get_decode_cache(
     """
     global _decode_cache
     if _decode_cache is None:
-        _decode_cache = DecodeCache(maxsize=maxsize, ttl=ttl)
+        with _cache_singleton_lock:
+            if _decode_cache is None:
+                _decode_cache = DecodeCache(maxsize=maxsize, ttl=ttl)
     return _decode_cache
 
 
 def get_label_cache(maxsize: int = 200) -> LabelFormatCache:
     """
-    Get or create the global label format cache instance.
+    Get or create the global label format cache instance (thread-safe).
 
     Args:
         maxsize: Maximum cache size (only used on first call)
@@ -443,7 +446,9 @@ def get_label_cache(maxsize: int = 200) -> LabelFormatCache:
     """
     global _label_cache
     if _label_cache is None:
-        _label_cache = LabelFormatCache(maxsize=maxsize)
+        with _cache_singleton_lock:
+            if _label_cache is None:
+                _label_cache = LabelFormatCache(maxsize=maxsize)
     return _label_cache
 
 

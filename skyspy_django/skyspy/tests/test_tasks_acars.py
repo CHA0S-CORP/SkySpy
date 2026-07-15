@@ -94,7 +94,7 @@ class DecodeAcarsMessageTaskTest(TestCase):
 
     @patch("skyspy.tasks.acars.decode_message_text")
     def test_decode_message_empty_result(self, mock_decode):
-        """Test handling of empty decode result."""
+        """Test that undecodable messages are marked so they aren't requeued forever."""
         mock_decode.return_value = None
 
         message = AcarsMessage.objects.create(
@@ -106,8 +106,9 @@ class DecodeAcarsMessageTaskTest(TestCase):
 
         decode_acars_message(message.id)
 
+        # Empty-dict sentinel excludes it from the decoded__isnull=True queue scan
         message.refresh_from_db()
-        self.assertIsNone(message.decoded)
+        self.assertEqual(message.decoded, {})
 
     @patch("skyspy.tasks.acars.decode_message_text")
     def test_decode_message_updates_only_decoded_field(self, mock_decode):

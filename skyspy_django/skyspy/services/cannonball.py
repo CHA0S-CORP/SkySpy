@@ -249,6 +249,7 @@ class CannonballService:
         self._position_history: dict[str, list[AircraftPosition]] = {}
         self._pattern_cache: dict[str, list[PatternDetection]] = {}
         self._previous_distances: dict[str, float] = {}
+        self._previous_update_times: dict[str, datetime] = {}
 
     def analyze_aircraft(
         self,
@@ -290,6 +291,8 @@ class CannonballService:
 
             # Apply altitude filter
             altitude = ac.get("alt_baro") or ac.get("alt_geom") or ac.get("altitude") or 0
+            if not isinstance(altitude, (int, float)):
+                altitude = 0  # readsb reports alt_baro="ground" for on-ground aircraft
             if altitude > altitude_ceiling:
                 continue
 
@@ -309,9 +312,12 @@ class CannonballService:
             bearing = calculate_bearing(user_lat, user_lon, ac_lat, ac_lon)
 
             # Get trend and closing speed
+            now = timezone.now()
             prev_distance = self._previous_distances.get(hex_code)
+            prev_time = self._previous_update_times.get(hex_code)
+            time_delta_seconds = (now - prev_time).total_seconds() if prev_time else None
             trend = get_trend(distance_nm, prev_distance)
-            closing_speed = self._calculate_closing_speed(hex_code, distance_nm, prev_distance)
+            closing_speed = self._calculate_closing_speed(hex_code, distance_nm, prev_distance, time_delta_seconds)
 
             # Calculate ETA if approaching
             eta_seconds = None
@@ -370,8 +376,9 @@ class CannonballService:
 
             threats.append(threat)
 
-            # Update previous distance
+            # Update previous distance and observation time
             self._previous_distances[hex_code] = distance_nm
+            self._previous_update_times[hex_code] = now
 
         # Sort by urgency score (descending), then threat level, then distance
         threat_order = {"critical": 0, "warning": 1, "info": 2}
@@ -400,7 +407,9 @@ class CannonballService:
         if callsign:
             for pattern, category, description in TRAFFIC_ENFORCEMENT_PATTERNS:
                 if re.match(pattern, callsign, re.IGNORECASE):
-                    result["is_law_enforcement"] = category not in ["Fire/Emergency"]
+                    # Only upgrade the LE flag - never downgrade a prior positive identification
+                    if category not in ["Fire/Emergency"]:
+                        result["is_law_enforcement"] = True
                     result["is_interest"] = True
                     if result["confidence"] == "none":
                         result["confidence"] = "high"
@@ -414,9 +423,9 @@ class CannonballService:
         operator = (aircraft.get("ownOp") or aircraft.get("operator") or "").strip().upper()
         if operator and operator in ADDITIONAL_LE_OPERATORS:
             category, description = ADDITIONAL_LE_OPERATORS[operator]
-            result["is_law_enforcement"] = (
-                "Law Enforcement" in category or "Police" in category or "Sheriff" in category
-            )
+            # Only upgrade the LE flag - never downgrade a prior positive identification
+            if "Law Enforcement" in category or "Police" in category or "Sheriff" in category:
+                result["is_law_enforcement"] = True
             result["is_interest"] = True
             if result["confidence"] in ["none", "low"]:
                 result["confidence"] = "high"
@@ -700,10 +709,10 @@ class CannonballService:
         hex_code: str,
         current_distance: float,
         previous_distance: float | None,
-        time_delta_seconds: float = 3.0,
+        time_delta_seconds: float | None = None,
     ) -> float | None:
-        """Calculate closing speed in knots."""
-        if previous_distance is None:
+        """Calculate closing speed in knots from the actual time between observations."""
+        if previous_distance is None or not time_delta_seconds or time_delta_seconds <= 0:
             return None
 
         distance_change = previous_distance - current_distance  # Positive = closing

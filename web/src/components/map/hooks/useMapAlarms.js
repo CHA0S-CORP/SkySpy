@@ -1,5 +1,8 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 
+// Severity ranking used to decide when an alarm loop must escalate
+const SEVERITY_RANK = { low: 0, warning: 1, critical: 2 };
+
 /**
  * Custom hook for handling map alarms, notifications, and audio alerts
  */
@@ -10,6 +13,7 @@ export function useMapAlarms({ config, soundMuted }) {
   const audioContextRef = useRef(null);
   const alarmPlayingRef = useRef(false);
   const alarmIntervalRef = useRef(null);
+  const alarmSeverityRef = useRef(null);
 
   // Initialize audio context on user interaction
   const initAudioContext = useCallback(() => {
@@ -27,7 +31,7 @@ export function useMapAlarms({ config, soundMuted }) {
   const sendNotification = useCallback(
     (title, body, tag, urgent = false) => {
       // Always log to console for debugging/testing
-      console.log(`[SkySpy Notification] ${title}: ${body}`);
+      // Notification triggered
 
       if (typeof Notification === 'undefined') {
         console.warn('Notifications not supported in this browser');
@@ -40,7 +44,7 @@ export function useMapAlarms({ config, soundMuted }) {
       }
 
       if (!config.browserNotifications) {
-        console.log('Browser notifications disabled in settings');
+        // Browser notifications disabled in settings
         return;
       }
 
@@ -286,16 +290,30 @@ export function useMapAlarms({ config, soundMuted }) {
 
   // Stop the alarm loop
   const stopAlarmLoop = useCallback(() => {
+    alarmSeverityRef.current = null;
     if (alarmIntervalRef.current) {
       clearInterval(alarmIntervalRef.current);
       alarmIntervalRef.current = null;
     }
   }, []);
 
-  // Start looping alarm for unacknowledged events
+  // Start looping alarm for unacknowledged events. If a loop is already
+  // running at a lower severity, restart it at the new (faster) cadence
+  // so escalation is never missed.
   const startAlarmLoop = useCallback(
     (severity = 'low') => {
-      if (alarmIntervalRef.current || soundMuted) return;
+      if (alarmIntervalRef.current) {
+        // Already looping: only restart if the new severity is higher
+        if ((SEVERITY_RANK[severity] ?? 0) <= (SEVERITY_RANK[alarmSeverityRef.current] ?? 0)) {
+          return;
+        }
+        clearInterval(alarmIntervalRef.current);
+        alarmIntervalRef.current = null;
+      }
+
+      // Remember the requested severity so the loop can resume after unmute
+      alarmSeverityRef.current = severity;
+      if (soundMuted) return;
 
       playConflictAlarm(severity);
 
@@ -333,13 +351,22 @@ export function useMapAlarms({ config, soundMuted }) {
     [config.apiBaseUrl, stopAlarmLoop]
   );
 
-  // Save sound muted preference and stop alarm if muted
+  // Save sound muted preference. Pause the alarm loop while muted and
+  // resume at the remembered severity on unmute.
   useEffect(() => {
     localStorage.setItem('adsb-sound-muted', soundMuted.toString());
     if (soundMuted) {
-      stopAlarmLoop();
+      // Pause without clearing alarmSeverityRef so unmute can resume
+      if (alarmIntervalRef.current) {
+        clearInterval(alarmIntervalRef.current);
+        alarmIntervalRef.current = null;
+      }
+    } else if (alarmSeverityRef.current) {
+      const severity = alarmSeverityRef.current;
+      alarmSeverityRef.current = null;
+      startAlarmLoop(severity);
     }
-  }, [soundMuted, stopAlarmLoop]);
+  }, [soundMuted, startAlarmLoop]);
 
   // Cleanup on unmount
   useEffect(() => {

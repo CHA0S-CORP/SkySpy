@@ -97,9 +97,10 @@ def check_task_health():
         "skyspy.tasks.aircraft.poll_aircraft": 10,
         # Session updates - should run every 5 seconds
         "skyspy.tasks.aircraft.update_aircraft_sessions_from_cache": 30,
-        # Stats updates - should run every 30-60 seconds
-        "skyspy.tasks.aircraft.update_stats_cache": 120,
-        "skyspy.tasks.aircraft.update_safety_stats": 90,
+        # Unified stats aggregation - runs every 60s (90s on RPi)
+        # (replaced the individual update_stats_cache/update_safety_stats
+        # tasks, whose beat entries are commented out in celery.py)
+        "skyspy.tasks.analytics.aggregate_all_stats": 180,
         # Stream tasks - long-running but should restart
         "skyspy.tasks.aircraft_stream.stream_aircraft": 120,
         "skyspy.tasks.aircraft_stream.flush_stream_to_database": 30,
@@ -120,6 +121,8 @@ def check_task_health():
         try:
             from skyspy.socketio.utils import sync_emit
 
+            # Emit to topic_stats - a room clients can actually subscribe to
+            # (topic_admin is not in SUPPORTED_TOPICS, so nobody ever joins it)
             sync_emit(
                 "system:health",
                 {
@@ -127,7 +130,7 @@ def check_task_health():
                     "issue": "stale_tasks",
                     "stale_tasks": stale_tasks,
                 },
-                room="topic_admin",
+                room="topic_stats",
             )
         except Exception:
             pass

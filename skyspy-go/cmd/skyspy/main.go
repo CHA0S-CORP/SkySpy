@@ -168,7 +168,7 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 
 	// Set API key if provided
-	if apiKey != "" {
+	if authMgr != nil && apiKey != "" {
 		authMgr.SetAPIKey(apiKey)
 	}
 

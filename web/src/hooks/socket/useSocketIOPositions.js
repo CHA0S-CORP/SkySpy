@@ -163,9 +163,21 @@ export function useSocketIOPositions(enabled, apiBase, interpolate = true, inter
       // Handle aircraft:update for position data
       else if (type === 'aircraft:update') {
         const now = performance.now();
-        // aircraft:update may contain a single aircraft or array
-        const aircraftData =
-          data?.data?.aircraft || data?.aircraft || (data?.data ? [data.data] : []);
+        const payload = data?.data ?? data;
+
+        // aircraft:update may be a delta ({ type: 'delta', added, updated, removed }),
+        // a full update ({ aircraft: [...] }), or a single aircraft object
+        let aircraftData;
+        let removedIcaos = [];
+        if (payload?.type === 'delta') {
+          aircraftData = [
+            ...(Array.isArray(payload.added) ? payload.added : []),
+            ...(Array.isArray(payload.updated) ? payload.updated : []),
+          ];
+          removedIcaos = Array.isArray(payload.removed) ? payload.removed : [];
+        } else {
+          aircraftData = payload?.aircraft || (payload ? [payload] : []);
+        }
         const updates = Array.isArray(aircraftData) ? aircraftData : [aircraftData];
 
         for (const ac of updates) {
@@ -197,6 +209,18 @@ export function useSocketIOPositions(enabled, apiBase, interpolate = true, inter
           // If not interpolating, update interpolated positions directly
           if (!interpolateRef.current) {
             interpolatedPositionsRef.current[icao] = posData;
+          }
+        }
+
+        // Remove aircraft from delta removals
+        for (const rawIcao of removedIcaos) {
+          const hex = typeof rawIcao === 'string' ? rawIcao : rawIcao?.hex;
+          if (typeof hex === 'string') {
+            const icao = hex.toUpperCase();
+            delete targetPositionsRef.current[icao];
+            delete prevPositionsRef.current[icao];
+            delete lastUpdateRef.current[icao];
+            delete interpolatedPositionsRef.current[icao];
           }
         }
 
@@ -329,7 +353,6 @@ export function useSocketIOPositions(enabled, apiBase, interpolate = true, inter
    * Note: Topic subscription is deferred to the event listener setup effect
    */
   const handleConnect = useCallback(() => {
-    console.log('[useSocketIOPositions] Socket.IO connected');
     setConnected(true);
     // Don't subscribe here - wait for event listeners to be set up first
   }, []);
@@ -338,8 +361,6 @@ export function useSocketIOPositions(enabled, apiBase, interpolate = true, inter
    * Handle Socket.IO disconnection
    */
   const handleDisconnect = useCallback(() => {
-    console.log('[useSocketIOPositions] Socket.IO disconnected');
-
     // Set flag to prevent message handling during cleanup
     isDisconnectingRef.current = true;
 
@@ -401,8 +422,6 @@ export function useSocketIOPositions(enabled, apiBase, interpolate = true, inter
       'batch',
     ];
 
-    console.log('[useSocketIOPositions] Setting up event listeners');
-
     const unsubscribers = eventTypes.map((eventType) => {
       return on(eventType, (data) => handleMessage(eventType, data));
     });
@@ -416,7 +435,6 @@ export function useSocketIOPositions(enabled, apiBase, interpolate = true, inter
   useEffect(() => {
     if (!enabled || !socketReady) return;
 
-    console.log('[useSocketIOPositions] Socket ready, subscribing to aircraft topic');
     emit('subscribe', { topics: ['aircraft'] });
   }, [enabled, socketReady, emit]);
 

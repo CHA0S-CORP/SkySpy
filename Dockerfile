@@ -2,11 +2,13 @@ FROM node:20-alpine AS frontend-builder
 
 WORKDIR /app
 
-COPY ./web/package.json ./
+COPY ./web/package.json ./web/package-lock.json ./
 
-RUN npm install
+RUN npm ci
 
 COPY ./web/index.html ./web/vite.config.js ./
+
+COPY ./web/public/ ./public/
 
 COPY ./web/src/ ./src/
 

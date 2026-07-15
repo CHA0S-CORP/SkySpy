@@ -276,15 +276,25 @@ func tickCmd() tea.Cmd {
 
 func aircraftMsgCmd(client *ws.Client) tea.Cmd {
 	return func() tea.Msg {
-		msg := <-client.AircraftMessages()
-		return aircraftMsg(msg)
+		select {
+		case msg := <-client.AircraftMessages():
+			return aircraftMsg(msg)
+		case <-client.Done():
+			// Client stopped; exit so the goroutine doesn't leak
+			return nil
+		}
 	}
 }
 
 func acarsMsgCmd(client *ws.Client) tea.Cmd {
 	return func() tea.Msg {
-		msg := <-client.ACARSMessages()
-		return acarsMsg(msg)
+		select {
+		case msg := <-client.ACARSMessages():
+			return acarsMsg(msg)
+		case <-client.Done():
+			// Client stopped; exit so the goroutine doesn't leak
+			return nil
+		}
 	}
 }
 
@@ -627,6 +637,9 @@ func (m *Model) updateTarget(ac *ws.Aircraft, isNew bool) {
 		target.Bearing = *ac.Bearing
 	}
 
+	// Snapshot the previous state before overwriting so alert rules can
+	// compare against it (e.g. geofence entry detection)
+	prev := m.aircraft[ac.Hex]
 	m.aircraft[ac.Hex] = target
 
 	// Update trail tracker if we have a valid position
@@ -635,11 +648,11 @@ func (m *Model) updateTarget(ac *ws.Aircraft, isNew bool) {
 	}
 
 	// Trigger audio alerts
-	m.triggerAudioAlerts(target, isNew)
+	m.triggerAudioAlerts(target, prev, isNew)
 }
 
 // triggerAudioAlerts checks if audio alerts should be triggered for this aircraft
-func (m *Model) triggerAudioAlerts(target *radar.Target, isNew bool) {
+func (m *Model) triggerAudioAlerts(target, prev *radar.Target, isNew bool) {
 	if m.alertPlayer == nil {
 		return
 	}
@@ -663,20 +676,15 @@ func (m *Model) triggerAudioAlerts(target *radar.Target, isNew bool) {
 	m.alertedAircraft[target.Hex] = true
 
 	// Check custom alert rules
-	m.checkAlertRules(target)
+	m.checkAlertRules(target, prev)
 }
 
-// checkAlertRules checks custom alert rules for this aircraft
-func (m *Model) checkAlertRules(target *radar.Target) {
+// checkAlertRules checks custom alert rules for this aircraft.
+// prev is the target's previous state (before the current update), used for
+// geofence entry detection; it may be nil for newly seen aircraft.
+func (m *Model) checkAlertRules(target, prev *radar.Target) {
 	if m.alertState == nil {
 		return
-	}
-
-	// Get previous state for comparison (for geofence entry detection)
-	prevTarget, exists := m.aircraft[target.Hex]
-	var prev *radar.Target
-	if exists {
-		prev = prevTarget
 	}
 
 	// Check alert rules

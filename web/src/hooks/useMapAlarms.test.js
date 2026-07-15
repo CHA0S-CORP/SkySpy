@@ -275,6 +275,49 @@ describe('useMapAlarms', () => {
 
       expect(mockOscillator.start).not.toHaveBeenCalled();
     });
+
+    it('should escalate warning loop to critical cadence', () => {
+      const { result } = renderHook(() => useMapAlarms());
+
+      act(() => {
+        result.current.startAlarmLoop('warning');
+      });
+
+      act(() => {
+        result.current.startAlarmLoop('critical');
+      });
+
+      const callsAfterEscalation = mockOscillator.start.mock.calls.length;
+
+      // Critical cadence fires at 1500ms; the old warning loop would not
+      // have fired until 2500ms.
+      act(() => {
+        vi.advanceTimersByTime(1500);
+      });
+
+      expect(mockOscillator.start.mock.calls.length).toBeGreaterThan(callsAfterEscalation);
+    });
+
+    it('should keep critical cadence when a lower severity is requested', () => {
+      const { result } = renderHook(() => useMapAlarms());
+
+      act(() => {
+        result.current.startAlarmLoop('critical');
+      });
+
+      act(() => {
+        result.current.startAlarmLoop('warning');
+      });
+
+      const callsBefore = mockOscillator.start.mock.calls.length;
+
+      // Still on critical cadence (1500ms), not warning (2500ms)
+      act(() => {
+        vi.advanceTimersByTime(1500);
+      });
+
+      expect(mockOscillator.start.mock.calls.length).toBeGreaterThan(callsBefore);
+    });
   });
 
   describe('stopAlarmLoop', () => {
@@ -489,6 +532,89 @@ describe('useMapAlarms', () => {
 
       // Should not have continued playing
       expect(mockOscillator.start.mock.calls.length).toBe(callCountBefore);
+    });
+
+    it('should resume alarm loop on unmute', () => {
+      const { result } = renderHook(() => useMapAlarms());
+
+      act(() => {
+        result.current.startAlarmLoop('critical');
+      });
+
+      act(() => {
+        result.current.setSoundMuted(true);
+      });
+
+      // Let the "alarm playing" debounce release while muted; nothing plays
+      act(() => {
+        vi.advanceTimersByTime(2000);
+      });
+
+      const callsWhileMuted = mockOscillator.start.mock.calls.length;
+
+      act(() => {
+        result.current.setSoundMuted(false);
+      });
+
+      // Resumes immediately at the remembered severity
+      expect(mockOscillator.start.mock.calls.length).toBeGreaterThan(callsWhileMuted);
+
+      const callsAfterResume = mockOscillator.start.mock.calls.length;
+
+      // And keeps looping at the critical cadence
+      act(() => {
+        vi.advanceTimersByTime(1500);
+      });
+
+      expect(mockOscillator.start.mock.calls.length).toBeGreaterThan(callsAfterResume);
+    });
+
+    it('should remember severity requested while muted and play it on unmute', () => {
+      const { result } = renderHook(() => useMapAlarms());
+
+      act(() => {
+        result.current.setSoundMuted(true);
+      });
+
+      act(() => {
+        result.current.startAlarmLoop('warning');
+      });
+
+      expect(mockOscillator.start).not.toHaveBeenCalled();
+
+      act(() => {
+        result.current.setSoundMuted(false);
+      });
+
+      expect(mockOscillator.start).toHaveBeenCalled();
+    });
+
+    it('should not resume on unmute after alarm loop was stopped', () => {
+      const { result } = renderHook(() => useMapAlarms());
+
+      act(() => {
+        result.current.startAlarmLoop('critical');
+      });
+
+      act(() => {
+        result.current.setSoundMuted(true);
+      });
+
+      act(() => {
+        result.current.stopAlarmLoop();
+      });
+
+      const callsAfterStop = mockOscillator.start.mock.calls.length;
+
+      act(() => {
+        result.current.setSoundMuted(false);
+      });
+
+      act(() => {
+        vi.advanceTimersByTime(5000);
+      });
+
+      expect(mockOscillator.start.mock.calls.length).toBe(callsAfterStop);
     });
   });
 

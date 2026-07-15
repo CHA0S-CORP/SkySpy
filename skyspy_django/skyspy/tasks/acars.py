@@ -61,6 +61,13 @@ def decode_acars_message(self, message_id: int):
             message.decoded = decoded
             message.save(update_fields=["decoded"])
             logger.debug(f"Decoded ACARS message {message_id}: {list(decoded.keys())}")
+        else:
+            # Undecodable content: store an empty-dict sentinel so the
+            # periodic decode queue (decoded__isnull=True) doesn't requeue
+            # this message forever, starving older undecoded messages
+            message.decoded = {}
+            message.save(update_fields=["decoded"])
+            logger.debug(f"ACARS message {message_id} undecodable, marked as attempted")
 
     except Exception as e:
         logger.error(f"Error decoding ACARS message {message_id}: {e}")
@@ -157,6 +164,10 @@ def decode_acars_batch(message_ids: list[int]):
                 message.decoded = decoded
                 message.save(update_fields=["decoded"])
                 decoded_count += 1
+            else:
+                # Mark undecodable messages so they aren't requeued forever
+                message.decoded = {}
+                message.save(update_fields=["decoded"])
 
         except Exception as e:
             logger.error(f"Error decoding ACARS message {message.id}: {e}")

@@ -20,6 +20,9 @@ from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_ex
 logger = logging.getLogger(__name__)
 
 # SRTM tile parameters
+# Tiles come in two resolutions: 3601x3601 (1 arc-second, served by the skadi
+# source below) and 1201x1201 (3 arc-second). The actual sample count is
+# derived from the tile file size; SRTM_SAMPLES is only a fallback default.
 SRTM_SAMPLES = 1201  # 3 arc-second resolution: 1201x1201 samples per tile
 SRTM_ARC_SECONDS = 3
 SRTM_NODATA = -32768
@@ -114,10 +117,27 @@ def _read_tile(lat: int, lon: int) -> bytes | None:
         return None
 
 
+def _tile_sample_count(tile_data: bytes) -> int:
+    """
+    Derive the samples-per-axis for an SRTM tile from its file size.
+
+    .hgt tiles are square grids of big-endian int16 values, so the axis
+    length is sqrt(bytes / 2): 3601 for 1 arc-second, 1201 for 3 arc-second.
+    """
+    samples = math.isqrt(len(tile_data) // 2)
+    if samples < 2 or samples * samples * 2 != len(tile_data):
+        logger.warning(f"Unexpected SRTM tile size {len(tile_data)} bytes; assuming {SRTM_SAMPLES} samples")
+        return SRTM_SAMPLES
+    return samples
+
+
 def _get_elevation_from_tile(tile_data: bytes, lat: float, lon: float) -> int | None:
     """Extract elevation from tile data using bilinear interpolation."""
     if tile_data is None:
         return None
+
+    # Determine tile resolution from the data itself (1201 or 3601 samples)
+    samples = _tile_sample_count(tile_data)
 
     # Calculate row/col in the tile
     tile_lat = int(math.floor(lat))
@@ -128,19 +148,19 @@ def _get_elevation_from_tile(tile_data: bytes, lat: float, lon: float) -> int | 
     frac_lon = lon - tile_lon
 
     # Row and column (row 0 is the top = highest latitude)
-    row = (SRTM_SAMPLES - 1) * (1.0 - frac_lat)
-    col = (SRTM_SAMPLES - 1) * frac_lon
+    row = (samples - 1) * (1.0 - frac_lat)
+    col = (samples - 1) * frac_lon
 
     row_int = int(row)
     col_int = int(col)
 
     # Clamp to valid range
-    row_int = max(0, min(row_int, SRTM_SAMPLES - 2))
-    col_int = max(0, min(col_int, SRTM_SAMPLES - 2))
+    row_int = max(0, min(row_int, samples - 2))
+    col_int = max(0, min(col_int, samples - 2))
 
     # Read 4 surrounding points for bilinear interpolation
     def read_sample(r, c):
-        offset = (r * SRTM_SAMPLES + c) * 2
+        offset = (r * samples + c) * 2
         if offset + 2 > len(tile_data):
             return SRTM_NODATA
         value = struct.unpack(">h", tile_data[offset : offset + 2])[0]

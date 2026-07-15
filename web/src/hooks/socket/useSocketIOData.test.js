@@ -102,6 +102,7 @@ vi.mock('../channels', () => ({
     }
   }),
   forceFlushAircraftBatch: vi.fn(),
+  unregisterAircraftBatch: vi.fn(),
 }));
 
 import { useSocketIO } from './useSocketIO';

@@ -23,14 +23,30 @@ from skyspy.services.notifications import (
 )
 
 
+def _public_addrinfo(*args, **kwargs):
+    """Fake getaddrinfo result resolving to a public IP."""
+    import socket as socket_module
+
+    return [(socket_module.AF_INET, socket_module.SOCK_STREAM, 6, "", ("93.184.216.34", 0))]
+
+
+def _private_addrinfo(*args, **kwargs):
+    """Fake getaddrinfo result resolving to a private IP."""
+    import socket as socket_module
+
+    return [(socket_module.AF_INET, socket_module.SOCK_STREAM, 6, "", ("10.0.0.5", 0))]
+
+
 class UrlSafetyValidationTests(TestCase):
     """Tests for URL safety validation (SSRF prevention)."""
 
-    def test_valid_https_url(self):
+    @patch("skyspy.services.notifications.socket.getaddrinfo", side_effect=_public_addrinfo)
+    def test_valid_https_url(self, mock_resolve):
         """Test that valid HTTPS URLs pass validation."""
         assert _is_safe_url("https://hooks.slack.com/services/xxx") is True
 
-    def test_valid_http_url(self):
+    @patch("skyspy.services.notifications.socket.getaddrinfo", side_effect=_public_addrinfo)
+    def test_valid_http_url(self, mock_resolve):
         """Test that valid HTTP URLs pass validation."""
         assert _is_safe_url("http://example.com/webhook") is True
 
@@ -74,10 +90,29 @@ class UrlSafetyValidationTests(TestCase):
         """Test that IPv6 loopback is blocked."""
         assert _is_safe_url("http://[::1]/webhook") is False
 
-    def test_public_hostname_allowed(self):
+    @patch("skyspy.services.notifications.socket.getaddrinfo", side_effect=_public_addrinfo)
+    def test_public_hostname_allowed(self, mock_resolve):
         """Test that public hostnames are allowed."""
         assert _is_safe_url("https://discord.com/api/webhooks/xxx") is True
         assert _is_safe_url("https://api.pushover.net/1/messages.json") is True
+
+    @patch("skyspy.services.notifications.socket.getaddrinfo", side_effect=_private_addrinfo)
+    def test_hostname_resolving_to_private_ip_blocked(self, mock_resolve):
+        """Test that hostnames resolving to private IPs are blocked (SSRF)."""
+        assert _is_safe_url("http://internal-service/webhook") is False
+        assert _is_safe_url("http://redis:6379/") is False
+
+    def test_localhost_hostname_blocked(self):
+        """Test that localhost is blocked even as a hostname (resolves to loopback)."""
+        assert _is_safe_url("http://localhost:8000/webhook") is False
+
+    @patch("skyspy.services.notifications.socket.getaddrinfo")
+    def test_unresolvable_hostname_blocked(self, mock_resolve):
+        """Test that unresolvable hostnames fail closed."""
+        import socket as socket_module
+
+        mock_resolve.side_effect = socket_module.gaierror("Name or service not known")
+        assert _is_safe_url("http://does-not-exist.invalid/webhook") is False
 
     def test_url_without_hostname(self):
         """Test that URLs without hostnames are blocked."""
@@ -523,7 +558,8 @@ class NotificationManagerIntegrationTests:
     def test_reload_from_db_loads_config(self):
         """Test that reload_from_db reads configuration from database."""
         config = NotificationConfig.get_config()
-        config.apprise_urls = "discord://webhook/token,slack://token"
+        # NotificationConfig.apprise_urls uses ";" as the canonical delimiter
+        config.apprise_urls = "discord://webhook/token;slack://token"
         config.save()
 
         with patch("apprise.Apprise") as mock_apprise_class:

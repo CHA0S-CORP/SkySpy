@@ -8,10 +8,11 @@ Uses the comprehensive audio service for:
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from celery import shared_task
 from django.conf import settings
+from django.utils import timezone
 
 from skyspy.models import AudioTransmission
 from skyspy.services.audio import (
@@ -36,10 +37,23 @@ def process_transcription_queue():
         return
 
     # Get queued transcriptions (batch of 5)
-    queued = AudioTransmission.objects.filter(transcription_status="queued").order_by("transcription_queued_at")[:5]
+    queued_ids = list(
+        AudioTransmission.objects.filter(transcription_status="queued")
+        .order_by("transcription_queued_at")
+        .values_list("id", flat=True)[:5]
+    )
 
-    for transmission in queued:
-        transcribe_audio.delay(transmission.id)
+    for transmission_id in queued_ids:
+        # Atomically claim the row before dispatching so the next scan
+        # (this task runs every 10s) doesn't dispatch it again while the
+        # transcription is still in flight
+        claimed = AudioTransmission.objects.filter(
+            id=transmission_id,
+            transcription_status="queued",
+        ).update(transcription_status="processing")
+
+        if claimed:
+            transcribe_audio.delay(transmission_id)
 
 
 @shared_task(bind=True, max_retries=3)
@@ -60,6 +74,18 @@ def transcribe_audio(self, transmission_id: int):
         return
 
     if transmission.transcription_status == "completed":
+        return
+
+    # Skip if another worker is already transcribing this transmission
+    # (transcription_started_at is set once work actually begins; rows
+    # merely claimed by the queue scan have no started_at yet)
+    if (
+        transmission.transcription_status == "processing"
+        and transmission.transcription_started_at
+        and timezone.now() - transmission.transcription_started_at < timedelta(minutes=10)
+        and self.request.retries == 0
+    ):
+        logger.debug(f"Transmission {transmission_id} already being transcribed, skipping")
         return
 
     # Broadcast status update

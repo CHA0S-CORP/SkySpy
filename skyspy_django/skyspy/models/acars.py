@@ -38,6 +38,7 @@ class AcarsMessage(models.Model):
 
     # Signal info
     signal_level = models.FloatField(blank=True, null=True)
+    noise_level = models.FloatField(blank=True, null=True)  # dBm noise floor (dumpvdl2)
     error_count = models.IntegerField(blank=True, null=True)
 
     # Station info

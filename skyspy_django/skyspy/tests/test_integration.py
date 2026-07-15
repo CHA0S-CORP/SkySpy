@@ -672,25 +672,6 @@ class TestTranscriptionFlow:
 # =============================================================================
 
 
-@pytest.mark.skip(reason="Django Channels replaced with Socket.IO")
-@pytest.mark.django_db(transaction=True)
-@pytest.mark.asyncio
-class TestWebSocketIntegration:
-    """Test WebSocket connections and broadcasts.
-
-    NOTE: These tests are skipped because Django Channels has been replaced
-    with Socket.IO. The WebsocketCommunicator from channels.testing no longer
-    works with the Socket.IO-based implementation.
-
-    Socket.IO WebSocket tests should use python-socketio's test client instead.
-    See skyspy/tests/test_socketio_namespaces.py for Socket.IO tests.
-    """
-
-    async def test_placeholder(self, db):
-        """Placeholder test - Socket.IO tests are in test_socketio_namespaces.py."""
-        pytest.skip("Django Channels replaced with Socket.IO")
-
-
 # =============================================================================
 # Full End-to-End Flow Tests
 # =============================================================================

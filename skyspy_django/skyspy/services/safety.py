@@ -16,6 +16,7 @@ import time
 import uuid
 
 from django.conf import settings
+from django.db import DatabaseError
 from django.utils import timezone
 
 from skyspy.models import SafetyEvent
@@ -214,6 +215,7 @@ class SafetyMonitor:
         self._last_cleanup = now
 
         cutoff = now - self.HISTORY_RETENTION
+        cooldown_cutoff = now - self.EVENT_COOLDOWN
         event_cutoff = now - self.EVENT_EXPIRY
 
         # Clean up old aircraft state
@@ -221,8 +223,9 @@ class SafetyMonitor:
         for icao in to_remove:
             del self._aircraft_state[icao]
 
-        # Clean up old cooldowns
-        old_cooldowns = [k for k, v in self._event_cooldown.items() if v < cutoff]
+        # Clean up expired cooldowns (must use EVENT_COOLDOWN as the cutoff so
+        # entries survive for the full cooldown period and remain enforceable)
+        old_cooldowns = [k for k, v in self._event_cooldown.items() if v < cooldown_cutoff]
         for k in old_cooldowns:
             del self._event_cooldown[k]
 
@@ -246,8 +249,13 @@ class SafetyMonitor:
             return f"{event_type}:{pair[0]}:{pair[1]}"
         return f"{event_type}:{icao}"
 
-    def _store_event(self, event: dict) -> dict:
-        """Store an event and return it with ID and metadata. Thread-safe."""
+    def _store_event(self, event: dict) -> tuple[dict, bool]:
+        """
+        Store an event and return (event with ID and metadata, created flag). Thread-safe.
+
+        The created flag is True when the event was not already active, so callers
+        can avoid re-persisting/re-broadcasting persistent events every cycle.
+        """
         event_id = self._generate_event_id(
             event["event_type"],
             event.get("icao") or event.get("icao_hex"),
@@ -261,9 +269,10 @@ class SafetyMonitor:
                 # Update existing event
                 existing = self._active_events[event_id]
                 existing.update(event)
+                existing["id"] = event_id
                 existing["last_seen"] = now
                 existing["acknowledged"] = event_id in self._acknowledged_events
-                return existing.copy()  # Return copy to avoid race conditions
+                return existing.copy(), False  # Return copy to avoid race conditions
             else:
                 # New event
                 event["id"] = event_id
@@ -271,7 +280,7 @@ class SafetyMonitor:
                 event["last_seen"] = now
                 event["acknowledged"] = False
                 self._active_events[event_id] = event
-                return event.copy()  # Return copy to avoid race conditions
+                return event.copy(), True  # Return copy to avoid race conditions
 
     def find_event_by_db_id(self, db_id: int) -> str | None:
         """Find an active event's string ID by its database ID. Thread-safe."""
@@ -588,7 +597,14 @@ class SafetyMonitor:
 
             lat = ac.get("lat")
             lon = ac.get("lon")
-            alt = safe_int_altitude(ac.get("alt_baro") or ac.get("alt")) or safe_int_altitude(ac.get("alt_geom"))
+            raw_alt = ac.get("alt_baro") or ac.get("alt")
+            # "ground" means explicitly on-ground: don't fall through to geometric
+            # altitude (MSL), which would put taxiing aircraft at high-elevation
+            # airports into the airborne proximity checks.
+            on_ground = isinstance(raw_alt, str) and raw_alt.lower() == "ground"
+            alt = safe_int_altitude(raw_alt)
+            if alt is None:
+                alt = safe_int_altitude(ac.get("alt_geom"))
             vr = ac.get("baro_rate") or ac.get("geom_rate") or ac.get("vr")
             gs = ac.get("gs")
             track = ac.get("track")
@@ -596,7 +612,7 @@ class SafetyMonitor:
             squawk = ac.get("squawk", "")
 
             # Only include in proximity check if airborne (>500ft) with valid position
-            if is_valid_position(lat, lon) and alt is not None and alt >= 500:
+            if not on_ground and is_valid_position(lat, lon) and alt is not None and alt >= 500:
                 current_positions[icao] = {
                     "lat": lat,
                     "lon": lon,
@@ -622,12 +638,15 @@ class SafetyMonitor:
         proximity_events = self._check_proximity_conflicts(current_positions)
         events.extend(proximity_events)
 
-        # Store all events and return with IDs
+        # Store all events and return with IDs.
+        # Persistent events (e.g. emergency squawks) are re-detected every cycle;
+        # only persist/broadcast them once when the condition starts.
         stored_events = []
         for e in events:
-            stored = self._store_event(e)
+            stored, created = self._store_event(e)
             stored_events.append(stored)
-            self._store_and_broadcast_event(e)
+            if created:
+                self._store_and_broadcast_event(e)
 
         return stored_events
 
@@ -948,8 +967,8 @@ class SafetyMonitor:
                 {**event, "event_action": event_type, "timestamp": timezone.now().isoformat().replace("+00:00", "Z")},
                 room="topic_safety",
             )
-        except Exception as e:
-            logger.warning(f"Failed to broadcast {event_type}: {e}")
+        except (ConnectionError, OSError, RuntimeError) as e:
+            logger.warning(f"Failed to broadcast {event_type}: {type(e).__name__}: {e}")
 
     def _store_and_broadcast_event(self, event: dict):
         """Store event in database and broadcast to clients. Thread-safe."""
@@ -977,8 +996,8 @@ class SafetyMonitor:
                 with self._events_lock:
                     if event_id in self._active_events:
                         self._active_events[event_id]["db_id"] = db_event.id
-        except Exception as e:
-            logger.error(f"Failed to store safety event: {e}")
+        except DatabaseError as e:
+            logger.error(f"Failed to store safety event: {type(e).__name__}: {e}")
 
         # Broadcast new event to WebSocket clients
         self._broadcast_event("safety_event", event)

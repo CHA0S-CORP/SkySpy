@@ -14,7 +14,7 @@ export function AdminConfigView({ apiBase = '' }) {
       if (toastFn) {
         toastFn(message, type);
       } else {
-        console.log(`[Toast ${type}]:`, message);
+        console.warn(`[Toast ${type}]:`, message);
       }
     },
     [toastFn]

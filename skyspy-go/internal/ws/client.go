@@ -82,9 +82,11 @@ type Client struct {
 	host           string
 	port           int
 	reconnectDelay time.Duration
-	state          ClientState
+	state          ClientState // aircraft connection state (drives IsConnected)
+	acarsState     ClientState // ACARS connection state, tracked separately
 	authProvider   AuthProvider
 	mu             sync.RWMutex
+	stopOnce       sync.Once
 	stopCh         chan struct{}
 	aircraftMsgCh  chan Message
 	acarsMsgCh     chan Message
@@ -97,6 +99,7 @@ func NewClient(host string, port int, reconnectDelay int) *Client {
 		port:           port,
 		reconnectDelay: time.Duration(reconnectDelay) * time.Second,
 		state:          StateDisconnected,
+		acarsState:     StateDisconnected,
 		stopCh:         make(chan struct{}),
 		aircraftMsgCh:  make(chan Message, 100),
 		acarsMsgCh:     make(chan Message, 100),
@@ -117,16 +120,28 @@ func (c *Client) SetAuthProvider(provider AuthProvider) {
 	c.authProvider = provider
 }
 
-// State returns the current connection state
+// State returns the current aircraft connection state
 func (c *Client) State() ClientState {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.state
 }
 
-// IsConnected returns true if the client is connected
+// IsConnected returns true if the aircraft connection is established
 func (c *Client) IsConnected() bool {
 	return c.State() == StateConnected
+}
+
+// ACARSState returns the current ACARS connection state
+func (c *Client) ACARSState() ClientState {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.acarsState
+}
+
+// IsACARSConnected returns true if the ACARS connection is established
+func (c *Client) IsACARSConnected() bool {
+	return c.ACARSState() == StateConnected
 }
 
 // AircraftMessages returns the channel for aircraft messages
@@ -145,14 +160,27 @@ func (c *Client) Start() {
 	go c.runACARSConnection()
 }
 
-// Stop closes all connections
+// Stop closes all connections. It is safe to call multiple times.
 func (c *Client) Stop() {
-	close(c.stopCh)
+	c.stopOnce.Do(func() {
+		close(c.stopCh)
+	})
 }
 
-func (c *Client) setState(state ClientState) {
+// Done returns a channel that is closed when the client is stopped
+func (c *Client) Done() <-chan struct{} {
+	return c.stopCh
+}
+
+func (c *Client) setAircraftState(state ClientState) {
 	c.mu.Lock()
 	c.state = state
+	c.mu.Unlock()
+}
+
+func (c *Client) setACARSState(state ClientState) {
+	c.mu.Lock()
+	c.acarsState = state
 	c.mu.Unlock()
 }
 
@@ -164,15 +192,15 @@ func (c *Client) getAuthProvider() AuthProvider {
 
 func (c *Client) runAircraftConnection() {
 	url := fmt.Sprintf("ws://%s:%d/ws/aircraft/?topics=aircraft", c.host, c.port)
-	c.runConnection(url, c.aircraftMsgCh, "aircraft")
+	c.runConnection(url, c.aircraftMsgCh, "aircraft", c.setAircraftState)
 }
 
 func (c *Client) runACARSConnection() {
 	url := fmt.Sprintf("ws://%s:%d/ws/acars/?topics=messages", c.host, c.port)
-	c.runConnection(url, c.acarsMsgCh, "messages")
+	c.runConnection(url, c.acarsMsgCh, "messages", c.setACARSState)
 }
 
-func (c *Client) runConnection(url string, msgCh chan<- Message, topic string) {
+func (c *Client) runConnection(url string, msgCh chan<- Message, topic string, setState func(ClientState)) {
 	for {
 		select {
 		case <-c.stopCh:
@@ -180,7 +208,7 @@ func (c *Client) runConnection(url string, msgCh chan<- Message, topic string) {
 		default:
 		}
 
-		c.setState(StateConnecting)
+		setState(StateConnecting)
 
 		// Build WebSocket dialer with auth
 		dialer := websocket.Dialer{
@@ -211,7 +239,7 @@ func (c *Client) runConnection(url string, msgCh chan<- Message, topic string) {
 			_ = resp.Body.Close()
 		}
 		if err != nil {
-			c.setState(StateDisconnected)
+			setState(StateDisconnected)
 			select {
 			case <-c.stopCh:
 				return
@@ -227,17 +255,23 @@ func (c *Client) runConnection(url string, msgCh chan<- Message, topic string) {
 		}
 		if err := conn.WriteJSON(subscribeMsg); err != nil {
 			conn.Close()
-			continue
+			setState(StateDisconnected)
+			select {
+			case <-c.stopCh:
+				return
+			case <-time.After(c.reconnectDelay):
+				continue
+			}
 		}
 
-		c.setState(StateConnected)
+		setState(StateConnected)
 
 		// Read messages
 		for {
 			_, data, err := conn.ReadMessage()
 			if err != nil {
 				conn.Close()
-				c.setState(StateDisconnected)
+				setState(StateDisconnected)
 				break
 			}
 

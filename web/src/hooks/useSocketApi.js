@@ -35,6 +35,12 @@ export function useSocketApi(endpoint, interval = null, apiBase = '', options = 
   const [error, setError] = useState(null);
   const mountedRef = useRef(true);
   const lastFetchRef = useRef(0);
+  // Trailing-edge debounce timer for rapid fetch calls
+  const debounceTimerRef = useRef(null);
+  // Monotonic request version - stale responses (older versions) are discarded
+  const requestVersionRef = useRef(0);
+  // Latest fetchData, so a debounced trailing call uses current endpoint/options
+  const fetchDataRef = useRef(null);
 
   // Store options in refs to avoid triggering re-fetches when they change
   // Update refs synchronously to avoid stale values in callbacks
@@ -109,44 +115,43 @@ export function useSocketApi(endpoint, interval = null, apiBase = '', options = 
   }, [endpoint]);
 
   const fetchData = useCallback(async () => {
-    // Debounce rapid fetches (min 500ms between fetches)
+    // Debounce rapid fetches (min 500ms between fetches) with a trailing
+    // call, so the last request in a burst is never silently dropped
     const now = Date.now();
-    if (now - lastFetchRef.current < 500) {
+    const elapsed = now - lastFetchRef.current;
+    if (elapsed < 500) {
+      if (!debounceTimerRef.current) {
+        debounceTimerRef.current = setTimeout(() => {
+          debounceTimerRef.current = null;
+          if (mountedRef.current) {
+            fetchDataRef.current?.();
+          }
+        }, 500 - elapsed);
+      }
       return;
     }
     lastFetchRef.current = now;
+
+    // Latest-wins: responses from older requests (e.g. a slow request for a
+    // previous endpoint) must not overwrite newer data
+    const version = ++requestVersionRef.current;
+    const isCurrent = () => mountedRef.current && version === requestVersionRef.current;
 
     // Determine if we should use socket or HTTP
     const useSocket =
       !disableSocket && wsRequestRef.current && wsConnectedRef.current && derivedSocketEvent;
 
-    if (import.meta.env.DEV) {
-      console.log(
-        `[useSocketApi] ${endpoint} -> ${derivedSocketEvent || 'HTTP'} (socket: ${useSocket}, connected: ${wsConnectedRef.current})`
-      );
-    }
-
     if (useSocket) {
       try {
         // Parse query params from endpoint to include in socket request
         const params = { ...socketParamsRef.current, ...parseQueryParams(endpoint) };
-        if (import.meta.env.DEV) {
-          console.log(`[useSocketApi] Socket request: ${derivedSocketEvent}`, params);
-        }
         const result = await wsRequestRef.current(derivedSocketEvent, params);
 
         if (result?.error) {
           throw new Error(result.error);
         }
 
-        if (import.meta.env.DEV) {
-          console.log(
-            `[useSocketApi] Socket response for ${derivedSocketEvent}:`,
-            result ? 'received' : 'empty'
-          );
-        }
-
-        if (mountedRef.current) {
+        if (isCurrent()) {
           setData(result);
           setError(null);
         }
@@ -155,11 +160,11 @@ export function useSocketApi(endpoint, interval = null, apiBase = '', options = 
           `[useSocketApi] Socket request failed for ${derivedSocketEvent}:`,
           err.message
         );
-        if (mountedRef.current) {
+        if (isCurrent()) {
           setError(err.message || 'Socket request failed');
         }
       } finally {
-        if (mountedRef.current) {
+        if (isCurrent()) {
           setLoading(false);
         }
       }
@@ -168,39 +173,50 @@ export function useSocketApi(endpoint, interval = null, apiBase = '', options = 
       try {
         const result = await fetchHttp();
 
-        if (mountedRef.current) {
+        if (isCurrent()) {
           setData(result);
           setError(null);
         }
       } catch (err) {
-        if (mountedRef.current) {
+        if (isCurrent()) {
           setError(err.message || 'HTTP request failed');
         }
       } finally {
-        if (mountedRef.current) {
+        if (isCurrent()) {
           setLoading(false);
         }
       }
     }
   }, [endpoint, derivedSocketEvent, disableSocket, fetchHttp]);
 
+  // Keep ref pointing at the latest fetchData so trailing debounce calls
+  // use the current endpoint/options
+  fetchDataRef.current = fetchData;
+
   useEffect(() => {
     mountedRef.current = true;
 
-    fetchData();
+    // Invalidate any in-flight request from a previous endpoint so its
+    // response can't overwrite data for the new endpoint
+    requestVersionRef.current++;
 
-    if (interval && interval > 0) {
-      const id = setInterval(fetchData, interval);
-      return () => {
-        mountedRef.current = false;
-        clearInterval(id);
-      };
-    }
+    fetchData();
 
     return () => {
       mountedRef.current = false;
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = null;
+      }
     };
-  }, [fetchData, interval]);
+  }, [fetchData]);
+
+  useEffect(() => {
+    if (interval && interval > 0) {
+      const id = setInterval(() => fetchDataRef.current?.(), interval);
+      return () => clearInterval(id);
+    }
+  }, [interval]);
 
   return { data, loading, error, refetch: fetchData };
 }

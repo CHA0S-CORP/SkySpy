@@ -385,7 +385,12 @@ class BufferPool:
                     break
 
     def _get_pool_size(self, requested_size: int) -> int:
-        """Get the appropriate pool size for requested size."""
+        """
+        Get the appropriate pool size for requested size.
+
+        Only valid for requests up to the largest pooled size; larger
+        requests bypass the pool entirely (see get_buffer).
+        """
         for size in self.SIZES:
             if size >= requested_size:
                 return size
@@ -402,13 +407,24 @@ class BufferPool:
         Returns:
             A ctypes string buffer
         """
+        # Requests larger than the biggest pooled size bypass the pool so the
+        # returned buffer is always at least the requested size.
+        if size > self.SIZES[-1]:
+            with self._lock:
+                self._stats.total_acquires += 1
+                self._stats.pool_misses += 1
+            buffer = ctypes.create_string_buffer(size)
+            with self._lock:
+                self._stats.total_created += 1
+            return buffer
+
         pool_size = self._get_pool_size(size)
 
         with self._lock:
             self._stats.total_acquires += 1
             pool = self._pools.get(pool_size)
 
-            if pool and pool:
+            if pool:
                 self._stats.pool_hits += 1
                 return pool.popleft()
 
@@ -431,6 +447,14 @@ class BufferPool:
             return
 
         size = ctypes.sizeof(buffer)
+
+        # Oversized buffers were allocated outside the pool; drop them.
+        if size > self.SIZES[-1]:
+            with self._lock:
+                self._stats.total_releases += 1
+                self._stats.total_destroyed += 1
+            return
+
         pool_size = self._get_pool_size(size)
 
         with self._lock:
@@ -471,13 +495,16 @@ class BufferPool:
 # Global pool instances
 _vstring_pool: ObjectPool | None = None
 _buffer_pool: BufferPool | None = None
+_pool_singleton_lock = threading.Lock()
 
 
 def get_buffer_pool() -> BufferPool:
-    """Get or create the global buffer pool."""
+    """Get or create the global buffer pool (thread-safe)."""
     global _buffer_pool
     if _buffer_pool is None:
-        _buffer_pool = BufferPool()
+        with _pool_singleton_lock:
+            if _buffer_pool is None:
+                _buffer_pool = BufferPool()
     return _buffer_pool
 
 

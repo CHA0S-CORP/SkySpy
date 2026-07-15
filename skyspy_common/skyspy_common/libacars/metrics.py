@@ -366,11 +366,12 @@ class HealthChecker:
 
 # Global metrics collector instance
 _metrics: MetricsCollector | None = None
+_metrics_singleton_lock = threading.Lock()
 
 
 def get_metrics_collector(prefix: str = "libacars") -> MetricsCollector:
     """
-    Get or create the global metrics collector.
+    Get or create the global metrics collector (thread-safe).
 
     Args:
         prefix: Metric name prefix (only used on first call)
@@ -380,7 +381,9 @@ def get_metrics_collector(prefix: str = "libacars") -> MetricsCollector:
     """
     global _metrics
     if _metrics is None:
-        _metrics = MetricsCollector(prefix=prefix)
+        with _metrics_singleton_lock:
+            if _metrics is None:
+                _metrics = MetricsCollector(prefix=prefix)
     return _metrics
 
 

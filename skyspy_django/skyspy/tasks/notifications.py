@@ -21,14 +21,10 @@ from django.utils import timezone
 logger = logging.getLogger(__name__)
 
 
-@shared_task(
-    bind=True,
-    max_retries=5,
-    autoretry_for=(Exception,),
-    retry_backoff=True,
-    retry_backoff_max=3600,  # Max 1 hour between retries
-    retry_jitter=True,
-)
+# NOTE: No Celery autoretry here. Retries are driven exclusively by
+# process_notification_queue via the NotificationLog status/next_retry_at
+# fields; combining both mechanisms caused duplicate deliveries.
+@shared_task(bind=True, max_retries=5)
 def send_notification_task(
     self,
     channel_url: str,
@@ -130,16 +126,20 @@ def send_notification_task(
 
     except Exception as e:
         error_msg = str(e)
-        logger.warning(f"Notification failed (attempt {self.request.retries + 1}/{self.max_retries + 1}): {error_msg}")
+        # Track attempts on the log entry (self.request.retries is always 0
+        # here because redelivery happens via process_notification_queue,
+        # which dispatches a fresh task)
+        retry_count = (log_entry.retry_count or 0) + 1
+        logger.warning(f"Notification failed (attempt {retry_count}/{log_entry.max_retries + 1}): {error_msg}")
 
         # Update log entry
-        log_entry.retry_count = self.request.retries + 1
+        log_entry.retry_count = retry_count
         log_entry.last_error = error_msg
 
-        if self.request.retries < self.max_retries:
+        if retry_count <= log_entry.max_retries:
             log_entry.status = "retrying"
-            # Calculate next retry time (exponential backoff with jitter)
-            countdown = self.default_retry_delay * (2**self.request.retries)
+            # Calculate next retry time (exponential backoff, capped at 1 hour)
+            countdown = min(self.default_retry_delay * (2 ** (retry_count - 1)), 3600)
             log_entry.next_retry_at = timezone.now() + timedelta(seconds=countdown)
         else:
             log_entry.status = "failed"
@@ -168,12 +168,31 @@ def process_notification_queue():
     now = timezone.now()
 
     # Find notifications ready for retry
-    pending = NotificationLog.objects.filter(
-        status="retrying",
-        next_retry_at__lte=now,
-    ).select_related("channel")[:50]  # Process up to 50 at a time
+    pending_ids = list(
+        NotificationLog.objects.filter(
+            status="retrying",
+            next_retry_at__lte=now,
+        ).values_list("id", flat=True)[:50]  # Process up to 50 at a time
+    )
 
-    for log_entry in pending:
+    processed = 0
+    for log_id in pending_ids:
+        # Atomically claim the row by pushing next_retry_at forward so
+        # overlapping/subsequent beat runs don't re-enqueue the same
+        # notification while the dispatched task is still in flight.
+        # If the task is lost, the row becomes eligible again after the
+        # claim window expires.
+        claimed = NotificationLog.objects.filter(
+            id=log_id,
+            status="retrying",
+            next_retry_at__lte=now,
+        ).update(next_retry_at=now + timedelta(minutes=10))
+
+        if not claimed:
+            continue
+
+        log_entry = NotificationLog.objects.select_related("channel").get(id=log_id)
+
         try:
             # Re-queue for delivery
             send_notification_task.delay(
@@ -187,10 +206,11 @@ def process_notification_queue():
                 context=log_entry.details,
                 notification_log_id=log_entry.id,
             )
+            processed += 1
         except Exception as e:
             logger.error(f"Failed to re-queue notification {log_entry.id}: {e}")
 
-    return {"processed": len(pending)}
+    return {"processed": processed}
 
 
 @shared_task

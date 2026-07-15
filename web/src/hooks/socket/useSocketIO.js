@@ -107,28 +107,47 @@ export function useSocketIO({
   }, [enabled, apiBase, namespace, path, auth, reconnectConfig]);
 
   /**
+   * Clean up internal event handlers from socket
+   */
+  const cleanupInternalHandlers = useCallback(() => {
+    const socket = socketRef.current;
+    const handlers = internalHandlersRef.current;
+    if (socket && handlers) {
+      socket.off('connect', handlers.handleConnect);
+      socket.off('disconnect', handlers.handleDisconnect);
+      socket.off('connect_error', handlers.handleConnectError);
+      socket.io?.off('reconnect_attempt', handlers.handleReconnectAttempt);
+      socket.io?.off('reconnect', handlers.handleReconnect);
+      socket.io?.off('reconnect_error', handlers.handleReconnectError);
+      socket.io?.off('reconnect_failed', handlers.handleReconnectFailed);
+    }
+    internalHandlersRef.current = null;
+  }, []);
+
+  /**
    * Connect to Socket.IO server
    */
   const connect = useCallback(() => {
     if (!enabledRef.current || !mountedRef.current) {
-      console.log(
-        '[useSocketIO] Connect skipped - enabled:',
-        enabledRef.current,
-        'mounted:',
-        mountedRef.current
-      );
       return;
     }
     if (socketRef.current?.connected) {
-      console.log('[useSocketIO] Already connected, skipping');
       return;
+    }
+
+    // Fully close any existing (possibly still auto-reconnecting) socket
+    // before creating a new one, so it isn't orphaned with its reconnect loop
+    if (socketRef.current) {
+      cleanupInternalHandlers();
+      socketRef.current.disconnect();
+      socketRef.current = null;
     }
 
     const serverUrl = getSocketIOUrl(apiBaseRef.current);
     const nsPath = namespaceRef.current === '/' ? '' : namespaceRef.current;
     const fullUrl = `${serverUrl}${nsPath}`;
 
-    console.log('[useSocketIO] Connecting to:', fullUrl, 'path:', pathRef.current);
+    // Connecting to Socket.IO server
 
     // Validate mount state before state updates
     if (!mountedRef.current) return;
@@ -137,9 +156,6 @@ export function useSocketIO({
     setError(null);
 
     try {
-      // Get current auth token
-      const accessToken = getAccessToken();
-
       // Default reconnection config
       const defaultReconnectConfig = {
         reconnection: true,
@@ -154,9 +170,13 @@ export function useSocketIO({
       // Note: Set upgrade to false to prevent transport switching issues with some proxies
       const socket = io(fullUrl, {
         path: pathRef.current,
-        auth: {
-          token: accessToken,
-          ...authRef.current,
+        // Auth as a function so each (re)connection attempt reads the
+        // current JWT instead of reusing a token captured at creation time
+        auth: (cb) => {
+          cb({
+            token: getAccessToken(),
+            ...authRef.current,
+          });
         },
         transports: ['websocket', 'polling'],
         upgrade: false,
@@ -179,7 +199,7 @@ export function useSocketIO({
           return;
         }
 
-        console.log('[useSocketIO] Connected, socket id:', socket.id);
+        // Socket.IO connected
         setConnected(true);
         setIsReady(true);
         setConnecting(false);
@@ -190,7 +210,7 @@ export function useSocketIO({
       };
 
       const handleDisconnect = (reason) => {
-        console.log('[useSocketIO] Disconnected:', reason);
+        // Socket.IO disconnected
 
         if (!mountedRef.current) return;
 
@@ -213,7 +233,7 @@ export function useSocketIO({
       };
 
       const handleReconnectAttempt = (attempt) => {
-        console.log('[useSocketIO] Reconnection attempt:', attempt);
+        // Socket.IO reconnection attempt
         if (mountedRef.current) {
           setReconnectAttempt(attempt);
           setConnecting(true);
@@ -221,7 +241,7 @@ export function useSocketIO({
       };
 
       const handleReconnect = (attempt) => {
-        console.log('[useSocketIO] Reconnected after', attempt, 'attempts');
+        // Socket.IO reconnected
         if (mountedRef.current) {
           setReconnectAttempt(0);
           onReconnectRef.current?.(attempt);
@@ -264,31 +284,21 @@ export function useSocketIO({
       socket.io.on('reconnect', handleReconnect);
       socket.io.on('reconnect_error', handleReconnectError);
       socket.io.on('reconnect_failed', handleReconnectFailed);
+
+      // Re-attach any previously subscribed event handlers so consumers
+      // (e.g. useSocketIOAudio) keep receiving events after a manual reconnect
+      subscribersRef.current.forEach((handlers, event) => {
+        handlers.forEach((handler) => {
+          socket.on(event, handler);
+        });
+      });
     } catch (err) {
       console.error('[useSocketIO] Socket creation error:', err);
       setError(err);
       setConnecting(false);
       onErrorRef.current?.(err);
     }
-  }, []); // All values accessed via refs to avoid stale closures
-
-  /**
-   * Clean up internal event handlers from socket
-   */
-  const cleanupInternalHandlers = useCallback(() => {
-    const socket = socketRef.current;
-    const handlers = internalHandlersRef.current;
-    if (socket && handlers) {
-      socket.off('connect', handlers.handleConnect);
-      socket.off('disconnect', handlers.handleDisconnect);
-      socket.off('connect_error', handlers.handleConnectError);
-      socket.io?.off('reconnect_attempt', handlers.handleReconnectAttempt);
-      socket.io?.off('reconnect', handlers.handleReconnect);
-      socket.io?.off('reconnect_error', handlers.handleReconnectError);
-      socket.io?.off('reconnect_failed', handlers.handleReconnectFailed);
-    }
-    internalHandlersRef.current = null;
-  }, []);
+  }, [cleanupInternalHandlers]); // All other values accessed via refs to avoid stale closures
 
   /**
    * Disconnect from Socket.IO server

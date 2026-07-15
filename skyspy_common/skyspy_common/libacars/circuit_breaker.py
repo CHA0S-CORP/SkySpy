@@ -218,6 +218,10 @@ class CircuitBreaker:
 
         if new_state == CircuitState.HALF_OPEN:
             self._half_open_calls = 0
+            # Start each recovery probe window with a clean success count so a
+            # stale count (e.g. left over after a crash-path OPEN transition)
+            # cannot close the circuit after a single success.
+            self._success_count = 0
             self._stats.recovery_attempts += 1
         elif new_state == CircuitState.CLOSED:
             if old_state == CircuitState.HALF_OPEN:
@@ -246,6 +250,9 @@ class CircuitBreaker:
 
                 if elapsed >= timeout:
                     self._transition_to(CircuitState.HALF_OPEN)
+                    # Count this call as the first half-open probe so that at
+                    # most half_open_max_calls probes are admitted in total.
+                    self._half_open_calls = 1
                     return True
 
                 self._stats.rejected_calls += 1
@@ -310,6 +317,7 @@ class CircuitBreaker:
             if category == ErrorCategory.LIBRARY_CRASH:
                 self._transition_to(CircuitState.OPEN)
                 self._backoff_multiplier = 4  # Longer recovery for crashes
+                self._success_count = 0
                 return
 
             if self._state == CircuitState.CLOSED:
@@ -430,6 +438,7 @@ class CircuitBreaker:
 
 # Global circuit breaker instance
 _circuit_breaker: CircuitBreaker | None = None
+_circuit_breaker_lock = threading.Lock()
 
 
 def get_circuit_breaker(
@@ -437,7 +446,7 @@ def get_circuit_breaker(
     recovery_timeout: float = 60.0,
 ) -> CircuitBreaker:
     """
-    Get or create the global circuit breaker instance.
+    Get or create the global circuit breaker instance (thread-safe).
 
     Args:
         failure_threshold: Failures before opening (only used on first call)
@@ -448,10 +457,12 @@ def get_circuit_breaker(
     """
     global _circuit_breaker
     if _circuit_breaker is None:
-        _circuit_breaker = CircuitBreaker(
-            failure_threshold=failure_threshold,
-            recovery_timeout=recovery_timeout,
-        )
+        with _circuit_breaker_lock:
+            if _circuit_breaker is None:
+                _circuit_breaker = CircuitBreaker(
+                    failure_threshold=failure_threshold,
+                    recovery_timeout=recovery_timeout,
+                )
     return _circuit_breaker
 
 

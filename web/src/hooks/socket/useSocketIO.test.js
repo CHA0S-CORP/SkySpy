@@ -97,10 +97,18 @@ describe('useSocketIO', () => {
         'http://localhost:8000',
         expect.objectContaining({
           path: '/socket.io',
-          auth: expect.objectContaining({ token: 'test-token' }),
+          // auth is a function so each reconnect attempt reads the current token
+          auth: expect.any(Function),
           transports: ['websocket', 'polling'],
         })
       );
+
+      // The auth function should provide the current token
+      let authPayload;
+      io.mock.calls[0][1].auth((payload) => {
+        authPayload = payload;
+      });
+      expect(authPayload).toEqual(expect.objectContaining({ token: 'test-token' }));
     });
 
     it('should use namespace when provided', () => {
@@ -610,6 +618,16 @@ describe('useSocketIO', () => {
   });
 
   describe('authentication', () => {
+    /** Invoke the auth function passed to io() and capture its payload */
+    const getAuthPayload = () => {
+      const authFn = io.mock.calls[io.mock.calls.length - 1][1].auth;
+      let authPayload;
+      authFn((payload) => {
+        authPayload = payload;
+      });
+      return authPayload;
+    };
+
     it('should include auth token from getAccessToken', () => {
       getAccessToken.mockReturnValue('custom-jwt-token');
 
@@ -620,12 +638,7 @@ describe('useSocketIO', () => {
         })
       );
 
-      expect(io).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.objectContaining({
-          auth: expect.objectContaining({ token: 'custom-jwt-token' }),
-        })
-      );
+      expect(getAuthPayload()).toEqual(expect.objectContaining({ token: 'custom-jwt-token' }));
     });
 
     it('should include additional auth data', () => {
@@ -637,15 +650,29 @@ describe('useSocketIO', () => {
         })
       );
 
-      expect(io).toHaveBeenCalledWith(
-        expect.any(String),
+      expect(getAuthPayload()).toEqual(
         expect.objectContaining({
-          auth: expect.objectContaining({
-            token: 'test-token',
-            customField: 'value',
-          }),
+          token: 'test-token',
+          customField: 'value',
         })
       );
+    });
+
+    it('should read the current token on each auth callback invocation', () => {
+      getAccessToken.mockReturnValue('initial-token');
+
+      renderHook(() =>
+        useSocketIO({
+          enabled: true,
+          apiBase: 'http://localhost:8000',
+        })
+      );
+
+      expect(getAuthPayload()).toEqual(expect.objectContaining({ token: 'initial-token' }));
+
+      // Token refresh: subsequent (re)connection attempts get the new token
+      getAccessToken.mockReturnValue('refreshed-token');
+      expect(getAuthPayload()).toEqual(expect.objectContaining({ token: 'refreshed-token' }));
     });
   });
 

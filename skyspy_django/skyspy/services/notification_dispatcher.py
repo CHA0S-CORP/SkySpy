@@ -256,15 +256,18 @@ class NotificationDispatcher:
             elif payload.priority == "critical":
                 notify_type = apprise.NotifyType.FAILURE
 
-            # Send notification
-            apobj.notify(
+            # Send notification (apprise returns False if delivery failed)
+            success = apobj.notify(
                 title=payload.title,
                 body=payload.body,
                 notify_type=notify_type,
             )
 
-            # Log success
-            self._log_notification(payload, status="sent")
+            if success:
+                self._log_notification(payload, status="sent")
+            else:
+                logger.warning(f"Notification delivery failed for channel {payload.channel_id}")
+                self._log_notification(payload, status="failed", error="Apprise notify() returned False")
 
         except ImportError:
             logger.debug("Apprise not installed, skipping notification")

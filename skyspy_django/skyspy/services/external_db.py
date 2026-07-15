@@ -26,7 +26,7 @@ from threading import Lock
 
 import httpx
 from django.conf import settings
-from django.db import transaction
+from django.db import DatabaseError, transaction
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from skyspy.models import AircraftInfo, AirframeSourceData
@@ -308,8 +308,8 @@ def download_adsbx_database() -> Path | None:
         logger.info(f"Downloaded ADS-B Exchange database: {file_size / 1024 / 1024:.1f}MB in {duration:.1f}s")
         return target_path
 
-    except Exception as e:
-        logger.error(f"Failed to download ADS-B Exchange database: {e}")
+    except (httpx.HTTPError, ConnectionError, OSError) as e:
+        logger.error(f"Failed to download ADS-B Exchange database: {type(e).__name__}: {e}")
         return None
 
 
@@ -382,8 +382,8 @@ def load_adsbx_database(auto_download: bool = True) -> bool:
         logger.info(f"Loaded {count:,} aircraft from ADS-B Exchange in {duration:.1f}s")
         return True
 
-    except Exception as e:
-        logger.error(f"Failed to load ADS-B Exchange database: {e}")
+    except (OSError, ValueError, json.JSONDecodeError) as e:
+        logger.error(f"Failed to load ADS-B Exchange database: {type(e).__name__}: {e}")
         return False
 
 
@@ -416,8 +416,8 @@ def download_tar1090_database() -> Path | None:
         logger.info(f"Downloaded tar1090-db: {file_size / 1024 / 1024:.1f}MB in {duration:.1f}s")
         return target_path
 
-    except Exception as e:
-        logger.error(f"Failed to download tar1090-db: {e}")
+    except (httpx.HTTPError, ConnectionError, OSError) as e:
+        logger.error(f"Failed to download tar1090-db: {type(e).__name__}: {e}")
         return None
 
 
@@ -485,8 +485,8 @@ def load_tar1090_database(auto_download: bool = True) -> bool:
         logger.info(f"Loaded {count:,} aircraft from tar1090-db in {duration:.1f}s")
         return True
 
-    except Exception as e:
-        logger.error(f"Failed to load tar1090-db: {e}")
+    except (OSError, ValueError) as e:
+        logger.error(f"Failed to load tar1090-db: {type(e).__name__}: {e}")
         return False
 
 
@@ -540,8 +540,8 @@ def download_faa_database() -> Path | None:
         zip_path.unlink()
         return target_path
 
-    except Exception as e:
-        logger.error(f"Failed to download FAA Registry: {e}")
+    except (httpx.HTTPError, ConnectionError, OSError, zipfile.BadZipFile) as e:
+        logger.error(f"Failed to download FAA Registry: {type(e).__name__}: {e}")
         return None
 
 
@@ -582,8 +582,8 @@ def _load_faa_master(path: Path) -> int:
                         "source": "faa",
                     }
 
-        except Exception as e:
-            logger.error(f"Error parsing FAA CSV: {e}")
+        except (csv.Error, ValueError, OSError) as e:
+            logger.error(f"Error parsing FAA CSV: {type(e).__name__}: {e}")
             return 0
 
         return len(_faa_db)
@@ -615,8 +615,8 @@ def load_faa_database(auto_download: bool = True) -> bool:
         logger.info(f"Loaded {count:,} aircraft from FAA Registry in {duration:.1f}s")
         return True
 
-    except Exception as e:
-        logger.error(f"Failed to load FAA Registry: {e}")
+    except (OSError, ValueError) as e:
+        logger.error(f"Failed to load FAA Registry: {type(e).__name__}: {e}")
         return False
 
 
@@ -655,13 +655,15 @@ def download_opensky_database() -> Path | None:
         logger.info(f"Downloaded OpenSky database: {file_size / 1024 / 1024:.1f}MB in {duration:.1f}s")
         return target_path
 
-    except Exception as e:
-        logger.error(f"Failed to download OpenSky database: {e}")
+    except (httpx.HTTPError, ConnectionError, OSError) as e:
+        logger.error(f"Failed to download OpenSky database: {type(e).__name__}: {e}")
         if target_path.exists():
             try:
                 target_path.unlink()
-            except Exception as cleanup_err:
-                logger.debug(f"Failed to cleanup partial download {target_path}: {cleanup_err}")
+            except OSError as cleanup_err:
+                logger.debug(
+                    f"Failed to cleanup partial download {target_path}: {type(cleanup_err).__name__}: {cleanup_err}"
+                )
         return None
     finally:
         _opensky_downloading = False
@@ -785,8 +787,8 @@ def load_opensky_database(auto_download: bool = True) -> bool:
         logger.info(f"Loaded {count:,} aircraft from OpenSky in {duration:.1f}s")
         return True
 
-    except Exception as e:
-        logger.error(f"Failed to load OpenSky database: {e}")
+    except (OSError, ValueError) as e:
+        logger.error(f"Failed to load OpenSky database: {type(e).__name__}: {e}")
         return False
     finally:
         _opensky_loading = False
@@ -835,8 +837,8 @@ def fetch_route(callsign: str) -> dict | None:
                         _route_cache_ttl[callsign] = now + 3600
                     return route_data
 
-    except Exception as e:
-        logger.debug(f"Route lookup failed for {callsign}: {e}")
+    except (httpx.HTTPError, ConnectionError, OSError, ValueError) as e:
+        logger.debug(f"Route lookup failed for {callsign}: {type(e).__name__}: {e}")
 
     return None
 
@@ -870,8 +872,8 @@ def fetch_aircraft_from_adsb_lol(icao_hex: str) -> dict | None:
                 if data.get("ac"):
                     return data["ac"][0] if data["ac"] else None
 
-    except Exception as e:
-        logger.debug(f"adsb.lol lookup failed for {icao_hex}: {e}")
+    except (httpx.HTTPError, ConnectionError, OSError, ValueError) as e:
+        logger.debug(f"adsb.lol lookup failed for {icao_hex}: {type(e).__name__}: {e}")
 
     return None
 
@@ -1144,8 +1146,8 @@ def sync_databases_to_postgres():
         duration = time.time() - start_time
         logger.info(f"Synced {processed_count:,} aircraft to PostgreSQL in {duration:.1f}s")
 
-    except Exception as e:
-        logger.error(f"Error syncing external databases to Postgres: {e}")
+    except (DatabaseError, ValueError, TypeError) as e:
+        logger.error(f"Error syncing external databases to Postgres: {type(e).__name__}: {e}")
 
 
 def _bulk_upsert_batch(batch: list[dict]):
@@ -1184,9 +1186,9 @@ def _bulk_upsert_batch(batch: list[dict]):
         AircraftInfo.objects.bulk_create(
             instances, update_conflicts=True, unique_fields=["icao_hex"], update_fields=update_fields
         )
-    except Exception as e:
+    except DatabaseError as e:
         # Fallback to individual updates if bulk_create fails
-        logger.warning(f"Bulk upsert failed, falling back to individual updates: {e}")
+        logger.warning(f"Bulk upsert failed, falling back to individual updates: {type(e).__name__}: {e}")
         with transaction.atomic():
             for instance in instances:
                 AircraftInfo.objects.update_or_create(
@@ -1242,9 +1244,9 @@ def _bulk_upsert_source_data_batch(batch: list[dict]):
         AirframeSourceData.objects.bulk_create(
             instances, update_conflicts=True, unique_fields=["aircraft_info", "source"], update_fields=update_fields
         )
-    except Exception as e:
+    except DatabaseError as e:
         # Fallback to individual updates
-        logger.warning(f"Bulk source data upsert failed, falling back to individual updates: {e}")
+        logger.warning(f"Bulk source data upsert failed, falling back to individual updates: {type(e).__name__}: {e}")
         with transaction.atomic():
             for instance in instances:
                 AirframeSourceData.objects.update_or_create(

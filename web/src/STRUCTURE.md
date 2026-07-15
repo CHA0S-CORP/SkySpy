@@ -56,19 +56,20 @@ src/
     │   ├── AlertsView.jsx     # Alert configuration
     │   └── SystemView.jsx     # System status/monitoring
     │
-    └── map/                   # Map/radar components (formerly ~5000 lines)
+    └── map/                   # Map/radar components (~16,900 lines)
         ├── index.js           # Barrel export
-        ├── MapView.jsx        # Main map orchestrator
-        ├── MapControls.jsx    # Zoom, fullscreen, toggles
-        ├── AircraftPopup.jsx  # Selected aircraft info popup
-        ├── AircraftListPanel.jsx  # Floating aircraft list
-        ├── ConflictBanner.jsx # TCAS conflict alerts
-        ├── SafetyEventsPanel.jsx  # Emergency events
-        ├── FilterMenu.jsx     # Traffic filtering controls
-        ├── OverlayMenu.jsx    # Aviation data overlays
-        ├── LegendPanel.jsx    # Map legend
-        ├── AcarsPanel.jsx     # ACARS/VDL2 messages
-        └── WeatherPopups.jsx  # METAR/PIREP/NAVAID/Airport popups
+        ├── MapView.jsx        # Main map orchestrator (~12,240 lines — NO TESTS)
+        ├── MapControls.jsx    # Zoom, fullscreen, toggles (157 lines)
+        ├── AircraftPopup.jsx  # Selected aircraft info popup (400 lines)
+        ├── AircraftListPanel.jsx  # Floating aircraft list (204 lines)
+        ├── ConflictBanner.jsx # TCAS conflict alerts (107 lines)
+        ├── SafetyEventsPanel.jsx  # Emergency events (94 lines)
+        ├── FilterMenu.jsx     # Traffic filtering controls (185 lines)
+        ├── OverlayMenu.jsx    # Aviation data overlays (240 lines)
+        ├── LegendPanel.jsx    # Map legend (148 lines)
+        ├── AcarsPanel.jsx     # ACARS/VDL2 messages (404 lines)
+        ├── MultiScopeWrapper.jsx  # Multi-scope radar layout (242 lines)
+        └── WeatherPopups.jsx  # METAR/PIREP/NAVAID/Airport popups (579 lines)
 ```
 
 ## Component Architecture
@@ -77,7 +78,7 @@ src/
 Clean orchestration of views with tab-based navigation.
 
 ### MapView Subsystem
-The map view has been fully decomposed from ~5000 lines into:
+MapView.jsx is currently ~12,240 lines with no test coverage. Some logic has been extracted into hooks and sub-components, but the main file still contains ~50 useState hooks, ~30 useEffect hooks, canvas rendering for aviation overlays, and inline event handlers. Sub-components extracted so far:
 
 **Custom Hooks:**
 - `useMapAlarms` - Three-stage Web Audio alarm system

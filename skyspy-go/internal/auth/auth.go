@@ -174,6 +174,11 @@ func (m *Manager) loginOIDC(ctx context.Context) error {
 		return err
 	}
 
+	// Verify the returned state matches the one we were issued (CSRF protection)
+	if authResp.State != "" && result.State != authResp.State {
+		return fmt.Errorf("OIDC state mismatch: expected %q, got %q", authResp.State, result.State)
+	}
+
 	// Exchange code for tokens via the API callback endpoint
 	tokens, err := m.exchangeCodeForTokens(result.Code, result.State, redirectURI)
 	if err != nil {

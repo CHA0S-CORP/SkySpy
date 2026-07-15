@@ -460,7 +460,11 @@ class NotificationViewSet(viewsets.ViewSet):
     @action(detail=False, methods=["get"])
     def history(self, request):
         """Get notification history."""
-        limit = int(request.query_params.get("limit", 50))
+        try:
+            limit = int(request.query_params.get("limit", 50))
+        except (ValueError, TypeError):
+            limit = 50
+        limit = max(1, min(limit, 500))
         channel_id = request.query_params.get("channel_id")
         status_filter = request.query_params.get("status")
 

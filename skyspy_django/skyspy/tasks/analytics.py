@@ -94,7 +94,9 @@ def update_antenna_analytics():
     all_distances = []
     all_rssi = []
 
-    for s in sightings.values("latitude", "longitude", "distance_nm", "rssi", "icao_hex"):
+    # Stream rows from the DB instead of materializing the full hour
+    # (up to ~10^6 sightings) in memory every 5 minutes
+    for s in sightings.values("latitude", "longitude", "distance_nm", "rssi", "icao_hex").iterator(chunk_size=2000):
         if s["distance_nm"] is None:
             continue
 
@@ -679,14 +681,21 @@ def update_favorite_tracking():
         for fav in favorites_to_update:
             session = session_map.get(fav.icao_hex)
             if session:
-                fav.times_seen = F("times_seen") + 1
+                update_fields = ["last_seen_at", "total_tracking_minutes"]
+
+                # Count a new sighting only once per session (not per poll)
+                if fav.last_seen_at is None or session["first_seen"] > fav.last_seen_at:
+                    fav.times_seen = F("times_seen") + 1
+                    update_fields.append("times_seen")
+
+                # Add only the tracking time accrued since the last run
+                # (not the cumulative session duration every 5 minutes)
+                interval_start = max(session["first_seen"], fav.last_seen_at or cutoff, cutoff)
+                delta_minutes = max((session["last_seen"] - interval_start).total_seconds() / 60, 0)
+                fav.total_tracking_minutes = F("total_tracking_minutes") + delta_minutes
+
                 fav.last_seen_at = session["last_seen"]
-
-                # Calculate tracking minutes for this period
-                duration = (session["last_seen"] - session["first_seen"]).total_seconds() / 60
-                fav.total_tracking_minutes = F("total_tracking_minutes") + duration
-
-                fav.save(update_fields=["times_seen", "last_seen_at", "total_tracking_minutes"])
+                fav.save(update_fields=update_fields)
                 updated_count += 1
 
         if updated_count > 0:

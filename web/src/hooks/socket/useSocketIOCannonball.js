@@ -21,18 +21,23 @@ import { useSocketIO } from './useSocketIO';
  * @param {number} options.threatRadius - Initial threat radius in NM (default: 25)
  * @param {Function} options.onThreatsUpdate - Callback when threats update
  * @param {Function} options.onSessionStarted - Callback when session starts
+ * @param {Function} options.onAlert - Callback when the server pushes a new alert
  * @returns {Object} Cannonball state and methods
  */
+const MAX_ALERTS = 50;
+
 export function useSocketIOCannonball({
   enabled = true,
   apiBase = '',
   threatRadius = 25,
   onThreatsUpdate,
   onSessionStarted,
+  onAlert,
 } = {}) {
   // State
   const [threats, setThreats] = useState([]);
   const [threatCount, setThreatCount] = useState(0);
+  const [alerts, setAlerts] = useState([]);
   const [sessionId, setSessionId] = useState(null);
   const [lastUpdate, setLastUpdate] = useState(null);
   const [error, setError] = useState(null);
@@ -46,6 +51,7 @@ export function useSocketIOCannonball({
   // Refs for callback stability - prevents listener churn on every render
   const onThreatsUpdateRef = useRef(onThreatsUpdate);
   const onSessionStartedRef = useRef(onSessionStarted);
+  const onAlertRef = useRef(onAlert);
   // Flag to track if initial setup has been sent after connection
   const initialSetupSentRef = useRef(false);
 
@@ -63,12 +69,15 @@ export function useSocketIOCannonball({
     onSessionStartedRef.current = onSessionStarted;
   }, [onSessionStarted]);
 
+  useEffect(() => {
+    onAlertRef.current = onAlert;
+  }, [onAlert]);
+
   /**
    * Handle Socket.IO connection
    * Note: Uses refs for all values to avoid stale closures on reconnection
    */
   const handleConnect = useCallback(() => {
-    console.log('[Cannonball Socket.IO] Connected');
     // Mark that initial setup needs to be sent
     initialSetupSentRef.current = false;
   }, []);
@@ -100,8 +109,6 @@ export function useSocketIOCannonball({
    * Handle Socket.IO disconnection
    */
   const handleDisconnect = useCallback((reason) => {
-    console.log('[Cannonball Socket.IO] Disconnected:', reason);
-
     if (mountedRef.current) {
       setThreats([]);
       setThreatCount(0);
@@ -149,7 +156,6 @@ export function useSocketIOCannonball({
     unsubscribers.push(
       on('session_started', (data) => {
         if (!mountedRef.current) return;
-        console.log('[Cannonball Socket.IO] Session started:', data.session_id);
         setSessionId(data.session_id);
         setError(null);
         onSessionStartedRef.current?.(data);
@@ -171,7 +177,28 @@ export function useSocketIOCannonball({
     // Radius updated confirmation
     unsubscribers.push(
       on('radius_updated', (data) => {
-        console.log('[Cannonball Socket.IO] Radius updated:', data.radius_nm);
+        // Radius update confirmed
+      })
+    );
+
+    // Server-push threat updates (room broadcast from the analysis task)
+    unsubscribers.push(
+      on('threat_update', (data) => {
+        if (!mountedRef.current) return;
+        const threatList = data.threats || [];
+        setThreats(threatList);
+        setThreatCount(data.count ?? threatList.length);
+        setLastUpdate(data.timestamp || new Date().toISOString());
+        onThreatsUpdateRef.current?.(threatList, data);
+      })
+    );
+
+    // Server-push alerts (room broadcast when a new CannonballAlert is created)
+    unsubscribers.push(
+      on('new_alert', (data) => {
+        if (!mountedRef.current) return;
+        setAlerts((prev) => [data, ...prev].slice(0, MAX_ALERTS));
+        onAlertRef.current?.(data);
       })
     );
 
@@ -342,6 +369,7 @@ export function useSocketIOCannonball({
     // State
     threats,
     threatCount,
+    alerts,
     connected,
     connecting,
     sessionId,

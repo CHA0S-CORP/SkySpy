@@ -406,8 +406,12 @@ class MilitaryHexRangesTests(TestCase):
 
     def test_us_military_range_boundaries(self):
         """Test US military hex range boundaries."""
-        # Just inside lower bound
+        # Just below lower bound (0xADF7C7 is still a civil allocation)
         result = military_db.identify_military_by_hex("ADF7C7")
+        self.assertIsNone(result)
+
+        # Just inside lower bound (US military starts at 0xADF7C8)
+        result = military_db.identify_military_by_hex("ADF7C8")
         self.assertIsNotNone(result)
         self.assertEqual(result["country"], "USA")
 

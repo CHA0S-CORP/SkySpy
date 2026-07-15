@@ -49,7 +49,9 @@ export function getWindColor(speed, opacity = 1.0) {
  * Light and variable is "9900" (0 knots)
  */
 function parseWindsAloftCode(code) {
-  if (!code || code === '9900' || code === '    ' || code.trim() === '') {
+  // Light and variable is "9900", possibly followed by a temperature
+  // group (e.g. "9900+15") - match on the prefix, not exact equality
+  if (!code || code.trim() === '' || code.trim().startsWith('9900')) {
     return { direction: null, speed: 0, isLightVariable: true };
   }
 
@@ -113,15 +115,15 @@ function interpolateWind(lat, lon, stations, maxDistance = 300) {
   let dirY = 0;
   let speedSum = 0;
 
-  stations.forEach((station) => {
-    if (station.wind.speed === 0 && station.wind.isLightVariable) return;
+  for (const station of stations) {
+    if (station.wind.speed === 0 && station.wind.isLightVariable) continue;
 
     // Calculate distance in nm (approximate)
     const dLat = (lat - station.lat) * 60;
     const dLon = (lon - station.lon) * 60 * Math.cos((lat * Math.PI) / 180);
     const distance = Math.sqrt(dLat * dLat + dLon * dLon);
 
-    if (distance > maxDistance) return;
+    if (distance > maxDistance) continue;
     if (distance < 0.1) {
       // Very close to station - use directly
       return {
@@ -139,7 +141,7 @@ function interpolateWind(lat, lon, stations, maxDistance = 300) {
     dirX += Math.sin(rad) * weight;
     dirY += Math.cos(rad) * weight;
     speedSum += station.wind.speed * weight;
-  });
+  }
 
   if (weightSum === 0) return null;
 
@@ -166,6 +168,36 @@ const AWC_WINDS_URL = 'https://aviationweather.gov/api/data/windtemp';
  */
 const NOAA_NDFD_URL =
   'https://graphical.weather.gov/xml/sample_products/browser_interface/ndfdXMLclient.php';
+
+/**
+ * Parse station wind data for a given altitude level from a raw AWC response
+ */
+function parseStationsForLevel(data, level) {
+  const stations = [];
+
+  if (data && Array.isArray(data)) {
+    data.forEach((item) => {
+      if (!item.lat || !item.lon) return;
+
+      // Find the wind for the requested level
+      const levelKey = `${level}`;
+      const windCode = item[levelKey] || item.winds?.[levelKey];
+
+      if (windCode) {
+        const wind = parseWindsAloftCode(windCode);
+        stations.push({
+          id: item.station || item.id,
+          lat: parseFloat(item.lat),
+          lon: parseFloat(item.lon),
+          wind,
+          level,
+        });
+      }
+    });
+  }
+
+  return stations;
+}
 
 /**
  * useWindsAloft - Hook for winds aloft data overlay
@@ -202,6 +234,9 @@ export function useWindsAloft({
   const fetchTimeoutRef = useRef(null);
   const refreshIntervalRef = useRef(null);
   const lastFetchTimeRef = useRef(0);
+  // Cache of the last raw API response so level changes can re-parse
+  // without a network fetch (and without waiting out the rate limit)
+  const rawDataRef = useRef(null);
 
   // Calculate bounds from feeder location and range
   const bounds = useMemo(() => {
@@ -236,10 +271,16 @@ export function useWindsAloft({
   const fetchWindsData = useCallback(async () => {
     if (!enabled || !bounds) return;
 
-    // Rate limit: don't fetch more than once per 5 minutes
+    // Rate limit: don't fetch more than once per 5 minutes.
+    // Level changes within the window re-parse the cached raw response so
+    // the displayed winds always match the selected level.
     const now = Date.now();
     if (now - lastFetchTimeRef.current < 5 * 60 * 1000) {
-      console.log('[WindsAloft] Skipping fetch - rate limited');
+      if (rawDataRef.current) {
+        const stations = parseStationsForLevel(rawDataRef.current, selectedLevel);
+        setStationData(stations);
+        setError(stations.length === 0 ? 'No winds aloft data available for this level' : null);
+      }
       return;
     }
 
@@ -268,39 +309,15 @@ export function useWindsAloft({
 
       const data = await response.json();
 
-      // Parse the winds aloft data
-      // AWC returns station-based FB data
-      const stations = [];
+      // Parse the winds aloft data (AWC returns station-based FB data)
+      // and cache the raw response for level-change re-parsing
+      rawDataRef.current = data && Array.isArray(data) ? data : null;
+      const stations = parseStationsForLevel(data, selectedLevel);
 
-      if (data && Array.isArray(data)) {
-        data.forEach((item) => {
-          if (!item.lat || !item.lon) return;
-
-          // Find the wind for our selected level
-          const levelKey = `${selectedLevel}`;
-          const windCode = item[levelKey] || item.winds?.[levelKey];
-
-          if (windCode) {
-            const wind = parseWindsAloftCode(windCode);
-            stations.push({
-              id: item.station || item.id,
-              lat: parseFloat(item.lat),
-              lon: parseFloat(item.lon),
-              wind,
-              level: selectedLevel,
-            });
-          }
-        });
-      }
-
-      // If AWC didn't return data, generate synthetic data for demo
-      // In production, you would have fallback data sources
+      // Never fabricate winds - if the API returned nothing usable,
+      // surface an empty state instead of rendering synthetic data
       if (stations.length === 0) {
-        console.log('[WindsAloft] No AWC data, generating synthetic winds');
-        // Generate representative winds based on typical patterns
-        // This is a fallback for when the API is unavailable
-        const syntheticStations = generateSyntheticWinds(bounds, selectedLevel);
-        stations.push(...syntheticStations);
+        setError('No winds aloft data available for this level');
       }
 
       setStationData(stations);
@@ -312,12 +329,8 @@ export function useWindsAloft({
     } catch (err) {
       console.error('[WindsAloft] Fetch error:', err);
       setError(err.message || 'Failed to fetch winds aloft data');
-
-      // Generate synthetic data as fallback
-      const syntheticStations = generateSyntheticWinds(bounds, selectedLevel);
-      setStationData(syntheticStations);
-      setLastFetch(new Date());
-      lastFetchTimeRef.current = now;
+      // Never fabricate winds - clear data and let the error state show
+      setStationData([]);
     } finally {
       setLoading(false);
     }
@@ -408,6 +421,7 @@ export function useWindsAloft({
 
   // Clear data
   const clear = useCallback(() => {
+    rawDataRef.current = null;
     setStationData([]);
     setWindGrid([]);
     setError(null);
@@ -465,77 +479,6 @@ export function useWindsAloft({
     getWindColor,
     levels: WINDS_ALOFT_LEVELS,
   };
-}
-
-/**
- * Generate synthetic winds for demo/fallback
- * Creates a realistic-looking wind field based on altitude
- */
-function generateSyntheticWinds(bounds, level) {
-  const stations = [];
-  const { north, south, east, west } = bounds;
-
-  // Typical wind patterns:
-  // - Lower levels: variable, lighter winds
-  // - Mid levels: westerly flow, moderate
-  // - Upper levels: stronger westerlies, jet stream possible
-
-  let baseDirection, baseSpeed, variation;
-
-  if (level <= 6000) {
-    // Low level: lighter, more variable
-    baseDirection = 270 + Math.random() * 60 - 30; // 240-300
-    baseSpeed = 10 + Math.random() * 15; // 10-25 kt
-    variation = 40;
-  } else if (level <= 18000) {
-    // Mid level: moderate westerlies
-    baseDirection = 280 + Math.random() * 40 - 20; // 260-300
-    baseSpeed = 25 + Math.random() * 25; // 25-50 kt
-    variation = 25;
-  } else {
-    // Upper level: stronger, more consistent westerlies
-    baseDirection = 290 + Math.random() * 20 - 10; // 280-300
-    baseSpeed = 50 + Math.random() * 50; // 50-100 kt (jet stream territory)
-    variation = 15;
-  }
-
-  // Create a grid of synthetic stations
-  const latStep = 2;
-  const lonStep = 2;
-
-  for (let lat = Math.ceil(south); lat <= north; lat += latStep) {
-    for (let lon = Math.ceil(west); lon <= east; lon += lonStep) {
-      // Add some spatial variation
-      const latOffset = (lat - (north + south) / 2) * 2;
-      const lonOffset = (lon - (east + west) / 2) * 1;
-
-      const direction =
-        (baseDirection +
-          latOffset * 0.5 +
-          lonOffset * 0.3 +
-          (Math.random() - 0.5) * variation +
-          360) %
-        360;
-      const speed = Math.max(
-        0,
-        baseSpeed + latOffset * 0.5 + (Math.random() - 0.5) * variation * 0.5
-      );
-
-      stations.push({
-        id: `syn_${lat}_${lon}`,
-        lat,
-        lon,
-        wind: {
-          direction: Math.round(direction),
-          speed: Math.round(speed),
-          isLightVariable: speed < 3,
-        },
-        level,
-      });
-    }
-  }
-
-  return stations;
 }
 
 export default useWindsAloft;

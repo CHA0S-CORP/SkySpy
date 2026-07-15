@@ -25,6 +25,7 @@ from django.utils import timezone
 
 from skyspy.models import AudioTransmission
 from skyspy.socketio.middleware import authenticate_socket, check_topic_permission
+from skyspy.socketio.namespaces.mixins import parse_int_param
 from skyspy.socketio.server import sio
 from skyspy.socketio.utils.rate_limiter import RateLimiter
 
@@ -137,6 +138,15 @@ class AudioNamespace(socketio.AsyncNamespace):
             "params": {...}
         }
         """
+        if not isinstance(data, dict):
+            logger.warning(f"Invalid audio request from {sid}: expected dict, got {type(data).__name__}")
+            await self.emit(
+                "error",
+                {"request_id": None, "message": "Invalid request: expected dict payload"},
+                room=sid,
+            )
+            return
+
         # Check rate limiting
         session = await sio.get_session(sid, namespace="/audio")
         rate_limiter = session.get("rate_limiter")
@@ -161,7 +171,7 @@ class AudioNamespace(socketio.AsyncNamespace):
                 frequency=params.get("frequency"),
                 channel_name=params.get("channel_name"),
                 transcription_status=params.get("transcription_status"),
-                limit=params.get("limit", 50),
+                limit=parse_int_param(params.get("limit"), 50, min_val=1, max_val=500),
             )
             await self.emit(
                 "response", {"request_id": request_id, "request_type": "transmissions", "data": transmissions}, room=sid
@@ -197,6 +207,15 @@ class AudioNamespace(socketio.AsyncNamespace):
         or
         {"topics": "all"}
         """
+        if not isinstance(data, dict):
+            logger.warning(f"Invalid audio subscribe from {sid}: expected dict, got {type(data).__name__}")
+            await self.emit(
+                "error",
+                {"message": "Invalid subscription request: expected dict with 'topics' key"},
+                room=sid,
+            )
+            return
+
         topics = data.get("topics", [])
         if isinstance(topics, str):
             topics = [topics]
@@ -223,6 +242,15 @@ class AudioNamespace(socketio.AsyncNamespace):
         Expected data:
         {"topics": ["transmissions"]}
         """
+        if not isinstance(data, dict):
+            logger.warning(f"Invalid audio unsubscribe from {sid}: expected dict, got {type(data).__name__}")
+            await self.emit(
+                "error",
+                {"message": "Invalid unsubscription request: expected dict with 'topics' key"},
+                room=sid,
+            )
+            return
+
         topics = data.get("topics", [])
         if isinstance(topics, str):
             topics = [topics]

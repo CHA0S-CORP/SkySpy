@@ -68,7 +68,7 @@ export const AcarsPanel = memo(function AcarsPanel({
           initialFetchRef.current = true;
         }
       } catch (err) {
-        console.log('ACARS messages fetch error:', err.message);
+        console.warn('ACARS messages fetch error:', err.message);
       }
     };
 
@@ -89,7 +89,7 @@ export const AcarsPanel = memo(function AcarsPanel({
           setMessages(data.messages || data.results || (Array.isArray(data) ? data : []));
         }
       } catch (err) {
-        console.log('ACARS messages fetch error:', err.message);
+        console.warn('ACARS messages fetch error:', err.message);
       }
     };
 
@@ -119,7 +119,7 @@ export const AcarsPanel = memo(function AcarsPanel({
         const data = await safeJson(statusRes);
         if (data) setStatus(data);
       } catch (err) {
-        console.log('ACARS status fetch error:', err.message);
+        console.warn('ACARS status fetch error:', err.message);
       }
     };
 
@@ -137,7 +137,7 @@ export const AcarsPanel = memo(function AcarsPanel({
         const data = await safeJson(res);
         if (data) setLabels(data.labels || {});
       } catch (err) {
-        console.log('Labels fetch error:', err.message);
+        console.warn('Labels fetch error:', err.message);
       }
     };
 

@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // ansiColorMap maps ANSI 256 color codes to hex colors
@@ -421,8 +422,10 @@ func parseANSI(content string) string {
 			}
 		}
 
-		// Write the character with current style
-		char := string(content[i])
+		// Write the character with current style (decode full rune so
+		// multi-byte UTF-8 glyphs are not split across spans)
+		r, size := utf8.DecodeRuneInString(content[i:])
+		char := string(r)
 
 		// HTML escape
 		char = html.EscapeString(char)
@@ -434,7 +437,7 @@ func parseANSI(content string) string {
 			result.WriteString(char)
 		}
 
-		i++
+		i += size
 	}
 
 	return result.String()
