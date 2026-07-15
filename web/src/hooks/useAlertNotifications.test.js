@@ -106,13 +106,22 @@ describe('useAlertNotifications', () => {
   });
 
   describe('fetching unacknowledged count', () => {
-    it('should fetch count via WebSocket when connected', async () => {
+    it('should fetch count via HTTP even when WebSocket connected', async () => {
+      // Regression: there is no WS 'alert-count' request type and no
+      // /alerts/count route. The count must come from the alert-history list
+      // endpoint over HTTP regardless of socket state (previously it called a
+      // dead WS type that rejected, so the badge never reflected the server).
       vi.useRealTimers();
 
-      mockWsRequest.mockResolvedValue({ count: 5 });
+      mockFetch.mockResolvedValue({
+        ok: true,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: () => Promise.resolve({ count: 5 }),
+      });
 
       const { result } = renderHook(() =>
         useAlertNotifications({
+          apiBase: 'http://localhost:8000',
           wsRequest: mockWsRequest,
           wsConnected: true,
         })
@@ -122,7 +131,10 @@ describe('useAlertNotifications', () => {
         expect(result.current.unacknowledgedCount).toBe(5);
       });
 
-      expect(mockWsRequest).toHaveBeenCalledWith('alert-count', { acknowledged: false });
+      expect(mockWsRequest).not.toHaveBeenCalledWith('alert-count', expect.anything());
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:8000/api/v1/alerts/history/?acknowledged=false&hours=720'
+      );
     });
 
     it('should fetch count via HTTP when WebSocket not available', async () => {
@@ -145,17 +157,20 @@ describe('useAlertNotifications', () => {
       });
 
       expect(mockFetch).toHaveBeenCalledWith(
-        'http://localhost:8000/api/v1/alerts/count?acknowledged=false'
+        'http://localhost:8000/api/v1/alerts/history/?acknowledged=false&hours=720'
       );
     });
 
     it('should rate limit fetch requests', async () => {
-      mockWsRequest.mockResolvedValue({ count: 5 });
+      mockFetch.mockResolvedValue({
+        ok: true,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: () => Promise.resolve({ count: 5 }),
+      });
 
       const { result } = renderHook(() =>
         useAlertNotifications({
-          wsRequest: mockWsRequest,
-          wsConnected: true,
+          apiBase: 'http://localhost:8000',
         })
       );
 
@@ -170,16 +185,19 @@ describe('useAlertNotifications', () => {
       result.current.fetchUnacknowledgedCount();
 
       // Should only have called once due to rate limiting
-      expect(mockWsRequest).toHaveBeenCalledTimes(1);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
     });
 
     it('should periodically refresh count', async () => {
-      mockWsRequest.mockResolvedValue({ count: 5 });
+      mockFetch.mockResolvedValue({
+        ok: true,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: () => Promise.resolve({ count: 5 }),
+      });
 
       renderHook(() =>
         useAlertNotifications({
-          wsRequest: mockWsRequest,
-          wsConnected: true,
+          apiBase: 'http://localhost:8000',
         })
       );
 
@@ -188,14 +206,14 @@ describe('useAlertNotifications', () => {
         await vi.advanceTimersByTimeAsync(100);
       });
 
-      expect(mockWsRequest).toHaveBeenCalledTimes(1);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
 
       // Wait past rate limit (5s) then to refresh interval (30s)
       await act(async () => {
         await vi.advanceTimersByTimeAsync(30000);
       });
 
-      expect(mockWsRequest).toHaveBeenCalledTimes(2);
+      expect(mockFetch).toHaveBeenCalledTimes(2);
     });
   });
 
@@ -333,14 +351,19 @@ describe('useAlertNotifications', () => {
   });
 
   describe('acknowledging alerts', () => {
-    it('should acknowledge single alert', async () => {
+    it('should acknowledge single alert via HTTP even when WebSocket connected', async () => {
+      // Regression: there is no WS 'acknowledge-alert' request type. When the
+      // socket was connected the code awaited it, the promise rejected, and the
+      // HTTP POST was skipped — so the ack was only ever local and reappeared
+      // unacknowledged after reload. The acknowledge action must always POST.
       vi.useRealTimers();
 
-      mockWsRequest.mockResolvedValue({ success: true });
+      mockFetch.mockResolvedValue({ ok: true });
 
       const { result } = renderHook(() =>
         useAlertNotifications({
           toast: mockToast,
+          apiBase: 'http://localhost:8000',
           wsRequest: mockWsRequest,
           wsConnected: true,
         })
@@ -358,7 +381,11 @@ describe('useAlertNotifications', () => {
 
       expect(result.current.unacknowledgedCount).toBe(0);
       expect(result.current.recentAlerts.find((a) => a.id === 123)).toBeUndefined();
-      expect(mockWsRequest).toHaveBeenCalledWith('acknowledge-alert', { id: 123 });
+      expect(mockWsRequest).not.toHaveBeenCalledWith('acknowledge-alert', expect.anything());
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:8000/api/v1/alerts/history/123/acknowledge/',
+        { method: 'POST' }
+      );
     });
 
     it('should acknowledge via HTTP when WebSocket not available', async () => {
@@ -409,6 +436,38 @@ describe('useAlertNotifications', () => {
         await result.current.acknowledgeAll();
       });
 
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:8000/api/v1/alerts/history/acknowledge-all/',
+        { method: 'POST' }
+      );
+    });
+
+    it('should acknowledge all via HTTP even when WebSocket connected', async () => {
+      // Regression: no WS 'acknowledge-all-alerts' type; when connected the code
+      // awaited it, rejected, and skipped the HTTP POST — so the clear was only
+      // local and every alert returned unacknowledged after reload.
+      vi.useRealTimers();
+
+      mockFetch.mockResolvedValue({ ok: true });
+
+      const { result } = renderHook(() =>
+        useAlertNotifications({
+          toast: mockToast,
+          apiBase: 'http://localhost:8000',
+          wsRequest: mockWsRequest,
+          wsConnected: true,
+        })
+      );
+
+      act(() => {
+        result.current.handleAlertTriggered({ id: 1, rule_name: 'Test 1' });
+      });
+
+      await act(async () => {
+        await result.current.acknowledgeAll();
+      });
+
+      expect(mockWsRequest).not.toHaveBeenCalledWith('acknowledge-all-alerts', expect.anything());
       expect(mockFetch).toHaveBeenCalledWith(
         'http://localhost:8000/api/v1/alerts/history/acknowledge-all/',
         { method: 'POST' }

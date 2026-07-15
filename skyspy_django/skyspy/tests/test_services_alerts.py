@@ -1305,3 +1305,36 @@ class TestCooldownClearedOnPersistFailure:
 
         assert alert is not None
         assert AlertHistory.objects.count() == 1
+
+    def test_db_error_on_one_rule_does_not_abort_whole_cycle(self):
+        """A transient DB fault while persisting one alert must skip only that
+        rule; other rules in the same check_alerts() cycle must still fire.
+
+        Regression: _trigger_alert re-raises DatabaseError (after clearing its
+        cooldown), but the per-rule isolation except clauses did not list
+        DatabaseError, so the whole cycle aborted and every not-yet-evaluated
+        rule's alert was silently dropped."""
+        AlertRule.objects.create(name="Bad", rule_type="icao", operator="eq", value="AAA111", enabled=True)
+        AlertRule.objects.create(name="Good", rule_type="icao", operator="eq", value="BBB222", enabled=True)
+        aircraft_list = [
+            {"hex": "AAA111", "flight": "BAD1"},
+            {"hex": "BBB222", "flight": "GOOD1"},
+        ]
+        service = AlertService()
+
+        real_create = AlertHistory.objects.create
+
+        def create_side_effect(*args, **kwargs):
+            if kwargs.get("icao_hex") == "AAA111" or kwargs.get("icao") == "AAA111":
+                raise DatabaseError("db down")
+            return real_create(*args, **kwargs)
+
+        with (
+            patch("skyspy.services.alerts.sync_emit"),
+            patch.object(AlertHistory.objects, "create", side_effect=create_side_effect),
+        ):
+            triggered = service.check_alerts(aircraft_list)
+
+        # The good rule still fired despite the bad rule's DB error.
+        assert any(a.get("icao") == "BBB222" or a.get("icao_hex") == "BBB222" for a in triggered)
+        assert AlertHistory.objects.filter(icao_hex="BBB222").exists()

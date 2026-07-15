@@ -164,31 +164,48 @@ describe('useAcarsData', () => {
       expect(acarsCall).toBeDefined();
     });
 
-    it('should prefer WebSocket when connected', async () => {
+    it('resolves message registration to icao_hex via the airframes endpoint', async () => {
+      // Regression: the sightings API has no registration filter, so looking up
+      // a registration there returned an arbitrary aircraft (wrong link). Must
+      // use /airframes/registration/<reg>/ like the App.jsx tail lookup.
       vi.useRealTimers();
 
-      const mockMessages = [{ id: 1, callsign: 'UAL123', text: 'WS message' }];
-      mockWsRequest.mockResolvedValue({ messages: mockMessages });
-
-      const { result } = renderHook(() =>
-        useAcarsData({
-          ...defaultProps,
-          wsRequest: mockWsRequest,
-          wsConnected: true,
-        })
-      );
-
-      await waitFor(() => {
-        expect(result.current.acarsMessages).toEqual(mockMessages);
+      mockFetch.mockImplementation((url) => {
+        if (url.includes('/airframes/registration/')) {
+          return Promise.resolve({
+            ok: true,
+            headers: new Headers({ 'content-type': 'application/json' }),
+            json: () => Promise.resolve({ icao_hex: 'ABCDEF', registration: 'N12345' }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          headers: new Headers({ 'content-type': 'application/json' }),
+          json: () => Promise.resolve({ messages: [{ id: 1, registration: 'N12345' }] }),
+        });
       });
 
-      expect(mockWsRequest).toHaveBeenCalledWith('acars-messages', expect.any(Object));
+      const { result } = renderHook(() => useAcarsData(defaultProps));
+
+      await waitFor(() => {
+        expect(result.current.regHexCache.N12345).toBe('ABCDEF');
+      });
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:8000/api/v1/airframes/registration/N12345/'
+      );
+      // Must NOT resolve registration through the sightings API.
+      expect(mockFetch).not.toHaveBeenCalledWith(
+        expect.stringContaining('sightings?registration=')
+      );
     });
 
-    it('should fallback to HTTP when WebSocket fails', async () => {
+    it('should fetch messages over HTTP even when WebSocket is connected', async () => {
+      // Regression: there is no WS 'acars-messages' request type, and it does
+      // not honour source/airline/label filters, so message fetching must use
+      // HTTP (with filters) regardless of socket state — never a dead WS type.
       vi.useRealTimers();
 
-      mockWsRequest.mockRejectedValue(new Error('WS error'));
       mockFetch.mockResolvedValue({
         ok: true,
         headers: new Headers({ 'content-type': 'application/json' }),
@@ -206,6 +223,12 @@ describe('useAcarsData', () => {
       await waitFor(() => {
         expect(result.current.acarsMessages.length).toBe(1);
       });
+
+      expect(mockWsRequest).not.toHaveBeenCalledWith('acars-messages', expect.anything());
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining('/api/v1/acars?'),
+        expect.any(Object)
+      );
     });
 
     it('should include source filter in query', async () => {

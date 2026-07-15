@@ -137,7 +137,11 @@ class AlertService:
                                 if alert:
                                     triggered.append(alert)
                                     timer.add_trigger()
-                        except (KeyError, TypeError, AttributeError, ValueError) as e:
+                        except (KeyError, TypeError, AttributeError, ValueError, DatabaseError) as e:
+                            # DatabaseError included so a transient DB fault while
+                            # persisting ONE alert (re-raised by _trigger_alert after
+                            # clearing its cooldown) skips only that rule instead of
+                            # aborting the remaining rules/aircraft this cycle.
                             logger.warning(
                                 f"Skipping rule {rule.id} ('{rule.name}') after evaluation error: "
                                 f"{type(e).__name__}: {e}"
@@ -188,7 +192,8 @@ class AlertService:
                         if alert:
                             triggered.append(alert)
                             timer.add_trigger()
-            except (KeyError, TypeError, AttributeError, ValueError) as e:
+            except (KeyError, TypeError, AttributeError, ValueError, DatabaseError) as e:
+                # DatabaseError: see segmented path above — isolate per rule.
                 logger.warning(
                     f"Skipping rule {rule.id} ('{rule.name}') after evaluation error: {type(e).__name__}: {e}"
                 )

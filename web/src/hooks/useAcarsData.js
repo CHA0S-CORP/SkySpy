@@ -38,14 +38,6 @@ export function useAcarsData({ apiBase, timeRange, wsRequest, wsConnected, viewT
 
   const hours = { '1h': 1, '6h': 6, '24h': 24, '48h': 48, '7d': 168 };
 
-  // Store ws functions in refs to avoid triggering re-fetches
-  const wsRequestRef = useRef(wsRequest);
-  const wsConnectedRef = useRef(wsConnected);
-  useEffect(() => {
-    wsRequestRef.current = wsRequest;
-    wsConnectedRef.current = wsConnected;
-  }, [wsRequest, wsConnected]);
-
   // Fetch label reference once on mount
   const labelsFetchedRef = useRef(false);
   useEffect(() => {
@@ -77,28 +69,12 @@ export function useAcarsData({ apiBase, timeRange, wsRequest, wsConnected, viewT
 
     const fetchAcars = async () => {
       try {
-        const queryParams = {
-          hours: hours[timeRange],
-          limit: 200,
-        };
-        if (acarsSource !== 'all') queryParams.source = acarsSource;
-        if (acarsAirlineFilter) queryParams.airline = acarsAirlineFilter;
-        if (acarsSelectedLabels.length > 0) queryParams.label = acarsSelectedLabels.join(',');
-
         let result = null;
 
-        // Prefer WebSocket
-        if (wsRequestRef.current && wsConnectedRef.current) {
-          try {
-            result = await wsRequestRef.current('acars-messages', queryParams);
-            if (result?.error) result = null;
-          } catch (err) {
-            console.debug('ACARS WS request failed:', err.message);
-          }
-        }
-
-        // HTTP fallback
-        if (!result && !abortController.signal.aborted) {
+        // There is no WS 'acars-messages' request type (only acars-snapshot /
+        // acars-stats, neither of which honours source/airline/label filters),
+        // so fetch over HTTP where the filters are supported.
+        if (!abortController.signal.aborted) {
           const params = new URLSearchParams();
           params.set('hours', hours[timeRange]);
           params.set('limit', '200');
@@ -237,34 +213,20 @@ export function useAcarsData({ apiBase, timeRange, wsRequest, wsConnected, viewT
       for (const reg of lookups) {
         if (!isMounted) return;
         try {
-          let data;
-          if (wsRequest && wsConnected) {
-            const result = await wsRequest('sightings', {
-              registration: reg,
-              hours: 168,
-              limit: 1,
-            });
-            if (!isMounted) return;
-            if (result && (result.sightings || result.results)) {
-              data = result;
-            } else {
-              throw new Error('Invalid sightings response');
-            }
-          } else {
-            const res = await fetch(
-              `${apiBase}/api/v1/sightings?registration=${encodeURIComponent(reg)}&hours=168&limit=1`
-            );
-            if (!isMounted) return;
-            data = await safeJson(res);
-            if (!isMounted) return;
-            if (!data) throw new Error('HTTP request failed');
-          }
-          const sightings = data?.sightings || data?.results || [];
+          // Resolve registration -> icao_hex via the airframes endpoint. The
+          // sightings API has no registration filter (WS and REST both ignore
+          // the param and return an arbitrary aircraft), so it must not be used
+          // here — this mirrors the App.jsx tail-lookup fix.
+          const res = await fetch(
+            `${apiBase}/api/v1/airframes/registration/${encodeURIComponent(reg)}/`
+          );
           if (!isMounted) return;
-          if (sightings.length > 0 && sightings[0].icao_hex) {
+          const data = await safeJson(res);
+          if (!isMounted) return;
+          if (data?.icao_hex) {
             setRegHexCache((prev) => ({
               ...prev,
-              [reg]: sightings[0].icao_hex,
+              [reg]: data.icao_hex,
             }));
           } else {
             setRegHexCache((prev) => ({ ...prev, [reg]: null }));
