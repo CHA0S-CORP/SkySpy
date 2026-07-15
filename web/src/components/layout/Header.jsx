@@ -84,7 +84,12 @@ export function Header({ stats, location, onlineUsers, config, setConfig, setSho
             <BellOff size={16} />
           )}
         </button>
-        <button className="header-btn" onClick={() => setShowSettings(true)}>
+        <button
+          className="header-btn"
+          title="Settings"
+          aria-label="Settings"
+          onClick={() => setShowSettings(true)}
+        >
           <Settings size={16} />
         </button>
         <TimeDisplay />

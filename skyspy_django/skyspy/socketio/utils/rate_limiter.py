@@ -1,8 +1,10 @@
 """
 Rate limiter for Socket.IO messages.
 
-Provides per-topic rate limiting to control message frequency
-and reduce bandwidth usage.
+Provides per-topic token-bucket rate limiting to control message frequency
+and reduce bandwidth usage. Token buckets allow short bursts (e.g. the flood
+of requests a dashboard fires on page load) while still enforcing the
+sustained rate.
 
 Thread-safe: Uses threading.Lock to protect internal state from
 concurrent access in multi-threaded async environments.
@@ -11,34 +13,52 @@ concurrent access in multi-threaded async environments.
 import time
 from threading import Lock
 
-# Default rate limits (messages per second)
+# Default rate limits (messages per second, sustained)
 DEFAULT_RATE_LIMITS = {
     "aircraft:update": 10,  # Max 10 Hz
     "aircraft:position": 5,  # Max 5 Hz
     "stats:update": 0.5,  # Max 0.5 Hz (2 second minimum)
     "default": 5,  # Default rate limit
-    "request": 10,  # Max 10 requests per second
+    "request": 10,  # Max 10 requests per second sustained
 }
+
+# Burst window: each topic's bucket holds rate * BURST_SECONDS tokens, so a
+# client can burst that many messages instantly before the sustained rate
+# applies. Page load fires ~15 requests at once; 3s of budget absorbs that.
+BURST_SECONDS = 3.0
 
 
 class RateLimiter:
-    """Per-topic rate limiter for Socket.IO messages (thread-safe)."""
+    """Per-topic token-bucket rate limiter for Socket.IO messages (thread-safe)."""
 
     def __init__(self, rate_limits: dict[str, float] | None = None):
         """
         Initialize the rate limiter.
 
         Args:
-            rate_limits: Optional dict mapping topic names to rate limits (Hz).
-                        If not provided, uses DEFAULT_RATE_LIMITS.
+            rate_limits: Optional dict mapping topic names to sustained rate
+                        limits (Hz). If not provided, uses DEFAULT_RATE_LIMITS.
         """
-        self._last_send: dict[str, float] = {}
+        # topic -> (tokens, last_refill_monotonic)
+        self._buckets: dict[str, tuple[float, float]] = {}
         self._rate_limits = rate_limits if rate_limits is not None else DEFAULT_RATE_LIMITS.copy()
         self._lock = Lock()
+
+    def _capacity(self, rate: float) -> float:
+        return max(1.0, rate * BURST_SECONDS)
+
+    def _refill(self, topic: str, rate: float, now: float) -> float:
+        """Return current token count for topic after refilling. Lock held by caller."""
+        capacity = self._capacity(rate)
+        tokens, last = self._buckets.get(topic, (capacity, now))
+        tokens = min(capacity, tokens + (now - last) * rate)
+        return tokens
 
     def can_send(self, topic: str) -> bool:
         """
         Check if a message for this topic can be sent (thread-safe).
+
+        Consumes one token when allowed.
 
         Args:
             topic: The message topic/event name.
@@ -46,20 +66,19 @@ class RateLimiter:
         Returns:
             True if the message can be sent, False if rate limited.
         """
-        now = time.monotonic()  # Use monotonic clock for duration tracking
+        now = time.monotonic()
 
         with self._lock:
-            rate_limit = self._rate_limits.get(topic, self._rate_limits.get("default", 5))
+            rate = self._rate_limits.get(topic, self._rate_limits.get("default", 5))
 
-            if rate_limit <= 0:
+            if rate <= 0:
                 return True  # No limit
 
-            min_interval = 1.0 / rate_limit
-            last_send = self._last_send.get(topic, 0)
-
-            if now - last_send >= min_interval:
-                self._last_send[topic] = now
+            tokens = self._refill(topic, rate, now)
+            if tokens >= 1.0:
+                self._buckets[topic] = (tokens - 1.0, now)
                 return True
+            self._buckets[topic] = (tokens, now)
             return False
 
     def get_wait_time(self, topic: str) -> float:
@@ -76,15 +95,15 @@ class RateLimiter:
         now = time.monotonic()
 
         with self._lock:
-            rate_limit = self._rate_limits.get(topic, self._rate_limits.get("default", 5))
+            rate = self._rate_limits.get(topic, self._rate_limits.get("default", 5))
 
-            if rate_limit <= 0:
+            if rate <= 0:
                 return 0
 
-            min_interval = 1.0 / rate_limit
-            last_send = self._last_send.get(topic, 0)
-            wait = min_interval - (now - last_send)
-            return max(0, wait)
+            tokens = self._refill(topic, rate, now)
+            if tokens >= 1.0:
+                return 0
+            return (1.0 - tokens) / rate
 
     def reset(self, topic: str | None = None):
         """
@@ -95,9 +114,9 @@ class RateLimiter:
         """
         with self._lock:
             if topic is None:
-                self._last_send.clear()
-            elif topic in self._last_send:
-                del self._last_send[topic]
+                self._buckets.clear()
+            elif topic in self._buckets:
+                del self._buckets[topic]
 
     def set_rate_limit(self, topic: str, rate: float):
         """
@@ -105,11 +124,12 @@ class RateLimiter:
 
         Args:
             topic: The message topic/event name.
-            rate: The rate limit in Hz (messages per second).
+            rate: The sustained rate limit in Hz (messages per second).
                   Use 0 or negative for no limit.
         """
         with self._lock:
             self._rate_limits[topic] = rate
+            # Existing bucket keeps its tokens but is clamped on next refill
 
     def cleanup_old_entries(self, max_age: float = 300.0):
         """
@@ -124,4 +144,4 @@ class RateLimiter:
         """
         now = time.monotonic()
         with self._lock:
-            self._last_send = {k: v for k, v in self._last_send.items() if now - v < max_age}
+            self._buckets = {k: (t, ts) for k, (t, ts) in self._buckets.items() if now - ts < max_age}

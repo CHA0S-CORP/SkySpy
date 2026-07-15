@@ -165,11 +165,17 @@ class StatsHandlerMixin:
         cutoff = timezone.now() - timedelta(hours=hours)
         sessions = AircraftSession.objects.filter(last_seen__gte=cutoff)
 
-        longest = list(
-            sessions.order_by("-total_positions")[:limit].values(
+        longest = [
+            {
+                **row,
+                # datetimes must be serialized - the payload goes straight to JSON
+                "first_seen": row["first_seen"].isoformat().replace("+00:00", "Z") if row["first_seen"] else None,
+                "last_seen": row["last_seen"].isoformat().replace("+00:00", "Z") if row["last_seen"] else None,
+            }
+            for row in sessions.order_by("-total_positions")[:limit].values(
                 "icao_hex", "callsign", "total_positions", "first_seen", "last_seen"
             )
-        )
+        ]
 
         furthest = list(
             sessions.filter(max_distance_nm__isnull=False)

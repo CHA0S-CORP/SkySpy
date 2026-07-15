@@ -12,6 +12,11 @@ Environment Variables:
     EMERGENCY_RATE: Probability of emergency squawk 0.0-1.0 (default: 0.05)
     ENABLE_WEATHER: Enable wind effects "true"/"false" (default: true)
     PORT: Server port (default: 80)
+    DATA_SOURCE: "simulated" or "live" - live polls a keyless open ADS-B API
+        and serves real traffic through all endpoints/streams (default: simulated)
+    LIVE_SOURCE: "adsb_lol", "adsb_fi", or "airplanes_live" (default: adsb_lol)
+    LIVE_POLL_INTERVAL: Seconds between upstream polls, min 2 (default: 5)
+    LIVE_RADIUS_NM: Live query radius, capped at 250 (default: COVERAGE_RADIUS_NM)
 """
 
 import contextlib
@@ -77,6 +82,136 @@ state_lock = Lock()
 last_update_time = time.time()
 server_start_time = time.time()
 message_count = 0
+
+# ============================================================================
+# Live open-data source (optional alternative to simulated traffic)
+#
+# DATA_SOURCE=live polls a keyless open ADS-B API centered on the coverage
+# area and serves REAL aircraft through every existing endpoint/stream
+# (aircraft.json, SSE, TCP JSON stream, /v2/*, /conflicts, ...).
+#
+#   DATA_SOURCE:        "simulated" (default) or "live"
+#   LIVE_SOURCE:        "adsb_lol" (default), "adsb_fi", "airplanes_live"
+#   LIVE_POLL_INTERVAL: Seconds between upstream polls (default 5; keep >=2 -
+#                       these community APIs ask for ~1 request/second max)
+#   LIVE_RADIUS_NM:     Query radius (default COVERAGE_RADIUS_NM, capped 250)
+# ============================================================================
+DATA_SOURCE = os.getenv("DATA_SOURCE", "simulated").lower()
+LIVE_SOURCE = os.getenv("LIVE_SOURCE", "adsb_lol").lower()
+LIVE_POLL_INTERVAL = max(2.0, float(os.getenv("LIVE_POLL_INTERVAL", "5")))
+LIVE_RADIUS_NM = min(float(os.getenv("LIVE_RADIUS_NM", str(COVERAGE_RADIUS_NM))), 250)
+
+# All three return readsb-style aircraft dicts in an "ac" array, no API key.
+LIVE_SOURCE_URLS = {
+    "adsb_lol": "https://api.adsb.lol/v2/point/{lat}/{lon}/{radius}",
+    "adsb_fi": "https://opendata.adsb.fi/api/v2/lat/{lat}/lon/{lon}/dist/{radius}",
+    "airplanes_live": "https://api.airplanes.live/v2/point/{lat}/{lon}/{radius}",
+}
+
+_live_state: dict[str, dict] = {}
+_live_lock = Lock()
+_live_last_success = 0.0
+_live_last_error = ""
+
+
+def _normalize_live_aircraft(ac: dict) -> dict | None:
+    """Map an upstream readsb-style aircraft dict onto the internal state shape.
+
+    The open APIs emit readsb output, so most fields pass through; this fills
+    the keys the serializers index with [] and drops position-less aircraft.
+    """
+    hex_code = (ac.get("hex") or "").strip().upper()
+    if not hex_code or ac.get("lat") is None or ac.get("lon") is None:
+        return None
+
+    alt_baro = ac.get("alt_baro")
+    if alt_baro == "ground":
+        # Serializers treat falsy alt_baro as on-ground
+        alt_baro = None
+
+    return {
+        **ac,
+        "hex": hex_code,
+        "flight": (ac.get("flight") or "").strip(),
+        "r": ac.get("r", ""),
+        "t": ac.get("t", ""),
+        "desc": ac.get("desc", ""),
+        "alt_baro": alt_baro,
+        "alt_geom": ac.get("alt_geom"),
+        "gs": ac.get("gs") or 0.0,
+        "track": ac.get("track") or 0.0,
+        "baro_rate": ac.get("baro_rate") or 0,
+        "squawk": ac.get("squawk") or "",
+        "category": ac.get("category") or "",
+        "rssi": ac.get("rssi") if ac.get("rssi") is not None else -30.0,
+        "dbFlags": ac.get("dbFlags", 0),
+        "seen": ac.get("seen", 0.0),
+        "seen_pos": ac.get("seen_pos", ac.get("seen", 0.0)),
+        "messages": ac.get("messages", 0),
+    }
+
+
+def _fetch_live_aircraft() -> dict[str, dict]:
+    """Fetch one snapshot from the configured open data source."""
+    import requests
+
+    url = LIVE_SOURCE_URLS[LIVE_SOURCE].format(
+        lat=f"{COVERAGE_CENTER_LAT:.4f}", lon=f"{COVERAGE_CENTER_LON:.4f}", radius=int(LIVE_RADIUS_NM)
+    )
+    resp = requests.get(url, timeout=10, headers={"User-Agent": "SkySpy-mock/2.4 (dev environment)"})
+    resp.raise_for_status()
+    data = resp.json()
+
+    snapshot: dict[str, dict] = {}
+    for raw in data.get("ac") or data.get("aircraft") or []:
+        ac = _normalize_live_aircraft(raw)
+        if ac:
+            snapshot[ac["hex"]] = ac
+    return snapshot
+
+
+def _live_poll_loop():
+    """Background poller: refresh _live_state every LIVE_POLL_INTERVAL seconds."""
+    global _live_last_success, _live_last_error, message_count
+
+    while True:
+        try:
+            snapshot = _fetch_live_aircraft()
+            with _live_lock:
+                _live_state.clear()
+                _live_state.update(snapshot)
+                _live_last_success = time.time()
+                _live_last_error = ""
+            message_count += max(len(snapshot), 1)
+        except Exception as e:  # noqa: BLE001 - keep the poller alive on any upstream failure
+            _live_last_error = str(e)
+            print(f"Live source {LIVE_SOURCE} poll failed: {e}")
+        time.sleep(LIVE_POLL_INTERVAL)
+
+
+def start_live_polling():
+    """Start the live data poller (daemon thread)."""
+    thread = threading.Thread(target=_live_poll_loop, daemon=True, name="live-poll")
+    thread.start()
+
+
+def _apply_live_snapshot(state_dict: dict[str, dict]):
+    """Replace state_dict contents with the latest live snapshot.
+
+    `seen`/`seen_pos` are aged by the time since the last successful poll so
+    consumers can tell when upstream data has gone stale.
+    """
+    now = time.time()
+    with _live_lock:
+        age = (now - _live_last_success) if _live_last_success else 0.0
+        snapshot = {}
+        for hex_code, ac in _live_state.items():
+            ac = dict(ac)
+            ac["seen"] = round(ac.get("seen", 0.0) + age, 1)
+            ac["seen_pos"] = round(ac.get("seen_pos", 0.0) + age, 1)
+            snapshot[hex_code] = ac
+    state_dict.clear()
+    state_dict.update(snapshot)
 
 
 class FlightProfile(Enum):
@@ -1623,6 +1758,13 @@ def update_all_aircraft(templates, state_dict):
     """Update all aircraft positions and handle respawning"""
     global last_update_time
 
+    # Live mode: the 1090 state mirrors the open data source instead of the
+    # simulator. UAT (978) has no open live source and stays simulated.
+    if DATA_SOURCE == "live" and state_dict is aircraft_state:
+        _apply_live_snapshot(state_dict)
+        last_update_time = time.time()
+        return
+
     current_time = time.time()
     dt = current_time - last_update_time
 
@@ -1805,7 +1947,18 @@ def ultrafeeder_stats():
 
 @app.route("/data/aircraft.json")
 def dump978_aircraft():
-    """UAT aircraft data endpoint"""
+    """Aircraft data endpoint.
+
+    Real ultrafeeder serves its readsb JSON at /data/aircraft.json, so in
+    ultrafeeder mode this must mirror the 1090 feed (pollers hit this path).
+    Only dump978 mode serves the UAT state here.
+    """
+    if MOCK_TYPE == "ultrafeeder":
+        with state_lock:
+            update_all_aircraft(AIRCRAFT_TEMPLATES, aircraft_state)
+            aircraft = get_aircraft_json(aircraft_state)
+        return jsonify({"now": time.time(), "messages": message_count, "aircraft": aircraft})
+
     with state_lock:
         update_all_aircraft(UAT_TEMPLATES, uat_aircraft_state)
         aircraft = get_aircraft_json(uat_aircraft_state)
@@ -1825,16 +1978,24 @@ def health():
         num_aircraft = len(aircraft_state)
         num_uat = len(uat_aircraft_state)
 
-    return jsonify(
-        {
-            "status": "healthy",
-            "type": MOCK_TYPE,
-            "uptime_seconds": round(uptime, 1),
-            "aircraft_count": num_aircraft,
-            "uat_aircraft_count": num_uat,
-            "messages_total": message_count,
+    payload = {
+        "status": "healthy",
+        "type": MOCK_TYPE,
+        "uptime_seconds": round(uptime, 1),
+        "aircraft_count": num_aircraft,
+        "uat_aircraft_count": num_uat,
+        "messages_total": message_count,
+        "data_source": DATA_SOURCE,
+    }
+    if DATA_SOURCE == "live":
+        payload["live"] = {
+            "source": LIVE_SOURCE,
+            "poll_interval_s": LIVE_POLL_INTERVAL,
+            "radius_nm": LIVE_RADIUS_NM,
+            "last_success_age_s": round(time.time() - _live_last_success, 1) if _live_last_success else None,
+            "last_error": _live_last_error or None,
         }
-    )
+    return jsonify(payload)
 
 
 @app.route("/config")
@@ -2591,6 +2752,10 @@ if __name__ == "__main__":
     print(f"Stream Interval:  {JSON_STREAM_INTERVAL_MS}ms")
     print(f"Coverage center:  {COVERAGE_CENTER_LAT:.4f}, {COVERAGE_CENTER_LON:.4f}")
     print(f"Coverage radius:  {COVERAGE_RADIUS_NM} NM")
+    if DATA_SOURCE == "live":
+        print(f"Data source:      LIVE via {LIVE_SOURCE} (poll {LIVE_POLL_INTERVAL:.0f}s, radius {LIVE_RADIUS_NM:.0f} NM)")
+    else:
+        print("Data source:      simulated")
     print(f"Traffic density:  {TRAFFIC_DENSITY} ({len(active_templates)} aircraft)")
     print(f"Conflict pairs:   {conflict_pairs} pairs configured for testing")
     print(f"Conflict thresh:  < {CONFLICT_HORIZONTAL_NM}nm AND < {CONFLICT_VERTICAL_FT}ft")
@@ -2609,6 +2774,12 @@ if __name__ == "__main__":
     print("  /v2/mil         - ADSBx v2 military")
     print("  /conflicts      - Active proximity conflicts")
     print("=" * 60)
+
+    # Start the live open-data poller if enabled
+    if DATA_SOURCE == "live":
+        if LIVE_SOURCE not in LIVE_SOURCE_URLS:
+            raise SystemExit(f"Unknown LIVE_SOURCE '{LIVE_SOURCE}' (options: {', '.join(LIVE_SOURCE_URLS)})")
+        start_live_polling()
 
     # Start JSON streaming server if enabled
     if JSON_STREAM_ENABLED:

@@ -222,7 +222,8 @@ export function useSocketIO({
       };
 
       const handleConnectError = (err) => {
-        console.error('[useSocketIO] Connection error:', err.message);
+        // Transient - socket.io auto-reconnects; consumers get the error via state
+        console.warn('[useSocketIO] Connection error:', err.message);
 
         if (!mountedRef.current) return;
 

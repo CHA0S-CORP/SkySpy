@@ -97,7 +97,7 @@ export function SystemView({ apiBase, wsRequest, wsConnected }) {
             console.error('Failed to fetch database stats:', err);
             return null;
           }),
-          fetch(`${apiBase}/api/v1/safety/monitor/status`).catch((err) => {
+          fetch(`${apiBase}/api/v1/safety/events/monitor/status`).catch((err) => {
             console.error('Failed to fetch safety status:', err);
             return null;
           }),

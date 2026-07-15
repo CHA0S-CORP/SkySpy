@@ -251,7 +251,7 @@ function deriveSocketEvent(endpoint) {
     '/api/v1/history/stats': 'history-stats',
     '/api/v1/history/sessions': 'history-sessions',
     '/api/v1/history/trends': 'history-trends',
-    '/api/v1/history/top': 'history-top',
+    '/api/v1/history/top-performers': 'history-top',
     '/api/v1/history/analytics/distance': 'history-analytics-distance',
     '/api/v1/history/analytics/speed': 'history-analytics-speed',
     '/api/v1/history/analytics/correlation': 'history-analytics-correlation',
@@ -269,9 +269,8 @@ function deriveSocketEvent(endpoint) {
 
     // Safety endpoints
     '/api/v1/safety/events/stats': 'safety-stats',
-    '/api/v1/safety/stats': 'safety-stats',
     '/api/v1/safety/events': 'safety-events',
-    '/api/v1/safety/monitor/status': 'safety-status',
+    '/api/v1/safety/events/monitor/status': 'safety-status',
 
     // Alerts endpoints (Django ViewSets with nested routes)
     '/api/v1/alerts/rules': 'alerts-rules',

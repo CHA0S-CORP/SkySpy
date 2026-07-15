@@ -238,13 +238,29 @@ export default function App() {
     1000
   );
 
+  // Backend reports feeder location as {latitude, longitude}; the UI
+  // (Header, MapView) consumes {lat, lon}. Normalize once at the boundary -
+  // without this the map/scope silently falls back to the default location.
+  const normalizeStatus = (data) => {
+    if (!data?.location) return data;
+    const { latitude, longitude } = data.location;
+    return {
+      ...data,
+      location: {
+        ...data.location,
+        lat: data.location.lat ?? latitude,
+        lon: data.location.lon ?? longitude,
+      },
+    };
+  };
+
   // Fetch status via WebSocket or fallback to HTTP
   useEffect(() => {
     const fetchStatus = async () => {
       if (wsRequest && connected) {
         try {
           const data = await wsRequest('status', {});
-          if (data && !data.error) setStatus(data);
+          if (data && !data.error) setStatus(normalizeStatus(data));
         } catch (err) {
           console.warn('App status WS request error:', err.message);
         }
@@ -252,7 +268,7 @@ export default function App() {
         try {
           const res = await fetch(`${config.apiBaseUrl}/api/v1/system/status`);
           const data = await safeJson(res);
-          if (data) setStatus(data);
+          if (data) setStatus(normalizeStatus(data));
         } catch (err) {
           console.warn('App status HTTP fetch error:', err.message);
         }

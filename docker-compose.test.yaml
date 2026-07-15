@@ -422,6 +422,16 @@ services:
     environment:
       - MOCK_TYPE=ultrafeeder
       - ADSBX_API_KEY=${ADSBX_API_KEY:-}
+      # Data source: "simulated" (default) or "live" - live polls a keyless
+      # open ADS-B API (adsb.lol/adsb.fi/airplanes.live) centered on the feeder
+      # and serves real aircraft through every endpoint/stream
+      - DATA_SOURCE=${MOCK_DATA_SOURCE:-simulated}
+      - LIVE_SOURCE=${MOCK_LIVE_SOURCE:-adsb_lol}
+      - LIVE_POLL_INTERVAL=${MOCK_LIVE_POLL_INTERVAL:-5}
+      - LIVE_RADIUS_NM=${MOCK_LIVE_RADIUS_NM:-150}
+      # Center the mock coverage on the configured feeder location
+      - COVERAGE_LAT=${FEEDER_LAT:-47.9377}
+      - COVERAGE_LON=${FEEDER_LON:--121.9687}
       # JSON streaming configuration (readsb net-json-port compatible)
       - JSON_STREAM_ENABLED=${JSON_STREAM_ENABLED:-true}
       - JSON_STREAM_PORT=30047

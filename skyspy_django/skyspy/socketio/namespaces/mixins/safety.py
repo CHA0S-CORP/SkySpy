@@ -92,7 +92,7 @@ class SafetyHandlerMixin:
                     "icao_hex": e.icao_hex,
                     "callsign": e.callsign,
                     "timestamp": e.timestamp.isoformat() if e.timestamp else None,
-                    "description": e.description,
+                    "message": e.message,
                     "acknowledged": e.acknowledged,
                 }
             )
@@ -133,14 +133,15 @@ class SafetyHandlerMixin:
                 "icao": event.icao_hex,
                 "callsign": event.callsign,
                 "timestamp": event.timestamp.isoformat() if event.timestamp else None,
-                "description": event.description,
+                "message": event.message,
                 "acknowledged": event.acknowledged,
                 "acknowledged_at": event.acknowledged_at.isoformat() if event.acknowledged_at else None,
-                "latitude": event.latitude,
-                "longitude": event.longitude,
-                "altitude": event.altitude,
-                "ground_speed": event.ground_speed,
-                "vertical_rate": event.vertical_rate,
+                # Position/telemetry live in the aircraft_snapshot JSON, not on the model
+                "latitude": (event.aircraft_snapshot or {}).get("lat"),
+                "longitude": (event.aircraft_snapshot or {}).get("lon"),
+                "altitude": (event.aircraft_snapshot or {}).get("alt_baro"),
+                "ground_speed": (event.aircraft_snapshot or {}).get("gs"),
+                "vertical_rate": (event.aircraft_snapshot or {}).get("baro_rate"),
                 "details": event.details or {},
             }
         except SafetyEvent.DoesNotExist:

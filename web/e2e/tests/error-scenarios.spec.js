@@ -27,7 +27,10 @@ test.describe('API Failure Responses', () => {
         await route.fulfill({
           status: 500,
           contentType: 'application/json',
-          body: JSON.stringify({ error: 'Internal Server Error', detail: 'Database connection failed' }),
+          body: JSON.stringify({
+            error: 'Internal Server Error',
+            detail: 'Database connection failed',
+          }),
         });
       });
 
@@ -38,7 +41,9 @@ test.describe('API Failure Responses', () => {
       await expect(page.locator('.app')).toBeVisible({ timeout: 10000 });
 
       // Check for error message or error state
-      const errorIndicator = page.locator('.error-message, .error-state, [class*="error"], [role="alert"]').first();
+      const errorIndicator = page
+        .locator('.error-message, .error-state, [class*="error"], [role="alert"]')
+        .first();
       const hasError = await errorIndicator.isVisible({ timeout: 5000 }).catch(() => false);
       // Error handling may show error or empty state
       expect(typeof hasError).toBe('boolean');
@@ -75,7 +80,10 @@ test.describe('API Failure Responses', () => {
         await route.fulfill({
           status: 500,
           contentType: 'application/json',
-          body: JSON.stringify({ error: 'Internal Server Error', detail: 'Alert service unavailable' }),
+          body: JSON.stringify({
+            error: 'Internal Server Error',
+            detail: 'Alert service unavailable',
+          }),
         });
       });
 
@@ -124,7 +132,10 @@ test.describe('API Failure Responses', () => {
           status: 503,
           contentType: 'application/json',
           headers: { 'Retry-After': '60' },
-          body: JSON.stringify({ error: 'Service Unavailable', detail: 'System maintenance in progress' }),
+          body: JSON.stringify({
+            error: 'Service Unavailable',
+            detail: 'System maintenance in progress',
+          }),
         });
       });
 
@@ -190,7 +201,9 @@ test.describe('API Failure Responses', () => {
       await expect(page.locator('.app')).toBeVisible({ timeout: 10000 });
 
       // Check for not found message or redirect
-      const notFound = page.locator('.not-found, :has-text("not found"), :has-text("Not Found")').first();
+      const notFound = page
+        .locator('.not-found, :has-text("not found"), :has-text("Not Found")')
+        .first();
       const hasNotFound = await notFound.isVisible({ timeout: 5000 }).catch(() => false);
       expect(typeof hasNotFound).toBe('boolean');
     });
@@ -270,8 +283,15 @@ test.describe('API Failure Responses', () => {
 
       // Should show login or handle gracefully
       await page.waitForTimeout(1000);
-      const hasApp = await page.locator('.app').isVisible({ timeout: 3000 }).catch(() => false);
-      const hasLogin = await page.locator('.login-page, .login-form, .login-card').isVisible({ timeout: 3000 }).catch(() => false);
+      const hasApp = await page
+        .locator('.app')
+        .isVisible({ timeout: 3000 })
+        .catch(() => false);
+      const hasLogin = await page
+        .locator('.login-page, .login-form, .login-card')
+        .first()
+        .isVisible()
+        .catch(() => false);
 
       // Either app handles error or redirects to login
       expect(hasApp || hasLogin).toBe(true);
@@ -316,7 +336,10 @@ test.describe('API Failure Responses', () => {
           await route.fulfill({
             status: 403,
             contentType: 'application/json',
-            body: JSON.stringify({ error: 'Forbidden', detail: 'Insufficient permissions to create rules' }),
+            body: JSON.stringify({
+              error: 'Forbidden',
+              detail: 'Insufficient permissions to create rules',
+            }),
           });
         } else {
           await route.continue();
@@ -328,7 +351,9 @@ test.describe('API Failure Responses', () => {
       await expect(page.locator('.app')).toBeVisible({ timeout: 10000 });
 
       // Try to create a rule
-      const createBtn = page.locator('button:has-text("Create"), button:has-text("Add Rule")').first();
+      const createBtn = page
+        .locator('button:has-text("Create"), button:has-text("Add Rule")')
+        .first();
       if (await createBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
         await createBtn.click();
         await page.waitForTimeout(500);
@@ -374,7 +399,7 @@ test.describe('Network Errors', () => {
 
       // Simulate slow response (3 second delay)
       await page.route('**/api/v1/aircraft**', async (route) => {
-        await new Promise(resolve => setTimeout(resolve, 3000));
+        await new Promise((resolve) => setTimeout(resolve, 3000));
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
@@ -386,7 +411,9 @@ test.describe('Network Errors', () => {
       await page.waitForLoadState('domcontentloaded');
 
       // Check for loading indicator
-      const loading = page.locator('.loading, [class*="loading"], .spinner, [class*="spinner"]').first();
+      const loading = page
+        .locator('.loading, [class*="loading"], .spinner, [class*="spinner"]')
+        .first();
       const hasLoading = await loading.isVisible({ timeout: 1000 }).catch(() => false);
       expect(typeof hasLoading).toBe('boolean');
 
@@ -400,7 +427,7 @@ test.describe('Network Errors', () => {
 
       // Simulate very slow response that might timeout
       await page.route('**/api/v1/aircraft**', async (route) => {
-        await new Promise(resolve => setTimeout(resolve, 30000));
+        await new Promise((resolve) => setTimeout(resolve, 30000));
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
@@ -436,7 +463,11 @@ test.describe('Network Errors', () => {
       await page.waitForTimeout(500);
 
       // Check for offline indicator
-      const offlineIndicator = page.locator('.offline-indicator, .connection-error, [class*="offline"], [class*="disconnected"]').first();
+      const offlineIndicator = page
+        .locator(
+          '.offline-indicator, .connection-error, [class*="offline"], [class*="disconnected"]'
+        )
+        .first();
       const hasOffline = await offlineIndicator.isVisible({ timeout: 5000 }).catch(() => false);
       expect(typeof hasOffline).toBe('boolean');
 
@@ -478,7 +509,10 @@ test.describe('Network Errors', () => {
       await page.waitForTimeout(500);
 
       // App should handle gracefully
-      const hasApp = await page.locator('.app').isVisible({ timeout: 3000 }).catch(() => false);
+      const hasApp = await page
+        .locator('.app')
+        .isVisible({ timeout: 3000 })
+        .catch(() => false);
       expect(hasApp).toBe(true);
 
       // Restore online
@@ -697,7 +731,13 @@ test.describe('Data Validation Errors', () => {
           contentType: 'application/json',
           body: JSON.stringify({
             aircraft: [
-              { hex: 'ABC123', flight: 'UAL123', lat: 37.7749, lon: -122.4194, altitude: 'invalid' },
+              {
+                hex: 'ABC123',
+                flight: 'UAL123',
+                lat: 37.7749,
+                lon: -122.4194,
+                altitude: 'invalid',
+              },
               { hex: 'DEF456', flight: 'DAL456', lat: 37.8, lon: -122.5, altitude: -99999 },
             ],
             now: Date.now() / 1000,
@@ -731,7 +771,9 @@ test.describe('Data Validation Errors', () => {
       await expect(page.locator('.app')).toBeVisible({ timeout: 10000 });
 
       // Check for empty state message
-      const emptyState = page.locator('.empty-state, :has-text("No aircraft"), :has-text("no aircraft")').first();
+      const emptyState = page
+        .locator('.empty-state, :has-text("No aircraft"), :has-text("no aircraft")')
+        .first();
       const hasEmpty = await emptyState.isVisible({ timeout: 5000 }).catch(() => false);
       expect(typeof hasEmpty).toBe('boolean');
     });
@@ -841,13 +883,19 @@ test.describe('Session/Auth Errors', () => {
           await route.fulfill({
             status: 200,
             contentType: 'application/json',
-            body: JSON.stringify({ aircraft: mockData.generateAircraft(5), now: Date.now() / 1000 }),
+            body: JSON.stringify({
+              aircraft: mockData.generateAircraft(5),
+              now: Date.now() / 1000,
+            }),
           });
         } else {
           await route.fulfill({
             status: 401,
             contentType: 'application/json',
-            body: JSON.stringify({ error: 'Session invalidated', detail: 'Logged in from another device' }),
+            body: JSON.stringify({
+              error: 'Session invalidated',
+              detail: 'Logged in from another device',
+            }),
           });
         }
       });
@@ -889,7 +937,10 @@ test.describe('Session/Auth Errors', () => {
         await route.fulfill({
           status: 401,
           contentType: 'application/json',
-          body: JSON.stringify({ error: 'Invalid credentials', detail: 'Username or password incorrect' }),
+          body: JSON.stringify({
+            error: 'Invalid credentials',
+            detail: 'Username or password incorrect',
+          }),
         });
       });
 
@@ -918,7 +969,9 @@ test.describe('Session/Auth Errors', () => {
           await page.waitForTimeout(500);
 
           // Check for error message
-          const errorMsg = page.locator('.login-error, .error-message, [role="alert"], :has-text("Invalid")').first();
+          const errorMsg = page
+            .locator('.login-error, .error-message, [role="alert"], :has-text("Invalid")')
+            .first();
           const hasError = await errorMsg.isVisible({ timeout: 3000 }).catch(() => false);
           expect(typeof hasError).toBe('boolean');
         }
@@ -1082,7 +1135,9 @@ test.describe('Form Validation Errors', () => {
       await expect(page.locator('.app')).toBeVisible({ timeout: 10000 });
 
       // Try to create a rule
-      const createBtn = page.locator('button:has-text("Create"), button:has-text("Add Rule")').first();
+      const createBtn = page
+        .locator('button:has-text("Create"), button:has-text("Add Rule")')
+        .first();
       if (await createBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
         await createBtn.click();
         await page.waitForTimeout(500);
@@ -1224,7 +1279,9 @@ test.describe('Form Validation Errors', () => {
       await expect(page.locator('.app')).toBeVisible({ timeout: 10000 });
 
       // Try SQL injection in search
-      const searchInput = page.locator('input[type="search"], input[type="text"][placeholder*="Search"], .search-input').first();
+      const searchInput = page
+        .locator('input[type="search"], input[type="text"][placeholder*="Search"], .search-input')
+        .first();
       if (await searchInput.isVisible({ timeout: 3000 }).catch(() => false)) {
         await searchInput.fill("'; DROP TABLE aircraft; --");
         await page.waitForTimeout(500);
@@ -1243,7 +1300,9 @@ test.describe('Form Validation Errors', () => {
       await page.waitForLoadState('domcontentloaded');
       await expect(page.locator('.app')).toBeVisible({ timeout: 10000 });
 
-      const searchInput = page.locator('input[type="search"], input[type="text"][placeholder*="Search"], .search-input').first();
+      const searchInput = page
+        .locator('input[type="search"], input[type="text"][placeholder*="Search"], .search-input')
+        .first();
       if (await searchInput.isVisible({ timeout: 3000 }).catch(() => false)) {
         await searchInput.fill('<script>alert("xss")</script>');
         await page.waitForTimeout(500);
@@ -1253,7 +1312,7 @@ test.describe('Form Validation Errors', () => {
 
         // Should not have script executed (no alert dialog)
         const dialogs = [];
-        page.on('dialog', dialog => dialogs.push(dialog));
+        page.on('dialog', (dialog) => dialogs.push(dialog));
         await page.waitForTimeout(500);
         expect(dialogs.length).toBe(0);
       }
@@ -1268,7 +1327,9 @@ test.describe('Form Validation Errors', () => {
       await page.waitForLoadState('domcontentloaded');
       await expect(page.locator('.app')).toBeVisible({ timeout: 10000 });
 
-      const searchInput = page.locator('input[type="search"], input[type="text"][placeholder*="Search"], .search-input').first();
+      const searchInput = page
+        .locator('input[type="search"], input[type="text"][placeholder*="Search"], .search-input')
+        .first();
       if (await searchInput.isVisible({ timeout: 3000 }).catch(() => false)) {
         await searchInput.fill('\u0041\u0042\u0043\u4e2d\u6587');
         await page.waitForTimeout(500);
@@ -1287,7 +1348,9 @@ test.describe('Form Validation Errors', () => {
       await page.waitForLoadState('domcontentloaded');
       await expect(page.locator('.app')).toBeVisible({ timeout: 10000 });
 
-      const searchInput = page.locator('input[type="search"], input[type="text"][placeholder*="Search"], .search-input').first();
+      const searchInput = page
+        .locator('input[type="search"], input[type="text"][placeholder*="Search"], .search-input')
+        .first();
       if (await searchInput.isVisible({ timeout: 3000 }).catch(() => false)) {
         // Type very long string
         const longString = 'A'.repeat(10000);
@@ -1354,7 +1417,9 @@ test.describe('Error Recovery', () => {
     await expect(page.locator('.app')).toBeVisible({ timeout: 10000 });
 
     // Do some filtering
-    const searchInput = page.locator('input[type="search"], input[type="text"][placeholder*="Search"]').first();
+    const searchInput = page
+      .locator('input[type="search"], input[type="text"][placeholder*="Search"]')
+      .first();
     if (await searchInput.isVisible({ timeout: 3000 }).catch(() => false)) {
       await searchInput.fill('UAL');
 
@@ -1394,7 +1459,9 @@ test.describe('Error Recovery', () => {
     await expect(page.locator('.app')).toBeVisible({ timeout: 10000 });
 
     // Check for retry button
-    const retryBtn = page.locator('button:has-text("Retry"), button:has-text("Try Again"), [class*="retry"]').first();
+    const retryBtn = page
+      .locator('button:has-text("Retry"), button:has-text("Try Again"), [class*="retry"]')
+      .first();
     const hasRetry = await retryBtn.isVisible({ timeout: 5000 }).catch(() => false);
     expect(typeof hasRetry).toBe('boolean');
   });
@@ -1407,7 +1474,7 @@ test.describe('Error Recovery', () => {
 test.describe('Console Error Monitoring', () => {
   test('no console errors during normal operation', async ({ page, mockApi }) => {
     const consoleErrors = [];
-    page.on('console', msg => {
+    page.on('console', (msg) => {
       if (msg.type() === 'error') {
         consoleErrors.push(msg.text());
       }
@@ -1429,11 +1496,12 @@ test.describe('Console Error Monitoring', () => {
     await page.waitForLoadState('domcontentloaded');
 
     // Filter out known acceptable errors (network/CORS related during testing)
-    const criticalErrors = consoleErrors.filter(err =>
-      !err.includes('net::') &&
-      !err.includes('Failed to fetch') &&
-      !err.includes('NetworkError') &&
-      !err.includes('CORS')
+    const criticalErrors = consoleErrors.filter(
+      (err) =>
+        !err.includes('net::') &&
+        !err.includes('Failed to fetch') &&
+        !err.includes('NetworkError') &&
+        !err.includes('CORS')
     );
 
     // Should have no critical JS errors
@@ -1442,7 +1510,7 @@ test.describe('Console Error Monitoring', () => {
 
   test('handles uncaught promise rejection gracefully', async ({ page, mockApi }) => {
     const pageErrors = [];
-    page.on('pageerror', error => {
+    page.on('pageerror', (error) => {
       pageErrors.push(error.message);
     });
 

@@ -13,6 +13,17 @@ from skyspy.socketio.namespaces.mixins import parse_int_param
 logger = logging.getLogger(__name__)
 
 
+def _numeric_altitude(ac: dict) -> int:
+    """Best-effort numeric altitude in ft; readsb reports "ground" for on-ground."""
+    for key in ("alt_baro", "alt", "alt_geom"):
+        alt = ac.get(key)
+        if isinstance(alt, (int, float)):
+            return int(alt)
+        if alt == "ground":
+            return 0
+    return 0
+
+
 class AircraftHandlerMixin:
     """Aircraft lookup, listing, stats, sightings, and photo handlers."""
 
@@ -191,7 +202,7 @@ class AircraftHandlerMixin:
 
         altitude_bands = {"ground": 0, "low": 0, "medium": 0, "high": 0}
         for ac in cached:
-            alt = ac.get("alt_baro") or ac.get("alt") or 0
+            alt = _numeric_altitude(ac)
             if alt < 500:
                 altitude_bands["ground"] += 1
             elif alt < 10000:
@@ -225,7 +236,7 @@ class AircraftHandlerMixin:
 
         highest = sorted(
             [ac for ac in with_position if ac.get("alt_baro") or ac.get("alt")],
-            key=lambda x: x.get("alt_baro") or x.get("alt") or 0,
+            key=_numeric_altitude,
             reverse=True,
         )[:5]
 

@@ -750,3 +750,36 @@ class TestSafetyEventsIntegration:
         # PUT should not be allowed
         response = api_client.put(f"/api/v1/safety/events/{event.id}/", {"event_type": "extreme_vs"}, format="json")
         assert response.status_code == status.HTTP_405_METHOD_NOT_ALLOWED
+
+
+@pytest.mark.django_db
+class TestActiveSafetyEventAcknowledge:
+    """Tests for the active (in-memory) safety event acknowledge endpoint."""
+
+    def test_acknowledge_active_event(self, api_client):
+        """Acknowledging a live monitor event key succeeds."""
+        from skyspy.services.safety import safety_monitor
+
+        event_id = "vs_reversal:TEST01"
+        with safety_monitor._events_lock:
+            safety_monitor._active_events[event_id] = {
+                "id": event_id,
+                "event_type": "vs_reversal",
+                "icao_hex": "TEST01",
+                "acknowledged": False,
+            }
+        try:
+            response = api_client.post(f"/api/v1/safety/active/{event_id}/acknowledge")
+            assert response.status_code == 200
+            assert response.json()["acknowledged"] is True
+            with safety_monitor._events_lock:
+                assert safety_monitor._active_events[event_id]["acknowledged"] is True
+        finally:
+            with safety_monitor._events_lock:
+                safety_monitor._active_events.pop(event_id, None)
+                safety_monitor._acknowledged_events.discard(event_id)
+
+    def test_acknowledge_unknown_active_event_404(self, api_client):
+        """Unknown monitor event keys return 404."""
+        response = api_client.post("/api/v1/safety/active/vs_reversal:NOPE99/acknowledge")
+        assert response.status_code == 404

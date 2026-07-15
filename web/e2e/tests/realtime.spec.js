@@ -409,24 +409,42 @@ testWithSocketIO.describe('Socket.IO Connection Lifecycle', () => {
     await mockApi.mockSystemStatus();
   });
 
-  testWithSocketIO('establishes initial connection', async ({ page, socketMock }) => {
-    await page.goto('/#map');
-    await page.waitForLoadState('domcontentloaded');
-    await page.waitForTimeout(500);
+  // The app imports `io` from the socket.io-client ES module, so the
+  // window.io interception in SocketIOMock never engages for the *outgoing*
+  // connection. Lifecycle is asserted against the real websocket via
+  // Playwright's native websocket events instead (the e2e environment always
+  // runs a live backend - vite proxies /socket.io to it).
+  // Helper: resolve when any /socket.io/ websocket sees a matching frame.
+  // The client may open and discard a probe socket first, so listeners are
+  // attached to every websocket the page creates.
+  function waitForSocketFrame(page, direction, predicate, timeoutMs = 20000) {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error(`no ${direction} frame matched`)), timeoutMs);
+      page.on('websocket', (ws) => {
+        if (!ws.url().includes('/socket.io/')) return;
+        ws.on(direction, (frame) => {
+          const payload = typeof frame.payload === 'string' ? frame.payload : '';
+          if (predicate(payload)) {
+            clearTimeout(timer);
+            resolve(payload);
+          }
+        });
+      });
+    });
+  }
 
-    const state = await socketMock.getConnectionState();
-    expect(state.connected).toBe(true);
-    expect(state.connectionAttempts).toBeGreaterThanOrEqual(1);
+  testWithSocketIO('establishes initial connection', async ({ page }) => {
+    // Engine.IO handshake: the server sends an open packet ("0{...sid...}")
+    const opened = waitForSocketFrame(page, 'framereceived', (p) => p.startsWith('0'));
+    await page.goto('/#map');
+    await expect(opened).resolves.toContain('sid');
   });
 
-  testWithSocketIO('subscribes to topics on connect', async ({ page, socketMock }) => {
+  testWithSocketIO('subscribes to topics on connect', async ({ page }) => {
+    // The client emits a "subscribe" event shortly after connecting
+    const subscribed = waitForSocketFrame(page, 'framesent', (p) => p.includes('"subscribe"'));
     await page.goto('/#map');
-    await page.waitForLoadState('domcontentloaded');
-    await page.waitForTimeout(500);
-
-    const messages = await socketMock.getSentMessages();
-    const subscribeMsg = messages.find((m) => m.event === 'subscribe');
-    expect(subscribeMsg).toBeDefined();
+    await expect(subscribed).resolves.toContain('subscribe');
   });
 
   testWithSocketIO('handles disconnect gracefully', async ({ page, socketMock }) => {
@@ -442,19 +460,33 @@ testWithSocketIO.describe('Socket.IO Connection Lifecycle', () => {
     expect(state.connected).toBe(false);
   });
 
-  testWithSocketIO('reconnects after disconnect', async ({ page, socketMock }) => {
+  testWithSocketIO('reconnects after disconnect', async ({ page, context }) => {
+    const firstWs = page.waitForEvent('websocket', {
+      predicate: (ws) => ws.url().includes('/socket.io/'),
+      timeout: 20000,
+    });
     await page.goto('/#map');
-    await page.waitForLoadState('domcontentloaded');
     await expect(page.locator('.app')).toBeVisible({ timeout: 10000 });
+    const ws1 = await firstWs;
 
-    // Simulate disconnect then reconnect
-    await socketMock.simulateDisconnect();
-    await page.waitForTimeout(200);
-    await socketMock.simulateReconnect();
-    await page.waitForTimeout(200);
+    // Kill connectivity: the socket drops...
+    const closed = ws1.isClosed()
+      ? Promise.resolve()
+      : new Promise((resolve) => ws1.on('close', resolve));
+    await context.setOffline(true);
+    await closed;
 
-    const state = await socketMock.getConnectionState();
-    expect(state.connected).toBe(true);
+    // ...and a NEW websocket must appear once connectivity returns
+    const reconnectWs = page.waitForEvent('websocket', {
+      predicate: (ws) => ws.url().includes('/socket.io/'),
+      timeout: 30000,
+    });
+    await context.setOffline(false);
+    const ws2 = await reconnectWs;
+    expect(ws2.url()).toContain('/socket.io/');
+
+    // App survives the round trip
+    await expect(page.locator('.app')).toBeVisible();
   });
 
   testWithSocketIO('handles connection error', async ({ page, socketMock }) => {
@@ -896,74 +928,68 @@ testWithSocketIO.describe('Real-time Integration', () => {
     await mockApi.mock('/safety/events', { events: [], count: 0 });
   });
 
-  testWithSocketIO(
-    'handles mixed events from multiple topics',
-    async ({ page, socketMock }) => {
-      await page.goto('/#map');
-      await page.waitForLoadState('domcontentloaded');
-      await expect(page.locator('.app')).toBeVisible({ timeout: 10000 });
+  testWithSocketIO('handles mixed events from multiple topics', async ({ page, socketMock }) => {
+    await page.goto('/#map');
+    await page.waitForLoadState('domcontentloaded');
+    await expect(page.locator('.app')).toBeVisible({ timeout: 10000 });
 
-      // Send various events in rapid succession
-      await socketMock.sendAircraftSnapshot(mockData.generateAircraft(10));
-      await socketMock.sendSafetySnapshot([
-        {
-          id: 1,
-          event_type: 'tcas_ta',
-          severity: 'warning',
-          icao_hex: 'ABC123',
-          message: 'TCAS Traffic Advisory',
-        },
-      ]);
-      await socketMock.sendAlertTriggered({
+    // Send various events in rapid succession
+    await socketMock.sendAircraftSnapshot(mockData.generateAircraft(10));
+    await socketMock.sendSafetySnapshot([
+      {
         id: 1,
-        rule_name: 'Test Alert',
-        type: 'callsign',
-        severity: 'info',
-        message: 'Alert triggered',
-        aircraft: { hex: 'ABC123', flight: 'UAL123' },
-      });
-      await socketMock.sendAcarsMessage({
-        id: 1,
-        flight: 'UAL123',
-        label: 'H1',
-        text: 'Test message',
-      });
+        event_type: 'tcas_ta',
+        severity: 'warning',
+        icao_hex: 'ABC123',
+        message: 'TCAS Traffic Advisory',
+      },
+    ]);
+    await socketMock.sendAlertTriggered({
+      id: 1,
+      rule_name: 'Test Alert',
+      type: 'callsign',
+      severity: 'info',
+      message: 'Alert triggered',
+      aircraft: { hex: 'ABC123', flight: 'UAL123' },
+    });
+    await socketMock.sendAcarsMessage({
+      id: 1,
+      flight: 'UAL123',
+      label: 'H1',
+      text: 'Test message',
+    });
 
-      await page.waitForTimeout(500);
+    await page.waitForTimeout(500);
 
-      // App should handle all events without errors
-      await expect(page.locator('.app')).toBeVisible();
-    }
-  );
+    // App should handle all events without errors
+    await expect(page.locator('.app')).toBeVisible();
+  });
 
-  testWithSocketIO(
-    'maintains state across reconnection',
-    async ({ page, socketMock }) => {
-      await page.goto('/#map');
-      await page.waitForLoadState('domcontentloaded');
-      await expect(page.locator('.app')).toBeVisible({ timeout: 10000 });
+  testWithSocketIO('maintains state across reconnection', async ({ page, socketMock }) => {
+    await page.goto('/#map');
+    await page.waitForLoadState('domcontentloaded');
+    await expect(page.locator('.app')).toBeVisible({ timeout: 10000 });
 
-      // Send initial data
-      const aircraft = mockData.generateAircraft(5);
-      await socketMock.sendAircraftSnapshot(aircraft);
-      await page.waitForTimeout(200);
+    // Send initial data
+    const aircraft = mockData.generateAircraft(5);
+    await socketMock.sendAircraftSnapshot(aircraft);
+    await page.waitForTimeout(200);
 
-      // Simulate disconnect
-      await socketMock.simulateDisconnect();
-      await page.waitForTimeout(200);
+    // Simulate disconnect
+    await socketMock.simulateDisconnect();
+    await page.waitForTimeout(200);
 
-      // Simulate reconnect
-      await socketMock.simulateReconnect();
-      await page.waitForTimeout(200);
+    // Simulate reconnect
+    await socketMock.simulateReconnect();
+    await page.waitForTimeout(200);
 
-      // Send new data after reconnect
-      await socketMock.sendAircraftSnapshot(aircraft);
-      await page.waitForTimeout(200);
+    // Send new data after reconnect
+    await socketMock.sendAircraftSnapshot(aircraft);
+    await page.waitForTimeout(200);
 
-      // Verify app recovered
-      await expect(page.locator('.app')).toBeVisible();
-    }
-  );
+    // Verify app recovered
+    await expect(page.locator('.app')).toBeVisible();
+  });
 
   testWithSocketIO('handles high-frequency updates', async ({ page, socketMock }) => {
     await page.goto('/#map');

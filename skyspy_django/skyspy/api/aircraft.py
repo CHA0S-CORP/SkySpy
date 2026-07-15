@@ -104,9 +104,11 @@ class AircraftViewSet(viewsets.ViewSet):
             key=lambda x: x.get("distance_nm", float("inf")),
         )[:limit]
 
-        # Highest altitude
+        # Highest altitude ("ground" string sorts as 0)
         highest = sorted(
-            [ac for ac in with_position if ac.get("alt") is not None], key=lambda x: x.get("alt", 0), reverse=True
+            [ac for ac in with_position if ac.get("alt") is not None],
+            key=lambda x: x.get("alt") if isinstance(x.get("alt"), (int, float)) else 0,
+            reverse=True,
         )[:limit]
 
         # Fastest
@@ -171,6 +173,8 @@ class AircraftViewSet(viewsets.ViewSet):
         }
         for ac in aircraft_list:
             alt = ac.get("alt")
+            if not isinstance(alt, (int, float)):
+                alt = None  # readsb reports "ground" for on-ground aircraft
             if alt is None or alt < 100:
                 altitude_bands["ground"] += 1
             elif alt < 10000:

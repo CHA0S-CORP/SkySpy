@@ -43,10 +43,14 @@ class TestRateLimiter:
         """Test rate limiter with custom rates."""
         from skyspy.socketio.utils.rate_limiter import RateLimiter
 
-        custom_rates = {"test:topic": 1.0}  # 1 Hz
+        custom_rates = {"test:topic": 1.0}  # 1 Hz sustained, burst of rate*BURST_SECONDS
         limiter = RateLimiter(rate_limits=custom_rates)
 
-        assert limiter.can_send("test:topic") is True
+        from skyspy.socketio.utils.rate_limiter import BURST_SECONDS
+
+        burst = max(1, int(1.0 * BURST_SECONDS))
+        for _ in range(burst):
+            assert limiter.can_send("test:topic") is True
         assert limiter.can_send("test:topic") is False
 
     def test_rate_limiter_get_wait_time(self):
@@ -517,7 +521,8 @@ class TestRequestRateLimiting:
         namespace = MainNamespace("/")
 
         limiter = RateLimiter({"request": 10})
-        assert limiter.can_send("request") is True  # consume the allowance
+        while limiter.can_send("request"):  # drain the burst allowance
+            pass
 
         mock_sio = MagicMock()
         mock_sio.emit = AsyncMock()

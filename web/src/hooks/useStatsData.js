@@ -126,7 +126,7 @@ export function useStatsData({
     socketOpts
   );
   const { data: safetyStats } = useSocketApi(
-    `/api/v1/safety/stats?hours=${selectedHours}`,
+    `/api/v1/safety/events/stats?hours=${selectedHours}`,
     null,
     apiBase,
     socketOpts
@@ -154,7 +154,7 @@ export function useStatsData({
     socketOpts
   );
   const { data: topPerformersData } = useSocketApi(
-    `/api/v1/history/top?${filterParams}&limit=10`,
+    `/api/v1/history/top-performers?${filterParams}&limit=10`,
     null,
     apiBase,
     socketOpts

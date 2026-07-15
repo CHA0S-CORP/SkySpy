@@ -16,6 +16,7 @@ from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from skyspy.auth.authentication import APIKeyAuthentication, OptionalJWTAuthentication
 from skyspy.models import SafetyEvent
@@ -309,3 +310,26 @@ class SafetyEventViewSet(viewsets.ModelViewSet):
         event.acknowledged_at = None
         event.save()
         return Response(SafetyEventSerializer(event).data)
+
+
+class ActiveSafetyEventAcknowledgeView(APIView):
+    """Acknowledge an in-memory active safety event by its monitor key.
+
+    Active events live in the SafetyMonitor singleton under composite string
+    keys (e.g. "vs_reversal:A3F7F6") until they resolve; they are not
+    addressable through the SafetyEvent DB viewset. The map alarm UI posts
+    here to silence an active event.
+    """
+
+    authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
+
+    @extend_schema(
+        summary="Acknowledge active safety event",
+        description="Acknowledge an active (in-memory) safety event by its monitor event key",
+    )
+    def post(self, request, event_id: str):
+        from skyspy.services.safety import safety_monitor
+
+        if safety_monitor.acknowledge_event(event_id):
+            return Response({"success": True, "id": event_id, "acknowledged": True})
+        return Response({"error": "not_found", "id": event_id}, status=404)

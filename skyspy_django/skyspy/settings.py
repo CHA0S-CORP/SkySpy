@@ -363,9 +363,12 @@ REST_FRAMEWORK = {
         "rest_framework.throttling.AnonRateThrottle",
         "rest_framework.throttling.UserRateThrottle",
     ],
+    # The dashboard is a chatty SPA (aircraft/safety/weather polling); in
+    # AUTH_MODE=public every request is anonymous, so the anon rate must
+    # comfortably exceed one dashboard's steady-state request volume.
     "DEFAULT_THROTTLE_RATES": {
-        "anon": "100/minute",
-        "user": "1000/minute",
+        "anon": get_env("API_THROTTLE_ANON", "600/minute"),
+        "user": get_env("API_THROTTLE_USER", "2000/minute"),
     },
 }
 

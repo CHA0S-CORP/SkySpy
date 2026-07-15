@@ -645,12 +645,12 @@ class TestRateLimiterThreadSafety:
         limiter = RateLimiter()
         limiter.can_send("test")
 
-        # The _last_send values should be based on monotonic time
-        last_send = limiter._last_send.get("test", 0)
+        # Bucket timestamps should be based on monotonic time
+        _tokens, last_refill = limiter._buckets.get("test", (0, 0))
         current_monotonic = time.monotonic()
 
         # Should be close to current monotonic time
-        assert abs(current_monotonic - last_send) < 1.0
+        assert abs(current_monotonic - last_refill) < 1.0
 
     def test_rate_limiter_cleanup(self):
         """Test that cleanup_old_entries removes stale entries."""
@@ -662,12 +662,12 @@ class TestRateLimiterThreadSafety:
         limiter.can_send("topic1")
         limiter.can_send("topic2")
 
-        assert len(limiter._last_send) == 2
+        assert len(limiter._buckets) == 2
 
         # Cleanup with 0 max_age should remove all
         limiter.cleanup_old_entries(max_age=0)
 
-        assert len(limiter._last_send) == 0
+        assert len(limiter._buckets) == 0
 
     def test_rate_limiter_reset(self):
         """Test that reset clears rate limiting state."""
@@ -680,12 +680,12 @@ class TestRateLimiterThreadSafety:
 
         # Reset single topic
         limiter.reset("topic1")
-        assert "topic1" not in limiter._last_send
-        assert "topic2" in limiter._last_send
+        assert "topic1" not in limiter._buckets
+        assert "topic2" in limiter._buckets
 
         # Reset all
         limiter.reset()
-        assert len(limiter._last_send) == 0
+        assert len(limiter._buckets) == 0
 
 
 # =============================================================================

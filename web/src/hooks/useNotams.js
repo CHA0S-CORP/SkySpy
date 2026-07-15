@@ -144,7 +144,12 @@ export function useNotams(wsRequest, wsConnected, options = {}) {
       setError(null);
     } catch (err) {
       if (!mountedRef.current) return;
-      console.error('NOTAMs fetch error:', err);
+      if (/disconnected/i.test(err?.message || '')) {
+        // Socket dropped mid-request (reconnect/unmount) - next poll retries
+        console.warn('NOTAMs fetch skipped, socket disconnected');
+      } else {
+        console.error('NOTAMs fetch error:', err);
+      }
       setError(err.message || 'Failed to fetch NOTAMs');
     } finally {
       if (mountedRef.current) {

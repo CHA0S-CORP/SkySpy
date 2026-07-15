@@ -72,7 +72,7 @@ from skyspy.api.map import MapViewSet
 from skyspy.api.mobile import MobileViewSet
 from skyspy.api.notams import NotamViewSet
 from skyspy.api.notifications import NotificationChannelViewSet, NotificationViewSet
-from skyspy.api.safety import SafetyEventViewSet
+from skyspy.api.safety import ActiveSafetyEventAcknowledgeView, SafetyEventViewSet
 from skyspy.api.stats import EngagementViewSet, FavoritesViewSet, TrackingQualityViewSet
 from skyspy.api.system import (
     AircraftLookupView,
@@ -166,6 +166,13 @@ urlpatterns = [
             [
                 # Router-based endpoints
                 path("", include(router.urls)),
+                # Active (in-memory) safety event acknowledgment - keys like
+                # "vs_reversal:A3F7F6" are not DB pks, so this sits outside the router
+                path(
+                    "safety/active/<str:event_id>/acknowledge",
+                    ActiveSafetyEventAcknowledgeView.as_view(),
+                    name="safety-active-acknowledge",
+                ),
                 # Authentication endpoints
                 path("auth/config", AuthConfigView.as_view(), name="auth-config"),
                 path("auth/config/", AuthConfigView.as_view(), name="auth-config-slash"),

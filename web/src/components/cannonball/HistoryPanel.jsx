@@ -310,7 +310,12 @@ export function HistoryPanel({
           <button className="icon-btn danger" onClick={onClear} title="Clear">
             <Trash2 size={18} />
           </button>
-          <button className="icon-btn" onClick={onClose}>
+          <button
+            className="icon-btn close-btn"
+            onClick={onClose}
+            title="Close"
+            aria-label="Close history"
+          >
             <X size={20} />
           </button>
         </div>
