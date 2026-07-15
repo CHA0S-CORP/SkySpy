@@ -243,6 +243,30 @@ class DistributedCooldownManager:
                 return None
         return None
 
+    def clear_one(self, rule_id: int, icao_hex: str) -> bool:
+        """
+        Clear the cooldown for a single rule/aircraft pair.
+
+        Used to roll back a cooldown that check_and_set just wrote when the
+        alert could not be persisted, so the next evaluation cycle can retry.
+
+        Returns:
+            True if a cooldown was removed
+        """
+        removed = False
+
+        if self.redis:
+            try:
+                removed = bool(self.redis.delete(self._get_key(rule_id, icao_hex)))
+            except Exception as e:
+                logger.warning(f"Redis clear_one failed: {e}")
+
+        # Also clear in-memory fallback
+        if self._fallback_cooldowns.remove((rule_id, icao_hex.upper())):
+            removed = True
+
+        return removed
+
     def clear_rule(self, rule_id: int) -> int:
         """
         Clear all cooldowns for a specific rule.

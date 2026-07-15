@@ -342,11 +342,11 @@ describe('AlertHistory', () => {
       await user.click(ackButtons[0]);
 
       await waitFor(() => {
+        // Must POST to the acknowledge action - the detail route is read-only (PATCH -> 405)
         expect(mockFetch).toHaveBeenCalledWith(
-          'http://localhost:8000/api/v1/alerts/history/1/',
+          'http://localhost:8000/api/v1/alerts/history/1/acknowledge/',
           expect.objectContaining({
-            method: 'PATCH',
-            body: JSON.stringify({ acknowledged: true }),
+            method: 'POST',
           })
         );
       });

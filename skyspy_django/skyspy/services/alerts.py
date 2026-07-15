@@ -400,20 +400,27 @@ class AlertService:
         callsign = aircraft.get("flight") or icao
         message = f"Alert '{rule.name}' triggered for {callsign}"
 
-        # Store in history and update rule atomically
-        with transaction.atomic():
-            AlertHistory.objects.create(
-                rule_id=rule.id,
-                rule_name=rule.name,
-                icao_hex=icao,
-                callsign=aircraft.get("flight"),
-                message=message,
-                priority=rule.priority,
-                aircraft_data=aircraft,
-            )
+        # Store in history and update rule atomically. On failure, roll back
+        # the cooldown that check_and_set just wrote - otherwise a transient
+        # DB error would silently suppress this alert (no history row, no
+        # broadcast, no notification) for the entire cooldown window.
+        try:
+            with transaction.atomic():
+                AlertHistory.objects.create(
+                    rule_id=rule.id,
+                    rule_name=rule.name,
+                    icao_hex=icao,
+                    callsign=aircraft.get("flight"),
+                    message=message,
+                    priority=rule.priority,
+                    aircraft_data=aircraft,
+                )
 
-            # Update rule's last_triggered timestamp
-            AlertRule.objects.filter(id=rule.id).update(last_triggered=timezone.now())
+                # Update rule's last_triggered timestamp
+                AlertRule.objects.filter(id=rule.id).update(last_triggered=timezone.now())
+        except DatabaseError:
+            cooldown_manager.clear_one(rule.id, icao)
+            raise
 
         alert_data = {
             "rule_id": rule.id,
@@ -524,23 +531,31 @@ class AlertService:
             # when only one of them actually failed.
             title = f"SkysPy Alert: {alert_data['rule_name']}"
             for url, channel_id in url_channel_pairs:
-                apobj = apprise.Apprise()
-                apobj.add(url)
-                # notify() returns False (or None for invalid URLs) on failure
-                success = bool(apobj.notify(title=title, body=alert_data["message"], notify_type=notify_type))
-                if not success:
-                    logger.warning(f"Apprise notification failed for alert rule '{alert_data['rule_name']}'")
+                # Isolate each iteration: a failure delivering or logging one
+                # channel must not skip delivery to the remaining channels.
+                try:
+                    apobj = apprise.Apprise()
+                    apobj.add(url)
+                    # notify() returns False (or None for invalid URLs) on failure
+                    success = bool(apobj.notify(title=title, body=alert_data["message"], notify_type=notify_type))
+                    if not success:
+                        logger.warning(f"Apprise notification failed for alert rule '{alert_data['rule_name']}'")
 
-                NotificationLog.objects.create(
-                    notification_type="alert",
-                    icao_hex=alert_data["icao"],
-                    callsign=alert_data.get("callsign"),
-                    message=alert_data["message"],
-                    details=alert_data,
-                    channel_id=channel_id,
-                    channel_url=url,
-                    status="sent" if success else "failed",
-                )
+                    NotificationLog.objects.create(
+                        notification_type="alert",
+                        icao_hex=alert_data["icao"],
+                        callsign=alert_data.get("callsign"),
+                        message=alert_data["message"],
+                        details=alert_data,
+                        channel_id=channel_id,
+                        channel_url=url,
+                        status="sent" if success else "failed",
+                    )
+                except (DatabaseError, ConnectionError, OSError, ValueError, TypeError) as e:
+                    logger.error(
+                        f"Notification channel {channel_id if channel_id is not None else url[:50]} failed "
+                        f"for alert rule '{alert_data['rule_name']}': {type(e).__name__}: {e}"
+                    )
 
         except ImportError:
             logger.debug("Apprise not installed, skipping notification")

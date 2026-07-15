@@ -624,4 +624,60 @@ describe('RuleForm', () => {
       expect(screen.getByLabelText(/expires at/i)).toBeInTheDocument();
     });
   });
+
+  describe('schedule timezone handling', () => {
+    // Force a non-UTC timezone so UTC<->local conversion bugs can't hide
+    // (Node re-reads TZ at runtime, so this affects Date within these tests)
+    let originalTz;
+
+    beforeEach(() => {
+      originalTz = process.env.TZ;
+      process.env.TZ = 'America/Chicago';
+    });
+
+    afterEach(() => {
+      if (originalTz === undefined) {
+        delete process.env.TZ;
+      } else {
+        process.env.TZ = originalTz;
+      }
+    });
+
+    const editRule = {
+      id: 1,
+      name: 'Scheduled Rule',
+      priority: 'info',
+      enabled: true,
+      cooldown: 300,
+      conditions: { logic: 'AND', groups: [] },
+      starts_at: '2024-01-15T18:30:00Z',
+      expires_at: '2024-01-16T06:00:00Z',
+    };
+
+    const toLocalInputValue = (iso) => {
+      const d = new Date(iso);
+      d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+      return d.toISOString().slice(0, 16);
+    };
+
+    it('should display stored UTC times as local wall-clock time', () => {
+      render(<RuleForm {...defaultProps} editRule={editRule} />);
+
+      // 18:30 UTC must render as the user's local time, not as 18:30 local
+      expect(screen.getByLabelText(/starts at/i).value).toBe(toLocalInputValue(editRule.starts_at));
+      expect(screen.getByLabelText(/expires at/i).value).toBe(
+        toLocalInputValue(editRule.expires_at)
+      );
+    });
+
+    it('should round-trip an edited local time without shifting it', () => {
+      render(<RuleForm {...defaultProps} editRule={editRule} />);
+
+      const startsAtInput = screen.getByLabelText(/starts at/i);
+      // User enters a local wall-clock time; store converts local->UTC and the
+      // display converts UTC->local, so the shown value must not drift
+      fireEvent.change(startsAtInput, { target: { value: '2024-03-15T08:45' } });
+      expect(startsAtInput.value).toBe('2024-03-15T08:45');
+    });
+  });
 });

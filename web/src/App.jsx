@@ -131,8 +131,6 @@ export default function App() {
   const [showCannonball, setShowCannonball] = useState(false);
 
   // Refs for tail lookup to avoid stale closures
-  const wsRequestRef = React.useRef(null);
-  const connectedRef = React.useRef(false);
   const apiBaseUrlRef = React.useRef(config.apiBaseUrl);
 
   // Auth context
@@ -311,15 +309,7 @@ export default function App() {
     return () => clearInterval(interval);
   }, [config.apiBaseUrl, wsRequest, connected]);
 
-  // Keep refs in sync for tail lookup to avoid stale closures
-  useEffect(() => {
-    wsRequestRef.current = wsRequest;
-  }, [wsRequest]);
-
-  useEffect(() => {
-    connectedRef.current = connected;
-  }, [connected]);
-
+  // Keep ref in sync for tail lookup to avoid stale closures
   useEffect(() => {
     apiBaseUrlRef.current = config.apiBaseUrl;
   }, [config.apiBaseUrl]);
@@ -346,38 +336,19 @@ export default function App() {
     // Mark lookup in progress and trigger async lookup
     tailLookupInProgressRef.current.add(tail);
 
-    // Look up from sightings API (prefer WebSocket)
-    // Uses refs to read current values at execution time, avoiding stale closures
+    // Look up via the airframe registration endpoint, which resolves
+    // registration → icao_hex. (The sightings API has no registration filter —
+    // it would silently ignore the param and return an arbitrary aircraft.)
+    // Uses a ref to read the current API base at execution time, avoiding stale closures
     const lookupTail = async () => {
       try {
-        let data;
-        // Read current values from refs at execution time
-        const currentWsRequest = wsRequestRef.current;
-        const currentConnected = connectedRef.current;
         const currentApiBaseUrl = apiBaseUrlRef.current;
-
-        if (currentWsRequest && currentConnected) {
-          const result = await currentWsRequest('sightings', {
-            registration: tail,
-            hours: 168,
-            limit: 1,
-          });
-          if (result && (result.sightings || result.results)) {
-            data = result;
-          } else {
-            throw new Error('Invalid sightings response');
-          }
-        } else {
-          // Django API uses /api/v1/sightings (was /api/v1/history/sightings)
-          const res = await fetch(
-            `${currentApiBaseUrl}/api/v1/sightings?registration=${encodeURIComponent(tail)}&hours=168&limit=1`
-          );
-          data = await safeJson(res);
-          if (!data) throw new Error('HTTP request failed');
-        }
-        const sightings = data?.sightings || data?.results || [];
-        if (sightings.length > 0 && sightings[0].icao_hex) {
-          setTailHexLookup((p) => ({ ...p, [tail]: sightings[0].icao_hex }));
+        const res = await fetch(
+          `${currentApiBaseUrl}/api/v1/airframes/registration/${encodeURIComponent(tail)}/`
+        );
+        const data = await safeJson(res);
+        if (data?.icao_hex) {
+          setTailHexLookup((p) => ({ ...p, [tail]: data.icao_hex }));
         } else {
           setTailHexLookup((p) => ({ ...p, [tail]: null }));
         }

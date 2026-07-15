@@ -12,7 +12,7 @@ from django.db.models.functions import TruncHour
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import OpenApiParameter, extend_schema
-from rest_framework import viewsets
+from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -47,7 +47,7 @@ class SafetyEventViewSet(viewsets.ModelViewSet):
         AUTH_MODE is 'public'. Reads (and acknowledge/unacknowledge) keep
         the existing AUTH_MODE-based behavior.
         """
-        if self.action in ("create", "destroy"):
+        if self.action in ("create", "destroy", "generate_test"):
             return [IsAuthenticated()]
         return super().get_permissions()
 
@@ -290,6 +290,23 @@ class SafetyEventViewSet(viewsets.ModelViewSet):
                 "timestamp": timezone.now().isoformat(),
             }
         )
+
+    @extend_schema(
+        summary="Generate test safety events",
+        description=(
+            "Generate one synthetic safety event of each type (emergency squawk, "
+            "TCAS, extreme VS, proximity) in the safety monitor's active-event "
+            "set, for exercising dashboards and alarms. Events are flagged "
+            "is_test and expire like real active events. Requires authentication."
+        ),
+    )
+    @action(detail=False, methods=["post"], url_path="test")
+    def generate_test(self, request):
+        """Generate synthetic safety events for testing."""
+        from skyspy.services.safety import safety_monitor
+
+        events = safety_monitor.generate_test_events()
+        return Response({"generated": len(events), "events": events}, status=status.HTTP_201_CREATED)
 
     @extend_schema(summary="Acknowledge safety event", description="Mark a safety event as acknowledged")
     @action(detail=True, methods=["post"])

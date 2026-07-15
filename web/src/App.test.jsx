@@ -491,6 +491,44 @@ describe('App', () => {
       });
       expect(screen.getByTestId('safety-event-page')).toBeInTheDocument();
     });
+
+    it('should resolve tail to hex via the airframe registration endpoint', async () => {
+      global.fetch = vi.fn((url) => {
+        if (String(url).includes('/api/v1/airframes/registration/')) {
+          return Promise.resolve({
+            ok: true,
+            headers: new Headers({ 'content-type': 'application/json' }),
+            json: () => Promise.resolve({ icao_hex: 'ABC123', registration: 'N12345' }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          headers: new Headers({ 'content-type': 'application/json' }),
+          json: () => Promise.resolve({}),
+        });
+      });
+
+      window.location.hash = '#airframe?tail=N12345';
+      await act(async () => {
+        render(<App />);
+      });
+
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalledWith('/api/v1/airframes/registration/N12345/');
+      });
+
+      // Must NOT use the sightings API - it has no registration filter and
+      // would silently return an arbitrary aircraft's sighting
+      const sightingsCalls = global.fetch.mock.calls.filter(([url]) =>
+        String(url).includes('/api/v1/sightings')
+      );
+      expect(sightingsCalls).toHaveLength(0);
+
+      // The resolved hex should be passed through to the detail page
+      await waitFor(() => {
+        expect(screen.getByTestId('aircraft-detail')).toHaveTextContent('Aircraft ABC123');
+      });
+    });
   });
 
   describe('connection status', () => {

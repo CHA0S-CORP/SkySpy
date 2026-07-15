@@ -4046,6 +4046,9 @@ func TestModel_SaveOverlays_WithOverlays(t *testing.T) {
 
 func TestModel_HandleRadarKey_Remaining(t *testing.T) {
 	cfg := newTestConfig()
+	// The P/E keys trigger real file exports; without an explicit directory
+	// they would default to the process cwd (this package dir).
+	cfg.Export.Directory = t.TempDir()
 	m := NewModel(cfg)
 	m.width = 100
 	m.height = 40
@@ -4095,6 +4098,28 @@ func TestModel_HandleRadarKey_Remaining(t *testing.T) {
 	// Test E key (uppercase)
 	keyMsg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'E'}}
 	m.Update(keyMsg)
+
+	// Regression: the P/E exports must land in the configured directory,
+	// not in the process cwd (the package source dir).
+	entries, err := os.ReadDir(cfg.Export.Directory)
+	if err != nil {
+		t.Fatalf("failed to read export directory: %v", err)
+	}
+	var haveScreenshot, haveCSV bool
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), "skyspy_screenshot_") && strings.HasSuffix(e.Name(), ".html") {
+			haveScreenshot = true
+		}
+		if strings.HasPrefix(e.Name(), "skyspy_aircraft_") && strings.HasSuffix(e.Name(), ".csv") {
+			haveCSV = true
+		}
+	}
+	if !haveScreenshot {
+		t.Error("P key should write skyspy_screenshot_*.html into the export directory")
+	}
+	if !haveCSV {
+		t.Error("E key should write skyspy_aircraft_*.csv into the export directory")
+	}
 }
 
 func TestView_RenderRadar_AllBranches(t *testing.T) {

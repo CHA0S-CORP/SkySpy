@@ -59,6 +59,8 @@ export function usePlaybackMode({
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [playbackPercent, setPlaybackPercent] = useState(0);
   const [selectedHours, setSelectedHours] = useState(1);
+  // Explicit start/end window set via setTimeRange (null = preset hours mode)
+  const [customRange, setCustomRange] = useState(null);
 
   // Data state
   const [isLoading, setIsLoading] = useState(false);
@@ -80,14 +82,16 @@ export function usePlaybackMode({
   }, [isPlaying, playbackSpeed, playbackPercent]);
 
   /**
-   * Calculate time range based on selected hours
+   * Calculate time range based on selected hours, or use the custom range
+   * when one has been set via setTimeRange
    */
   const timeRange = useMemo(() => {
     if (!isPlayback) return null;
+    if (customRange) return customRange;
     const end = new Date();
     const start = new Date(end.getTime() - selectedHours * 60 * 60 * 1000);
     return { start, end };
-  }, [isPlayback, selectedHours]);
+  }, [isPlayback, selectedHours, customRange]);
 
   /**
    * Calculate current playback time based on percent
@@ -326,6 +330,7 @@ export function usePlaybackMode({
   const enterPlayback = useCallback(
     async (hours) => {
       setSelectedHours(hours);
+      setCustomRange(null);
       setIsPlayback(true);
       setPlaybackPercent(0);
       setIsPlaying(false);
@@ -352,6 +357,7 @@ export function usePlaybackMode({
     setIsPlayback(false);
     setIsPlaying(false);
     setPlaybackPercent(0);
+    setCustomRange(null);
     setHistorySightings([]);
     setError(null);
   }, []);
@@ -446,10 +452,11 @@ export function usePlaybackMode({
    */
   const setTimeRange = useCallback(
     async (start, end) => {
-      const customRange = { start: new Date(start), end: new Date(end) };
+      const range = { start: new Date(start), end: new Date(end) };
       // For custom ranges, we need to calculate hours for the fetch
-      const hours = Math.ceil((customRange.end - customRange.start) / (1000 * 60 * 60));
+      const hours = Math.ceil((range.end - range.start) / (1000 * 60 * 60));
       setSelectedHours(hours);
+      setCustomRange(range);
       setIsPlayback(true);
       setPlaybackPercent(0);
       setIsPlaying(false);
@@ -460,9 +467,16 @@ export function usePlaybackMode({
 
       try {
         let data;
+        // The sightings endpoints only support a now-anchored `hours` window,
+        // so request enough hours to reach back to the custom start time
+        const fetchHours = Math.max(
+          1,
+          Math.ceil((Date.now() - range.start.getTime()) / (1000 * 60 * 60))
+        );
         const params = {
-          start: customRange.start.toISOString(),
-          end: customRange.end.toISOString(),
+          start: range.start.toISOString(),
+          end: range.end.toISOString(),
+          hours: fetchHours,
           limit: 100000,
         };
 
@@ -484,7 +498,13 @@ export function usePlaybackMode({
           }
         }
 
-        const sightings = data?.sightings || data?.results || [];
+        // Clip to the requested window (backend returns the whole hours window)
+        const startMs = range.start.getTime();
+        const endMs = range.end.getTime();
+        const sightings = (data?.sightings || data?.results || []).filter((s) => {
+          const ts = new Date(s.timestamp).getTime();
+          return ts >= startMs && ts <= endMs;
+        });
         setHistorySightings(sightings);
         setIsLoading(false);
       } catch (err) {
@@ -527,7 +547,9 @@ export function usePlaybackMode({
       // This means the increment per second = 100 / (hours * 3600)
       // With 60fps, increment per frame = 100 / (hours * 3600) / 60 * speed
       // Simplified: increment per ms = 100 / (hours * 3600 * 1000) * speed
-      const totalMs = selectedHours * 60 * 60 * 1000;
+      const totalMs = timeRange
+        ? timeRange.end.getTime() - timeRange.start.getTime()
+        : selectedHours * 60 * 60 * 1000;
       const incrementPerMs = (100 / totalMs) * speed;
       const increment = deltaTime * incrementPerMs;
 
@@ -550,7 +572,7 @@ export function usePlaybackMode({
         animationFrameRef.current = null;
       }
     };
-  }, [isPlaying, isPlayback, selectedHours]);
+  }, [isPlaying, isPlayback, selectedHours, timeRange]);
 
   // Cleanup on unmount
   useEffect(() => {

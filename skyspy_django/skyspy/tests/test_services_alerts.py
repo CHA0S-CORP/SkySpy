@@ -9,11 +9,12 @@ from datetime import timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
-from django.db import transaction
+from django.db import DatabaseError, transaction
 from django.test import TestCase
 from django.utils import timezone
 
 from skyspy.models import AlertHistory, AlertRule, NotificationConfig, NotificationLog
+from skyspy.services.alert_cooldowns import cooldown_manager
 from skyspy.services.alert_rule_cache import CompiledRule
 from skyspy.services.alerts import AlertService
 
@@ -1225,3 +1226,82 @@ class TestPerChannelNotificationStatus:
             "json://good.example.com": "sent",
             "json://bad.example.com": "failed",
         }
+
+
+@pytest.mark.django_db
+class TestPerChannelNotificationIsolation:
+    """Regression: one channel's failure (e.g. a DB error writing its
+    NotificationLog row) must not skip delivery to the remaining channels."""
+
+    def test_db_error_on_first_channel_log_does_not_skip_remaining(self):
+        config = NotificationConfig.get_config()
+        config.enabled = True
+        config.apprise_urls = "json://one.example.com;json://two.example.com"
+        config.save()
+
+        alert_data = {"rule_name": "Test Alert", "message": "msg", "priority": "info", "icao": "ABC123"}
+
+        first = MagicMock()
+        first.notify.return_value = True
+        second = MagicMock()
+        second.notify.return_value = True
+
+        real_create = NotificationLog.objects.create
+        call_count = {"n": 0}
+
+        def flaky_create(**kwargs):
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                raise DatabaseError("transient log write failure")
+            return real_create(**kwargs)
+
+        with (
+            patch("apprise.Apprise", side_effect=[first, second]),
+            patch("apprise.NotifyType"),
+            patch.object(NotificationLog.objects, "create", side_effect=flaky_create),
+        ):
+            AlertService()._send_notification(alert_data)
+
+        # The second channel must still be delivered and logged even though
+        # the first channel's NotificationLog write raised.
+        assert second.notify.called
+        assert [log.channel_url for log in NotificationLog.objects.all()] == ["json://two.example.com"]
+
+
+@pytest.mark.django_db
+class TestCooldownClearedOnPersistFailure:
+    """Regression: a DB failure while persisting a triggered alert must roll
+    back the just-set cooldown, or the alert is silently suppressed (no
+    history row, no broadcast, no notification) for the whole cooldown
+    window."""
+
+    def setup_method(self):
+        cooldown_manager.clear_all()
+
+    def teardown_method(self):
+        cooldown_manager.clear_all()
+
+    def test_persist_failure_clears_cooldown_so_next_cycle_can_retry(self):
+        db_rule = AlertRule.objects.create(
+            name="Persist Fail", rule_type="icao", operator="eq", value="ABC123", enabled=True
+        )
+        rule = create_compiled_rule(db_rule)
+        aircraft = {"hex": "ABC123", "flight": "TEST1"}
+        service = AlertService()
+
+        with (
+            patch("skyspy.services.alerts.sync_emit"),
+            patch.object(AlertHistory.objects, "create", side_effect=DatabaseError("db down")),
+            pytest.raises(DatabaseError),
+        ):
+            service._trigger_alert(rule, aircraft)
+
+        assert AlertHistory.objects.count() == 0
+
+        # The next evaluation cycle must be able to retry: the cooldown set
+        # before the failed persist must have been cleared.
+        with patch("skyspy.services.alerts.sync_emit"):
+            alert = service._trigger_alert(rule, aircraft)
+
+        assert alert is not None
+        assert AlertHistory.objects.count() == 1

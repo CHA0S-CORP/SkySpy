@@ -301,7 +301,8 @@ export function SystemView({ apiBase, wsRequest, wsConnected }) {
     setTestLoading(true);
     setTestResult(null);
     try {
-      const res = await fetch(`${apiBase}/api/v1/notifications/test`, { method: 'POST' });
+      // Trailing slash required: DRF router non-GET requests are not slash-redirected
+      const res = await fetch(`${apiBase}/api/v1/notifications/test/`, { method: 'POST' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const contentType = res.headers.get('content-type');
       if (!contentType || !contentType.includes('application/json')) {
@@ -329,21 +330,22 @@ export function SystemView({ apiBase, wsRequest, wsConnected }) {
     setSafetyTestLoading(true);
     setSafetyTestResult(null);
     try {
-      const res = await fetch(`${apiBase}/api/v1/safety/test`, { method: 'POST' });
+      const res = await fetch(`${apiBase}/api/v1/safety/events/test/`, { method: 'POST' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const contentType = res.headers.get('content-type');
       if (!contentType || !contentType.includes('application/json')) {
         throw new Error('Invalid response');
       }
       const data = await res.json();
+      const generated = data.generated ?? 0;
       setSafetyTestResult({
-        success: data.success,
-        message: data.success ? `Generated ${data.count} events` : 'Failed to generate',
+        success: generated > 0,
+        message: generated > 0 ? `Generated ${generated} events` : 'Failed to generate',
       });
       addSystemEvent(
         'safety_test',
-        data.success ? `Generated ${data.count} test events` : 'Safety test failed',
-        data.success ? 'success' : 'error'
+        generated > 0 ? `Generated ${generated} test events` : 'Safety test failed',
+        generated > 0 ? 'success' : 'error'
       );
     } catch {
       setSafetyTestResult({ success: false, message: 'Error generating events' });

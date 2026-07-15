@@ -783,3 +783,40 @@ class TestActiveSafetyEventAcknowledge:
         """Unknown monitor event keys return 404."""
         response = api_client.post("/api/v1/safety/active/vs_reversal:NOPE99/acknowledge")
         assert response.status_code == 404
+
+
+@pytest.mark.django_db
+class TestGenerateTestEvents:
+    """Tests for POST /api/v1/safety/events/test/ (synthetic event generation)."""
+
+    def _cleanup(self):
+        from skyspy.services.safety import safety_monitor
+
+        with safety_monitor._events_lock:
+            for key in [k for k in safety_monitor._active_events if k.startswith("test_")]:
+                safety_monitor._active_events.pop(key, None)
+
+    def test_generate_requires_authentication(self, api_client):
+        """Anonymous clients must not be able to fabricate safety events."""
+        response = api_client.post("/api/v1/safety/events/test/")
+        assert response.status_code in (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN)
+
+    def test_generate_creates_active_test_events(self, api_client, django_user_model):
+        """Authenticated POST generates is_test events in the active monitor set."""
+        from skyspy.services.safety import safety_monitor
+
+        user = django_user_model.objects.create_user(username="safety_tester", password="testpass")
+        api_client.force_authenticate(user=user)
+        try:
+            response = api_client.post("/api/v1/safety/events/test/")
+            assert response.status_code == status.HTTP_201_CREATED
+            data = response.json()
+            assert data["generated"] == len(data["events"]) > 0
+            assert all(e["is_test"] for e in data["events"])
+            event_types = {e["event_type"] for e in data["events"]}
+            assert "squawk_emergency" in event_types
+            with safety_monitor._events_lock:
+                active_test_keys = [k for k in safety_monitor._active_events if k.startswith("test_")]
+            assert len(active_test_keys) >= data["generated"]
+        finally:
+            self._cleanup()

@@ -97,10 +97,11 @@ export function useAircraftRadio({
         if (abortController.signal.aborted) return;
 
         if (!radioData) {
+          // The /api/v1/audio/matched/ endpoint reads `hours` and `limit`
+          // (not the radio_* names used by the WS aircraft-info request).
           const params = new URLSearchParams({
-            include_radio_calls: 'true',
-            radio_hours: radioHours.toString(),
-            radio_limit: '50',
+            hours: radioHours.toString(),
+            limit: '50',
           });
           if (callsign) params.append('callsign', callsign);
           const res = await fetch(`${baseUrl}/api/v1/audio/matched/?${params}`, {
@@ -163,10 +164,11 @@ export function useAircraftRadio({
         if (abortController.signal.aborted) return;
 
         if (!radioData) {
+          // The /api/v1/audio/matched/ endpoint reads `hours` and `limit`
+          // (not the radio_* names used by the WS aircraft-info request).
           const params = new URLSearchParams({
-            include_radio_calls: 'true',
-            radio_hours: radioHours.toString(),
-            radio_limit: '50',
+            hours: radioHours.toString(),
+            limit: '50',
           });
           if (callsign) params.append('callsign', callsign);
           const res = await fetch(`${baseUrl}/api/v1/audio/matched/?${params}`, {

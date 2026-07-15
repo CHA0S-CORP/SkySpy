@@ -113,10 +113,9 @@ export function AlertHistory({ apiBase = '', wsRequest, wsConnected, onToast }) 
       // Optimistic update
       setLocalAcknowledgedIds((prev) => new Set([...prev, id]));
 
-      const res = await fetch(`${apiBase}/api/v1/alerts/history/${id}/`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ acknowledged: true }),
+      // AlertHistoryViewSet is read-only; acknowledge is a POST detail action
+      const res = await fetch(`${apiBase}/api/v1/alerts/history/${id}/acknowledge/`, {
+        method: 'POST',
       });
 
       if (!res.ok) {

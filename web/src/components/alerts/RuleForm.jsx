@@ -51,6 +51,20 @@ function SeveritySelector({ value, onChange }) {
 }
 
 /**
+ * Convert a stored UTC ISO string to the local wall-clock value expected by
+ * <input type="datetime-local"> (which interprets its value as local time).
+ * Keeps display and the local→UTC write-back in onChange symmetric, so edit
+ * round-trips don't shift times by the user's UTC offset.
+ */
+function toDatetimeLocal(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().slice(0, 16);
+}
+
+/**
  * ScheduleFields component - renders starts_at and expires_at fields
  */
 function ScheduleFields({ startsAt, expiresAt, onChange }) {
@@ -61,7 +75,7 @@ function ScheduleFields({ startsAt, expiresAt, onChange }) {
         <input
           id="rule-starts-at"
           type="datetime-local"
-          value={startsAt ? startsAt.slice(0, 16) : ''}
+          value={toDatetimeLocal(startsAt)}
           onChange={(e) =>
             onChange('starts_at', e.target.value ? new Date(e.target.value).toISOString() : '')
           }
@@ -72,7 +86,7 @@ function ScheduleFields({ startsAt, expiresAt, onChange }) {
         <input
           id="rule-expires-at"
           type="datetime-local"
-          value={expiresAt ? expiresAt.slice(0, 16) : ''}
+          value={toDatetimeLocal(expiresAt)}
           onChange={(e) =>
             onChange('expires_at', e.target.value ? new Date(e.target.value).toISOString() : '')
           }
