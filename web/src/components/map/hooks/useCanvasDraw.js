@@ -260,11 +260,20 @@ export function useCanvasDraw({
       eventListeners.push({ target, event, handler, options });
     };
 
-    // Set canvas size to match container
+    // Set canvas size to match container.
+    // IMPORTANT: assigning canvas.width/height clears the canvas AND resets its
+    // transform — even when assigning the same value. This effect re-runs on
+    // every data change (sortedAircraft is a dependency), so unconditionally
+    // resizing here blanked the canvas on every aircraft update, producing a
+    // visible flash (worse with more aircraft / faster refresh). Only resize
+    // when the pixel dimensions actually changed.
     const resize = () => {
       const rect = container.getBoundingClientRect();
-      canvas.width = rect.width * window.devicePixelRatio;
-      canvas.height = rect.height * window.devicePixelRatio;
+      const w = Math.round(rect.width * window.devicePixelRatio);
+      const h = Math.round(rect.height * window.devicePixelRatio);
+      if (canvas.width === w && canvas.height === h) return;
+      canvas.width = w;
+      canvas.height = h;
       canvas.style.width = rect.width + 'px';
       canvas.style.height = rect.height + 'px';
       ctx.scale(window.devicePixelRatio, window.devicePixelRatio);

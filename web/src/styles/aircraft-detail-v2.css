@@ -713,7 +713,10 @@
 /* Aircraft Info Section */
 .aircraft-info-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  /* min(240px, 100%) so a card never forces a track wider than the rail and
+     gets clipped (the old minmax(280px,1fr) overflowed the narrow left column,
+     truncating "Registration" -> "Registra" and cutting off ICAO Hex). */
+  grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
   gap: 12px;
 }
 

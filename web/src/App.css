@@ -13,7 +13,9 @@
   --border: #252d3a;
   --text-primary: #e6edf3;
   --text-secondary: #8b949e;
-  --text-dim: #484f58;
+  /* Was #484f58 (2.08:1 contrast — effectively invisible, made labels/rows
+     look empty). Bumped to ~4.8:1 so dim labels are actually readable. */
+  --text-dim: #7a828c;
   --accent-cyan: #00d4ff;
   --accent-green: #4ade80;
   --accent-blue: #5a7a9a;
