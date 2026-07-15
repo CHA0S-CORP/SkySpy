@@ -106,13 +106,13 @@ def _read_tile(lat: int, lon: int) -> bytes | None:
         try:
             if not _download_tile(lat, lon):
                 return None
-        except Exception as e:
+        except (httpx.HTTPError, OSError, gzip.BadGzipFile) as e:
             logger.warning(f"Failed to download SRTM tile for ({lat}, {lon}): {e}")
             return None
 
     try:
         return tile_path.read_bytes()
-    except Exception as e:
+    except OSError as e:
         logger.error(f"Failed to read SRTM tile {tile_path}: {e}")
         return None
 

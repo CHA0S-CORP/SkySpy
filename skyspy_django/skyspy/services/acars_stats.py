@@ -15,6 +15,7 @@ from collections import defaultdict
 from datetime import timedelta
 
 from django.core.cache import cache
+from django.db import DatabaseError
 from django.db.models import Count, Q
 from django.db.models.functions import ExtractHour, TruncDay, TruncHour
 from django.utils import timezone
@@ -516,7 +517,7 @@ def refresh_acars_stats_cache(broadcast: bool = True) -> None:
         if broadcast:
             broadcast_acars_stats_update("acars_stats", stats)
 
-    except Exception as e:
+    except (DatabaseError, ConnectionError, OSError) as e:
         logger.error(f"Error refreshing ACARS stats cache: {e}")
 
 
@@ -527,7 +528,7 @@ def broadcast_acars_stats_update(stat_type: str, data: dict) -> None:
     try:
         sync_emit("acars:update", {"stat_type": stat_type, "stats": data}, room="topic_acars")
         logger.debug(f"Broadcast ACARS stats update: {stat_type}")
-    except Exception as e:
+    except Exception as e:  # broad: socketio emit boundary — broadcast must never break the caller
         logger.warning(f"Failed to broadcast ACARS stats update: {e}")
 
 

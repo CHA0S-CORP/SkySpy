@@ -9,7 +9,7 @@ import logging
 
 from django.conf import settings
 from django.contrib.auth.models import User
-from django.db import transaction
+from django.db import DatabaseError, transaction
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +49,7 @@ class OIDCAuthenticationBackend:
                 self._update_user_from_claims(user, claims, issuer)
                 self._assign_roles_from_claims(user, claims)
                 return user
-        except Exception as e:
+        except (DatabaseError, ValueError, KeyError, TypeError) as e:
             logger.exception(f"OIDC authentication error: {e}")
             return None
 
@@ -183,7 +183,7 @@ class OIDCAuthenticationBackend:
             if claims.get("picture"):
                 profile.avatar_url = claims["picture"]
             profile.save()
-        except Exception as e:
+        except (AttributeError, DatabaseError, KeyError, TypeError) as e:
             logger.debug(f"Could not update OIDC profile for {user.username}: {e}")
 
     def _assign_roles_from_claims(self, user, claims):

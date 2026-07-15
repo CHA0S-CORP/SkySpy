@@ -32,6 +32,8 @@ import time
 from collections import OrderedDict, defaultdict
 from datetime import UTC, datetime, timedelta
 
+from django.db import DatabaseError
+
 from skyspy.services.acars_decoder import enrich_acars_message
 from skyspy.socketio.utils import sync_emit
 
@@ -235,7 +237,7 @@ class AcarsService:
                     task.result()
                 except asyncio.CancelledError:
                     pass  # Task was cancelled, not an error
-                except Exception as e:
+                except Exception as e:  # broad: error-reporting callback surfacing any task failure
                     logger.error(f"Unhandled exception in {self.source} message processing: {e}", exc_info=True)
 
             def error_received(self, exc):
@@ -247,7 +249,7 @@ class AcarsService:
                 local_addr=("0.0.0.0", port),  # nosec B104 - intentional bind to all interfaces for UDP listener
             )
             logger.debug(f"UDP endpoint created for {source} on port {port}")
-        except Exception as e:
+        except OSError as e:
             logger.error(f"Failed to create UDP listener for {source} on port {port}: {e}")
             return
 
@@ -329,7 +331,7 @@ class AcarsService:
             with self._stats_lock:
                 self._stats[source]["errors"] += 1
             logger.warning(f"Unicode decode error from {source}: {e}")
-        except Exception as e:
+        except Exception as e:  # broad: per-message resilience boundary - one bad message must not stop the listener
             with self._stats_lock:
                 self._stats[source]["errors"] += 1
             logger.error(f"Error processing {source} message: {e}", exc_info=True)
@@ -466,7 +468,7 @@ class AcarsService:
             logger.debug(f"Unknown source type: {source}")
             return None
 
-        except Exception as e:
+        except (AttributeError, TypeError, KeyError, ValueError) as e:
             logger.error(f"Error normalizing {source} message: {e}", exc_info=True)
             return None
 
@@ -524,7 +526,7 @@ class AcarsService:
 
             return record.id
 
-        except Exception as e:
+        except (DatabaseError, ValueError, TypeError, OSError) as e:
             logger.error(f"Error storing ACARS message: {e}", exc_info=True)
             return None
 
@@ -575,7 +577,7 @@ class AcarsService:
                 from skyspy.tasks.acars import decode_acars_message
 
                 decode_acars_message.delay(message_id)
-            except Exception as e:
+            except Exception as e:  # broad: enqueue must never break message storage (eager mode can raise SynchronousOnlyOperation)
                 logger.warning(f"Failed to queue decode task for message {message_id}: {e}")
 
     async def _broadcast_message(self, msg: dict):
@@ -600,7 +602,7 @@ class AcarsService:
             if icao:
                 sync_emit("acars:message", msg, room=f"acars_{icao.lower()}", namespace="/acars")
 
-        except Exception as e:
+        except Exception as e:  # broad: broadcast must never raise into the caller
             logger.warning(f"Failed to broadcast ACARS message: {e}")
 
     def get_recent_messages(self, limit: int = 50) -> list[dict]:

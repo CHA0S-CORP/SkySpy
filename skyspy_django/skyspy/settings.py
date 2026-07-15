@@ -72,7 +72,7 @@ def get_db_config(key, default=None, cast=str):
             return str(value).lower() in ("true", "1", "yes", "on")
         return cast(value)
 
-    except Exception:
+    except Exception:  # broad: settings-load boundary — DB not ready, AppRegistryNotReady, DoesNotExist, cast errors
         # On any error (import, DoesNotExist, etc.), return default
         return default
 

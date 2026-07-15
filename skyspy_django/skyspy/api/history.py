@@ -11,6 +11,8 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.core.cache import cache
+from django.core.exceptions import FieldError
+from django.db import DatabaseError
 from django.db.models import Avg, Case, CharField, Count, F, Max, Min, Q, Value, When
 from django.db.models.functions import ExtractHour, Floor, TruncHour
 from django.utils import timezone
@@ -460,7 +462,7 @@ class HistoryViewSet(viewsets.ViewSet):
         try:
             fastest_qs = sessions.filter(max_ground_speed__isnull=False).order_by("-max_ground_speed")[:limit]
             fastest = [serialize_session(s) for s in fastest_qs]
-        except Exception as e:
+        except (FieldError, DatabaseError) as e:
             # Field may not exist in older schema versions
             logger.debug(f"max_ground_speed field not available: {e}")
 

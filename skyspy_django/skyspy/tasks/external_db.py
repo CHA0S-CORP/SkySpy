@@ -10,8 +10,11 @@ Provides Celery tasks for:
 import logging
 from datetime import datetime
 
+import httpx
 from celery import shared_task
 from django.conf import settings
+from django.db import DatabaseError
+from kombu.exceptions import OperationalError as KombuOperationalError
 
 from skyspy.socketio.utils import sync_emit
 
@@ -38,7 +41,7 @@ def broadcast_airframe_error(
             },
             room="topic_aircraft",
         )
-    except Exception as e:
+    except Exception as e:  # broad: error-broadcast helper must never raise into callers
         logger.warning(f"Failed to broadcast airframe error: {e}")
 
 
@@ -72,7 +75,7 @@ def sync_external_databases(self):
 
         return stats
 
-    except Exception as e:
+    except Exception as e:  # broad: Celery task top-level guard, retries on any failure
         logger.error(f"Failed to sync external databases: {e}")
         raise self.retry(exc=e, countdown=300)
 
@@ -93,7 +96,7 @@ def update_stale_databases(self):
 
         return external_db.get_database_stats()
 
-    except Exception as e:
+    except Exception as e:  # broad: Celery task top-level guard, retries on any failure
         logger.error(f"Failed to update stale databases: {e}")
         raise self.retry(exc=e, countdown=300)
 
@@ -120,7 +123,7 @@ def load_opensky_database():
 
         return result
 
-    except Exception as e:
+    except Exception as e:  # broad: Celery task top-level guard, must not crash the worker
         logger.error(f"Failed to load OpenSky database: {e}")
         return False
 
@@ -195,7 +198,7 @@ def fetch_aircraft_info_batch(self, icao_list: list):
                     },
                 )
 
-        except Exception as e:
+        except (DatabaseError, httpx.HTTPError, ValueError, KeyError, TypeError, AttributeError, OSError) as e:
             logger.debug(f"Batch lookup failed for {icao}: {e}")
 
     logger.debug(f"Batch processed {processed} aircraft info lookups")
@@ -265,8 +268,6 @@ def fetch_aircraft_info(icao_hex: str):
             return
 
         # Try HexDB API
-        import httpx
-
         try:
             url = f"https://hexdb.io/api/v1/aircraft/{icao}"
             response = httpx.get(url, timeout=10.0)
@@ -290,7 +291,7 @@ def fetch_aircraft_info(icao_hex: str):
                 _trigger_photo_fetch_if_enabled(icao)
                 return
 
-        except Exception as e:
+        except (DatabaseError, httpx.HTTPError, ValueError, KeyError, TypeError, OSError) as e:
             logger.debug(f"HexDB lookup failed for {icao}: {e}")
 
         # Try adsb.lol API
@@ -309,7 +310,7 @@ def fetch_aircraft_info(icao_hex: str):
                 logger.debug(f"Got info for {icao} from adsb.lol")
                 _trigger_photo_fetch_if_enabled(icao)
                 return
-        except Exception as e:
+        except (DatabaseError, httpx.HTTPError, ValueError, KeyError, TypeError, OSError) as e:
             logger.debug(f"adsb.lol lookup failed for {icao}: {e}")
 
         # Mark as failed if all sources failed
@@ -327,7 +328,7 @@ def fetch_aircraft_info(icao_hex: str):
         )
         logger.debug(f"All sources failed for {icao}")
 
-    except Exception as e:
+    except Exception as e:  # broad: Celery task top-level guard, reports any failure to clients
         logger.error(f"Error fetching aircraft info for {icao}: {e}")
         broadcast_airframe_error(icao, str(e), sources_tried=["error"])
 
@@ -343,7 +344,7 @@ def _trigger_photo_fetch_if_enabled(icao: str):
     try:
         fetch_aircraft_photos.delay(icao)
         logger.debug(f"Queued photo fetch for {icao}")
-    except Exception as e:
+    except (ConnectionError, OSError, RuntimeError, KombuOperationalError) as e:
         logger.debug(f"Failed to queue photo fetch for {icao}: {e}")
 
 
@@ -361,7 +362,7 @@ def fetch_route_info(callsign: str):
             return route
         return None
 
-    except Exception as e:
+    except Exception as e:  # broad: Celery task top-level guard, returns None on any failure
         logger.error(f"Error fetching route for {callsign}: {e}")
         return None
 
@@ -402,8 +403,6 @@ def fetch_aircraft_photos(
 
         # Try planespotters first (higher quality source)
         if not photo_url:
-            import httpx
-
             try:
                 ps_url = f"https://api.planespotters.net/pub/photos/hex/{icao}"
                 response = httpx.get(ps_url, timeout=10.0)
@@ -430,13 +429,11 @@ def fetch_aircraft_photos(
                                 photo_source="planespotters.net",
                                 photo_photographer=photo.get("photographer"),
                             )
-            except Exception as e:
+            except (DatabaseError, httpx.HTTPError, ValueError, KeyError, TypeError, OSError) as e:
                 logger.debug(f"Planespotters photo check failed for {icao}: {e}")
 
         # Fallback to hexdb.io if planespotters didn't work
         if not photo_url:
-            import httpx
-
             try:
                 hex_photo_url = f"https://hexdb.io/hex-image?hex={icao.lower()}"
                 hex_thumb_url = f"https://hexdb.io/hex-image-thumb?hex={icao.lower()}"
@@ -451,7 +448,7 @@ def fetch_aircraft_photos(
                         AircraftInfo.objects.filter(icao_hex=icao).update(
                             photo_url=photo_url, photo_thumbnail_url=thumbnail_url, photo_source="hexdb.io"
                         )
-            except Exception as e:
+            except (DatabaseError, httpx.HTTPError, ValueError, KeyError, TypeError, OSError) as e:
                 logger.debug(f"HexDB photo check failed for {icao}: {e}")
 
         # Download photos if we have URLs
@@ -469,7 +466,7 @@ def fetch_aircraft_photos(
         else:
             logger.debug(f"No photo sources found for {icao}")
 
-    except Exception as e:
+    except Exception as e:  # broad: Celery task top-level guard, must not crash the worker
         logger.error(f"Error fetching photos for {icao}: {e}")
 
 
@@ -485,8 +482,6 @@ def upgrade_aircraft_photo(icao_hex: str):
     logger.debug(f"Attempting photo upgrade for {icao}")
 
     try:
-        import httpx
-
         from skyspy.models import AircraftInfo
         from skyspy.services.photo_cache import download_photo, update_photo_paths
 
@@ -518,7 +513,7 @@ def upgrade_aircraft_photo(icao_hex: str):
                     new_thumb_url = hex_thumb_url
                     photo_page_link = None  # hexdb provides direct URLs
                     logger.info(f"Found hexdb.io photo for {icao}, upgrading")
-        except Exception as e:
+        except (httpx.HTTPError, ValueError, KeyError, TypeError, OSError) as e:
             logger.debug(f"HexDB photo check failed for {icao}: {e}")
 
         # If no hexdb photo and we have a planespotters URL without page link, get page link
@@ -540,7 +535,7 @@ def upgrade_aircraft_photo(icao_hex: str):
                             info.photo_page_link = photo_page_link
                             info.save(update_fields=["photo_page_link"])
                             logger.info(f"Got page link for {icao}: {photo_page_link}")
-            except Exception as e:
+            except (DatabaseError, httpx.HTTPError, ValueError, KeyError, TypeError, OSError) as e:
                 logger.debug(f"Planespotters API failed for {icao}: {e}")
 
         # Update if we found a better URL
@@ -589,7 +584,7 @@ def upgrade_aircraft_photo(icao_hex: str):
                 update_photo_paths(icao, photo_path, thumb_path)
                 logger.info(f"Upgraded photo via scraping for {icao}")
 
-    except Exception as e:
+    except Exception as e:  # broad: Celery task top-level guard, must not crash the worker
         logger.error(f"Error upgrading photo for {icao}: {e}")
 
 
@@ -608,7 +603,7 @@ def batch_fetch_aircraft_photos(icao_list: list):
         try:
             fetch_aircraft_photos.delay(icao)
             time.sleep(0.5)  # Rate limit to avoid hammering APIs
-        except Exception as e:
+        except (ConnectionError, OSError, RuntimeError, KombuOperationalError) as e:
             logger.error(f"Error queuing photo fetch for {icao}: {e}")
 
 
@@ -650,7 +645,7 @@ def refresh_stale_aircraft_info(max_age_days: int = 7, batch_size: int = 100):
             try:
                 fetch_aircraft_info.delay(icao)
                 refreshed += 1
-            except Exception as e:
+            except (ConnectionError, OSError, RuntimeError, KombuOperationalError) as e:
                 logger.warning(f"Failed to queue refresh for {icao}: {e}")
 
         # Queue retry for failed records
@@ -660,13 +655,13 @@ def refresh_stale_aircraft_info(max_age_days: int = 7, batch_size: int = 100):
                 AircraftInfo.objects.filter(icao_hex=icao, fetch_failed=True).delete()
                 fetch_aircraft_info.delay(icao)
                 retried += 1
-            except Exception as e:
+            except (DatabaseError, ConnectionError, OSError, RuntimeError, KombuOperationalError) as e:
                 logger.warning(f"Failed to queue retry for {icao}: {e}")
 
         logger.info(f"Queued {refreshed} stale + {retried} retry aircraft info lookups")
         return {"refreshed": refreshed, "retried": retried}
 
-    except Exception as e:
+    except Exception as e:  # broad: Celery task top-level guard, returns error dict on any failure
         logger.error(f"Error refreshing stale aircraft info: {e}")
         return {"error": str(e)}
 
@@ -707,13 +702,13 @@ def batch_upgrade_aircraft_photos(batch_size: int = 50):
                 upgrade_aircraft_photo.delay(icao)
                 upgraded += 1
                 time.sleep(0.5)  # Rate limit
-            except Exception as e:
+            except (ConnectionError, OSError, RuntimeError, KombuOperationalError) as e:
                 logger.warning(f"Failed to queue photo upgrade for {icao}: {e}")
 
         logger.info(f"Queued {upgraded} aircraft for photo upgrade")
         return {"queued": upgraded}
 
-    except Exception as e:
+    except Exception as e:  # broad: Celery task top-level guard, returns error dict on any failure
         logger.error(f"Error in batch photo upgrade: {e}")
         return {"error": str(e)}
 
@@ -765,7 +760,7 @@ def cleanup_orphan_aircraft_info(days_without_sighting: int = 30):
 
         return {"deleted_failed": deleted_failed, "deleted_no_photo": deleted_no_photo, "total_deleted": total_deleted}
 
-    except Exception as e:
+    except Exception as e:  # broad: Celery task top-level guard, returns error dict on any failure
         logger.error(f"Error cleaning up orphan aircraft info: {e}")
         return {"error": str(e)}
 
@@ -820,7 +815,7 @@ def update_cached_photo_set():
         logger.info(f"Updated cached photo set: {len(icaos)} photos, {len(thumbs)} thumbnails")
         return {"cached": len(icaos), "thumbnails": len(thumbs)}
 
-    except Exception as e:
+    except Exception as e:  # broad: Celery task top-level guard, returns error dict on any failure
         logger.error(f"Error updating cached photo set: {e}")
         return {"error": str(e)}
 
@@ -871,6 +866,6 @@ def get_aircraft_info_stats():
             "by_photo_source": by_photo_source,
         }
 
-    except Exception as e:
+    except Exception as e:  # broad: Celery task top-level guard, returns error dict on any failure
         logger.error(f"Error getting aircraft info stats: {e}")
         return {"error": str(e)}

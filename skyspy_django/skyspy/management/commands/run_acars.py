@@ -74,7 +74,7 @@ class Command(BaseCommand):
             asyncio.run(self._run_service(acars_port, vdlm2_port))
         except KeyboardInterrupt:
             self.stdout.write(self.style.WARNING("\nShutdown requested..."))
-        except Exception as e:
+        except Exception as e:  # broad: top-level command guard — log any service failure and exit non-zero
             self.stderr.write(self.style.ERROR(f"Error: {e}"))
             logger.exception("ACARS service error")
             sys.exit(1)

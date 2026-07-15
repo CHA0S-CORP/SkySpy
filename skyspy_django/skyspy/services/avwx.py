@@ -75,7 +75,8 @@ def _make_request(endpoint: str, params: dict | None = None) -> dict[str, Any] |
         else:
             logger.error(f"AVWX API error: {e.response.status_code}")
         return None
-    except Exception as e:
+    except (httpx.HTTPError, ConnectionError, OSError, TimeoutError, ValueError) as e:
+        # ValueError covers JSON decode failures from response.json()
         logger.error(f"AVWX API request failed: {e}")
         return None
 

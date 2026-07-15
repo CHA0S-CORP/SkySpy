@@ -17,6 +17,7 @@ from urllib.parse import urlparse
 
 import apprise
 from django.conf import settings
+from django.db import DatabaseError
 
 from skyspy.models import NotificationConfig, NotificationLog
 
@@ -107,7 +108,7 @@ def _is_safe_url(url: str) -> bool:
 
         return True
 
-    except Exception as e:
+    except Exception as e:  # broad: SSRF security boundary must fail closed on any unexpected error
         logger.warning(f"URL validation error: {e}")
         return False
 
@@ -203,7 +204,7 @@ class NotificationManager:
             if config and not config.enabled:
                 return False
             cooldown = config.cooldown_seconds if config else getattr(settings, "NOTIFICATION_COOLDOWN", 300)
-        except Exception as e:
+        except DatabaseError as e:
             logger.warning(f"Failed to check notification config: {e}")
             cooldown = getattr(settings, "NOTIFICATION_COOLDOWN", 300)
 
@@ -245,7 +246,7 @@ class NotificationManager:
                         message=f"{title}: {body}",
                         details=details or {},
                     )
-                except Exception as e:
+                except DatabaseError as e:
                     logger.warning(f"Failed to log notification: {e}")
 
                 logger.info(f"Notification sent: {title}")
@@ -254,7 +255,7 @@ class NotificationManager:
 
             return result
 
-        except Exception as e:
+        except Exception as e:  # broad: Apprise dispatches to many third-party platforms with unknowable failure modes
             logger.error(f"Notification error: {e}")
             return False
 
@@ -269,7 +270,7 @@ class NotificationManager:
             config = NotificationConfig.get_config()
             enabled = config.enabled if config else True
             cooldown = config.cooldown_seconds if config else getattr(settings, "NOTIFICATION_COOLDOWN", 300)
-        except Exception:
+        except DatabaseError:
             enabled = True
             cooldown = 300
 
@@ -354,7 +355,7 @@ def cleanup_cooldowns():
     try:
         config = NotificationConfig.get_config()
         cooldown = (config.cooldown_seconds if config else None) or getattr(settings, "NOTIFICATION_COOLDOWN", 300)
-    except Exception as e:
+    except DatabaseError as e:
         logger.warning(f"Failed to read notification config for cooldown cleanup: {e}")
         cooldown = getattr(settings, "NOTIFICATION_COOLDOWN", 300)
     cutoff = now - max(600, cooldown * 2)

@@ -164,7 +164,7 @@ class CannonballNamespace(socketio.AsyncNamespace):
             # Clear session data
             await sio.save_session(sid, {}, namespace="/cannonball")
 
-        except Exception as e:
+        except Exception as e:  # broad: disconnect cleanup must never raise
             logger.debug(f"Error during disconnect cleanup: {e}")
 
         logger.info(f"Client disconnected from /cannonball: {sid}")
@@ -546,7 +546,7 @@ class CannonballNamespace(socketio.AsyncNamespace):
                 },
                 room=sid,
             )
-        except Exception as e:
+        except Exception as e:  # broad: request-dispatch catch-all must not crash the socket handler
             logger.exception(f"Error handling request {request_type} for {sid}: {e}")
             await self.emit(
                 "error",

@@ -107,6 +107,7 @@ def transcribe_audio(self, transmission_id: int):
             if self.request.retries < self.max_retries:
                 raise Exception(transmission.transcription_error or "Transcription failed")
 
+    # broad: Celery task boundary — transcription failure modes are unknowable; must retry, not crash the worker
     except Exception as e:
         logger.error(f"Failed to transcribe {transmission_id}: {e}")
 
@@ -150,7 +151,7 @@ def _broadcast_transcription_update(transmission, status: str):
             room="audio_transmissions",
             namespace="/audio",
         )
-    except Exception as e:
+    except Exception as e:  # broad: Socket.IO broadcast must never raise into the caller
         logger.warning(f"Failed to broadcast transcription update: {e}")
 
 

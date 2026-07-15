@@ -249,7 +249,7 @@ class MainNamespace(
             logger.info(f"Socket.IO disconnected: {sid}")
         except asyncio.CancelledError:
             logger.debug(f"Disconnect cleanup cancelled for {sid}")
-        except Exception as e:
+        except Exception as e:  # broad: disconnect cleanup boundary must never raise, whatever the session state
             logger.warning(f"Error during disconnect cleanup for {sid}: {e}")
 
     async def on_subscribe(self, sid: str, data: dict | None):
@@ -419,7 +419,7 @@ class MainNamespace(
                     await self._emit_error(sid, request_id, f"Unknown request type: {request_type}")
         except asyncio.CancelledError:
             logger.debug(f"Request {request_type} cancelled for {sid} (client disconnected)")
-        except Exception as e:
+        except Exception as e:  # broad: top-level dispatch guard over all mixin handlers; must degrade to error response
             logger.exception(f"Error handling request {request_type} for {sid}: {e}")
             await self._emit_error(sid, request_id, "Internal server error")
 
@@ -461,14 +461,14 @@ class MainNamespace(
         if await check_topic_permission(user, "aircraft"):
             try:
                 await self._emit_cached_snapshot(sid, "aircraft")
-            except Exception as e:
+            except Exception as e:  # broad: snapshot boundary must not abort connect; emit spans many mixins/cache
                 logger.error(f"Failed to send aircraft snapshot to {sid}: {e}", exc_info=True)
 
         for topic in ("safety", "alerts", "acars", "notams"):
             if topic in subscribed or "all" in subscribed:
                 try:
                     await self._emit_cached_snapshot(sid, topic)
-                except Exception as e:
+                except Exception as e:  # broad: per-topic snapshot boundary must not abort connect; emit spans mixins/cache
                     logger.error(f"Failed to send {topic} snapshot to {sid}: {e}", exc_info=True)
 
     async def _send_topic_snapshots(self, sid: str, topics: list):
@@ -476,7 +476,7 @@ class MainNamespace(
         for topic in topics:
             try:
                 await self._emit_cached_snapshot(sid, topic)
-            except Exception as e:
+            except Exception as e:  # broad: per-topic snapshot boundary must not abort subscribe; emit spans mixins/cache
                 logger.error(f"Failed to send {topic} snapshot to {sid}: {e}", exc_info=True)
 
     # Topics whose snapshot event name differs from "{topic}:snapshot"

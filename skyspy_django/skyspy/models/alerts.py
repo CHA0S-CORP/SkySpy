@@ -151,7 +151,7 @@ class AlertRule(models.Model):
                             return True
 
             return False
-        except Exception:
+        except (ValueError, KeyError, TypeError, AttributeError):
             return False
 
     def can_be_edited_by(self, user) -> bool:
@@ -363,6 +363,6 @@ def cleanup_rule_cooldowns(sender, instance, **kwargs):
         count = cooldown_manager.clear_rule(instance.id)
         if count > 0:
             logger.debug(f"Cleared {count} cooldowns for deleted rule {instance.id} ({instance.name})")
-    except Exception as e:
+    except Exception as e:  # broad: post_delete signal must never block rule deletion (Redis failure modes unknowable)
         # Log but don't raise - rule deletion should still succeed
         logger.warning(f"Failed to clear cooldowns for deleted rule {instance.id}: {e}")

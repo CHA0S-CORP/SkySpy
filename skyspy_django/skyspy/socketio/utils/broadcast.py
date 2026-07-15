@@ -20,6 +20,18 @@ from threading import Lock
 
 from django.conf import settings
 
+try:
+    from redis.exceptions import RedisError
+
+    _REDIS_ERRORS: tuple[type[BaseException], ...] = (RedisError,)
+except ImportError:  # pragma: no cover - redis is an optional runtime dependency
+    _REDIS_ERRORS = ()
+
+# Redis publish failures: connection/timeout errors (which subclass the builtins in redis-py)
+# plus RedisError for protocol/response errors. TypeError/ValueError cover json.dumps() failures
+# on a non-serializable data payload.
+_BROADCAST_ERRORS = (ConnectionError, OSError, TimeoutError, TypeError, ValueError, *_REDIS_ERRORS)
+
 logger = logging.getLogger(__name__)
 
 # Redis connection pool for sync Socket.IO broadcasts (thread-safe singleton)
@@ -210,7 +222,7 @@ def sync_emit(
 
         return True
 
-    except Exception as e:
+    except _BROADCAST_ERRORS as e:
         logger.warning(
             f"Socket.IO sync_emit error: {e} (event={event}, room={room}, namespace={namespace})", exc_info=True
         )

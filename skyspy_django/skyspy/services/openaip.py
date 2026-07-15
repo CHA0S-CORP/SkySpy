@@ -161,7 +161,7 @@ def _make_request(endpoint: str, params: dict | None = None, timeout: int = 15) 
         else:
             logger.error(f"OpenAIP API error: {e.response.status_code}")
         return None
-    except Exception as e:
+    except (httpx.HTTPError, ConnectionError, OSError, ValueError) as e:
         logger.error(f"OpenAIP API request failed: {e}")
         return None
 
@@ -267,7 +267,7 @@ def _parse_airspace(item: dict[str, Any]) -> dict[str, Any] | None:
             "source": "openaip",
         }
 
-    except Exception as e:
+    except (ValueError, KeyError, TypeError, AttributeError) as e:
         logger.warning(f"Failed to parse airspace: {e}")
         return None
 
@@ -361,7 +361,7 @@ def _parse_airport(item: dict[str, Any]) -> dict[str, Any] | None:
             "source": "openaip",
         }
 
-    except Exception as e:
+    except (ValueError, KeyError, TypeError, AttributeError) as e:
         logger.warning(f"Failed to parse airport: {e}")
         return None
 
@@ -460,7 +460,7 @@ def _parse_navaid(item: dict[str, Any]) -> dict[str, Any] | None:
             "source": "openaip",
         }
 
-    except Exception as e:
+    except (ValueError, KeyError, TypeError, AttributeError) as e:
         logger.warning(f"Failed to parse navaid: {e}")
         return None
 

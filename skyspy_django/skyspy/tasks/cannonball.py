@@ -15,6 +15,7 @@ from datetime import datetime, timedelta
 from celery import shared_task
 from django.conf import settings
 from django.core.cache import cache
+from django.db import DatabaseError
 from django.utils import timezone
 
 from skyspy.models import (
@@ -118,7 +119,7 @@ def analyze_aircraft_patterns(self):
         elapsed = (datetime.now() - start_time).total_seconds()
         logger.debug(f"Cannonball analysis completed in {elapsed:.2f}s")
 
-    except Exception as e:
+    except Exception as e:  # broad: Celery task top-level guard — must never crash the worker
         logger.exception(f"Error in analyze_aircraft_patterns: {e}")
 
 
@@ -177,7 +178,7 @@ def _update_cannonball_session(threat: dict, user_lat: float = None, user_lon: f
         # Generate alerts if needed
         _check_and_generate_alerts(session, threat)
 
-    except Exception as e:
+    except (DatabaseError, KeyError, TypeError, AttributeError, ValueError) as e:
         logger.exception(f"Error updating Cannonball session: {e}")
 
 
@@ -227,7 +228,7 @@ def _record_pattern(session: CannonballSession, pattern: dict, threat: dict):
             # Increment session pattern count
             session.increment_pattern_count()
 
-    except Exception as e:
+    except (DatabaseError, KeyError, TypeError, AttributeError, ValueError) as e:
         logger.exception(f"Error recording pattern: {e}")
 
 
@@ -292,7 +293,7 @@ def _check_and_generate_alerts(session: CannonballSession, threat: dict):
                     threat=threat,
                 )
 
-    except Exception as e:
+    except (DatabaseError, KeyError, TypeError, AttributeError, ValueError) as e:
         logger.exception(f"Error checking alerts: {e}")
 
 
@@ -329,7 +330,7 @@ def _create_alert(
 
         logger.info(f"Created Cannonball alert: {alert_type} - {title}")
 
-    except Exception as e:
+    except (DatabaseError, KeyError, TypeError, AttributeError, ValueError) as e:
         logger.exception(f"Error creating alert: {e}")
 
 
@@ -348,7 +349,7 @@ def _broadcast_threats(threats: list):
             room="cannonball_threats",
             namespace="/cannonball",
         )
-    except Exception as e:
+    except Exception as e:  # broad: best-effort Socket.IO/Redis broadcast — must never fail the caller
         logger.debug(f"Failed to broadcast threats: {e}")
 
 
@@ -367,7 +368,7 @@ def _broadcast_threat_refresh():
             {"timestamp": timezone.now().isoformat().replace("+00:00", "Z")},
             namespace="/cannonball",
         )
-    except Exception as e:
+    except Exception as e:  # broad: best-effort Socket.IO/Redis broadcast — must never fail the caller
         logger.debug(f"Failed to broadcast threat refresh: {e}")
 
 
@@ -392,7 +393,7 @@ def _broadcast_alert(alert: CannonballAlert, threat: dict):
             room="cannonball_alerts",
             namespace="/cannonball",
         )
-    except Exception as e:
+    except Exception as e:  # broad: best-effort Socket.IO/Redis broadcast — must never fail the caller
         logger.debug(f"Failed to broadcast alert: {e}")
 
 

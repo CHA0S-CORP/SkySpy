@@ -62,7 +62,7 @@ def refresh_airspace_advisories():
                             room="topic_aircraft",
                         )
                         logger.debug(f"Broadcast {expired_count} expired advisories")
-                    except Exception as e:
+                    except Exception as e:  # broad: broadcast must never break the caller; sync_emit failure modes unknowable
                         logger.warning(f"Failed to broadcast advisory expiration: {e}")
 
                 # Process new advisories
@@ -163,7 +163,7 @@ def refresh_airspace_advisories():
                     {"count": len(advisories), "timestamp": datetime.utcnow().isoformat() + "Z"},
                     room="topic_aircraft",
                 )
-            except Exception as e:
+            except Exception as e:  # broad: broadcast must never break the caller; sync_emit failure modes unknowable
                 logger.warning(f"Failed to broadcast advisory update: {e}")
 
         else:
@@ -171,7 +171,7 @@ def refresh_airspace_advisories():
 
     except httpx.HTTPError as e:
         logger.error(f"HTTP error fetching advisories: {e}")
-    except Exception as e:
+    except Exception as e:  # broad: Celery task top-level guard; must never crash the worker
         logger.exception(f"Error refreshing advisories: {e}")
 
 
@@ -270,12 +270,12 @@ def refresh_airspace_boundaries(self):
                 {"count": boundary_count, "new": total_stored, "timestamp": datetime.utcnow().isoformat() + "Z"},
                 room="topic_aircraft",
             )
-        except Exception as e:
+        except Exception as e:  # broad: broadcast must never break the caller; sync_emit failure modes unknowable
             logger.warning(f"Failed to broadcast boundary update: {e}")
 
         return {"status": "complete", "processed": total_stored, "total": boundary_count}
 
-    except Exception as e:
+    except Exception as e:  # broad: Celery task top-level guard; captures any failure to trigger retry
         logger.error(f"Failed to refresh airspace boundaries: {e}")
         raise self.retry(exc=e, countdown=300)
 

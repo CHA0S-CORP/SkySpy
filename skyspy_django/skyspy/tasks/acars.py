@@ -69,7 +69,7 @@ def decode_acars_message(self, message_id: int):
             message.save(update_fields=["decoded"])
             logger.debug(f"ACARS message {message_id} undecodable, marked as attempted")
 
-    except Exception as e:
+    except Exception as e:  # broad: Celery task guard over libacars decode + DB save; retries transient failures
         logger.error(f"Error decoding ACARS message {message_id}: {e}")
         # Retry on transient errors
         if self.request.retries < self.max_retries:
@@ -169,7 +169,7 @@ def decode_acars_batch(message_ids: list[int]):
                 message.decoded = {}
                 message.save(update_fields=["decoded"])
 
-        except Exception as e:
+        except Exception as e:  # broad: batch loop must continue past any per-message decode/save failure
             logger.error(f"Error decoding ACARS message {message.id}: {e}")
 
     if decoded_count > 0:

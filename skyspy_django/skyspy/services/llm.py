@@ -178,7 +178,7 @@ class LLMClient:
                     continue
                 return None
 
-            except Exception as e:
+            except (httpx.HTTPError, ConnectionError, OSError, ValueError, KeyError, TypeError) as e:
                 last_error = str(e)
                 logger.warning(f"LLM error: {e}")
                 _stats["failures"] += 1
@@ -326,7 +326,7 @@ Validate each callsign."""
     except json.JSONDecodeError as e:
         logger.warning(f"Failed to parse LLM validation response: {e}")
         return extracted
-    except Exception as e:
+    except (KeyError, TypeError, AttributeError, ValueError) as e:
         logger.warning(f"Error processing LLM validation: {e}")
         return extracted
 
@@ -410,7 +410,7 @@ Resolve each ambiguous callsign."""
     except json.JSONDecodeError as e:
         logger.warning(f"Failed to parse LLM resolution response: {e}")
         return ambiguous
-    except Exception as e:
+    except (KeyError, TypeError, AttributeError, ValueError) as e:
         logger.warning(f"Error processing LLM resolution: {e}")
         return ambiguous
 
@@ -487,7 +487,7 @@ Identify which mentions refer to the same aircraft."""
     except json.JSONDecodeError as e:
         logger.warning(f"Failed to parse LLM deduplication response: {e}")
         return callsigns
-    except Exception as e:
+    except (KeyError, TypeError, AttributeError, ValueError) as e:
         logger.warning(f"Error processing LLM deduplication: {e}")
         return callsigns
 
@@ -542,7 +542,7 @@ def enhance_callsign_extraction(
 
         return result
 
-    except Exception as e:
+    except Exception as e:  # broad: top-level fallback — must always degrade to regex-only extraction
         logger.error(f"LLM enhancement failed, returning regex-only: {e}")
         return extracted
 

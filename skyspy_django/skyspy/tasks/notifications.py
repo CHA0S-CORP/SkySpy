@@ -124,7 +124,7 @@ def send_notification_task(
         log_entry.mark_failed("Apprise library not installed")
         return {"status": "failed", "error": "Apprise not installed"}
 
-    except Exception as e:
+    except Exception as e:  # broad: Celery task guard; apprise delivery has unknowable failure modes, re-raises for retry
         error_msg = str(e)
         # Track attempts on the log entry (self.request.retries is always 0
         # here because redelivery happens via process_notification_queue,
@@ -207,7 +207,7 @@ def process_notification_queue():
                 notification_log_id=log_entry.id,
             )
             processed += 1
-        except Exception as e:
+        except Exception as e:  # broad: background loop must keep processing remaining items on per-item failure
             logger.error(f"Failed to re-queue notification {log_entry.id}: {e}")
 
     return {"processed": processed}
@@ -271,7 +271,7 @@ def verify_notification_channel(channel_id: int) -> dict[str, Any]:
 
     except ImportError:
         return {"success": False, "error": "Apprise library not installed"}
-    except Exception as e:
+    except Exception as e:  # broad: apprise notify() has unknowable failure modes; records failure and returns result
         channel.last_failure = timezone.now()
         channel.last_error = str(e)
         channel.save(update_fields=["last_failure", "last_error"])
@@ -292,7 +292,7 @@ def send_bulk_notifications(notifications: list, delay_between_ms: int = 100):
         try:
             result = send_notification_task.delay(**notif)
             results.append({"index": i, "task_id": result.id})
-        except Exception as e:
+        except Exception as e:  # broad: loop must continue queueing remaining notifications on per-item failure
             results.append({"index": i, "error": str(e)})
 
         # Rate limiting delay
@@ -321,7 +321,7 @@ def cleanup_notification_cooldowns():
     except ImportError:
         logger.debug("Notifications service not available")
         return {"status": "skipped", "reason": "module not available"}
-    except Exception as e:
+    except Exception as e:  # broad: periodic beat task guard; must never crash the worker
         logger.warning(f"Failed to cleanup notification cooldowns: {e}")
         return {"status": "error", "error": str(e)}
 
@@ -394,6 +394,6 @@ def send_webhook_task(
             "rule_id": rule_id,
         }
 
-    except Exception as e:
+    except Exception as e:  # broad: catch-all fallback after specific httpx handlers; re-raises to trigger Celery retry
         logger.error(f"Webhook failed for rule {rule_id}: {e}")
         raise  # Will trigger retry

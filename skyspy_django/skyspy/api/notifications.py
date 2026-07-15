@@ -321,7 +321,7 @@ class NotificationChannelViewSet(viewsets.ModelViewSet):
                 {"success": False, "message": "apprise library not installed", "servers_notified": 0},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
-        except Exception as e:
+        except Exception as e:  # broad: apprise notify spans dozens of backends with unknowable failure modes
             logger.error(f"Failed to send test notification to {channel.name}: {e}")
             channel.last_failure = timezone.now()
             channel.last_error = str(e)
@@ -431,7 +431,7 @@ class NotificationViewSet(viewsets.ViewSet):
                 {"success": False, "message": "apprise library not installed", "servers_notified": 0},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
-        except Exception as e:
+        except Exception as e:  # broad: apprise notify spans dozens of backends with unknowable failure modes
             logger.error(f"Failed to send test notification: {e}")
             return Response(
                 {"success": False, "message": str(e), "servers_notified": 0},

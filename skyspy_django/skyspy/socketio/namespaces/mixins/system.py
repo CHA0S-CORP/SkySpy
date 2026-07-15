@@ -40,7 +40,7 @@ class SystemHandlerMixin:
         """Get WebSocket service status."""
         try:
             socketio_connections = len(sio.eio.sockets) if hasattr(sio, "eio") and hasattr(sio.eio, "sockets") else 0
-        except Exception:
+        except (AttributeError, TypeError):
             socketio_connections = 0
 
         return {
@@ -72,7 +72,7 @@ class SystemHandlerMixin:
     @sync_to_async
     def _get_health_status(self):
         """Get service health checks."""
-        from django.db import connection
+        from django.db import DatabaseError, connection
 
         health = {"status": "healthy", "services": {}}
 
@@ -80,7 +80,7 @@ class SystemHandlerMixin:
             with connection.cursor() as cursor:
                 cursor.execute("SELECT 1")
             health["services"]["database"] = {"status": "up"}
-        except Exception as e:
+        except (DatabaseError, OSError) as e:
             health["services"]["database"] = {"status": "down", "error": str(e)}
             health["status"] = "unhealthy"
 
@@ -94,7 +94,7 @@ class SystemHandlerMixin:
             cache.set("_health_check", True, timeout=5)
             cache.get("_health_check")
             health["services"]["cache"] = {"status": "up"}
-        except Exception as e:
+        except (ConnectionError, OSError, RuntimeError) as e:
             health["services"]["cache"] = {"status": "down", "error": str(e)}
             health["status"] = "degraded"
 
@@ -203,9 +203,11 @@ class SystemHandlerMixin:
     @sync_to_async
     def _check_user_permission(self, user, permission: str) -> bool:
         """Check if an authenticated user has a specific permission."""
+        from django.db import DatabaseError
+
         try:
             profile = user.skyspy_profile
             return profile.has_permission(permission)
-        except Exception as e:
+        except (AttributeError, TypeError, DatabaseError) as e:
             logger.debug(f"Error checking user permission: {e}")
             return False

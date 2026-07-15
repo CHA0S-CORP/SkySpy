@@ -55,7 +55,7 @@ def _create_client_manager():
         manager = socketio.AsyncRedisManager(redis_url)
         logger.info(f"Socket.IO using Redis client manager: {redis_url}")
         return manager
-    except Exception as e:
+    except Exception as e:  # broad: graceful startup fallback to in-memory; redis/socketio init failures unknowable
         logger.warning(f"Failed to create Redis manager, falling back to in-memory: {e}")
         return None
 

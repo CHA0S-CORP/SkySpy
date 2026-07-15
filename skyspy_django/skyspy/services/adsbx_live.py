@@ -96,7 +96,8 @@ def _make_request(endpoint: str, params: dict | None = None, timeout: int = 15) 
         else:
             logger.error(f"ADS-B Exchange API error: {e.response.status_code}")
         return None
-    except Exception as e:
+    except (httpx.HTTPError, ConnectionError, OSError, ValueError) as e:
+        # ValueError covers response.json() decode failures; httpx/OS/Connection cover network faults
         logger.error(f"ADS-B Exchange API request failed: {e}")
         return None
 
@@ -476,7 +477,7 @@ def _parse_aircraft(ac: dict[str, Any]) -> dict[str, Any] | None:
             "is_pia": ac.get("pia", False),
         }
 
-    except Exception as e:
+    except (ValueError, KeyError, TypeError, AttributeError) as e:
         logger.warning(f"Failed to parse ADS-B Exchange aircraft: {e}")
         return None
 

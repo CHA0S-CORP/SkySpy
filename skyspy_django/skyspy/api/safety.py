@@ -95,7 +95,7 @@ class SafetyEventViewSet(viewsets.ModelViewSet):
 
             stats = safety_monitor.get_stats()
             tracked_aircraft = stats.get("tracked_aircraft", 0)
-        except Exception:
+        except (ImportError, AttributeError, TypeError, KeyError):
             pass
 
         return Response(

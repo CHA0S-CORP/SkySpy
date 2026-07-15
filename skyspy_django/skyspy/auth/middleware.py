@@ -9,6 +9,7 @@ Provides:
 import logging
 
 from django.conf import settings
+from django.db import DatabaseError
 from django.http import JsonResponse
 from django.utils import timezone
 
@@ -151,7 +152,7 @@ class LastActiveMiddleware:
 
             profile.save(update_fields=["last_active", "last_login_ip"])
 
-        except Exception as e:
+        except (DatabaseError, AttributeError, TypeError) as e:
             logger.debug(f"Failed to update last active: {e}")
 
     def _get_client_ip(self, request):

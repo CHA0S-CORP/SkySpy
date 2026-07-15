@@ -2,8 +2,10 @@
 Celery tasks for terrain elevation data management.
 """
 
+import gzip
 import logging
 
+import httpx
 from celery import shared_task
 from django.conf import settings
 
@@ -48,7 +50,7 @@ def download_srtm_tiles(self, radius_nm: float = 100):
                 downloaded += 1
             else:
                 skipped += 1  # nodata (ocean)
-        except Exception as e:
+        except (httpx.HTTPError, OSError, gzip.BadGzipFile) as e:
             logger.warning(f"Failed to download tile ({tile_lat}, {tile_lon}): {e}")
             failed += 1
 

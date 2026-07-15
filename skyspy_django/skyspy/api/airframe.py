@@ -7,6 +7,7 @@ import logging
 from django.conf import settings
 from django.http import FileResponse, Http404
 from drf_spectacular.utils import OpenApiParameter, extend_schema
+from kombu.exceptions import OperationalError as KombuOperationalError
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -92,7 +93,7 @@ class AirframeViewSet(viewsets.ViewSet):
 
                 fetch_aircraft_info.delay(icao)
                 logger.debug(f"Queued aircraft info lookup for {icao}")
-            except Exception as e:
+            except (ConnectionError, OSError, RuntimeError, KombuOperationalError) as e:
                 logger.warning(f"Failed to queue aircraft info lookup for {icao}: {e}")
 
             return Response(

@@ -500,6 +500,6 @@ class AviationDataMixin:
         try:
             refresh_notams.delay()
             return {"success": True, "message": "NOTAM refresh queued"}
-        except Exception as e:
+        except Exception as e:  # broad: Celery broker enqueue can fail many ways; return graceful error to client
             logger.error(f"Failed to queue NOTAM refresh: {e}")
             return {"success": False, "message": str(e)}

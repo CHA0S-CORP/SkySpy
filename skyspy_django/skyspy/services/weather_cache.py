@@ -11,7 +11,7 @@ from math import atan2, cos, radians, sin, sqrt
 
 import httpx
 from django.core.cache import cache
-from django.db import transaction
+from django.db import DatabaseError, transaction
 from django.db.models import Max
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
@@ -186,7 +186,7 @@ def store_pirep(pirep: dict) -> int | None:
         _pirep_stats["stored"] += 1
         _pirep_stats["last_store"] = datetime.utcnow().isoformat()
         return cached_pirep.id
-    except Exception as e:
+    except (DatabaseError, ValueError, TypeError) as e:
         logger.error(f"Failed to store PIREP: {e}")
         return None
 
@@ -202,7 +202,7 @@ def store_pireps(pireps: list) -> int:
             result = store_pirep(pirep)
             if result:
                 stored_count += 1
-        except Exception as e:
+        except (DatabaseError, ValueError, TypeError) as e:
             logger.warning(f"Failed to store PIREP: {e}")
             continue
 
@@ -442,7 +442,7 @@ def _fetch_awc_data(endpoint: str, params: dict) -> dict | list:
     try:
         response = _http_get_awc(f"{AWC_BASE}/{endpoint}", params, timeout=15.0)
         return response.json() if response.text else []
-    except Exception as e:
+    except (httpx.HTTPError, ValueError, KeyError, TypeError) as e:
         logger.error(f"AWC API request failed for {endpoint}: {e}")
         return {"error": str(e)}
 
@@ -742,7 +742,7 @@ def fetch_nexrad_radar(bbox: str, width: int = 1024, height: int = 1024, ttl: in
             cache.set(cache_key, image_data, ttl)
             logger.debug(f"Cached NEXRAD radar image ({len(image_data)} bytes)")
         return image_data
-    except Exception as e:
+    except (httpx.HTTPError, ConnectionError, OSError) as e:
         logger.warning(f"Failed to fetch NEXRAD radar: {e}")
         return None
 
@@ -766,7 +766,7 @@ def fetch_radar_timestamp() -> str | None:
             if ts:
                 cache.set(cache_key, ts, 120)  # Cache for 2 min
             return ts
-    except Exception as e:
+    except (httpx.HTTPError, ValueError, KeyError, TypeError, ConnectionError, OSError) as e:
         logger.warning(f"Failed to fetch radar timestamp: {e}")
         return None
 
@@ -809,7 +809,7 @@ def fetch_winds_aloft(lat: float, lon: float, ttl: int = 3600) -> dict | None:
 
         cache.set(cache_key, data, ttl)
         return data
-    except Exception as e:
+    except (ValueError, KeyError, TypeError, ConnectionError, OSError) as e:
         logger.warning(f"Failed to fetch winds aloft: {e}")
         return None
 
@@ -852,6 +852,6 @@ def fetch_sigmets(ttl: int = 900) -> list:
 
         cache.set(cache_key, data, ttl)
         return data
-    except Exception as e:
+    except (ValueError, KeyError, TypeError, ConnectionError, OSError) as e:
         logger.warning(f"Failed to fetch SIGMETs: {e}")
         return []

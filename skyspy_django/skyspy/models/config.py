@@ -10,7 +10,7 @@ import os
 
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import DatabaseError, models
 
 # Configuration categories matching the plan
 CATEGORY_CHOICES = [
@@ -285,7 +285,7 @@ class SystemConfig(models.Model):
                 updated.append(config)
             except ValidationError as e:
                 errors[key] = str(e)
-            except Exception as e:
+            except DatabaseError as e:
                 errors[key] = str(e)
 
         return updated, errors

@@ -36,7 +36,7 @@ def _dict_from_assignment(tree: ast.AST, name: str) -> dict[str, str]:
             continue
         if name in target_names and isinstance(value, ast.Dict):
             out = {}
-            for k, v in zip(value.keys, value.values):
+            for k, v in zip(value.keys, value.values, strict=False):
                 if not isinstance(k, ast.Constant) or not isinstance(k.value, str):
                     continue
                 if isinstance(v, ast.Constant):

@@ -10,6 +10,7 @@ import logging
 
 from celery import current_app
 from celery.result import AsyncResult
+from django.db import DatabaseError
 from django_celery_results.models import TaskResult
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import OpenApiParameter, extend_schema
@@ -122,7 +123,7 @@ class TaskResultViewSet(viewsets.ReadOnlyModelViewSet):
                 response_data["result"] = result.result
                 if result.failed():
                     response_data["traceback"] = str(result.traceback)
-            except Exception as e:
+            except Exception as e:  # broad: deserializing result re-raises task's own exception (unknowable type)
                 logger.warning(f"Could not get result for task {task_id}: {e}")
                 response_data["result"] = {"error": str(e)}
 
@@ -131,7 +132,7 @@ class TaskResultViewSet(viewsets.ReadOnlyModelViewSet):
             db_result = TaskResult.objects.filter(task_id=task_id).first()
             if db_result and db_result.date_done:
                 response_data["date_done"] = db_result.date_done.isoformat()
-        except Exception:
+        except DatabaseError:
             pass
 
         return Response(response_data)
@@ -175,7 +176,7 @@ class TaskResultViewSet(viewsets.ReadOnlyModelViewSet):
                 }
             )
 
-        except Exception as e:
+        except Exception as e:  # broad: revoke() talks to the broker; transport failure modes vary by backend
             logger.error(f"Failed to revoke task {task_id}: {e}")
             return Response(
                 {"success": False, "message": str(e), "task_id": task_id},
@@ -269,7 +270,7 @@ class TaskResultViewSet(viewsets.ReadOnlyModelViewSet):
                     "count": len(app_tasks),
                 }
             )
-        except Exception as e:
+        except (AttributeError, TypeError) as e:
             logger.error(f"Failed to get registered tasks: {e}")
             return Response(
                 {"error": str(e)},
@@ -310,7 +311,7 @@ class TaskResultViewSet(viewsets.ReadOnlyModelViewSet):
                     "workers": list(active.keys()),
                 }
             )
-        except Exception as e:
+        except Exception as e:  # broad: inspect() reaches workers over the broker; failure modes vary by transport
             logger.warning(f"Could not get active tasks (workers may be offline): {e}")
             return Response(
                 {

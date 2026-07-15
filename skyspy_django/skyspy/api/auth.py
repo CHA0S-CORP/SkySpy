@@ -13,7 +13,7 @@ Provides CRUD endpoints for:
 import logging
 
 from django.contrib.auth.models import User
-from django.db import transaction
+from django.db import DatabaseError, transaction
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
@@ -410,7 +410,7 @@ class APIKeyViewSet(viewsets.ModelViewSet):
     def _has_admin_permission(self, user):
         try:
             return user.skyspy_profile.has_permission("users.view")
-        except Exception:
+        except (SkyspyUser.DoesNotExist, AttributeError, TypeError, DatabaseError):
             return False
 
 

@@ -65,7 +65,7 @@ def sync_le_external_sources(self, force: bool = False):
                 else:
                     logger.warning(f"Failed to sync {source.name}: {result.errors}")
 
-            except Exception as e:
+            except Exception as e:  # broad: per-source guard so one source's failure doesn't stop the sync loop
                 logger.exception(f"Error syncing {source.name}: {e}")
                 results.append(
                     {
@@ -81,7 +81,7 @@ def sync_le_external_sources(self, force: bool = False):
             "results": results,
         }
 
-    except Exception as e:
+    except Exception as e:  # broad: Celery task top-level guard; retries the task on any failure
         logger.exception(f"Error in sync_le_external_sources: {e}")
         raise self.retry(exc=e)
 
@@ -109,7 +109,7 @@ def import_le_source(self, source_name: str, force: bool = False):
 
         return result.to_dict()
 
-    except Exception as e:
+    except Exception as e:  # broad: Celery task top-level guard; retries the task on any failure
         logger.exception(f"Error importing {source_name}: {e}")
         raise self.retry(exc=e)
 
@@ -136,7 +136,7 @@ def deduplicate_le_database(dry_run: bool = True):
 
         return stats
 
-    except Exception as e:
+    except Exception as e:  # broad: Celery task top-level guard; logs and re-raises for visibility
         logger.exception(f"Error in deduplicate_le_database: {e}")
         raise
 
@@ -191,7 +191,7 @@ def check_source_health():
             "unhealthy_sources": unhealthy_sources,
         }
 
-    except Exception as e:
+    except Exception as e:  # broad: Celery task top-level guard; logs and re-raises for visibility
         logger.exception(f"Error in check_source_health: {e}")
         raise
 
@@ -223,6 +223,6 @@ def refresh_source_metadata():
             "sources_updated": updated,
         }
 
-    except Exception as e:
+    except Exception as e:  # broad: Celery task top-level guard; logs and re-raises for visibility
         logger.exception(f"Error in refresh_source_metadata: {e}")
         raise

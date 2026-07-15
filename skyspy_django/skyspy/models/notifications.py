@@ -360,11 +360,11 @@ class UserNotificationPreference(models.Model):
         if not self.quiet_hours_start or not self.quiet_hours_end:
             return False
 
+        from datetime import datetime
+
+        import pytz
+
         try:
-            from datetime import datetime
-
-            import pytz
-
             tz = pytz.timezone(self.timezone)
             now = datetime.now(tz).time()
 
@@ -374,7 +374,7 @@ class UserNotificationPreference(models.Model):
             else:
                 # Quiet hours span midnight (e.g., 22:00 - 08:00)
                 return now >= self.quiet_hours_start or now <= self.quiet_hours_end
-        except Exception:
+        except (pytz.UnknownTimeZoneError, AttributeError, TypeError, ValueError):
             return False
 
     def should_receive(self, priority: str, event_type: str) -> bool:

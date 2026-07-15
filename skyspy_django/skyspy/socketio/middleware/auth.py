@@ -10,6 +10,7 @@ import logging
 from asgiref.sync import sync_to_async
 from django.conf import settings
 from django.contrib.auth.models import AnonymousUser, User
+from django.db import DatabaseError
 
 logger = logging.getLogger(__name__)
 
@@ -109,7 +110,7 @@ def _validate_jwt(token: str) -> User | None:
     except (InvalidToken, TokenError) as e:
         logger.debug(f"JWT validation failed: {e}")
         return None
-    except Exception as e:
+    except Exception as e:  # broad: third-party JWT auth call, unknowable failure modes; must never crash connect
         logger.exception(f"JWT validation error: {e}")
         return None
 
@@ -152,6 +153,6 @@ def _validate_api_key(token: str) -> User | None:
     except APIKey.DoesNotExist:
         logger.debug("API key not found in database")
         return None
-    except Exception as e:
+    except (DatabaseError, ValueError, TypeError) as e:
         logger.debug(f"API key validation failed: {e}")
         return None

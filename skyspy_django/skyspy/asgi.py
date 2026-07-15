@@ -64,7 +64,7 @@ def _ensure_aviation_data():
 
                 refresh_airspace_boundaries.delay()
                 logger.info("Queued refresh_airspace_boundaries task")
-            except Exception as e:
+            except Exception as e:  # broad: startup Celery enqueue must never crash ASGI boot
                 logger.warning(f"Failed to queue airspace boundary refresh: {e}")
         else:
             logger.debug(f"Airspace data present: {boundary_count} boundaries")
@@ -78,7 +78,7 @@ def _ensure_aviation_data():
 
                 refresh_airspace_advisories.delay()
                 logger.info("Queued refresh_airspace_advisories task")
-            except Exception as e:
+            except Exception as e:  # broad: startup Celery enqueue must never crash ASGI boot
                 logger.warning(f"Failed to queue airspace advisory refresh: {e}")
 
         # Check geodata (airports, navaids)
@@ -92,12 +92,12 @@ def _ensure_aviation_data():
 
                     refresh_all_geodata.delay()
                     logger.info("Queued refresh_all_geodata task")
-                except Exception as e:
+                except Exception as e:  # broad: startup Celery enqueue must never crash ASGI boot
                     logger.warning(f"Failed to queue geodata refresh: {e}")
-        except Exception as e:
+        except Exception as e:  # broad: geodata cache/DB check must never crash ASGI boot
             logger.warning(f"Error checking geodata: {e}")
 
-    except Exception as e:
+    except Exception as e:  # broad: top-level startup guard must never crash ASGI boot
         logger.warning(f"Error checking aviation data on startup: {e}")
 
 

@@ -189,7 +189,7 @@ def poll_aircraft(self):
         # Queue new aircraft for background info lookup
         try:
             queue_new_aircraft_for_lookup(aircraft_list)
-        except Exception as e:
+        except Exception as e:  # broad: Celery dispatch/broker + malformed data must not break the poll
             logger.debug(f"Failed to queue aircraft lookups: {e}")
 
         # Run safety monitoring and alert rule evaluation against live data
@@ -264,7 +264,7 @@ def poll_aircraft(self):
                 {"aircraft": aircraft_list, "count": len(aircraft_list), "timestamp": timestamp},
                 room="topic_aircraft",
             )
-        except Exception as e:
+        except Exception as e:  # broad: Socket.IO/Redis emit must never break the poll cycle
             logger.warning(f"Failed to broadcast aircraft update: {e}")
 
         # Update previous aircraft state for next poll
@@ -282,16 +282,16 @@ def poll_aircraft(self):
             from skyspy.utils.sentry import capture_task_error
 
             capture_task_error(e, "poll_aircraft", extra={"url": f"{settings.ULTRAFEEDER_URL}/data/aircraft.json"})
-        except Exception as sentry_err:
+        except Exception as sentry_err:  # broad: error reporting must never raise
             logger.debug(f"Could not report to Sentry: {sentry_err}")
-    except Exception as e:
+    except Exception as e:  # broad: Celery task top-level guard - never crash the worker
         logger.exception(f"Error in poll_aircraft: {e}")
         # Capture unexpected errors to Sentry
         try:
             from skyspy.utils.sentry import capture_task_error
 
             capture_task_error(e, "poll_aircraft")
-        except Exception as sentry_err:
+        except Exception as sentry_err:  # broad: error reporting must never raise
             logger.debug(f"Could not report to Sentry: {sentry_err}")
 
 

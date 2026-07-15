@@ -150,7 +150,7 @@ def get_stream_task_status() -> dict[str, Any]:
                 "source": "inspect",
             }
 
-    except Exception as e:
+    except Exception as e:  # broad: Celery inspect/broker failure modes are unknowable; must fall back to cache
         # Fall back to cache check if Celery inspect fails
         # This can happen if the broker is temporarily unavailable
         logger.warning(f"Failed to inspect tasks via Celery, falling back to cache check: {e}")
@@ -551,7 +551,7 @@ def update_state_and_broadcast(batch: list[dict]):
             new_aircraft = [batch_by_icao[icao] for icao in new_icaos if icao in batch_by_icao]
             broadcast_new_aircraft(new_aircraft, timestamp)
 
-    except Exception as e:
+    except Exception as e:  # broad: hot-path broadcast (sync_emit) must never crash the stream loop
         logger.warning(f"Broadcast error: {e}")
 
     # Update previous state for change detection (thread-safe)
@@ -600,7 +600,7 @@ def sync_cache_state():
     # Broadcast heartbeat with current aircraft count
     try:
         broadcast_heartbeat(len(aircraft_list), timestamp)
-    except Exception as e:
+    except Exception as e:  # broad: heartbeat broadcast (sync_emit) must never crash the stream loop
         logger.warning(f"Failed to broadcast heartbeat: {e}")
 
 
@@ -684,7 +684,7 @@ def flush_stream_to_database(self):
                     AircraftSighting.objects.bulk_create(sightings, ignore_conflicts=True, batch_size=500)
                 logger.debug(f"Flushed {len(sightings)} stream sightings to database")
 
-    except Exception as e:
+    except Exception as e:  # broad: flush must requeue the batch on ANY failure (no data loss)
         logger.error(f"Failed to flush stream data to database: {e}")
         # Re-queue the whole failed batch ahead of newly buffered rows so
         # nothing is silently dropped; the deque's maxlen=10000 is the sole
@@ -719,7 +719,7 @@ def process_new_aircraft_lookups(self):
         try:
             fetch_aircraft_info_batch.delay(to_lookup)
             logger.debug(f"Queued batch of {len(to_lookup)} aircraft for info lookup")
-        except Exception as e:
+        except Exception as e:  # broad: Celery enqueue/broker failure modes are unknowable; lookups are best-effort
             logger.debug(f"Failed to queue batch lookup: {e}")
 
 
@@ -769,7 +769,7 @@ def cleanup_stale_aircraft(self):
         try:
             timestamp = timezone.now().isoformat().replace("+00:00", "Z")
             broadcast_removed_aircraft(stale_icaos, timestamp)
-        except Exception as e:
+        except Exception as e:  # broad: cleanup broadcast (sync_emit) must never crash the periodic task
             logger.warning(f"Failed to broadcast stale aircraft removal: {e}")
 
 
@@ -916,7 +916,7 @@ def stream_sse(url: str, feeder_lat: float, feeder_lon: float, batch_ms: int):
     except requests.exceptions.ConnectionError as e:
         logger.warning(f"SSE connection error: {e}")
         raise
-    except Exception as e:
+    except Exception as e:  # broad: log-and-reraise so stream_aircraft's reconnect handler decides recovery
         logger.exception(f"SSE stream error: {e}")
         raise
 
@@ -1121,7 +1121,7 @@ def stream_adsbx(feeder_lat: float, feeder_lon: float, poll_interval: float, rad
             sleep_time = max(0.1, poll_interval - elapsed)
             time.sleep(sleep_time)
 
-        except Exception as e:
+        except Exception as e:  # broad: log-and-reraise so stream_aircraft's reconnect handler decides recovery
             logger.error(f"ADSBexchange poll error: {e}")
             raise
 
@@ -1238,7 +1238,7 @@ def stream_aircraft(self):
                 logger.error("ADSBexchange mode requires ADSBX_LIVE_ENABLED=True and ADSBX_RAPIDAPI_KEY")
                 break
 
-        except Exception as e:
+        except Exception as e:  # broad: task-level reconnect loop must survive any stream failure
             logger.exception(f"Unexpected error in aircraft stream: {e}")
             cache.set(CACHE_KEY_STREAM_ACTIVE, False, timeout=60)
             consecutive_errors += 1

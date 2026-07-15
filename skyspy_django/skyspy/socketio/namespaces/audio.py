@@ -107,7 +107,7 @@ class AudioNamespace(socketio.AsyncNamespace):
 
             # Clear session data
             await sio.save_session(sid, {}, namespace="/audio")
-        except Exception as e:
+        except Exception as e:  # broad: disconnect cleanup must never raise
             logger.debug(f"Error during audio disconnect cleanup for {sid}: {e}")
 
         logger.info(f"Client disconnected from /audio: {sid}")

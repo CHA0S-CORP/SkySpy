@@ -77,7 +77,7 @@ def consume_swim_notams(self, max_messages: int = 1000, timeout_seconds: int = 3
             "errors": stats.get("errors", 0),
         }
 
-    except Exception as e:
+    except Exception as e:  # broad: Celery task top-level guard — retry on any failure
         logger.error(f"SWIM FNS consumer error: {e}")
         raise self.retry(exc=e, countdown=120)
 
@@ -139,12 +139,12 @@ def refresh_notams(self):
                 },
                 room="topic_notams",
             )
-        except Exception as e:
+        except Exception as e:  # broad: WebSocket broadcast is best-effort, must not fail the refresh
             logger.warning(f"Failed to broadcast NOTAM refresh: {e}")
 
         return count
 
-    except Exception as e:
+    except Exception as e:  # broad: Celery task top-level guard — retry on any failure
         logger.error(f"Failed to refresh NOTAMs: {e}")
         raise self.retry(exc=e, countdown=60)
 
@@ -167,7 +167,7 @@ def check_and_refresh_notams():
             logger.debug("NOTAM cache is fresh")
             return False
 
-    except Exception as e:
+    except Exception as e:  # broad: Celery task top-level guard — must not crash the worker
         logger.error(f"Error checking NOTAM freshness: {e}")
         return False
 
@@ -189,7 +189,7 @@ def refresh_notams_for_airports(icao_list: list):
         logger.info(f"Refreshed {count} NOTAMs for {len(icao_list)} airports")
         return count
 
-    except Exception as e:
+    except Exception as e:  # broad: Celery task top-level guard — must not crash the worker
         logger.error(f"Failed to refresh airport NOTAMs: {e}")
         return 0
 
@@ -219,7 +219,7 @@ def broadcast_new_tfr(tfr_data: dict):
         sync_emit("notam:tfr_new", tfr_data, room="topic_tfrs")
 
         logger.info(f"Broadcast new TFR: {tfr_data.get('notam_id')}")
-    except Exception as e:
+    except Exception as e:  # broad: WebSocket broadcast is best-effort, must not crash the worker
         logger.error(f"Failed to broadcast TFR: {e}")
 
 
@@ -238,6 +238,7 @@ def cleanup_expired_notams(archive_days: int = 7, delete_days: int = 90):
     """
     from datetime import timedelta
 
+    from django.db import DatabaseError
     from django.utils import timezone
 
     from skyspy.models.notams import CachedNotam
@@ -274,7 +275,7 @@ def cleanup_expired_notams(archive_days: int = 7, delete_days: int = 90):
 
         return {"archived": archived_count, "deleted": deleted}
 
-    except Exception as e:
+    except DatabaseError as e:
         logger.error(f"Failed to cleanup NOTAMs: {e}")
         return {"archived": 0, "deleted": 0}
 
@@ -290,6 +291,6 @@ def get_notam_stats():
         stats = notams.get_notam_stats()
         return stats
 
-    except Exception as e:
+    except Exception as e:  # broad: Celery task top-level guard — must not crash the worker
         logger.error(f"Error getting NOTAM stats: {e}")
         return {}

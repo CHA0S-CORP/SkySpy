@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from asgiref.sync import sync_to_async
 from django.conf import settings
 from django.core.cache import cache
+from django.db import DatabaseError
 from django.utils import timezone
 
 from skyspy.socketio.namespaces.mixins import parse_int_param
@@ -365,7 +366,7 @@ class AircraftHandlerMixin:
                 photographer = info.photo_photographer
                 source = info.photo_source
                 page_link = info.photo_page_link
-        except Exception:
+        except DatabaseError:
             pass
 
         return photographer, source, page_link

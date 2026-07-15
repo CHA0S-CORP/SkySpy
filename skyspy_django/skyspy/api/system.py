@@ -9,7 +9,7 @@ import time
 
 from django.conf import settings
 from django.core.cache import cache
-from django.db import connection
+from django.db import DatabaseError, connection
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
@@ -51,7 +51,7 @@ class HealthCheckView(APIView):
                 cursor.execute("SELECT 1")
             db_latency = (time.time() - start) * 1000
             services["database"] = {"status": "up", "latency_ms": round(db_latency, 2)}
-        except Exception as e:
+        except Exception as e:  # broad: health probe must report any failure as "down"
             services["database"] = {"status": "down", "message": str(e)}
             overall_status = "unhealthy"
 
@@ -64,7 +64,7 @@ class HealthCheckView(APIView):
                 services["cache"] = {"status": "degraded"}
                 if overall_status == "healthy":
                     overall_status = "degraded"
-        except Exception as e:
+        except Exception as e:  # broad: health probe must report any cache failure as "down"
             services["cache"] = {"status": "down", "message": str(e)}
             overall_status = "unhealthy"
 
@@ -75,7 +75,7 @@ class HealthCheckView(APIView):
                 services["celery"] = {"status": "up"}
             else:
                 services["celery"] = {"status": "unknown", "message": "No heartbeat"}
-        except Exception as e:
+        except Exception as e:  # broad: health probe reports celery status, never raises
             services["celery"] = {"status": "unknown", "message": f"Cache unavailable: {str(e)}"}
 
         # Check libacars
@@ -90,7 +90,7 @@ class HealthCheckView(APIView):
             }
             if libacars_health.get("issues"):
                 services["libacars"]["issues"] = libacars_health["issues"]
-        except Exception as e:
+        except Exception as e:  # broad: CFFI binding health probe, unknowable failure modes
             services["libacars"] = {"status": "error", "message": str(e)}
 
         return Response(
@@ -121,6 +121,8 @@ def _get_cached_table_counts():
         "safety_event_count": 0,
     }
 
+    # broad: each count is a best-effort probe — StatusView must always return
+    # valid JSON, so any failure (not only DatabaseError) leaves the default 0.
     with contextlib.suppress(Exception):
         counts["total_sightings"] = AircraftSighting.objects.count()
 
@@ -168,7 +170,7 @@ class StatusView(APIView):
         try:
             notif_config = NotificationConfig.get_config()
             notifications_configured = bool(notif_config.apprise_urls)
-        except Exception:
+        except Exception:  # broad: StatusView must always return valid JSON (tested)
             notifications_configured = False
 
         # Get current aircraft count from cache
@@ -188,7 +190,7 @@ class StatusView(APIView):
 
             safety_stats = safety_monitor.get_stats()
             safety_tracked_aircraft = safety_stats.get("tracked_aircraft", 0)
-        except Exception:
+        except (AttributeError, KeyError, TypeError):
             pass
 
         # Get WebSocket connection count from cache (set by channels consumer)
@@ -207,7 +209,7 @@ class StatusView(APIView):
                 active_tasks = PeriodicTask.objects.filter(enabled=True).values_list("name", flat=True)
                 celery_tasks = list(active_tasks)
                 cache.set("celery_periodic_tasks", celery_tasks, timeout=300)  # Cache for 5 minutes
-            except Exception:
+            except DatabaseError:
                 pass
 
         # Get antenna analytics from cache
@@ -235,7 +237,7 @@ class StatusView(APIView):
                 "available": is_available(),
                 "stats": get_stats(),
             }
-        except Exception:
+        except Exception:  # broad: CFFI binding load may fail in unknowable ways
             libacars_status = {"available": False, "error": "Could not load libacars"}
 
         return Response(
@@ -399,7 +401,7 @@ class MetricsView(APIView):
                 libacars_metrics = export_prometheus_metrics()
                 if libacars_metrics:
                     metrics_output += "\n# libacars metrics\n" + libacars_metrics
-            except Exception as e:
+            except Exception as e:  # broad: metrics export must never break the metrics endpoint
                 logger.debug(f"Could not get libacars metrics: {e}")
 
             return HttpResponse(metrics_output, content_type=CONTENT_TYPE_LATEST)
@@ -433,7 +435,7 @@ class ExternalDatabaseStatsView(APIView):
                     "any_loaded": external_db.is_any_loaded(),
                 }
             )
-        except Exception as e:
+        except Exception as e:  # broad: view guard over external_db (net/DB/file/parse mix)
             logger.error(f"Error getting database stats: {e}")
             return Response({"databases": {}, "any_loaded": False, "error": str(e)})
 
@@ -479,7 +481,7 @@ class OpenSkyLookupView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        except Exception as e:
+        except Exception as e:  # broad: view guard over external_db lookup (net/DB/parse mix)
             logger.error(f"Error looking up {icao_hex}: {e}")
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -513,7 +515,7 @@ class AircraftLookupView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        except Exception as e:
+        except Exception as e:  # broad: view guard over external_db lookup (net/DB/parse mix)
             logger.error(f"Error looking up {icao_hex}: {e}")
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -539,7 +541,7 @@ class RouteLookupView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        except Exception as e:
+        except Exception as e:  # broad: view guard over external_db route fetch (net/parse mix)
             logger.error(f"Error looking up route for {callsign}: {e}")
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -562,7 +564,7 @@ class GeodataStatsView(APIView):
             stats = geodata.get_cache_stats()
 
             return Response(stats)
-        except Exception as e:
+        except Exception as e:  # broad: view guard over geodata service (cache/file/parse mix)
             logger.error(f"Error getting geodata stats: {e}")
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -591,6 +593,6 @@ class WeatherCacheStatsView(APIView):
                     "taf_count": 0,  # TAF stats not separately tracked
                 }
             )
-        except Exception as e:
+        except Exception as e:  # broad: view guard over weather_cache service (net/cache/parse mix)
             logger.error(f"Error getting weather stats: {e}")
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

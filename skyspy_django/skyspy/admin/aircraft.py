@@ -215,7 +215,7 @@ class AircraftInfoAdmin(admin.ModelAdmin):
             try:
                 service.refresh_info(aircraft_info.icao_hex)
                 refreshed += 1
-            except Exception:
+            except Exception:  # broad: per-item guard for bulk admin action; any failure counts as failed, loop continues
                 failed += 1
 
         if refreshed > 0:

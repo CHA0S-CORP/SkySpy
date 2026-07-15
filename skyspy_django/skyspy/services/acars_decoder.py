@@ -13,6 +13,8 @@ import logging
 import re
 from functools import lru_cache
 
+from django.db import DatabaseError
+
 from skyspy.services.libacars_binding import (
     MsgDir,
     decode_acars_apps,
@@ -113,7 +115,7 @@ def find_airline_by_icao(icao_code: str) -> tuple[str, str]:
         airline = get_airline_by_icao(icao_code)
         if airline:
             return (airline.get("iata_code") or icao_code, airline.get("name", "Unknown Airline"))
-    except Exception:
+    except DatabaseError:
         pass  # Fall back to hardcoded dictionary
 
     # Fallback to hardcoded dictionary
@@ -135,7 +137,7 @@ def find_airline_by_iata(iata_code: str) -> tuple[str, str]:
         airline = CachedAirline.objects.filter(iata_code__iexact=iata_code).first()
         if airline:
             return (airline.icao_code, airline.name)
-    except Exception:
+    except DatabaseError:
         pass  # Fall back to hardcoded dictionary
 
     # Fallback to hardcoded dictionary
@@ -411,7 +413,7 @@ def decode_message_text(text: str, label: str = None, libacars_data: dict = None
                 if result:
                     decoded["libacars"] = result
                     logger.debug("libacars_decoded", extra={"label": label, "keys": list(result.keys())})
-            except Exception as e:
+            except Exception as e:  # broad: third-party libacars CFFI/ctypes decode, unknowable failure modes
                 logger.debug("libacars_decode_failed", extra={"label": label, "error": str(e)})
 
     # Ground Station Squitter

@@ -369,7 +369,7 @@ class RegistrationAnalysisService:
                 else:
                     stats["low_risk"] += 1
 
-            except Exception as e:
+            except Exception as e:  # broad: batch loop must continue past any per-aircraft failure
                 logger.error(f"Error analyzing {aircraft.icao_hex}: {e}")
                 stats["errors"] += 1
 

@@ -558,7 +558,7 @@ def cleanup_all_caches():
     except ImportError:
         # notifications module not available
         pass
-    except Exception as e:
+    except Exception as e:  # broad: periodic cleanup must not crash; cooldown backend failure modes unknowable
         logger.debug(f"Could not cleanup notification cooldowns: {e}")
 
     # Clean expired entries from bounded caches
@@ -571,7 +571,7 @@ def cleanup_all_caches():
                 f"Bounded cache cleanup: aircraft_info={expired_aircraft}, "
                 f"routes={expired_routes}, photos={expired_photos}"
             )
-    except Exception as e:
+    except Exception as e:  # broad: periodic cleanup boundary must keep running regardless of failure
         logger.debug(f"Could not cleanup bounded caches: {e}")
 
     logger.debug("Completed comprehensive cache cleanup")

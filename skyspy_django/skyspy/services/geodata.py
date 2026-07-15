@@ -119,7 +119,7 @@ def fetch_awc_data(endpoint: str, params: dict) -> dict | list:
     except httpx.HTTPStatusError as e:
         logger.error(f"AWC API error for {endpoint}: {e.response.status_code}")
         return {"error": str(e), "status": e.response.status_code}
-    except Exception as e:
+    except Exception as e:  # broad: AWC fetch must degrade to an error dict on any failure (tested)
         logger.error(f"AWC API request failed for {endpoint}: {e}")
         return {"error": str(e)}
 
@@ -129,7 +129,7 @@ def fetch_geojson(url: str) -> dict | None:
     try:
         response = _http_get_geojson(url, timeout=15.0)
         return response.json()
-    except Exception as e:
+    except Exception as e:  # broad: GeoJSON fetch returns None on any failure (tested)
         logger.error(f"Failed to fetch GeoJSON from {url}: {e}")
         return None
 

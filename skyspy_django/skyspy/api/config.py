@@ -7,6 +7,8 @@ stored in the database. Environment variables always take precedence.
 
 import logging
 
+from django.core.exceptions import ValidationError
+from django.db import DatabaseError
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status, viewsets
@@ -228,7 +230,7 @@ class ConfigViewSet(viewsets.ViewSet):
 
             except SystemConfig.DoesNotExist:
                 errors[key] = "Configuration does not exist"
-            except Exception as e:
+            except (DatabaseError, ValidationError, ValueError, TypeError) as e:
                 errors[key] = str(e)
 
         return Response(

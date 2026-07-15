@@ -10,7 +10,7 @@ import re
 from datetime import date, datetime, timedelta
 
 from django.core.cache import cache
-from django.db import transaction
+from django.db import DatabaseError, transaction
 from django.db.models import Count, Max, Sum
 from django.utils import timezone
 
@@ -383,7 +383,7 @@ class GamificationService:
                         "previous_value": previous_value,
                     }
 
-        except Exception as e:
+        except DatabaseError as e:
             logger.error(f"Error checking record {record_type}: {e}")
 
         return None
@@ -673,7 +673,7 @@ class GamificationService:
                 "rarity_score": rarity_score,
             }
 
-        except Exception as e:
+        except DatabaseError as e:
             logger.error(f"Error creating rare sighting: {e}")
             return None
 
@@ -881,7 +881,7 @@ class GamificationService:
             # Invalidate collection cache
             cache.delete(CACHE_KEY_COLLECTION_STATS)
 
-        except Exception as e:
+        except DatabaseError as e:
             logger.error(f"Error updating spotted aircraft: {e}")
 
     def _update_spotted_counts(self, session: AircraftSession, aircraft_info: AircraftInfo | None, is_new: bool):
@@ -1070,7 +1070,7 @@ class GamificationService:
 
                 streak.save()
 
-        except Exception as e:
+        except DatabaseError as e:
             logger.error(f"Error updating streak {streak_type}: {e}")
 
     # ==========================================================================
@@ -1199,7 +1199,7 @@ class GamificationService:
 
             logger.debug(f"Updated daily stats for {for_date}: {unique_hexes} aircraft")
 
-        except Exception as e:
+        except DatabaseError as e:
             logger.error(f"Error updating daily stats for {for_date}: {e}")
 
     # ==========================================================================

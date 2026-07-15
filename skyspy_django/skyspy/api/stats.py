@@ -5,6 +5,7 @@ Stats API views for tracking quality, engagement analytics, and gamification.
 import logging
 from datetime import timedelta
 
+from django.db import DatabaseError
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status, viewsets
@@ -105,7 +106,7 @@ class TrackingQualityViewSet(viewsets.ViewSet):
         try:
             gaps = get_coverage_gaps_analysis(hours=hours)
             return Response(gaps)
-        except Exception as e:
+        except (DatabaseError, ConnectionError, OSError) as e:
             logger.error(f"Error calculating coverage gaps: {e}")
             return Response({"error": "Unable to calculate coverage gaps"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 

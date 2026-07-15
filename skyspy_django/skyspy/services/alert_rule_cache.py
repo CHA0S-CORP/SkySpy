@@ -15,11 +15,25 @@ from threading import Lock
 from typing import Any
 
 from django.conf import settings
+from django.db import DatabaseError
 from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
+
+# Redis client error base for narrowing cache-op exception handlers. Guarded so
+# the module still imports if the redis library is unavailable.
+try:
+    from redis.exceptions import RedisError
+except ImportError:  # pragma: no cover - redis is a core dependency
+    RedisError = ()
+
+# Exception types raised by Redis operations (connection loss, timeouts, protocol
+# errors) and by from_url() on a missing/malformed REDIS_URL (ValueError — e.g.
+# when REDIS_URL is empty, as in tests), which the connection bootstrap must
+# treat as "Redis unavailable" and fall back to in-memory.
+REDIS_ERRORS = (ConnectionError, OSError, TimeoutError, ValueError, RedisError)
 
 # Maximum allowed regex pattern length to prevent ReDoS attacks
 MAX_REGEX_PATTERN_LENGTH = 500
@@ -253,7 +267,7 @@ class AlertRuleCache:
                 redis_url = getattr(settings, "REDIS_URL", "redis://redis:6379/0")
                 self._redis = redis.from_url(redis_url, decode_responses=True)
                 self._redis.ping()
-            except Exception as e:
+            except (ImportError, *REDIS_ERRORS) as e:
                 logger.warning(f"Redis not available for rule cache: {e}")
                 self._redis = False
         return self._redis if self._redis else None
@@ -268,7 +282,7 @@ class AlertRuleCache:
                 version = self.redis.get(self.VERSION_KEY)
                 if version:
                     return version
-            except Exception as e:
+            except REDIS_ERRORS as e:
                 logger.debug(f"Could not get cache version from Redis: {e}")
         return self._NO_VERSION_SENTINEL
 
@@ -339,7 +353,7 @@ class AlertRuleCache:
                     new_version = self._generate_version()
                     self.redis.set(self.VERSION_KEY, new_version)
                     self._local_version = new_version
-                except Exception as e:
+                except (*REDIS_ERRORS, TypeError, ValueError) as e:
                     logger.warning(f"Failed to store rules in Redis: {e}")
             else:
                 self._local_version = self._generate_version()
@@ -349,7 +363,7 @@ class AlertRuleCache:
             # Build segmented indexes for O(1) lookup
             self._build_segmented_indexes()
 
-        except Exception as e:
+        except (DatabaseError, *REDIS_ERRORS, ValueError, KeyError, TypeError, AttributeError) as e:
             logger.error(f"Failed to refresh rule cache: {e}")
             # Keep existing cache on error
             if not self._local_rules:
@@ -540,7 +554,7 @@ class AlertRuleCache:
                 self.redis.delete(self.REDIS_KEY)
                 new_version = self._generate_version()
                 self.redis.set(self.VERSION_KEY, new_version)
-            except Exception as e:
+            except REDIS_ERRORS as e:
                 logger.warning(f"Failed to invalidate Redis cache: {e}")
 
         logger.debug("Alert rule cache invalidated")

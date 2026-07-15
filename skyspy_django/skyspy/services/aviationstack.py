@@ -77,7 +77,7 @@ def _make_request(endpoint: str, params: dict | None = None, timeout: int = 30) 
     except httpx.HTTPStatusError as e:
         logger.error(f"Aviationstack API error: {e.response.status_code}")
         return None
-    except Exception as e:
+    except (httpx.HTTPError, ConnectionError, OSError, TimeoutError, ValueError) as e:
         logger.error(f"Aviationstack API request failed: {e}")
         return None
 
@@ -385,7 +385,7 @@ def _parse_flight(flight_data: dict[str, Any]) -> dict[str, Any] | None:
             "source": "aviationstack",
         }
 
-    except Exception as e:
+    except (AttributeError, TypeError, KeyError, ValueError) as e:
         logger.warning(f"Failed to parse Aviationstack flight: {e}")
         return None
 

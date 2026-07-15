@@ -78,7 +78,7 @@ def _get_s3_client():
             logger.error("boto3 not installed - S3 storage unavailable")
             _s3_client_init_failed = True
             return None
-        except Exception as e:
+        except Exception as e:  # broad: boto3/botocore client init has unknowable config/credential failure modes
             logger.error(f"Failed to initialize S3 client: {e}")
             _s3_client_init_failed = True
             return None
@@ -177,6 +177,7 @@ def generate_signed_url(filename: str, prefix: str, expires_in: int = 3600) -> s
     key = get_s3_key(filename, prefix)
 
     try:
+
         url = client.generate_presigned_url(
             "get_object",
             Params={
@@ -186,7 +187,7 @@ def generate_signed_url(filename: str, prefix: str, expires_in: int = 3600) -> s
             ExpiresIn=expires_in,
         )
         return url
-    except Exception as e:
+    except Exception as e:  # broad: signed-URL generation returns None on any error (tested)
         logger.error(f"Failed to generate signed URL for {filename}: {e}")
         return None
 
@@ -219,6 +220,7 @@ def upload_to_s3(
     key = get_s3_key(filename, prefix)
 
     try:
+
         client.put_object(
             Bucket=settings.S3_BUCKET,
             Key=key,
@@ -231,7 +233,7 @@ def upload_to_s3(
         logger.info(f"Uploaded to S3: {key}")
         return url
 
-    except Exception as e:
+    except Exception as e:  # broad: upload returns None/False on any error (tested)
         logger.error(f"S3 upload failed for {filename}: {e}")
         return None
 
@@ -254,9 +256,11 @@ def download_from_s3(filename: str, prefix: str) -> bytes | None:
     key = get_s3_key(filename, prefix)
 
     try:
+        from botocore.exceptions import BotoCoreError, ClientError
+
         response = client.get_object(Bucket=settings.S3_BUCKET, Key=key)
         return response["Body"].read()
-    except Exception as e:
+    except (BotoCoreError, ClientError) as e:
         logger.error(f"S3 download failed for {filename}: {e}")
         return None
 
@@ -303,7 +307,7 @@ def check_s3_exists(filename: str, prefix: str, use_cache: bool = True) -> bool:
         logger.warning(f"S3 head_object error for {filename}: {error_code}")
         return False
 
-    except Exception as e:
+    except Exception as e:  # broad: existence check is best-effort fallback after ClientError handled above
         logger.warning(f"S3 existence check failed for {filename}: {e}")
         return False
 
@@ -331,7 +335,7 @@ def save_file_locally(data: bytes, filename: str, directory: str) -> Path | None
         logger.info(f"Saved file locally: {file_path}")
         return file_path
 
-    except Exception as e:
+    except (OSError, ValueError) as e:
         logger.error(f"Failed to save file locally: {e}")
         return None
 
@@ -356,7 +360,7 @@ def read_local_file(filename: str, directory: str) -> bytes | None:
 
         return file_path.read_bytes()
 
-    except Exception as e:
+    except (OSError, ValueError) as e:
         logger.error(f"Failed to read local file: {e}")
         return None
 
@@ -382,7 +386,7 @@ def delete_local_file(filename: str, directory: str) -> bool:
             return True
         return False
 
-    except Exception as e:
+    except (OSError, ValueError) as e:
         logger.error(f"Failed to delete local file: {e}")
         return False
 
@@ -410,6 +414,6 @@ def get_local_file_stats(directory: str) -> dict:
             "total_size_mb": round(total_size / (1024 * 1024), 2),
         }
 
-    except Exception as e:
+    except OSError as e:
         logger.error(f"Failed to get local file stats: {e}")
         return {"file_count": 0, "total_size_mb": 0}

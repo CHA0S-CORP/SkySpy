@@ -22,8 +22,18 @@ from datetime import timedelta
 
 from celery import shared_task
 from django.conf import settings
-from django.db import connection
+from django.db import DatabaseError, connection
 from django.utils import timezone
+
+try:
+    from redis.exceptions import RedisError
+
+    _REDIS_ERRORS: tuple[type[BaseException], ...] = (RedisError,)
+except ImportError:  # pragma: no cover - redis is an optional runtime dependency
+    _REDIS_ERRORS = ()
+
+# Redis command failures: connection/timeout errors (subclassed by redis-py) plus RedisError.
+_REDIS_OP_ERRORS = (ConnectionError, OSError, TimeoutError, *_REDIS_ERRORS)
 
 logger = logging.getLogger(__name__)
 
@@ -91,7 +101,7 @@ def cleanup_old_sightings():
 
         return {"deleted": total_deleted, "retention_days": retention_days, "cutoff": cutoff.isoformat()}
 
-    except Exception as e:
+    except DatabaseError as e:
         logger.error(f"Error cleaning up old sightings: {e}")
         raise
 
@@ -116,7 +126,7 @@ def cleanup_old_sessions():
 
         return {"deleted": deleted, "retention_days": retention_days, "cutoff": cutoff.isoformat()}
 
-    except Exception as e:
+    except DatabaseError as e:
         logger.error(f"Error cleaning up old sessions: {e}")
         raise
 
@@ -141,7 +151,7 @@ def cleanup_old_alert_history():
 
         return {"deleted": deleted, "retention_days": retention_days, "cutoff": cutoff.isoformat()}
 
-    except Exception as e:
+    except DatabaseError as e:
         logger.error(f"Error cleaning up old alert history: {e}")
         raise
 
@@ -166,7 +176,7 @@ def cleanup_old_safety_events():
 
         return {"deleted": deleted, "retention_days": retention_days, "cutoff": cutoff.isoformat()}
 
-    except Exception as e:
+    except DatabaseError as e:
         logger.error(f"Error cleaning up old safety events: {e}")
         raise
 
@@ -191,7 +201,7 @@ def cleanup_old_notification_logs():
 
         return {"deleted": deleted, "retention_days": retention_days, "cutoff": cutoff.isoformat()}
 
-    except Exception as e:
+    except DatabaseError as e:
         logger.error(f"Error cleaning up old notification logs: {e}")
         raise
 
@@ -247,7 +257,7 @@ def cleanup_old_antenna_snapshots():
             "retention_days": retention_days,
         }
 
-    except Exception as e:
+    except DatabaseError as e:
         logger.error(f"Error cleaning up old antenna snapshots: {e}")
         raise
 
@@ -272,7 +282,7 @@ def cleanup_old_acars_messages():
 
         return {"deleted": deleted, "retention_days": retention_days, "cutoff": cutoff.isoformat()}
 
-    except Exception as e:
+    except DatabaseError as e:
         logger.error(f"Error cleaning up old ACARS messages: {e}")
         raise
 
@@ -290,37 +300,37 @@ def run_all_cleanup_tasks():
     # Run each cleanup task
     try:
         results["sightings"] = cleanup_old_sightings()
-    except Exception as e:
+    except Exception as e:  # broad: isolate sub-task failure so remaining cleanups still run
         results["sightings"] = {"error": str(e)}
 
     try:
         results["sessions"] = cleanup_old_sessions()
-    except Exception as e:
+    except Exception as e:  # broad: isolate sub-task failure so remaining cleanups still run
         results["sessions"] = {"error": str(e)}
 
     try:
         results["alert_history"] = cleanup_old_alert_history()
-    except Exception as e:
+    except Exception as e:  # broad: isolate sub-task failure so remaining cleanups still run
         results["alert_history"] = {"error": str(e)}
 
     try:
         results["safety_events"] = cleanup_old_safety_events()
-    except Exception as e:
+    except Exception as e:  # broad: isolate sub-task failure so remaining cleanups still run
         results["safety_events"] = {"error": str(e)}
 
     try:
         results["notification_logs"] = cleanup_old_notification_logs()
-    except Exception as e:
+    except Exception as e:  # broad: isolate sub-task failure so remaining cleanups still run
         results["notification_logs"] = {"error": str(e)}
 
     try:
         results["antenna_snapshots"] = cleanup_old_antenna_snapshots()
-    except Exception as e:
+    except Exception as e:  # broad: isolate sub-task failure so remaining cleanups still run
         results["antenna_snapshots"] = {"error": str(e)}
 
     try:
         results["acars_messages"] = cleanup_old_acars_messages()
-    except Exception as e:
+    except Exception as e:  # broad: isolate sub-task failure so remaining cleanups still run
         results["acars_messages"] = {"error": str(e)}
 
     # Calculate totals
@@ -402,7 +412,7 @@ def cleanup_orphan_cooldown_keys():
     except ImportError:
         logger.warning("Redis not available for cooldown key cleanup")
         return {"error": "redis_not_available"}
-    except Exception as e:
+    except (DatabaseError, *_REDIS_OP_ERRORS) as e:
         logger.error(f"Failed to cleanup orphan cooldown keys: {e}")
         raise
 
@@ -459,7 +469,7 @@ def cleanup_stale_cooldown_keys(max_age_hours: int = 24):
     except ImportError:
         logger.warning("Redis not available for stale cooldown key cleanup")
         return {"error": "redis_not_available"}
-    except Exception as e:
+    except _REDIS_OP_ERRORS as e:
         logger.error(f"Failed to cleanup stale cooldown keys: {e}")
         raise
 
@@ -503,7 +513,7 @@ def vacuum_analyze_tables():
                 cursor.execute(f"VACUUM ANALYZE {table}")
             results[table] = "success"
             logger.debug(f"VACUUM ANALYZE completed for {table}")
-        except Exception as e:
+        except Exception as e:  # broad: maintenance task must not crash on any DB error (tested)
             results[table] = f"error: {str(e)}"
             errors.append(f"{table}: {e}")
             logger.warning(f"VACUUM ANALYZE failed for {table}: {e}")

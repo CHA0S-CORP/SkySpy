@@ -366,7 +366,7 @@ def refresh_cache(hours: int = 24) -> dict:
             "last_updated": last_updated,
         }
 
-    except Exception as e:
+    except Exception as e:  # broad: cache-refresh degradation boundary (tested)
         logger.error(f"Error refreshing antenna cache: {e}")
         return {}
 
@@ -381,7 +381,7 @@ def broadcast_antenna_update(data: dict = None):
 
         sync_emit("stats:update", {"stat_type": "antenna_analytics", "stats": data}, room="topic_stats")
         logger.debug("Antenna analytics broadcast sent")
-    except Exception as e:
+    except Exception as e:  # broad: Socket.IO broadcast must never raise into callers; failure modes opaque
         logger.error(f"Error broadcasting antenna analytics: {e}")
 
 

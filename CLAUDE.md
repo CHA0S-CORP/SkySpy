@@ -211,14 +211,20 @@ API_THROTTLE_USER=2000/minute
 The 4 API test files (`test_api_aircraft.py`, `test_api_alerts.py`, `test_api_history.py`, `test_api_safety.py`) were previously excluded from CI due to PgBouncer deadlocks. They have been converted from `APITestCase` to pytest-style and are now included in CI. Coverage target set to 55% (`--cov-fail-under=55`). Target: restore to 80%.
 
 ### Broad Exception Handlers
-~140 `except Exception` handlers remain across ~34 service files. The 5 most critical files have been fixed with specific exception types:
-- `services/safety.py` — 2 handlers → `DatabaseError`, `(ConnectionError, OSError, RuntimeError)`
-- `services/alerts.py` — 4 handlers → specific types per operation
-- `services/external_db.py` — 15 handlers → `httpx.HTTPError`, `DatabaseError`, `OSError`, etc.
-- `services/aircraft_info.py` — 11 handlers → `DatabaseError`, `httpx.HTTPError`, etc.
-- `services/stats_cache.py` — 7 handlers → `(DatabaseError, ConnectionError, OSError)`
+A codebase-wide pass narrowed ~185 `except Exception` handlers to specific
+types (matching the established idiom: `DatabaseError`, `httpx.HTTPError`,
+`(ConnectionError, OSError)`, `(ValueError, KeyError, TypeError)`, etc.). The
+remaining ~215 are **intentionally broad resilience boundaries** and are
+annotated in-source with a trailing `# broad: <reason>` comment. Do not narrow
+those — they include:
+- Celery task top-level guards and periodic-beat loops that must never crash the worker
+- Sentry / error-reporting blocks (the reporting itself must never raise)
+- ASGI-startup guards (a narrow catch could crash the app at boot)
+- Third-party fan-out calls (e.g. Apprise `notify()`) with unknowable failure modes
 
-Remaining top offenders (not yet fixed): `swim_fns.py` (12), `flight_pattern_stats.py` (11), `storage.py` (9), `audio.py` (9).
+When adding a new handler: narrow it if it guards a specific operation (DB/HTTP/
+parse); leave it broad **with a `# broad:` comment** only if it is a genuine
+resilience boundary of the kinds above.
 
 ### Frontend Tech Debt
 - `MapView.jsx` — ~3,070 lines (decomposed from ~12,240), still no direct test coverage (keyboard shortcuts extracted to `useProKeyboardShortcuts` hook; see `web/src/components/map/CLAUDE.md`)

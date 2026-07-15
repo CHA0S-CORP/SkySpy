@@ -94,7 +94,7 @@ def _make_request(endpoint: str, params: dict | None = None, timeout: int = 30) 
         else:
             logger.error(f"OpenSky API error: {e.response.status_code}")
         return None
-    except Exception as e:
+    except (httpx.HTTPError, ConnectionError, OSError, ValueError) as e:
         logger.error(f"OpenSky API request failed: {e}")
         return None
 

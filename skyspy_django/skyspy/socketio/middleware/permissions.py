@@ -10,6 +10,7 @@ import logging
 from asgiref.sync import sync_to_async
 from django.conf import settings
 from django.contrib.auth.models import AnonymousUser, User
+from django.db import DatabaseError
 
 logger = logging.getLogger(__name__)
 
@@ -185,7 +186,7 @@ def _check_user_permission(user: User, permission: str) -> bool:
     try:
         profile = user.skyspy_profile
         return profile.has_permission(permission)
-    except Exception as e:
+    except (AttributeError, TypeError, KeyError, DatabaseError) as e:
         logger.debug(f"Error checking user permission: {e}")
         return False
 

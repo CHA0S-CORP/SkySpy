@@ -14,11 +14,13 @@ import logging
 from django.conf import settings
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
+from django.db import DatabaseError
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenRefreshView
 
@@ -181,7 +183,7 @@ class LogoutView(APIView):
                 token = RefreshToken(refresh_token)
                 token.blacklist()
 
-        except Exception as e:
+        except (TokenError, InvalidToken, DatabaseError) as e:
             logger.debug(f"Logout token blacklist failed: {e}")
 
         response = Response({"message": "Logged out successfully"})
@@ -366,7 +368,7 @@ class OIDCCallbackView(APIView):
                 token_response = client.post(token_url, data=token_data)
                 token_response.raise_for_status()
                 tokens = token_response.json()
-        except Exception as e:
+        except (httpx.HTTPError, ValueError, KeyError, TypeError) as e:
             logger.exception(f"OIDC token exchange failed: {e}")
             return Response(
                 {"error": "Failed to exchange authorization code"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -381,7 +383,7 @@ class OIDCCallbackView(APIView):
                 userinfo_response = client.get(userinfo_url, headers={"Authorization": f"Bearer {access_token}"})
                 userinfo_response.raise_for_status()
                 claims = userinfo_response.json()
-        except Exception as e:
+        except (httpx.HTTPError, ValueError, KeyError, TypeError) as e:
             logger.exception(f"OIDC userinfo failed: {e}")
             return Response({"error": "Failed to get user info"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 

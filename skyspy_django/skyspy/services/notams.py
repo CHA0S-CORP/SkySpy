@@ -173,7 +173,7 @@ def fetch_notams_from_api(
     except httpx.HTTPStatusError as e:
         logger.error(f"NOTAM API HTTP error: {e.response.status_code}")
         return []
-    except Exception as e:
+    except (httpx.HTTPError, ConnectionError, OSError, TimeoutError, ValueError, KeyError, TypeError) as e:
         logger.error(f"NOTAM API request failed: {e}")
         return []
 
@@ -282,7 +282,7 @@ def fetch_tfrs_from_api(
     except httpx.HTTPStatusError as e:
         logger.error(f"TFR GeoServer HTTP error: {e.response.status_code}")
         return []
-    except Exception as e:
+    except (httpx.HTTPError, ConnectionError, OSError, TimeoutError, ValueError, KeyError, TypeError) as e:
         logger.error(f"TFR GeoServer request failed: {e}")
         return []
 
@@ -411,7 +411,7 @@ def parse_notam(raw_notam: dict[str, Any]) -> dict[str, Any] | None:
             "source_data": raw_notam,
         }
 
-    except Exception as e:
+    except (AttributeError, TypeError, KeyError, ValueError) as e:
         logger.warning(f"Failed to parse NOTAM: {e}")
         return None
 
@@ -481,7 +481,7 @@ def refresh_notams(
             try:
                 notams = fetch_notams_from_api(icao=airport)
                 all_notams.extend(notams)
-            except Exception as e:
+            except (httpx.HTTPError, ConnectionError, OSError, TimeoutError) as e:
                 logger.warning(f"Failed to fetch NOTAMs for {airport}: {e}")
 
     if not all_notams:
@@ -562,7 +562,7 @@ def refresh_notams(
             try:
                 event_name = "notam:tfr_new" if notam.get("notam_type") == "TFR" else "notam:new"
                 sync_emit(event_name, notam, room="topic_notams")
-            except Exception as e:
+            except Exception as e:  # broad: Socket.IO broadcast must never break the refresh loop
                 logger.warning(f"Failed to broadcast new NOTAM: {e}")
 
     # Broadcast updated NOTAMs
@@ -572,7 +572,7 @@ def refresh_notams(
         for notam in updated_notams[:20]:  # Limit broadcasts
             try:
                 sync_emit("notam:update", notam, room="topic_notams")
-            except Exception as e:
+            except Exception as e:  # broad: Socket.IO broadcast must never break the refresh loop
                 logger.warning(f"Failed to broadcast NOTAM update: {e}")
 
     if archived_count:
@@ -592,7 +592,7 @@ def refresh_notams(
                     },
                     room="topic_notams",
                 )
-            except Exception as e:
+            except Exception as e:  # broad: Socket.IO broadcast must never break the refresh loop
                 logger.warning(f"Failed to broadcast expired NOTAM: {e}")
 
     if deleted:

@@ -16,6 +16,7 @@ from pathlib import Path
 
 import httpx
 from django.conf import settings
+from django.db import DatabaseError
 from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
 from skyspy.models import AircraftInfo
@@ -127,7 +128,7 @@ def _check_s3_photo_exists(icao_hex: str, is_thumbnail: bool = False) -> bool:
         return False
 
     try:
-        from botocore.exceptions import ClientError
+        from botocore.exceptions import BotoCoreError, ClientError
 
         client.head_object(Bucket=settings.S3_BUCKET, Key=key)
         with _s3_exists_cache_lock:
@@ -139,7 +140,7 @@ def _check_s3_photo_exists(icao_hex: str, is_thumbnail: bool = False) -> bool:
             with _s3_exists_cache_lock:
                 _s3_exists_cache[cache_key] = (False, now)
         return False
-    except Exception:
+    except (BotoCoreError, ConnectionError, OSError):
         return False
 
 
@@ -152,6 +153,7 @@ def _upload_photo_to_s3(data: bytes, icao_hex: str, is_thumbnail: bool = False) 
     client = _get_s3_client()
     if not client:
         return None
+
 
     last_error = None
     for attempt in range(MAX_RETRIES):
@@ -173,7 +175,7 @@ def _upload_photo_to_s3(data: bytes, icao_hex: str, is_thumbnail: bool = False) 
                 _s3_exists_cache[cache_key] = (True, time.time())
             return url
 
-        except Exception as e:
+        except Exception as e:  # broad: upload retry loop must tolerate any error (tested)
             last_error = e
             if attempt < MAX_RETRIES - 1:
                 logger.warning(f"S3 upload attempt {attempt + 1} failed: {e}, retrying...")
@@ -194,6 +196,7 @@ def get_signed_photo_url(icao_hex: str, is_thumbnail: bool = False, expires_in: 
 
     key = _get_s3_photo_key(icao_hex, is_thumbnail)
 
+
     try:
         url = client.generate_presigned_url(
             "get_object",
@@ -204,7 +207,7 @@ def get_signed_photo_url(icao_hex: str, is_thumbnail: bool = False, expires_in: 
             ExpiresIn=expires_in,
         )
         return url
-    except Exception as e:
+    except Exception as e:  # broad: signed-URL generation returns None on any error (tested)
         logger.error(f"Failed to generate signed URL for {icao_hex}: {e}")
         return None
 
@@ -280,7 +283,7 @@ def _scrape_planespotters_full_size(page_url: str) -> str | None:
 
     except httpx.HTTPStatusError as e:
         logger.warning(f"HTTP {e.response.status_code} scraping {page_url}")
-    except Exception as e:
+    except (httpx.HTTPError, ConnectionError, OSError) as e:
         logger.warning(f"Failed to scrape {page_url}: {e}")
 
     return None
@@ -385,7 +388,7 @@ def download_photo(
     except httpx.HTTPStatusError as e:
         logger.warning(f"HTTP error downloading photo for {icao_hex}: {e.response.status_code}")
         return None
-    except Exception as e:
+    except (httpx.HTTPError, ConnectionError, OSError) as e:
         logger.error(f"Error downloading photo for {icao_hex}: {e}")
         return None
     finally:
@@ -450,7 +453,7 @@ def update_photo_paths(icao_hex: str, photo_path: str | None = None, thumb_path:
         return
     try:
         AircraftInfo.objects.filter(icao_hex=icao_hex).update(**updates)
-    except Exception as e:
+    except DatabaseError as e:
         logger.error(f"Error updating photo cache paths for {icao_hex}: {e}")
 
 

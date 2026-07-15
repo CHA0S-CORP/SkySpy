@@ -50,7 +50,7 @@ def _fetch_csv_data(url: str) -> list[list[str]] | None:
             rows = list(reader)
             return rows
 
-    except Exception as e:
+    except Exception as e:  # broad: external CSV fetch returns None on any failure (tested)
         logger.error(f"Failed to fetch CSV from {url}: {e}")
         return None
 
@@ -115,7 +115,7 @@ def refresh_airlines() -> int:
                 )
             )
 
-        except Exception as e:
+        except (ValueError, KeyError, TypeError, IndexError, AttributeError) as e:
             logger.warning(f"Failed to parse airline row: {e}")
             continue
 
@@ -210,7 +210,7 @@ def refresh_aircraft_types() -> int:
                 )
             )
 
-        except Exception as e:
+        except (ValueError, KeyError, TypeError, IndexError, AttributeError) as e:
             logger.warning(f"Failed to parse aircraft type row: {e}")
             continue
 

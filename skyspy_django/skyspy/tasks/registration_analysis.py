@@ -92,7 +92,7 @@ def analyze_new_sightings(self, days: int = 1, batch_size: int = 100):
                 else:
                     stats["low_risk"] += 1
 
-            except Exception as e:
+            except Exception as e:  # broad: per-aircraft loop boundary — one bad analysis must not stop the batch
                 logger.warning(f"Error analyzing {icao_hex}: {e}")
                 stats["errors"] += 1
 
@@ -104,7 +104,7 @@ def analyze_new_sightings(self, days: int = 1, batch_size: int = 100):
 
         return stats
 
-    except Exception as e:
+    except Exception as e:  # broad: Celery task top-level guard — triggers retry on any failure
         logger.exception(f"Error in analyze_new_sightings: {e}")
         raise self.retry(exc=e)
 
@@ -128,7 +128,7 @@ def analyze_known_aircraft_batch(batch_size: int = 200):
 
         return stats
 
-    except Exception as e:
+    except Exception as e:  # broad: Celery task top-level guard — logs and re-raises any failure
         logger.exception(f"Error in analyze_known_aircraft_batch: {e}")
         raise
 
@@ -172,7 +172,7 @@ def refresh_transfer_history(batch_size: int = 100):
 
                 stats["checked"] += 1
 
-            except Exception as e:
+            except Exception as e:  # broad: per-aircraft loop boundary — one bad re-analysis must not stop the batch
                 logger.warning(f"Error refreshing {analysis.registration}: {e}")
                 stats["errors"] += 1
 
@@ -180,7 +180,7 @@ def refresh_transfer_history(batch_size: int = 100):
 
         return stats
 
-    except Exception as e:
+    except Exception as e:  # broad: Celery task top-level guard — logs and re-raises any failure
         logger.exception(f"Error in refresh_transfer_history: {e}")
         raise
 
@@ -240,7 +240,7 @@ def generate_high_risk_report():
 
         return report
 
-    except Exception as e:
+    except Exception as e:  # broad: Celery task top-level guard — logs and re-raises any failure
         logger.exception(f"Error generating high risk report: {e}")
         raise
 
@@ -281,6 +281,6 @@ def cleanup_old_analyses(retention_days: int = 180):
 
         return {"deleted": deleted}
 
-    except Exception as e:
+    except Exception as e:  # broad: Celery task top-level guard — logs and re-raises any failure
         logger.exception(f"Error in cleanup_old_analyses: {e}")
         raise

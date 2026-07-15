@@ -50,7 +50,7 @@ def capture_error(
 
             event_id = sentry_sdk.capture_exception(exception)
             return event_id
-    except Exception as e:
+    except Exception as e:  # broad: Sentry reporting must never raise into the caller
         logger.error(f"Failed to capture exception to Sentry: {e}")
         return None
 
@@ -189,7 +189,7 @@ def sentry_task_wrapper(task_name: str):
         def wrapper(*args, **kwargs):
             try:
                 return func(*args, **kwargs)
-            except Exception as e:
+            except Exception as e:  # broad: task-level guard captures any failure to Sentry, then re-raises
                 capture_task_error(e, task_name, args, kwargs)
                 raise
 
