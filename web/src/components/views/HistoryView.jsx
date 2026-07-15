@@ -739,7 +739,7 @@ export function HistoryView({
     viewKey: 'history-sightings',
     defaultField: 'timestamp',
     defaultDirection: 'desc',
-    data: data?.sightings || [],
+    data: data?.sightings || data?.results || [],
     sortConfig: SIGHTINGS_SORT_CONFIG,
   });
 
@@ -875,7 +875,7 @@ export function HistoryView({
       {viewType === 'sessions' && (
         <HistoryDashboardHeader
           sessions={data?.sessions || []}
-          sightings={data?.sightings || []}
+          sightings={data?.sightings || data?.results || []}
           safetyEvents={data?.events || []}
           timeRange={TIME_RANGE_HOURS[timeRange]}
           onTimeRangeChange={(hours) => {

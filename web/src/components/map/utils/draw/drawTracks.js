@@ -180,8 +180,7 @@ export function drawShortTracks(ctx, geo, data) {
         : Math.min(trackLength, 8);
   const effectiveTrackLength = lodTrailMax;
   // Phase 5.4: Range-based trail point decimation
-  const lodTrailStride =
-    radarRange <= 50 ? 1 : radarRange <= 100 ? 2 : radarRange <= 200 ? 3 : 4;
+  const lodTrailStride = radarRange <= 50 ? 1 : radarRange <= 100 ? 2 : radarRange <= 200 ? 3 : 4;
 
   // Target trail length in nm based on slider (5-60 positions maps to ~0.5-6nm)
   const targetTrailNm = effectiveTrackLength * 0.1;

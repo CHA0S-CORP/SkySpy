@@ -610,3 +610,179 @@ class TestBatcherFlushRaces:
         assert len(calls) == 2
         assert calls[1] == {"type": "test", "n": 1}
         assert batcher.pending_count == 0
+
+
+class TestConcurrentSubscriptionState:
+    """Concurrent subscribe events must not lose topics (session read-modify-write race)."""
+
+    @pytest.mark.asyncio
+    async def test_concurrent_subscribes_keep_both_topics(self):
+        """Two overlapping subscribes for different topics must both be tracked.
+
+        Handlers run as concurrent tasks (async_handlers=True); without per-sid
+        locking, both read the same base subscribed_topics list and the later
+        save_session drops the other's topic.
+        """
+        import asyncio
+
+        from skyspy.socketio.namespaces.main import MainNamespace
+
+        namespace = MainNamespace("/")
+
+        sessions = {"sid1": {"user": AnonymousUser(), "subscribed_topics": []}}
+
+        async def fake_get_session(sid):
+            return dict(sessions[sid])
+
+        async def fake_save_session(sid, session):
+            await asyncio.sleep(0)  # yield, like the real session store
+            sessions[sid] = session
+
+        async def fake_permission(user, topic):
+            await asyncio.sleep(0)  # yield, like the sync_to_async DB permission check
+            return True
+
+        mock_sio = MagicMock()
+        mock_sio.get_session = AsyncMock(side_effect=fake_get_session)
+        mock_sio.save_session = AsyncMock(side_effect=fake_save_session)
+        mock_sio.enter_room = AsyncMock()
+        mock_sio.emit = AsyncMock()
+
+        with (
+            patch("skyspy.socketio.namespaces.main.sio", mock_sio),
+            patch("skyspy.socketio.namespaces.main.check_topic_permission", fake_permission),
+            patch.object(namespace, "_send_topic_snapshots", AsyncMock()),
+        ):
+            await asyncio.gather(
+                namespace.on_subscribe("sid1", {"topics": ["safety"]}),
+                namespace.on_subscribe("sid1", {"topics": ["alerts"]}),
+            )
+
+        assert set(sessions["sid1"]["subscribed_topics"]) == {"safety", "alerts"}
+
+    @pytest.mark.asyncio
+    async def test_concurrent_subscribe_and_unsubscribe_serialized(self):
+        """A subscribe overlapping an unsubscribe must not resurrect or drop topics."""
+        import asyncio
+
+        from skyspy.socketio.namespaces.main import MainNamespace
+
+        namespace = MainNamespace("/")
+
+        sessions = {"sid1": {"user": AnonymousUser(), "subscribed_topics": ["safety"]}}
+
+        async def fake_get_session(sid):
+            return dict(sessions[sid])
+
+        async def fake_save_session(sid, session):
+            await asyncio.sleep(0)
+            sessions[sid] = session
+
+        async def fake_permission(user, topic):
+            await asyncio.sleep(0)
+            return True
+
+        mock_sio = MagicMock()
+        mock_sio.get_session = AsyncMock(side_effect=fake_get_session)
+        mock_sio.save_session = AsyncMock(side_effect=fake_save_session)
+        mock_sio.enter_room = AsyncMock()
+        mock_sio.leave_room = AsyncMock()
+        mock_sio.emit = AsyncMock()
+
+        with (
+            patch("skyspy.socketio.namespaces.main.sio", mock_sio),
+            patch("skyspy.socketio.namespaces.main.check_topic_permission", fake_permission),
+            patch.object(namespace, "_send_topic_snapshots", AsyncMock()),
+        ):
+            await asyncio.gather(
+                namespace.on_subscribe("sid1", {"topics": ["alerts"]}),
+                namespace.on_unsubscribe("sid1", {"topics": ["safety"]}),
+            )
+
+        assert set(sessions["sid1"]["subscribed_topics"]) == {"alerts"}
+
+    @pytest.mark.asyncio
+    async def test_disconnect_cleans_up_session_lock(self):
+        """on_disconnect must drop the per-sid lock to avoid unbounded growth."""
+        from skyspy.socketio.namespaces.main import MainNamespace
+
+        namespace = MainNamespace("/")
+        namespace._session_lock("sid1")
+        assert "sid1" in namespace._session_locks
+
+        mock_sio = MagicMock()
+        mock_sio.get_session = AsyncMock(return_value={"subscribed_topics": []})
+        mock_sio.leave_room = AsyncMock()
+        mock_sio.save_session = AsyncMock()
+
+        with patch("skyspy.socketio.namespaces.main.sio", mock_sio):
+            await namespace.on_disconnect("sid1")
+
+        assert "sid1" not in namespace._session_locks
+
+
+class TestRequestPermissionWriteAccess:
+    """Anonymous mutating requests must be gated on write_access, not read_access."""
+
+    @pytest.mark.django_db
+    def test_anonymous_mutating_request_denied_when_write_requires_auth(self):
+        """read_access=public must not grant anonymous clients manage requests."""
+        from asgiref.sync import async_to_sync
+        from django.test import override_settings
+
+        from skyspy.models.auth import FeatureAccess
+        from skyspy.socketio.namespaces.main import MainNamespace
+
+        FeatureAccess.objects.update_or_create(
+            feature="alerts", defaults={"read_access": "public", "write_access": "authenticated"}
+        )
+
+        namespace = MainNamespace("/")
+        mock_sio = MagicMock()
+        mock_sio.get_session = AsyncMock(return_value={"user": AnonymousUser()})
+
+        with override_settings(AUTH_MODE="hybrid"), patch("skyspy.socketio.namespaces.main.sio", mock_sio):
+            check = async_to_sync(namespace._check_request_permission)
+            # Reads stay public
+            assert check("test-sid", "alert-rules") is True
+            # Mutations are gated on write_access
+            assert check("test-sid", "alert-rule-delete") is False
+            assert check("test-sid", "alert-rule-create") is False
+            assert check("test-sid", "alert-rule-toggle") is False
+
+    @pytest.mark.django_db
+    def test_anonymous_mutating_request_allowed_when_write_public(self):
+        """write_access=public still grants anonymous manage requests."""
+        from asgiref.sync import async_to_sync
+        from django.test import override_settings
+
+        from skyspy.models.auth import FeatureAccess
+        from skyspy.socketio.namespaces.main import MainNamespace
+
+        FeatureAccess.objects.update_or_create(
+            feature="safety", defaults={"read_access": "public", "write_access": "public"}
+        )
+
+        namespace = MainNamespace("/")
+        mock_sio = MagicMock()
+        mock_sio.get_session = AsyncMock(return_value={"user": AnonymousUser()})
+
+        with override_settings(AUTH_MODE="hybrid"), patch("skyspy.socketio.namespaces.main.sio", mock_sio):
+            check = async_to_sync(namespace._check_request_permission)
+            assert check("test-sid", "safety-acknowledge") is True
+
+    @pytest.mark.django_db
+    def test_middleware_is_feature_public_checks_write_access(self):
+        """middleware._is_feature_public must use write_access for mutating actions."""
+        from asgiref.sync import async_to_sync
+
+        from skyspy.models.auth import FeatureAccess
+        from skyspy.socketio.middleware.permissions import _is_feature_public
+
+        FeatureAccess.objects.update_or_create(
+            feature="safety", defaults={"read_access": "public", "write_access": "authenticated"}
+        )
+
+        assert async_to_sync(_is_feature_public)("safety.view") is True
+        assert async_to_sync(_is_feature_public)("safety.acknowledge") is False
+        assert async_to_sync(_is_feature_public)("safety.manage") is False

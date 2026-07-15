@@ -93,9 +93,7 @@ export function AcarsInlinePanel({
           className="acars-callsign-filter"
           placeholder="Callsign..."
           value={acarsFilters.callsignFilter}
-          onChange={(e) =>
-            setAcarsFilters({ ...acarsFilters, callsignFilter: e.target.value })
-          }
+          onChange={(e) => setAcarsFilters({ ...acarsFilters, callsignFilter: e.target.value })}
         />
       </div>
       <div className="acars-messages">
@@ -154,9 +152,7 @@ export function AcarsInlinePanel({
                   <span className="acars-label">{msg.label || '--'}</span>
                   <span className={`acars-source-badge ${msg.source}`}>{msg.source}</span>
                   <span className="acars-time">
-                    {msg.timestamp
-                      ? new Date(msg.timestamp * 1000).toLocaleTimeString()
-                      : '--'}
+                    {msg.timestamp ? new Date(msg.timestamp * 1000).toLocaleTimeString() : '--'}
                   </span>
                 </div>
                 {msg.text && <div className="acars-text">{msg.text}</div>}

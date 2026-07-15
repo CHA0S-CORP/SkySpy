@@ -59,9 +59,7 @@ const renderEventBannerContent = (event) => {
       <>
         <div className="banner-main-info">
           <span className="banner-squawk-code">{details.squawk || event.squawk}</span>
-          <span className="banner-squawk-meaning">
-            {squawkMeanings[eventType] || 'EMERGENCY'}
-          </span>
+          <span className="banner-squawk-meaning">{squawkMeanings[eventType] || 'EMERGENCY'}</span>
         </div>
         <div className="banner-aircraft">
           <span className="banner-callsign">{event.callsign || event.icao}</span>
@@ -224,9 +222,7 @@ export default function SafetyBanner({
   if (visibleEvents.length === 0) return null;
 
   const handleBannerClick = (event) => {
-    const ac = aircraft.find(
-      (a) => a.hex?.toUpperCase() === event.icao?.toUpperCase()
-    );
+    const ac = aircraft.find((a) => a.hex?.toUpperCase() === event.icao?.toUpperCase());
     if (ac) {
       setSelectedMetar(null);
       setSelectedPirep(null);
@@ -257,9 +253,7 @@ export default function SafetyBanner({
         >
           <AlertTriangle size={28} />
           <div className="conflict-banner-content">
-            <strong className="banner-event-type">
-              {getEventTypeName(event.event_type)}
-            </strong>
+            <strong className="banner-event-type">{getEventTypeName(event.event_type)}</strong>
             {renderEventBannerContent(event)}
           </div>
           <div className="conflict-banner-actions">

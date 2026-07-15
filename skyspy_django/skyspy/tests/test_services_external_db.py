@@ -719,6 +719,43 @@ class LookupAllTests(TestCase):
         # FAA should take priority
         self.assertEqual(result["registration"], "N12345-FAA")
 
+    def test_lookup_all_is_military_or_merged_across_sources(self):
+        """tar1090's is_military=True must not be masked by adsbx's explicit False.
+
+        Boolean identity flags merge with OR semantics: any source True wins.
+        """
+        external_db._adsbx_db["ABC123"] = {
+            "registration": "N12345",
+            "is_military": False,  # adsbx manufactures False when 'mil' is absent
+            "source": "adsbx",
+        }
+        external_db._db_metadata["adsbx"]["loaded"] = True
+
+        external_db._tar1090_db["ABC123"] = {
+            "registration": "N12345",
+            "is_military": True,  # canonical Mictronics military dbFlag
+            "source": "tar1090",
+        }
+        external_db._db_metadata["tar1090"]["loaded"] = True
+
+        result = lookup_all("ABC123")
+
+        self.assertIsNotNone(result)
+        self.assertTrue(result["is_military"])
+
+    def test_lookup_all_is_military_false_when_all_sources_false(self):
+        """OR-merge must not invent True when every source reports False."""
+        external_db._adsbx_db["ABC123"] = {"is_military": False, "source": "adsbx"}
+        external_db._db_metadata["adsbx"]["loaded"] = True
+
+        external_db._tar1090_db["ABC123"] = {"is_military": False, "source": "tar1090"}
+        external_db._db_metadata["tar1090"]["loaded"] = True
+
+        result = lookup_all("ABC123")
+
+        self.assertIsNotNone(result)
+        self.assertFalse(result["is_military"])
+
     def test_lookup_all_strips_tilde(self):
         """Test lookup_all strips tilde prefix."""
         external_db._adsbx_db["ABC123"] = {"registration": "N12345", "source": "adsbx"}

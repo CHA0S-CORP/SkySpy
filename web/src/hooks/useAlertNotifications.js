@@ -306,7 +306,7 @@ export function useAlertNotifications(options = {}) {
         if (wsRequest && wsConnected) {
           await wsRequest('acknowledge-alert', { id: alertId });
         } else if (apiBase) {
-          await fetch(`${apiBase}/api/v1/alerts/history/${alertId}/acknowledge`, {
+          await fetch(`${apiBase}/api/v1/alerts/history/${alertId}/acknowledge/`, {
             method: 'POST',
           });
         }
@@ -331,7 +331,7 @@ export function useAlertNotifications(options = {}) {
       if (wsRequest && wsConnected) {
         await wsRequest('acknowledge-all-alerts', {});
       } else if (apiBase) {
-        await fetch(`${apiBase}/api/v1/alerts/history/acknowledge-all`, {
+        await fetch(`${apiBase}/api/v1/alerts/history/acknowledge-all/`, {
           method: 'POST',
         });
       }

@@ -706,3 +706,67 @@ class TestAlertsIntegration:
                 status.HTTP_401_UNAUTHORIZED,
                 status.HTTP_403_FORBIDDEN,
             ], f"{endpoint} should not require authentication"
+
+
+@pytest.mark.django_db
+class TestAlertRuleUpdateConditionsValidation:
+    """Regression: PATCH/PUT must validate complex conditions.
+
+    An unvalidated JSONField allowed persisting a group condition without a
+    "value" key, which crashed every subsequent alert-evaluation cycle.
+    """
+
+    @pytest.fixture
+    def rule(self):
+        return AlertRule.objects.create(
+            name="Conditions Rule",
+            rule_type="icao",
+            value="ABC123",
+            enabled=True,
+            visibility="public",
+        )
+
+    def test_patch_rejects_condition_without_value(self, api_client, rule):
+        data = {
+            "conditions": {
+                "logic": "AND",
+                "groups": [{"logic": "AND", "conditions": [{"type": "emergency"}]}],
+            }
+        }
+
+        response = api_client.patch(f"/api/v1/alerts/rules/{rule.id}/", data, format="json")
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        rule.refresh_from_db()
+        assert rule.conditions is None
+
+    def test_patch_rejects_non_dict_conditions(self, api_client, rule):
+        response = api_client.patch(f"/api/v1/alerts/rules/{rule.id}/", {"conditions": "bogus"}, format="json")
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        rule.refresh_from_db()
+        assert rule.conditions is None
+
+    def test_patch_accepts_valid_conditions(self, api_client, rule):
+        data = {
+            "conditions": {
+                "logic": "AND",
+                "groups": [{"logic": "AND", "conditions": [{"type": "emergency", "operator": "eq", "value": "true"}]}],
+            }
+        }
+
+        response = api_client.patch(f"/api/v1/alerts/rules/{rule.id}/", data, format="json")
+
+        assert response.status_code == status.HTTP_200_OK
+        rule.refresh_from_db()
+        assert rule.conditions["groups"][0]["conditions"][0]["value"] == "true"
+
+    def test_patch_accepts_null_conditions(self, api_client, rule):
+        rule.conditions = {"logic": "AND", "groups": []}
+        rule.save()
+
+        response = api_client.patch(f"/api/v1/alerts/rules/{rule.id}/", {"conditions": None}, format="json")
+
+        assert response.status_code == status.HTTP_200_OK
+        rule.refresh_from_db()
+        assert rule.conditions is None

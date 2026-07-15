@@ -129,12 +129,20 @@ class AlertService:
                         if not rule.can_match(ac):
                             continue
 
-                        # Full condition evaluation
-                        if self._check_rule(rule, ac):
-                            alert = self._trigger_alert(rule, ac)
-                            if alert:
-                                triggered.append(alert)
-                                timer.add_trigger()
+                        # Full condition evaluation - isolated per rule so one
+                        # malformed rule cannot abort the whole alert cycle
+                        try:
+                            if self._check_rule(rule, ac):
+                                alert = self._trigger_alert(rule, ac)
+                                if alert:
+                                    triggered.append(alert)
+                                    timer.add_trigger()
+                        except (KeyError, TypeError, AttributeError, ValueError) as e:
+                            logger.warning(
+                                f"Skipping rule {rule.id} ('{rule.name}') after evaluation error: "
+                                f"{type(e).__name__}: {e}"
+                            )
+                            continue
 
             except (KeyError, TypeError, AttributeError, ValueError, ConnectionError, OSError) as e:
                 logger.warning(f"Segmented lookup failed, falling back to full iteration: {type(e).__name__}: {e}")
@@ -169,15 +177,22 @@ class AlertService:
             else:
                 candidates = aircraft_list
 
-            for ac in candidates:
-                if not rule.can_match(ac):
-                    continue
+            # Isolate per rule so one malformed rule cannot abort the whole cycle
+            try:
+                for ac in candidates:
+                    if not rule.can_match(ac):
+                        continue
 
-                if self._check_rule(rule, ac):
-                    alert = self._trigger_alert(rule, ac)
-                    if alert:
-                        triggered.append(alert)
-                        timer.add_trigger()
+                    if self._check_rule(rule, ac):
+                        alert = self._trigger_alert(rule, ac)
+                        if alert:
+                            triggered.append(alert)
+                            timer.add_trigger()
+            except (KeyError, TypeError, AttributeError, ValueError) as e:
+                logger.warning(
+                    f"Skipping rule {rule.id} ('{rule.name}') after evaluation error: {type(e).__name__}: {e}"
+                )
+                continue
 
         return triggered
 
@@ -238,9 +253,11 @@ class AlertService:
                 return bool(db_flags & 1)
             return False
 
-        # Special handling for altitude - check both 'alt' and 'alt_baro'
+        # Special handling for altitude - check both 'alt' and 'alt_baro'.
+        # Use explicit None checks so a legitimate 0 ft altitude is preserved.
         if rule_type == "altitude":
-            return aircraft.get("alt") or aircraft.get("alt_baro")
+            alt = aircraft.get("alt")
+            return alt if alt is not None else aircraft.get("alt_baro")
 
         field = self.TYPE_MAPPING.get(rule_type)
         if not field:
@@ -260,6 +277,12 @@ class AlertService:
         Compare aircraft value with rule value using operator.
         """
         try:
+            # A missing/None rule value can never match. Malformed complex
+            # conditions may omit "value" - without this guard the string
+            # operations below raise AttributeError and kill the alert cycle.
+            if rule_value is None:
+                return False
+
             # Special handling for emergency type
             if rule_type == "emergency":
                 is_emergency = str(ac_value) in self.EMERGENCY_SQUAWKS
@@ -496,20 +519,18 @@ class AlertService:
                 logger.debug("No notification URLs configured, skipping notification")
                 return
 
-            # Create Apprise object and add all URLs
-            apobj = apprise.Apprise()
-            for url, _ in url_channel_pairs:
-                apobj.add(url)
-
-            # Send notification (apprise returns False if delivery failed)
-            success = apobj.notify(
-                title=f"SkysPy Alert: {alert_data['rule_name']}", body=alert_data["message"], notify_type=notify_type
-            )
-            if not success:
-                logger.warning(f"Apprise notification failed for alert rule '{alert_data['rule_name']}'")
-
-            # Log notification for each channel
+            # Notify each URL separately so we get a per-channel result;
+            # a single aggregate notify() would mark every channel failed
+            # when only one of them actually failed.
+            title = f"SkysPy Alert: {alert_data['rule_name']}"
             for url, channel_id in url_channel_pairs:
+                apobj = apprise.Apprise()
+                apobj.add(url)
+                # notify() returns False (or None for invalid URLs) on failure
+                success = bool(apobj.notify(title=title, body=alert_data["message"], notify_type=notify_type))
+                if not success:
+                    logger.warning(f"Apprise notification failed for alert rule '{alert_data['rule_name']}'")
+
                 NotificationLog.objects.create(
                     notification_type="alert",
                     icao_hex=alert_data["icao"],

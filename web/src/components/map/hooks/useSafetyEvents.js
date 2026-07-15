@@ -28,6 +28,7 @@ export function useSafetyEvents({
   const notifiedConflictsRef = useRef(new Set());
   const notifiedEmergenciesRef = useRef(new Set());
   const autoAckScheduledRef = useRef(new Set());
+  const playedLowAlarmRef = useRef(new Set());
 
   const {
     playConflictAlarm,
@@ -148,10 +149,16 @@ export function useSafetyEvents({
 
       if (severity === 'low') {
         stopAlarmLoop();
-        playConflictAlarm('low');
-        setTimeout(() => {
+        // Only play the double-ding once per event — the effect re-runs on every
+        // aircraft position update (activeConflicts is a new array each time)
+        const newLowEvents = unacknowledged.filter((e) => !playedLowAlarmRef.current.has(e.id));
+        if (newLowEvents.length > 0) {
+          newLowEvents.forEach((e) => playedLowAlarmRef.current.add(e.id));
           playConflictAlarm('low');
-        }, 1500);
+          setTimeout(() => {
+            playConflictAlarm('low');
+          }, 1500);
+        }
 
         unacknowledged.forEach((e) => {
           if (e.severity === 'low' && !autoAckScheduledRef.current.has(e.id)) {

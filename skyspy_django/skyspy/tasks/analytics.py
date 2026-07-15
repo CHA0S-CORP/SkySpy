@@ -477,7 +477,7 @@ def aggregate_hourly_antenna_analytics():
     Runs every hour to create consolidated hourly snapshots
     from the 5-minute scheduled snapshots.
     """
-    from django.db.models import Avg, Max, Sum
+    from django.db.models import Avg, Max
 
     from skyspy.models import AntennaAnalyticsSnapshot
 
@@ -510,7 +510,6 @@ def aggregate_hourly_antenna_analytics():
             avg_avg_range=Avg("avg_range_nm"),
             avg_coverage=Avg("coverage_percentage"),
             max_coverage=Max("coverage_percentage"),
-            total_positions=Sum("total_positions"),
             max_unique_aircraft=Max("unique_aircraft"),
             avg_best_rssi=Avg("best_rssi"),
             avg_avg_rssi=Avg("avg_rssi"),
@@ -520,6 +519,12 @@ def aggregate_hourly_antenna_analytics():
         # Get the latest direction data (most representative)
         latest = snapshots.order_by("-timestamp").first()
         range_by_direction = latest.range_by_direction if latest else {}
+
+        # Each scheduled snapshot's total_positions covers a trailing 1-hour
+        # window, so consecutive 5-minute snapshots overlap by ~55 minutes —
+        # summing them would count the same sightings ~12x. Use the latest
+        # snapshot, whose window best approximates [hour_start, hour_end).
+        total_positions = latest.total_positions if latest else 0
 
         # Create hourly aggregate
         hourly_snapshot = AntennaAnalyticsSnapshot.objects.create(
@@ -531,9 +536,9 @@ def aggregate_hourly_antenna_analytics():
             best_rssi=round(agg["avg_best_rssi"], 1) if agg["avg_best_rssi"] else None,
             avg_rssi=round(agg["avg_avg_rssi"], 1) if agg["avg_avg_rssi"] else None,
             worst_rssi=round(agg["avg_worst_rssi"], 1) if agg["avg_worst_rssi"] else None,
-            total_positions=agg["total_positions"] or 0,
+            total_positions=total_positions,
             unique_aircraft=agg["max_unique_aircraft"] or 0,
-            positions_per_hour=float(agg["total_positions"] or 0),
+            positions_per_hour=float(total_positions),
             coverage_percentage=round(agg["avg_coverage"] or 0, 1),
             range_by_direction=range_by_direction,
         )

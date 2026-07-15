@@ -184,7 +184,6 @@ describe('SubmissionForm', () => {
     });
 
     it('should show loading state during submission', async () => {
-      const user = userEvent.setup();
       mockOnSubmit.mockImplementation(
         () => new Promise((resolve) => setTimeout(() => resolve({ ok: true }), 100))
       );

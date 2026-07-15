@@ -1,3 +1,9 @@
+// Normalize altitude for range filtering: 'ground' -> 0, numbers kept, unknown -> null
+const normalizeFilterAltitude = (alt) => {
+  if (alt === 'ground') return 0;
+  return typeof alt === 'number' && !Number.isNaN(alt) ? alt : null;
+};
+
 /**
  * Filter aircraft based on filters and search query
  */
@@ -43,17 +49,23 @@ export function filterAircraft(aircraft, searchFilter, filters) {
     filtered = filtered.filter((ac) => ac.alt === 0 || ac.alt === null || ac.alt === 'ground');
   }
 
-  // Altitude range
+  // Altitude range (aircraft with unknown altitude are excluded from explicit range filters)
   if (filters.minAltitude) {
     const min = parseInt(filters.minAltitude, 10);
     if (!isNaN(min)) {
-      filtered = filtered.filter((ac) => (ac.alt || 0) >= min);
+      filtered = filtered.filter((ac) => {
+        const alt = normalizeFilterAltitude(ac.alt);
+        return alt !== null && alt >= min;
+      });
     }
   }
   if (filters.maxAltitude) {
     const max = parseInt(filters.maxAltitude, 10);
     if (!isNaN(max)) {
-      filtered = filtered.filter((ac) => (ac.alt || 0) <= max);
+      filtered = filtered.filter((ac) => {
+        const alt = normalizeFilterAltitude(ac.alt);
+        return alt !== null && alt <= max;
+      });
     }
   }
 

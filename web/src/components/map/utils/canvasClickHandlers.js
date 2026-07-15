@@ -96,8 +96,11 @@ export function handleCanvasClick(e, params) {
     setPopupPosition,
   } = params;
 
-  const { rect, clickX, clickY, centerX, centerY, maxRadius, pixelsPerNm } =
-    computeClickGeometry(e, canvasRef, radarRange);
+  const { rect, clickX, clickY, centerX, centerY, maxRadius, pixelsPerNm } = computeClickGeometry(
+    e,
+    canvasRef,
+    radarRange
+  );
 
   // Phase 1.2: Measurement tool (Shift+click)
   if (e.shiftKey && config.mapMode === 'pro') {
@@ -105,8 +108,7 @@ export function handleCanvasClick(e, params) {
     const nmX = (clickX - centerX - proPanOffset.x) / pixelsPerNm;
     const nmY = -(clickY - centerY - proPanOffset.y) / pixelsPerNm;
     const clickLat = feederLat + nmY / 60;
-    const clickLon =
-      feederLon + nmX / (60 * Math.cos((feederLat * Math.PI) / 180));
+    const clickLon = feederLon + nmX / (60 * Math.cos((feederLat * Math.PI) / 180));
 
     if (measurementPoints.length === 0) {
       // First point
@@ -161,8 +163,7 @@ export function handleCanvasClick(e, params) {
     aviationData.metars.forEach((metar) => {
       if (!metar.lat || !metar.lon) return;
       const pos = getScreenPos(metar.lat, metar.lon);
-      if (pos.x < 0 || pos.x > rect.width || pos.y < 0 || pos.y > rect.height)
-        return;
+      if (pos.x < 0 || pos.x > rect.width || pos.y < 0 || pos.y > rect.height) return;
 
       const clickDist = Math.sqrt((clickX - pos.x) ** 2 + (clickY - pos.y) ** 2);
       if (clickDist < closestDist) {
@@ -178,8 +179,7 @@ export function handleCanvasClick(e, params) {
     aviationData.pireps.forEach((pirep) => {
       if (!pirep.lat || !pirep.lon) return;
       const pos = getScreenPos(pirep.lat, pirep.lon);
-      if (pos.x < 0 || pos.x > rect.width || pos.y < 0 || pos.y > rect.height)
-        return;
+      if (pos.x < 0 || pos.x > rect.width || pos.y < 0 || pos.y > rect.height) return;
 
       const clickDist = Math.sqrt((clickX - pos.x) ** 2 + (clickY - pos.y) ** 2);
       if (clickDist < closestDist) {
@@ -284,8 +284,7 @@ export function handleCanvasClick(e, params) {
     navAidsToCheck.forEach((nav) => {
       if (!nav.lat || !nav.lon) return;
       const pos = getScreenPos(nav.lat, nav.lon);
-      if (pos.x < 0 || pos.x > rect.width || pos.y < 0 || pos.y > rect.height)
-        return;
+      if (pos.x < 0 || pos.x > rect.width || pos.y < 0 || pos.y > rect.height) return;
 
       const clickDist = Math.sqrt((clickX - pos.x) ** 2 + (clickY - pos.y) ** 2);
       if (clickDist < closestDist) {
@@ -341,8 +340,7 @@ export function handleCanvasClick(e, params) {
     airportsToCheck.forEach((apt) => {
       if (!apt.lat || !apt.lon) return;
       const pos = getScreenPos(apt.lat, apt.lon);
-      if (pos.x < 0 || pos.x > rect.width || pos.y < 0 || pos.y > rect.height)
-        return;
+      if (pos.x < 0 || pos.x > rect.width || pos.y < 0 || pos.y > rect.height) return;
 
       const clickDist = Math.sqrt((clickX - pos.x) ** 2 + (clickY - pos.y) ** 2);
       if (clickDist < closestDist) {
@@ -356,13 +354,9 @@ export function handleCanvasClick(e, params) {
   // Check Airspaces if enabled - use point-in-polygon test
   if (overlays.airspace) {
     // Compute filtered airspace data inline (same logic as canvas rendering)
-    const rawAirspaces = [
-      ...(aviationData.airspaces || []),
-      ...(aviationData.boundaries || []),
-    ];
+    const rawAirspaces = [...(aviationData.airspaces || []), ...(aviationData.boundaries || [])];
     const filteredAirspaces = rawAirspaces.filter((as) => {
-      const asClass =
-        as.class || as.airspace_class || as.type?.replace('CLASS_', '') || '';
+      const asClass = as.class || as.airspace_class || as.type?.replace('CLASS_', '') || '';
       if (airspaceTypeFilters[asClass] !== undefined) {
         return airspaceTypeFilters[asClass];
       }
@@ -382,10 +376,7 @@ export function handleCanvasClick(e, params) {
           polygonCoords = as.polygon;
         } else if (as.polygon.type === 'Polygon' && as.polygon.coordinates?.[0]) {
           polygonCoords = as.polygon.coordinates[0];
-        } else if (
-          as.polygon.type === 'MultiPolygon' &&
-          as.polygon.coordinates?.[0]?.[0]
-        ) {
+        } else if (as.polygon.type === 'MultiPolygon' && as.polygon.coordinates?.[0]?.[0]) {
           polygonCoords = as.polygon.coordinates[0][0];
         }
       }
@@ -393,9 +384,7 @@ export function handleCanvasClick(e, params) {
       if (!polygonCoords || polygonCoords.length < 3) return;
 
       // Convert click position to lat/lon
-      const clickLat =
-        feederLat +
-        ((centerY - clickY + proPanOffset.y) / pixelsPerNm) * (1 / 60);
+      const clickLat = feederLat + ((centerY - clickY + proPanOffset.y) / pixelsPerNm) * (1 / 60);
       const clickLon =
         feederLon +
         ((clickX - centerX - proPanOffset.x) / pixelsPerNm) *
@@ -404,23 +393,11 @@ export function handleCanvasClick(e, params) {
 
       // Point-in-polygon test (ray casting algorithm)
       let inside = false;
-      for (
-        let i = 0, j = polygonCoords.length - 1;
-        i < polygonCoords.length;
-        j = i++
-      ) {
-        const xi = Array.isArray(polygonCoords[i])
-          ? polygonCoords[i][0]
-          : polygonCoords[i].lon;
-        const yi = Array.isArray(polygonCoords[i])
-          ? polygonCoords[i][1]
-          : polygonCoords[i].lat;
-        const xj = Array.isArray(polygonCoords[j])
-          ? polygonCoords[j][0]
-          : polygonCoords[j].lon;
-        const yj = Array.isArray(polygonCoords[j])
-          ? polygonCoords[j][1]
-          : polygonCoords[j].lat;
+      for (let i = 0, j = polygonCoords.length - 1; i < polygonCoords.length; j = i++) {
+        const xi = Array.isArray(polygonCoords[i]) ? polygonCoords[i][0] : polygonCoords[i].lon;
+        const yi = Array.isArray(polygonCoords[i]) ? polygonCoords[i][1] : polygonCoords[i].lat;
+        const xj = Array.isArray(polygonCoords[j]) ? polygonCoords[j][0] : polygonCoords[j].lon;
+        const yj = Array.isArray(polygonCoords[j]) ? polygonCoords[j][1] : polygonCoords[j].lat;
 
         if (
           yi > clickLat !== yj > clickLat &&
@@ -439,9 +416,7 @@ export function handleCanvasClick(e, params) {
         const centerLon = as.center_lon || as.lon;
         if (centerLat && centerLon) {
           const centerPos = getScreenPos(centerLat, centerLon);
-          const clickDist = Math.sqrt(
-            (clickX - centerPos.x) ** 2 + (clickY - centerPos.y) ** 2
-          );
+          const clickDist = Math.sqrt((clickX - centerPos.x) ** 2 + (clickY - centerPos.y) ** 2);
           // Only select airspace if nothing else is close (closestDist > 30)
           if (closestDist > 30) {
             closestDist = Math.min(clickDist, 25); // Cap distance for polygon items
@@ -532,8 +507,11 @@ export function handleCanvasDoubleClick(e, params) {
     animatePanTo,
   } = params;
 
-  const { clickX, clickY, centerX, centerY, maxRadius, pixelsPerNm } =
-    computeClickGeometry(e, canvasRef, radarRange);
+  const { clickX, clickY, centerX, centerY, maxRadius, pixelsPerNm } = computeClickGeometry(
+    e,
+    canvasRef,
+    radarRange
+  );
 
   const getScreenPos = makeGetScreenPos({
     centerX,

@@ -85,24 +85,30 @@ export function useMapPanels() {
   const [showNotamPanel, setShowNotamPanel] = useState(false);
   const [showRangeControl, setShowRangeControl] = useState(false);
 
-  // Persist showAircraftList to localStorage
+  // Persist showAircraftList to localStorage (supports functional updaters)
   const setShowAircraftList = useCallback((value) => {
-    setShowAircraftListState(value);
-    try {
-      localStorage.setItem(STORAGE_KEYS.showAircraftList, String(value));
-    } catch {
-      // localStorage unavailable
-    }
+    setShowAircraftListState((prev) => {
+      const next = typeof value === 'function' ? value(prev) : value;
+      try {
+        localStorage.setItem(STORAGE_KEYS.showAircraftList, String(next));
+      } catch {
+        // localStorage unavailable
+      }
+      return next;
+    });
   }, []);
 
-  // Persist listExpanded to localStorage
+  // Persist listExpanded to localStorage (supports functional updaters)
   const setListExpanded = useCallback((value) => {
-    setListExpandedState(value);
-    try {
-      localStorage.setItem(STORAGE_KEYS.listExpanded, String(value));
-    } catch {
-      // localStorage unavailable
-    }
+    setListExpandedState((prev) => {
+      const next = typeof value === 'function' ? value(prev) : value;
+      try {
+        localStorage.setItem(STORAGE_KEYS.listExpanded, String(next));
+      } catch {
+        // localStorage unavailable
+      }
+      return next;
+    });
   }, []);
 
   // Close all transient panels

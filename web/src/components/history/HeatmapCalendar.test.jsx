@@ -5,10 +5,8 @@ import { HeatmapCalendar } from './HeatmapCalendar';
 describe('HeatmapCalendar', () => {
   // Mock date to ensure consistent test results
   const mockNow = new Date('2024-01-15T12:00:00Z');
-  let originalDate;
 
   beforeEach(() => {
-    originalDate = global.Date;
     vi.useFakeTimers();
     vi.setSystemTime(mockNow);
   });
@@ -16,23 +14,6 @@ describe('HeatmapCalendar', () => {
   afterEach(() => {
     vi.useRealTimers();
   });
-
-  // Generate sample data with timestamps within the last 7 days
-  const generateSampleData = () => {
-    const data = [];
-    for (let d = 0; d < 7; d++) {
-      for (let h = 0; h < 24; h++) {
-        const count = Math.floor(Math.random() * 10);
-        for (let i = 0; i < count; i++) {
-          const date = new Date(mockNow);
-          date.setDate(date.getDate() - d);
-          date.setHours(h, Math.floor(Math.random() * 60));
-          data.push({ timestamp: date.toISOString() });
-        }
-      }
-    }
-    return data;
-  };
 
   const sampleData = [
     { timestamp: '2024-01-15T10:00:00Z' },
@@ -224,6 +205,26 @@ describe('HeatmapCalendar', () => {
       ];
       const { container } = render(<HeatmapCalendar data={mixedData} />);
       expect(container.querySelector('.heatmap-calendar')).toBeInTheDocument();
+    });
+  });
+
+  describe('day attribution across midnight', () => {
+    it('buckets events by calendar day, not rolling 24h windows', () => {
+      // Monday 02:00 local time
+      vi.setSystemTime(new Date(2024, 0, 15, 2, 0, 0));
+      // Event on Sunday 23:00 local (3 hours ago, but previous calendar day)
+      const data = [{ timestamp: new Date(2024, 0, 14, 23, 0, 0).toISOString() }];
+
+      const { container } = render(<HeatmapCalendar data={data} days={7} />);
+      const cells = [...container.querySelectorAll('.heatmap-calendar__cell')];
+
+      // Attributed to Sunday's row at hour 23
+      const sundayCell = cells.find((c) => c.getAttribute('title') === 'Sun 23:00 - 1 events');
+      expect(sundayCell).toBeTruthy();
+
+      // Must NOT be attributed to Monday (today) at hour 23
+      const mondayCell = cells.find((c) => c.getAttribute('title') === 'Mon 23:00 - 1 events');
+      expect(mondayCell).toBeFalsy();
     });
   });
 

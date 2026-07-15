@@ -135,7 +135,7 @@ describe('HeatmapGrid', () => {
 
   describe('tooltip formatting', () => {
     it('should use custom tooltip formatter for cell titles', () => {
-      const tooltipFormatter = vi.fn((value, row, col) => `Value: ${value}`);
+      const tooltipFormatter = vi.fn((value) => `Value: ${value}`);
       render(<HeatmapGrid data={sampleData} tooltipFormatter={tooltipFormatter} />);
       // Formatter is called during render to set title attributes on cells
       // 3 rows x 4 cols = 12 cells

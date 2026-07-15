@@ -166,12 +166,12 @@ describe('FlightStatsPanel', () => {
     });
 
     it('should color climb rate green', () => {
-      const { container } = render(<FlightStatsPanel {...defaultProps} />);
+      render(<FlightStatsPanel {...defaultProps} />);
       // Check for green color styling on positive V/S
     });
 
     it('should color descent rate red', () => {
-      const { container } = render(<FlightStatsPanel {...defaultProps} />);
+      render(<FlightStatsPanel {...defaultProps} />);
       // Check for red color styling on negative V/S
     });
 

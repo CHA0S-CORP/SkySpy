@@ -14,6 +14,7 @@ Tests cover:
 import contextlib
 from unittest.mock import MagicMock, patch
 
+import pytest
 from django.core.cache import cache
 from django.test import TestCase, override_settings
 
@@ -1131,3 +1132,65 @@ class DifferentialUpdateIntegrationTest(TestCase):
         second_update = aircraft_update_calls[0][0][1]
         self.assertEqual(second_update.get("type"), "delta")
         self.assertEqual(len(second_update.get("updated", [])), 1)
+
+
+@pytest.mark.django_db
+def test_flush_failure_requeues_entire_batch_in_order():
+    """A failed flush must requeue ALL buffered rows, not just the first 1000.
+
+    The whole batch is rolled back by transaction.atomic(), so anything not
+    requeued is permanently lost; the deque's maxlen is the sole loss bound.
+    """
+    import skyspy.tasks.aircraft_stream as stream_module
+
+    reset_stream_state()
+    try:
+        with stream_module._db_buffer_lock:
+            for i in range(1500):
+                stream_module._db_write_buffer.append({"hex": f"{i:06X}", "lat": 40.0, "lon": -74.0})
+
+        with patch(
+            "skyspy.models.AircraftSighting.objects.bulk_create",
+            side_effect=Exception("db down"),
+        ):
+            flush_stream_to_database()
+
+        with stream_module._db_buffer_lock:
+            requeued = list(stream_module._db_write_buffer)
+
+        assert len(requeued) == 1500
+        # Chronological order preserved (oldest first)
+        assert requeued[0]["hex"] == "000000"
+        assert requeued[-1]["hex"] == f"{1499:06X}"
+    finally:
+        reset_stream_state()
+
+
+@pytest.mark.django_db
+def test_flush_failure_requeues_ahead_of_newer_rows():
+    """Requeued rows must sit ahead of rows buffered after the failed flush."""
+    import skyspy.tasks.aircraft_stream as stream_module
+
+    reset_stream_state()
+    try:
+        with stream_module._db_buffer_lock:
+            stream_module._db_write_buffer.append({"hex": "AAAAAA", "lat": 40.0, "lon": -74.0})
+            stream_module._db_write_buffer.append({"hex": "BBBBBB", "lat": 41.0, "lon": -73.0})
+
+        def fail_and_buffer_new_row(*args, **kwargs):
+            raise Exception("db down")
+
+        with patch(
+            "skyspy.models.AircraftSighting.objects.bulk_create",
+            side_effect=fail_and_buffer_new_row,
+        ):
+            flush_stream_to_database()
+
+        # A newer row arrives after the failed flush requeued the batch
+        with stream_module._db_buffer_lock:
+            stream_module._db_write_buffer.append({"hex": "CCCCCC", "lat": 42.0, "lon": -72.0})
+            hexes = [ac["hex"] for ac in stream_module._db_write_buffer]
+
+        assert hexes == ["AAAAAA", "BBBBBB", "CCCCCC"]
+    finally:
+        reset_stream_state()

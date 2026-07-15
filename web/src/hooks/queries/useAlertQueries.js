@@ -10,7 +10,7 @@ export const alertKeys = {
 export function useAlertRules(options = {}) {
   return useQuery({
     queryKey: alertKeys.rules(),
-    queryFn: () => api.get('/alerts/rules/'),
+    queryFn: () => api.getAlertRules(),
     staleTime: 60 * 1000,
     ...options,
   });
@@ -20,7 +20,7 @@ export function useCreateAlertRule(options = {}) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (data) => api.post('/alerts/rules/', data),
+    mutationFn: (data) => api.createAlertRule(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: alertKeys.rules() });
     },
@@ -35,7 +35,7 @@ export function useUpdateAlertRule(options = {}) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, data }) => api.patch(`/alerts/rules/${id}/`, data),
+    mutationFn: ({ id, data }) => api.updateAlertRule(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: alertKeys.rules() });
     },
@@ -50,7 +50,7 @@ export function useDeleteAlertRule(options = {}) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id) => api.delete(`/alerts/rules/${id}/`),
+    mutationFn: (id) => api.deleteAlertRule(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: alertKeys.rules() });
     },
@@ -64,7 +64,7 @@ export function useDeleteAlertRule(options = {}) {
 export function useAlertHistory(options = {}) {
   return useQuery({
     queryKey: alertKeys.history(),
-    queryFn: () => api.get('/alerts/history/'),
+    queryFn: () => api.getAlertHistory(),
     staleTime: 30 * 1000,
     ...options,
   });

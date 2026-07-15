@@ -131,10 +131,7 @@ export default function OverlayMenuPanel({
                     [key]: !airspaceTypeFilters[key],
                   };
                   setAirspaceTypeFilters(newFilters);
-                  localStorage.setItem(
-                    'adsb-airspace-type-filters',
-                    JSON.stringify(newFilters)
-                  );
+                  localStorage.setItem('adsb-airspace-type-filters', JSON.stringify(newFilters));
                 }}
               />
               <span className="toggle-label">{label}</span>
@@ -166,10 +163,7 @@ export default function OverlayMenuPanel({
                     [key]: !weatherAdvisoryFilters[key],
                   };
                   setWeatherAdvisoryFilters(newFilters);
-                  localStorage.setItem(
-                    'adsb-weather-advisory-filters',
-                    JSON.stringify(newFilters)
-                  );
+                  localStorage.setItem('adsb-weather-advisory-filters', JSON.stringify(newFilters));
                 }}
               />
               <span className="toggle-label">{label}</span>
@@ -291,9 +285,7 @@ export default function OverlayMenuPanel({
             <input
               type="checkbox"
               checked={overlays.usRefueling}
-              onChange={() =>
-                updateOverlays({ ...overlays, usRefueling: !overlays.usRefueling })
-              }
+              onChange={() => updateOverlays({ ...overlays, usRefueling: !overlays.usRefueling })}
             />
             <span className="toggle-label">US Refueling Tracks</span>
           </label>

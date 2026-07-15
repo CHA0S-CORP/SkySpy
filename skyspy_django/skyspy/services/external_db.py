@@ -882,6 +882,22 @@ def fetch_aircraft_from_adsb_lol(icao_hex: str) -> dict | None:
 # Aggregated Lookup
 # =============================================================================
 
+# Boolean identity flags merged with OR semantics: any source reporting True wins.
+# Fill-if-empty merging would let an earlier source's explicit False (e.g. adsbx
+# "mil" absent -> False) mask a later source's True (e.g. tar1090 dbFlags bit 1).
+_OR_MERGED_FLAGS = frozenset({"is_military", "is_interesting", "is_pia", "is_ladd"})
+
+
+def _merge_source_record(merged: dict, data: dict) -> None:
+    """Merge one source's record into the aggregate (fill-if-empty; OR for boolean flags)."""
+    for k, v in data.items():
+        if v is None:
+            continue
+        if k in _OR_MERGED_FLAGS:
+            merged[k] = bool(merged.get(k)) or bool(v)
+        elif k not in merged or merged[k] is None:
+            merged[k] = v
+
 
 def lookup_all(icao_hex: str) -> dict | None:
     """
@@ -907,25 +923,19 @@ def lookup_all(icao_hex: str) -> dict | None:
     # ADSBX
     adsbx_data = lookup_adsbx(icao_hex)
     if adsbx_data:
-        for k, v in adsbx_data.items():
-            if v is not None and (k not in merged or merged[k] is None):
-                merged[k] = v
+        _merge_source_record(merged, adsbx_data)
         sources.append("adsbx")
 
     # tar1090-db
     tar1090_data = lookup_tar1090(icao_hex)
     if tar1090_data:
-        for k, v in tar1090_data.items():
-            if v is not None and (k not in merged or merged[k] is None):
-                merged[k] = v
+        _merge_source_record(merged, tar1090_data)
         sources.append("tar1090")
 
     # OpenSky Network
     opensky_data = lookup_opensky(icao_hex)
     if opensky_data:
-        for k, v in opensky_data.items():
-            if v is not None and (k not in merged or merged[k] is None):
-                merged[k] = v
+        _merge_source_record(merged, opensky_data)
         sources.append("opensky")
 
     if merged:

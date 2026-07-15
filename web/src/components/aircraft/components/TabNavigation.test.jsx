@@ -87,7 +87,7 @@ describe('TabNavigation', () => {
     });
 
     it('should render indicator on active tab', () => {
-      const { container } = render(<TabNavigation {...defaultProps} activeTab="track" />);
+      render(<TabNavigation {...defaultProps} activeTab="track" />);
 
       const trackTab = screen.getByRole('tab', { name: /track/i });
       const indicator = trackTab.querySelector('.tab-indicator');

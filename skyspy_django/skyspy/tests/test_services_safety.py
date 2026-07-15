@@ -385,6 +385,40 @@ class SafetyMonitorUnitTests(TestCase):
         prox_events = [e for e in events if e["event_type"] == "proximity_conflict"]
         self.assertEqual(len(prox_events), 0)
 
+    @patch("skyspy.socketio.utils.sync_emit")
+    def test_proximity_conflict_across_antimeridian(self, mock_sync_emit):
+        """Aircraft <1nm apart straddling 180° longitude must not be skipped by the bounding-box pre-filter."""
+        mock_sync_emit.return_value = True
+
+        # ~0.08nm apart horizontally, 200ft vertically — a genuine conflict,
+        # but raw abs(lon1 - lon2) is 359.998° without wraparound handling.
+        aircraft_list = [
+            {"hex": "AMER01", "flight": "QFA001", "lat": 47.0, "lon": 179.999, "alt": 35000},
+            {"hex": "AMER02", "flight": "UAL002", "lat": 47.0, "lon": -179.999, "alt": 35200},
+        ]
+
+        events = self.monitor.update_aircraft(aircraft_list)
+
+        prox_events = [e for e in events if e["event_type"] == "proximity_conflict"]
+        self.assertEqual(len(prox_events), 1)
+        self.assertLess(prox_events[0]["details"]["distance_nm"], 0.5)
+
+    @patch("skyspy.socketio.utils.sync_emit")
+    def test_proximity_no_alert_far_apart_across_antimeridian(self, mock_sync_emit):
+        """Aircraft far apart across the antimeridian are still filtered out."""
+        mock_sync_emit.return_value = True
+
+        # Wrapped longitude difference is 2° (~82nm at this latitude).
+        aircraft_list = [
+            {"hex": "AMER03", "lat": 47.0, "lon": 179.0, "alt": 35000},
+            {"hex": "AMER04", "lat": 47.0, "lon": -179.0, "alt": 35000},
+        ]
+
+        events = self.monitor.update_aircraft(aircraft_list)
+
+        prox_events = [e for e in events if e["event_type"] == "proximity_conflict"]
+        self.assertEqual(len(prox_events), 0)
+
     # =========================================================================
     # Cooldown and Deduplication Tests
     # =========================================================================

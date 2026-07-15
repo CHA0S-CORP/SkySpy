@@ -12,7 +12,9 @@ import api from '../../lib/api';
 // Mock the api module
 vi.mock('../../lib/api', () => ({
   default: {
-    get: vi.fn(),
+    getAircraft: vi.fn(),
+    getAircraftDetail: vi.fn(),
+    getAircraftHistory: vi.fn(),
   },
 }));
 
@@ -89,7 +91,7 @@ describe('useAircraftQueries', () => {
         ],
       };
 
-      api.get.mockResolvedValue(mockAircraft);
+      api.getAircraft.mockResolvedValue(mockAircraft);
 
       const { result } = renderHook(() => useAircraft(), {
         wrapper: createWrapper(),
@@ -102,12 +104,12 @@ describe('useAircraftQueries', () => {
       });
 
       expect(result.current.data).toEqual(mockAircraft);
-      expect(api.get).toHaveBeenCalledWith('/aircraft/');
+      expect(api.getAircraft).toHaveBeenCalledTimes(1);
     });
 
     it('should handle fetch error', async () => {
       const mockError = new Error('Failed to fetch aircraft');
-      api.get.mockRejectedValue(mockError);
+      api.getAircraft.mockRejectedValue(mockError);
 
       const { result } = renderHook(() => useAircraft(), {
         wrapper: createWrapper(),
@@ -121,7 +123,7 @@ describe('useAircraftQueries', () => {
     });
 
     it('should accept custom options', async () => {
-      api.get.mockResolvedValue({ count: 0, results: [] });
+      api.getAircraft.mockResolvedValue({ count: 0, results: [] });
 
       const { result } = renderHook(() => useAircraft({ enabled: false }), {
         wrapper: createWrapper(),
@@ -129,11 +131,11 @@ describe('useAircraftQueries', () => {
 
       expect(result.current.isLoading).toBe(false);
       expect(result.current.isFetched).toBe(false);
-      expect(api.get).not.toHaveBeenCalled();
+      expect(api.getAircraft).not.toHaveBeenCalled();
     });
 
     it('should return empty list on empty response', async () => {
-      api.get.mockResolvedValue({ count: 0, results: [] });
+      api.getAircraft.mockResolvedValue({ count: 0, results: [] });
 
       const { result } = renderHook(() => useAircraft(), {
         wrapper: createWrapper(),
@@ -165,7 +167,7 @@ describe('useAircraftQueries', () => {
         destination: 'LAX',
       };
 
-      api.get.mockResolvedValue(mockDetail);
+      api.getAircraftDetail.mockResolvedValue(mockDetail);
 
       const { result } = renderHook(() => useAircraftDetail('ABC123'), {
         wrapper: createWrapper(),
@@ -176,11 +178,11 @@ describe('useAircraftQueries', () => {
       });
 
       expect(result.current.data).toEqual(mockDetail);
-      expect(api.get).toHaveBeenCalledWith('/aircraft/ABC123/');
+      expect(api.getAircraftDetail).toHaveBeenCalledWith('ABC123');
     });
 
     it('should not fetch when hex is not provided', async () => {
-      api.get.mockResolvedValue({});
+      api.getAircraftDetail.mockResolvedValue({});
 
       const { result } = renderHook(() => useAircraftDetail(null), {
         wrapper: createWrapper(),
@@ -188,11 +190,11 @@ describe('useAircraftQueries', () => {
 
       expect(result.current.isLoading).toBe(false);
       expect(result.current.isFetched).toBe(false);
-      expect(api.get).not.toHaveBeenCalled();
+      expect(api.getAircraftDetail).not.toHaveBeenCalled();
     });
 
     it('should not fetch when hex is empty string', async () => {
-      api.get.mockResolvedValue({});
+      api.getAircraftDetail.mockResolvedValue({});
 
       const { result } = renderHook(() => useAircraftDetail(''), {
         wrapper: createWrapper(),
@@ -200,12 +202,12 @@ describe('useAircraftQueries', () => {
 
       expect(result.current.isLoading).toBe(false);
       expect(result.current.isFetched).toBe(false);
-      expect(api.get).not.toHaveBeenCalled();
+      expect(api.getAircraftDetail).not.toHaveBeenCalled();
     });
 
     it('should handle fetch error', async () => {
       const mockError = new Error('Aircraft not found');
-      api.get.mockRejectedValue(mockError);
+      api.getAircraftDetail.mockRejectedValue(mockError);
 
       const { result } = renderHook(() => useAircraftDetail('ABC123'), {
         wrapper: createWrapper(),
@@ -222,7 +224,7 @@ describe('useAircraftQueries', () => {
       const mockDetail1 = { hex: 'ABC123', callsign: 'UAL123' };
       const mockDetail2 = { hex: 'DEF456', callsign: 'DAL456' };
 
-      api.get.mockResolvedValueOnce(mockDetail1).mockResolvedValueOnce(mockDetail2);
+      api.getAircraftDetail.mockResolvedValueOnce(mockDetail1).mockResolvedValueOnce(mockDetail2);
 
       const { result, rerender } = renderHook(({ hex }) => useAircraftDetail(hex), {
         wrapper: createWrapper(),
@@ -241,9 +243,9 @@ describe('useAircraftQueries', () => {
         expect(result.current.data).toEqual(mockDetail2);
       });
 
-      expect(api.get).toHaveBeenCalledTimes(2);
-      expect(api.get).toHaveBeenCalledWith('/aircraft/ABC123/');
-      expect(api.get).toHaveBeenCalledWith('/aircraft/DEF456/');
+      expect(api.getAircraftDetail).toHaveBeenCalledTimes(2);
+      expect(api.getAircraftDetail).toHaveBeenCalledWith('ABC123');
+      expect(api.getAircraftDetail).toHaveBeenCalledWith('DEF456');
     });
   });
 
@@ -269,7 +271,7 @@ describe('useAircraftQueries', () => {
         ],
       };
 
-      api.get.mockResolvedValue(mockHistory);
+      api.getAircraftHistory.mockResolvedValue(mockHistory);
 
       const { result } = renderHook(() => useAircraftHistory('ABC123'), {
         wrapper: createWrapper(),
@@ -280,11 +282,11 @@ describe('useAircraftQueries', () => {
       });
 
       expect(result.current.data).toEqual(mockHistory);
-      expect(api.get).toHaveBeenCalledWith('/aircraft/ABC123/history/');
+      expect(api.getAircraftHistory).toHaveBeenCalledWith('ABC123');
     });
 
     it('should not fetch when hex is not provided', async () => {
-      api.get.mockResolvedValue({});
+      api.getAircraftHistory.mockResolvedValue({});
 
       const { result } = renderHook(() => useAircraftHistory(null), {
         wrapper: createWrapper(),
@@ -292,11 +294,11 @@ describe('useAircraftQueries', () => {
 
       expect(result.current.isLoading).toBe(false);
       expect(result.current.isFetched).toBe(false);
-      expect(api.get).not.toHaveBeenCalled();
+      expect(api.getAircraftHistory).not.toHaveBeenCalled();
     });
 
     it('should not fetch when hex is undefined', async () => {
-      api.get.mockResolvedValue({});
+      api.getAircraftHistory.mockResolvedValue({});
 
       const { result } = renderHook(() => useAircraftHistory(undefined), {
         wrapper: createWrapper(),
@@ -304,12 +306,12 @@ describe('useAircraftQueries', () => {
 
       expect(result.current.isLoading).toBe(false);
       expect(result.current.isFetched).toBe(false);
-      expect(api.get).not.toHaveBeenCalled();
+      expect(api.getAircraftHistory).not.toHaveBeenCalled();
     });
 
     it('should handle fetch error', async () => {
       const mockError = new Error('Failed to fetch history');
-      api.get.mockRejectedValue(mockError);
+      api.getAircraftHistory.mockRejectedValue(mockError);
 
       const { result } = renderHook(() => useAircraftHistory('ABC123'), {
         wrapper: createWrapper(),
@@ -323,7 +325,7 @@ describe('useAircraftQueries', () => {
     });
 
     it('should return empty history array', async () => {
-      api.get.mockResolvedValue({ count: 0, results: [] });
+      api.getAircraftHistory.mockResolvedValue({ count: 0, results: [] });
 
       const { result } = renderHook(() => useAircraftHistory('ABC123'), {
         wrapper: createWrapper(),

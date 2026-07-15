@@ -14,10 +14,11 @@ import api from '../../lib/api';
 // Mock the api module
 vi.mock('../../lib/api', () => ({
   default: {
-    get: vi.fn(),
-    post: vi.fn(),
-    patch: vi.fn(),
-    delete: vi.fn(),
+    getAlertRules: vi.fn(),
+    createAlertRule: vi.fn(),
+    updateAlertRule: vi.fn(),
+    deleteAlertRule: vi.fn(),
+    getAlertHistory: vi.fn(),
   },
 }));
 
@@ -82,7 +83,7 @@ describe('useAlertQueries', () => {
         ],
       };
 
-      api.get.mockResolvedValue(mockRules);
+      api.getAlertRules.mockResolvedValue(mockRules);
 
       const { result } = renderHook(() => useAlertRules(), {
         wrapper: createWrapper(),
@@ -95,12 +96,12 @@ describe('useAlertQueries', () => {
       });
 
       expect(result.current.data).toEqual(mockRules);
-      expect(api.get).toHaveBeenCalledWith('/alerts/rules/');
+      expect(api.getAlertRules).toHaveBeenCalledTimes(1);
     });
 
     it('should handle fetch error', async () => {
       const mockError = new Error('Failed to fetch alert rules');
-      api.get.mockRejectedValue(mockError);
+      api.getAlertRules.mockRejectedValue(mockError);
 
       const { result } = renderHook(() => useAlertRules(), {
         wrapper: createWrapper(),
@@ -114,7 +115,7 @@ describe('useAlertQueries', () => {
     });
 
     it('should accept custom options', async () => {
-      api.get.mockResolvedValue({ count: 0, results: [] });
+      api.getAlertRules.mockResolvedValue({ count: 0, results: [] });
 
       const { result } = renderHook(() => useAlertRules({ enabled: false }), {
         wrapper: createWrapper(),
@@ -122,7 +123,7 @@ describe('useAlertQueries', () => {
 
       expect(result.current.isLoading).toBe(false);
       expect(result.current.isFetched).toBe(false);
-      expect(api.get).not.toHaveBeenCalled();
+      expect(api.getAlertRules).not.toHaveBeenCalled();
     });
   });
 
@@ -138,7 +139,7 @@ describe('useAlertQueries', () => {
 
       const createdRule = { id: 3, ...newRule };
 
-      api.post.mockResolvedValue(createdRule);
+      api.createAlertRule.mockResolvedValue(createdRule);
 
       const { result } = renderHook(() => useCreateAlertRule(), {
         wrapper: createWrapper(),
@@ -153,12 +154,12 @@ describe('useAlertQueries', () => {
       });
 
       expect(result.current.data).toEqual(createdRule);
-      expect(api.post).toHaveBeenCalledWith('/alerts/rules/', newRule);
+      expect(api.createAlertRule).toHaveBeenCalledWith(newRule);
     });
 
     it('should handle create error', async () => {
       const mockError = new Error('Failed to create alert rule');
-      api.post.mockRejectedValue(mockError);
+      api.createAlertRule.mockRejectedValue(mockError);
 
       const { result } = renderHook(() => useCreateAlertRule(), {
         wrapper: createWrapper(),
@@ -180,8 +181,8 @@ describe('useAlertQueries', () => {
       const newRule = { name: 'New Alert', rule_type: 'military' };
       const createdRule = { id: 2, ...newRule };
 
-      api.get.mockResolvedValue(mockRules);
-      api.post.mockResolvedValue(createdRule);
+      api.getAlertRules.mockResolvedValue(mockRules);
+      api.createAlertRule.mockResolvedValue(createdRule);
 
       const queryClient = new QueryClient({
         defaultOptions: {
@@ -235,7 +236,7 @@ describe('useAlertQueries', () => {
         enabled: false,
       };
 
-      api.patch.mockResolvedValue(updatedRule);
+      api.updateAlertRule.mockResolvedValue(updatedRule);
 
       const { result } = renderHook(() => useUpdateAlertRule(), {
         wrapper: createWrapper(),
@@ -250,12 +251,12 @@ describe('useAlertQueries', () => {
       });
 
       expect(result.current.data).toEqual(updatedRule);
-      expect(api.patch).toHaveBeenCalledWith('/alerts/rules/1/', updateData);
+      expect(api.updateAlertRule).toHaveBeenCalledWith(1, updateData);
     });
 
     it('should handle update error', async () => {
       const mockError = new Error('Failed to update alert rule');
-      api.patch.mockRejectedValue(mockError);
+      api.updateAlertRule.mockRejectedValue(mockError);
 
       const { result } = renderHook(() => useUpdateAlertRule(), {
         wrapper: createWrapper(),
@@ -275,7 +276,7 @@ describe('useAlertQueries', () => {
 
   describe('useDeleteAlertRule', () => {
     it('should delete alert rule successfully', async () => {
-      api.delete.mockResolvedValue(undefined);
+      api.deleteAlertRule.mockResolvedValue(undefined);
 
       const { result } = renderHook(() => useDeleteAlertRule(), {
         wrapper: createWrapper(),
@@ -289,12 +290,12 @@ describe('useAlertQueries', () => {
         expect(result.current.isSuccess).toBe(true);
       });
 
-      expect(api.delete).toHaveBeenCalledWith('/alerts/rules/1/');
+      expect(api.deleteAlertRule).toHaveBeenCalledWith(1);
     });
 
     it('should handle delete error', async () => {
       const mockError = new Error('Failed to delete alert rule');
-      api.delete.mockRejectedValue(mockError);
+      api.deleteAlertRule.mockRejectedValue(mockError);
 
       const { result } = renderHook(() => useDeleteAlertRule(), {
         wrapper: createWrapper(),
@@ -336,7 +337,7 @@ describe('useAlertQueries', () => {
         ],
       };
 
-      api.get.mockResolvedValue(mockHistory);
+      api.getAlertHistory.mockResolvedValue(mockHistory);
 
       const { result } = renderHook(() => useAlertHistory(), {
         wrapper: createWrapper(),
@@ -347,12 +348,12 @@ describe('useAlertQueries', () => {
       });
 
       expect(result.current.data).toEqual(mockHistory);
-      expect(api.get).toHaveBeenCalledWith('/alerts/history/');
+      expect(api.getAlertHistory).toHaveBeenCalledTimes(1);
     });
 
     it('should handle fetch error', async () => {
       const mockError = new Error('Failed to fetch alert history');
-      api.get.mockRejectedValue(mockError);
+      api.getAlertHistory.mockRejectedValue(mockError);
 
       const { result } = renderHook(() => useAlertHistory(), {
         wrapper: createWrapper(),
@@ -366,7 +367,7 @@ describe('useAlertQueries', () => {
     });
 
     it('should accept custom options', async () => {
-      api.get.mockResolvedValue({ count: 0, results: [] });
+      api.getAlertHistory.mockResolvedValue({ count: 0, results: [] });
 
       const { result } = renderHook(() => useAlertHistory({ enabled: false }), {
         wrapper: createWrapper(),
@@ -374,11 +375,11 @@ describe('useAlertQueries', () => {
 
       expect(result.current.isLoading).toBe(false);
       expect(result.current.isFetched).toBe(false);
-      expect(api.get).not.toHaveBeenCalled();
+      expect(api.getAlertHistory).not.toHaveBeenCalled();
     });
 
     it('should return empty history on empty response', async () => {
-      api.get.mockResolvedValue({ count: 0, results: [] });
+      api.getAlertHistory.mockResolvedValue({ count: 0, results: [] });
 
       const { result } = renderHook(() => useAlertHistory(), {
         wrapper: createWrapper(),

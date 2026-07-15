@@ -1087,3 +1087,141 @@ class AlertServiceEdgeCaseTests(TestCase):
 
             # Should NOT trigger because ICAO hex is required for cooldown tracking
             self.assertEqual(len(triggered), 0)
+
+
+# ---------------------------------------------------------------------------
+# Regression tests (pytest-style)
+# ---------------------------------------------------------------------------
+
+
+def _make_compiled_rule(rule_id, name, **overrides):
+    """Build a CompiledRule with sensible defaults for regression tests."""
+    kwargs = {
+        "id": rule_id,
+        "name": name,
+        "rule_type": None,
+        "operator": "eq",
+        "value": None,
+        "conditions": None,
+        "priority": "info",
+        "cooldown_seconds": 300,
+        "api_url": None,
+        "owner_id": None,
+        "visibility": "private",
+        "is_system": False,
+        "starts_at": None,
+        "expires_at": None,
+    }
+    kwargs.update(overrides)
+    return CompiledRule(**kwargs)
+
+
+class TestCompareValuesNoneRuleValue:
+    """Regression: a None rule value must not crash evaluation (AttributeError)."""
+
+    def test_emergency_condition_with_none_value_returns_false(self):
+        service = AlertService()
+        assert service._compare_values("7700", "eq", None, rule_type="emergency") is False
+
+    def test_military_condition_with_none_value_returns_false(self):
+        service = AlertService()
+        assert service._compare_values(True, "eq", None, rule_type="military") is False
+
+    def test_string_operator_with_none_value_returns_false(self):
+        service = AlertService()
+        assert service._compare_values("UAL123", "contains", None) is False
+
+
+@pytest.mark.django_db
+class TestBadRuleIsolation:
+    """Regression: one malformed rule must not abort the whole alert cycle."""
+
+    def test_check_alerts_survives_valueless_emergency_condition(self):
+        """A complex rule with {"type": "emergency"} and no value used to raise
+        AttributeError out of check_alerts, killing every rule in the cycle."""
+        AlertRule.objects.create(
+            name="Broken Emergency",
+            conditions={"logic": "AND", "groups": [{"logic": "AND", "conditions": [{"type": "emergency"}]}]},
+            enabled=True,
+        )
+        AlertRule.objects.create(name="Good ICAO", rule_type="icao", operator="eq", value="ABC123", enabled=True)
+
+        service = AlertService()
+        with patch("skyspy.services.alerts.sync_emit"):
+            triggered = service.check_alerts([{"hex": "ABC123", "squawk": "7700", "flight": "TEST1"}])
+
+        assert [t["rule_name"] for t in triggered] == ["Good ICAO"]
+
+    def test_full_iteration_isolates_bad_rule(self):
+        """The full-iteration fallback must skip a rule whose evaluation raises
+        instead of propagating and dropping every remaining rule."""
+        good_db = AlertRule.objects.create(
+            name="Good Rule", rule_type="icao", operator="eq", value="ABC123", enabled=True
+        )
+        good = CompiledRule.from_db_rule(good_db)
+        # Conditions list contains a non-dict entry: cond.get() raises AttributeError
+        bad = _make_compiled_rule(
+            good_db.id + 1000,
+            "Bad Rule",
+            conditions={"logic": "AND", "groups": [{"logic": "AND", "conditions": ["not-a-dict"]}]},
+        )
+        service = AlertService()
+        timer = MagicMock()
+
+        with (
+            patch.object(service, "_get_rules_from_db", return_value=[bad, good]),
+            patch("skyspy.services.alerts.sync_emit"),
+        ):
+            triggered = service._check_alerts_full_iteration(
+                [{"hex": "ABC123", "flight": "TEST2"}], timezone.now(), timer
+            )
+
+        assert [t["rule_name"] for t in triggered] == ["Good Rule"]
+
+
+class TestAltitudeZeroRegression:
+    """Regression: a legitimate 0 ft altitude must not be dropped by a falsy `or`."""
+
+    def test_get_aircraft_value_alt_zero(self):
+        service = AlertService()
+        assert service._get_aircraft_value({"alt": 0}, "altitude") == 0
+
+    def test_get_aircraft_value_alt_zero_with_null_baro(self):
+        service = AlertService()
+        assert service._get_aircraft_value({"alt": 0, "alt_baro": None}, "altitude") == 0
+
+    def test_get_aircraft_value_falls_back_to_alt_baro(self):
+        service = AlertService()
+        assert service._get_aircraft_value({"alt": None, "alt_baro": 500}, "altitude") == 500
+
+    def test_altitude_rule_matches_zero_altitude(self):
+        service = AlertService()
+        assert service._evaluate_simple_condition({"alt": 0}, "altitude", "lt", "100") is True
+
+
+@pytest.mark.django_db
+class TestPerChannelNotificationStatus:
+    """Regression: per-channel delivery results must be logged individually,
+    not one aggregate boolean applied to every channel."""
+
+    def test_mixed_channel_results_logged_individually(self):
+        config = NotificationConfig.get_config()
+        config.enabled = True
+        config.apprise_urls = "json://good.example.com;json://bad.example.com"
+        config.save()
+
+        alert_data = {"rule_name": "Test Alert", "message": "msg", "priority": "info", "icao": "ABC123"}
+
+        good = MagicMock()
+        good.notify.return_value = True
+        bad = MagicMock()
+        bad.notify.return_value = False
+
+        with patch("apprise.Apprise", side_effect=[good, bad]), patch("apprise.NotifyType"):
+            AlertService()._send_notification(alert_data)
+
+        statuses = {log.channel_url: log.status for log in NotificationLog.objects.all()}
+        assert statuses == {
+            "json://good.example.com": "sent",
+            "json://bad.example.com": "failed",
+        }

@@ -217,6 +217,47 @@ func TestModel_HandleAircraftSnapshot(t *testing.T) {
 	}
 }
 
+func TestModel_HandleAircraftSnapshot_RemovesStaleAircraft(t *testing.T) {
+	cfg := newTestConfig()
+	m := NewModel(cfg)
+
+	// Aircraft tracked before a reconnect; its aircraft:remove event was
+	// missed while the socket was down.
+	m.aircraft["STALE1"] = &radar.Target{Hex: "STALE1", Callsign: "GHOST01"}
+	m.alertedAircraft["STALE1"] = true
+
+	snapshotData := map[string]ws.Aircraft{
+		"ABC123": {
+			Hex:    "ABC123",
+			Flight: "TEST001",
+			Lat:    floatPtr(52.0),
+			Lon:    floatPtr(4.0),
+		},
+	}
+	data, _ := json.Marshal(struct {
+		Aircraft map[string]ws.Aircraft `json:"aircraft"`
+	}{Aircraft: snapshotData})
+
+	m.handleAircraftMsg(ws.Message{
+		Type: string(ws.AircraftSnapshot),
+		Data: data,
+	})
+
+	// Snapshot is authoritative: stale entries must be reconciled away
+	if _, exists := m.aircraft["STALE1"]; exists {
+		t.Error("aircraft STALE1 should be removed by authoritative snapshot")
+	}
+	if m.alertedAircraft["STALE1"] {
+		t.Error("alertedAircraft entry for STALE1 should be pruned with the target")
+	}
+	if _, exists := m.aircraft["ABC123"]; !exists {
+		t.Error("aircraft ABC123 from snapshot should exist")
+	}
+	if len(m.aircraft) != 1 {
+		t.Errorf("expected 1 aircraft after snapshot, got %d", len(m.aircraft))
+	}
+}
+
 func TestModel_HandleAircraftUpdate(t *testing.T) {
 	cfg := newTestConfig()
 	m := NewModel(cfg)
@@ -1492,6 +1533,38 @@ func TestModel_SpectrumUpdate(t *testing.T) {
 	labels := m.GetSpectrumLabels()
 	if len(labels) == 0 {
 		t.Error("spectrum labels should be available")
+	}
+}
+
+func TestModel_UpdateSpectrum_SmoothingConverges(t *testing.T) {
+	cfg := newTestConfig()
+	m := NewModel(cfg)
+
+	// Distance 5nm maps exactly to the first band, which maps to bin 0
+	m.aircraft["SPEC01"] = &radar.Target{
+		Hex:      "SPEC01",
+		Distance: 5,
+		RSSI:     -5,
+		HasRSSI:  true,
+	}
+
+	m.updateSpectrum()
+	firstTick := m.spectrum[0]
+	if firstTick <= 0 {
+		t.Fatalf("expected non-zero spectrum after first tick, got %f", firstTick)
+	}
+
+	for i := 0; i < 50; i++ {
+		m.updateSpectrum()
+	}
+
+	// With the analyzer's smoothing state preserved between ticks
+	// (ResetSamples instead of Reset), the analyzer output converges to
+	// the raw band value and the display EMA follows: steady state is
+	// ~8.3x the first-tick value. If Reset() wiped prevSpectrum every
+	// tick, steady state would only reach ~2.5x (stuck at raw*smoothing).
+	if m.spectrum[0] < firstTick*4 {
+		t.Errorf("spectrum smoothing did not converge: first=%f steady=%f", firstTick, m.spectrum[0])
 	}
 }
 

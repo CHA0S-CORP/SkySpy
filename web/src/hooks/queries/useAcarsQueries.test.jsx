@@ -7,7 +7,8 @@ import api from '../../lib/api';
 // Mock the api module
 vi.mock('../../lib/api', () => ({
   default: {
-    get: vi.fn(),
+    getAcarsMessages: vi.fn(),
+    getAcarsStats: vi.fn(),
   },
 }));
 
@@ -69,7 +70,7 @@ describe('useAcarsQueries', () => {
         ],
       };
 
-      api.get.mockResolvedValue(mockMessages);
+      api.getAcarsMessages.mockResolvedValue(mockMessages);
 
       const { result } = renderHook(() => useAcarsMessages(), {
         wrapper: createWrapper(),
@@ -83,12 +84,12 @@ describe('useAcarsQueries', () => {
       });
 
       expect(result.current.data).toEqual(mockMessages);
-      expect(api.get).toHaveBeenCalledWith('/acars/messages/');
+      expect(api.getAcarsMessages).toHaveBeenCalledTimes(1);
     });
 
     it('should handle fetch error', async () => {
       const mockError = new Error('Failed to fetch ACARS messages');
-      api.get.mockRejectedValue(mockError);
+      api.getAcarsMessages.mockRejectedValue(mockError);
 
       const { result } = renderHook(() => useAcarsMessages(), {
         wrapper: createWrapper(),
@@ -102,7 +103,7 @@ describe('useAcarsQueries', () => {
     });
 
     it('should accept custom options', async () => {
-      api.get.mockResolvedValue({ count: 0, results: [] });
+      api.getAcarsMessages.mockResolvedValue({ count: 0, results: [] });
 
       const { result } = renderHook(() => useAcarsMessages({ enabled: false }), {
         wrapper: createWrapper(),
@@ -111,11 +112,11 @@ describe('useAcarsQueries', () => {
       // Should not fetch when disabled
       expect(result.current.isLoading).toBe(false);
       expect(result.current.isFetched).toBe(false);
-      expect(api.get).not.toHaveBeenCalled();
+      expect(api.getAcarsMessages).not.toHaveBeenCalled();
     });
 
     it('should have correct stale time', async () => {
-      api.get.mockResolvedValue({ count: 0, results: [] });
+      api.getAcarsMessages.mockResolvedValue({ count: 0, results: [] });
 
       const { result } = renderHook(() => useAcarsMessages(), {
         wrapper: createWrapper(),
@@ -143,7 +144,7 @@ describe('useAcarsQueries', () => {
         },
       };
 
-      api.get.mockResolvedValue(mockStats);
+      api.getAcarsStats.mockResolvedValue(mockStats);
 
       const { result } = renderHook(() => useAcarsStats(), {
         wrapper: createWrapper(),
@@ -154,12 +155,12 @@ describe('useAcarsQueries', () => {
       });
 
       expect(result.current.data).toEqual(mockStats);
-      expect(api.get).toHaveBeenCalledWith('/acars/stats/');
+      expect(api.getAcarsStats).toHaveBeenCalledTimes(1);
     });
 
     it('should handle fetch error', async () => {
       const mockError = new Error('Failed to fetch ACARS stats');
-      api.get.mockRejectedValue(mockError);
+      api.getAcarsStats.mockRejectedValue(mockError);
 
       const { result } = renderHook(() => useAcarsStats(), {
         wrapper: createWrapper(),
@@ -173,7 +174,7 @@ describe('useAcarsQueries', () => {
     });
 
     it('should accept custom options', async () => {
-      api.get.mockResolvedValue({});
+      api.getAcarsStats.mockResolvedValue({});
 
       const { result } = renderHook(() => useAcarsStats({ enabled: false }), {
         wrapper: createWrapper(),
@@ -181,11 +182,11 @@ describe('useAcarsQueries', () => {
 
       expect(result.current.isLoading).toBe(false);
       expect(result.current.isFetched).toBe(false);
-      expect(api.get).not.toHaveBeenCalled();
+      expect(api.getAcarsStats).not.toHaveBeenCalled();
     });
 
     it('should return empty stats on empty response', async () => {
-      api.get.mockResolvedValue({});
+      api.getAcarsStats.mockResolvedValue({});
 
       const { result } = renderHook(() => useAcarsStats(), {
         wrapper: createWrapper(),

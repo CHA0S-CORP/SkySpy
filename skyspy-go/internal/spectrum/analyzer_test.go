@@ -414,6 +414,37 @@ func TestAnalyzer_Reset(t *testing.T) {
 	}
 }
 
+func TestAnalyzer_ResetSamples_PreservesSmoothingState(t *testing.T) {
+	analyzer := NewAnalyzer()
+
+	analyzer.AddAircraft("TEST", -10, 5)
+	first := analyzer.GetSpectrumSmoothed(10)
+
+	// ResetSamples clears band data but keeps smoothing/peak-hold state
+	analyzer.ResetSamples()
+
+	for i, band := range analyzer.bands {
+		if band.SampleCount != 0 || band.AircraftCount != 0 {
+			t.Errorf("band %d should be cleared after ResetSamples", i)
+		}
+	}
+
+	analyzer.AddAircraft("TEST", -10, 5)
+	second := analyzer.GetSpectrumSmoothed(10)
+
+	// With prevSpectrum preserved, the smoothed value keeps converging
+	// toward the raw value instead of restarting from zero each call
+	if second[0] <= first[0] {
+		t.Errorf("smoothing state lost across ResetSamples: first=%f second=%f", first[0], second[0])
+	}
+
+	// Peak hold should also survive ResetSamples
+	peaks := analyzer.GetPeaks(10)
+	if peaks[0] < second[0] {
+		t.Errorf("peak values should be preserved: peak=%f value=%f", peaks[0], second[0])
+	}
+}
+
 func TestAnalyzer_SetDecayRate(t *testing.T) {
 	analyzer := NewAnalyzer()
 

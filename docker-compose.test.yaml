@@ -12,8 +12,11 @@ services:
       - DJANGO_SECRET_KEY=test-secret-key-for-testing-only
       - DEBUG=False
 
-      # Database: Point to pgbouncer instead of postgres
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-adsb}:${POSTGRES_PASSWORD:-adsb}@pgbouncer:5432/${POSTGRES_DB:-adsb}
+      # Database: direct to postgres with a dedicated test DB. Routing through
+      # pgbouncer pointed tests at the dev "adsb" database (test_settings sets
+      # TEST.NAME to the URL's own db name), so live dev-stack data polluted
+      # test runs whenever the dev profile was up.
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-adsb}:${POSTGRES_PASSWORD:-adsb}@postgres:5432/${POSTGRES_TEST_DB:-adsb_test}
 
       # Redis
       - REDIS_URL=redis://redis:6379/0
@@ -55,7 +58,7 @@ services:
       - ./test-results:/app/test-results
       - ./skyspy_django/skyspy:/app/skyspy:ro  # Hot reload Python code
     depends_on:
-      pgbouncer:
+      postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -386,6 +389,7 @@ services:
       - POSTGRES_USER=${POSTGRES_USER:-adsb}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-adsb}
       - POSTGRES_DB=${POSTGRES_DB:-adsb}
+      - POSTGRES_TEST_DB=${POSTGRES_TEST_DB:-adsb_test}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-adsb} -d ${POSTGRES_DB:-adsb}"]
       interval: 5s
@@ -393,6 +397,8 @@ services:
       retries: 5
     tmpfs:
       - /var/lib/postgresql/data
+    volumes:
+      - ./test/init-db:/docker-entrypoint-initdb.d:ro
     networks:
       - test-network
 

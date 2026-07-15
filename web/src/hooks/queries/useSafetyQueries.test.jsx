@@ -7,7 +7,7 @@ import api from '../../lib/api';
 // Mock the api module
 vi.mock('../../lib/api', () => ({
   default: {
-    get: vi.fn(),
+    getSafetyEvents: vi.fn(),
   },
 }));
 
@@ -82,7 +82,7 @@ describe('useSafetyQueries', () => {
         ],
       };
 
-      api.get.mockResolvedValue(mockEvents);
+      api.getSafetyEvents.mockResolvedValue(mockEvents);
 
       const { result } = renderHook(() => useSafetyEvents(), {
         wrapper: createWrapper(),
@@ -95,12 +95,12 @@ describe('useSafetyQueries', () => {
       });
 
       expect(result.current.data).toEqual(mockEvents);
-      expect(api.get).toHaveBeenCalledWith('/safety/events/');
+      expect(api.getSafetyEvents).toHaveBeenCalledTimes(1);
     });
 
     it('should handle fetch error', async () => {
       const mockError = new Error('Failed to fetch safety events');
-      api.get.mockRejectedValue(mockError);
+      api.getSafetyEvents.mockRejectedValue(mockError);
 
       const { result } = renderHook(() => useSafetyEvents(), {
         wrapper: createWrapper(),
@@ -114,7 +114,7 @@ describe('useSafetyQueries', () => {
     });
 
     it('should accept custom options', async () => {
-      api.get.mockResolvedValue({ count: 0, results: [] });
+      api.getSafetyEvents.mockResolvedValue({ count: 0, results: [] });
 
       const { result } = renderHook(() => useSafetyEvents({ enabled: false }), {
         wrapper: createWrapper(),
@@ -122,11 +122,11 @@ describe('useSafetyQueries', () => {
 
       expect(result.current.isLoading).toBe(false);
       expect(result.current.isFetched).toBe(false);
-      expect(api.get).not.toHaveBeenCalled();
+      expect(api.getSafetyEvents).not.toHaveBeenCalled();
     });
 
     it('should return empty events on empty response', async () => {
-      api.get.mockResolvedValue({ count: 0, results: [] });
+      api.getSafetyEvents.mockResolvedValue({ count: 0, results: [] });
 
       const { result } = renderHook(() => useSafetyEvents(), {
         wrapper: createWrapper(),
@@ -152,7 +152,7 @@ describe('useSafetyQueries', () => {
         ],
       };
 
-      api.get.mockResolvedValue(mockEvents);
+      api.getSafetyEvents.mockResolvedValue(mockEvents);
 
       const { result } = renderHook(() => useSafetyEvents(), {
         wrapper: createWrapper(),
@@ -167,7 +167,7 @@ describe('useSafetyQueries', () => {
     });
 
     it('should have correct stale time', async () => {
-      api.get.mockResolvedValue({ count: 0, results: [] });
+      api.getSafetyEvents.mockResolvedValue({ count: 0, results: [] });
 
       const { result } = renderHook(() => useSafetyEvents(), {
         wrapper: createWrapper(),
@@ -192,7 +192,7 @@ describe('useSafetyQueries', () => {
         ],
       };
 
-      api.get.mockResolvedValue(mockEvents);
+      api.getSafetyEvents.mockResolvedValue(mockEvents);
 
       const { result } = renderHook(() => useSafetyEvents(), {
         wrapper: createWrapper(),
@@ -212,7 +212,7 @@ describe('useSafetyQueries', () => {
     it('should handle network timeout gracefully', async () => {
       const timeoutError = new Error('Request timeout');
       timeoutError.name = 'TimeoutError';
-      api.get.mockRejectedValue(timeoutError);
+      api.getSafetyEvents.mockRejectedValue(timeoutError);
 
       const { result } = renderHook(() => useSafetyEvents(), {
         wrapper: createWrapper(),
@@ -228,7 +228,7 @@ describe('useSafetyQueries', () => {
     it('should handle 404 error', async () => {
       const notFoundError = new Error('Not found');
       notFoundError.status = 404;
-      api.get.mockRejectedValue(notFoundError);
+      api.getSafetyEvents.mockRejectedValue(notFoundError);
 
       const { result } = renderHook(() => useSafetyEvents(), {
         wrapper: createWrapper(),
@@ -244,7 +244,7 @@ describe('useSafetyQueries', () => {
     it('should handle 500 error', async () => {
       const serverError = new Error('Internal server error');
       serverError.status = 500;
-      api.get.mockRejectedValue(serverError);
+      api.getSafetyEvents.mockRejectedValue(serverError);
 
       const { result } = renderHook(() => useSafetyEvents(), {
         wrapper: createWrapper(),

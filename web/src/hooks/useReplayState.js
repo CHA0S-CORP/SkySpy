@@ -17,6 +17,9 @@ export function useReplayState({ apiBase, wsRequest, wsConnected }) {
   const replayTracksRef = useRef({});
   const animationFrameRef = useRef({});
   const abortControllersRef = useRef({});
+  // Positions set externally (slider drag) while playback is running; the
+  // animation loop consumes these so a scrub isn't overwritten next frame
+  const scrubPositionRef = useRef({});
 
   // Ref to track latest replay state for animation callbacks (avoid stale closures)
   const replayStateRef = useRef(replayState);
@@ -198,6 +201,9 @@ export function useReplayState({ apiBase, wsRequest, wsConnected }) {
   // Handle replay slider change
   const handleReplayChange = useCallback(
     (eventKey, event, newPosition) => {
+      // Record the scrub so a running animation loop adopts it instead of
+      // snapping back to its internally-tracked position on the next frame
+      scrubPositionRef.current[eventKey] = newPosition;
       setReplayState((prev) => ({
         ...prev,
         [eventKey]: { ...prev[eventKey], position: newPosition },
@@ -222,6 +228,9 @@ export function useReplayState({ apiBase, wsRequest, wsConnected }) {
       if (newPlaying) {
         let pos = state.position <= 0 ? 0 : state.position;
         let lastTime = performance.now();
+        // Discard any scrub recorded before playback started; pos above
+        // already reflects the latest position
+        delete scrubPositionRef.current[eventKey];
 
         const animate = (currentTime) => {
           // Use ref to get latest state (avoid stale closure)
@@ -230,6 +239,13 @@ export function useReplayState({ apiBase, wsRequest, wsConnected }) {
           // Check if animation should stop (user paused or component unmounted)
           if (!currentState?.isPlaying) {
             return;
+          }
+
+          // Adopt a slider drag that happened while playing
+          const scrubbed = scrubPositionRef.current[eventKey];
+          if (scrubbed !== undefined) {
+            pos = scrubbed;
+            delete scrubPositionRef.current[eventKey];
           }
 
           const speed = currentState?.speed || 1;

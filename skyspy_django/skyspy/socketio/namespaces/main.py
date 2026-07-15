@@ -163,7 +163,15 @@ class MainNamespace(
 
     def __init__(self, namespace: str = "/"):
         super().__init__(namespace)
-        # Per-session state is stored via sio.save_session/get_session
+        # Per-session state is stored via sio.save_session/get_session.
+        # Event handlers run as concurrent tasks (async_handlers=True), so
+        # get_session -> save_session read-modify-write sequences must be
+        # serialized per sid or overlapping subscribes/unsubscribes lose updates.
+        self._session_locks: dict[str, asyncio.Lock] = {}
+
+    def _session_lock(self, sid: str) -> asyncio.Lock:
+        """Get (or create) the per-sid lock guarding subscription session state."""
+        return self._session_locks.setdefault(sid, asyncio.Lock())
 
     # =========================================================================
     # Socket.IO Event Handlers
@@ -218,6 +226,7 @@ class MainNamespace(
 
     async def on_disconnect(self, sid: str):
         """Handle client disconnection."""
+        self._session_locks.pop(sid, None)
         try:
             session = await sio.get_session(sid)
             # Convert to set since JSON serialization returns lists
@@ -271,37 +280,38 @@ class MainNamespace(
                 topics = list(self.SUPPORTED_TOPICS)
                 logger.info(f"[on_subscribe] Expanded 'all' to: {topics}")
 
-            session = await sio.get_session(sid)
-            user = session.get("user")
-            # Use list instead of set for JSON serialization compatibility
-            subscribed = list(session.get("subscribed_topics", []))
+            async with self._session_lock(sid):
+                session = await sio.get_session(sid)
+                user = session.get("user")
+                # Use list instead of set for JSON serialization compatibility
+                subscribed = list(session.get("subscribed_topics", []))
 
-            joined = []
-            denied = []
+                joined = []
+                denied = []
 
-            for topic in topics:
-                # Validate topic
-                if topic not in self.SUPPORTED_TOPICS:
-                    logger.warning(f"Unknown topic requested by {sid}: {topic}")
-                    continue
+                for topic in topics:
+                    # Validate topic
+                    if topic not in self.SUPPORTED_TOPICS:
+                        logger.warning(f"Unknown topic requested by {sid}: {topic}")
+                        continue
 
-                # Check permission
-                if not await check_topic_permission(user, topic):
-                    logger.warning(f"Permission denied for {sid} to subscribe to {topic}")
-                    denied.append(topic)
-                    continue
+                    # Check permission
+                    if not await check_topic_permission(user, topic):
+                        logger.warning(f"Permission denied for {sid} to subscribe to {topic}")
+                        denied.append(topic)
+                        continue
 
-                # Join room
-                room = f"topic_{topic}"
-                await sio.enter_room(sid, room)
-                if topic not in subscribed:
-                    subscribed.append(topic)
-                joined.append(topic)
-                logger.info(f"{sid} is entering room {room} [{self.namespace}]")
+                    # Join room
+                    room = f"topic_{topic}"
+                    await sio.enter_room(sid, room)
+                    if topic not in subscribed:
+                        subscribed.append(topic)
+                    joined.append(topic)
+                    logger.info(f"{sid} is entering room {room} [{self.namespace}]")
 
-            # Update session (using list for JSON serialization)
-            session["subscribed_topics"] = subscribed
-            await sio.save_session(sid, session)
+                # Update session (using list for JSON serialization)
+                session["subscribed_topics"] = subscribed
+                await sio.save_session(sid, session)
 
             # Send response
             await sio.emit(
@@ -336,21 +346,22 @@ class MainNamespace(
         if isinstance(topics, str):
             topics = [topics]
 
-        session = await sio.get_session(sid)
-        subscribed = set(session.get("subscribed_topics", []))
+        async with self._session_lock(sid):
+            session = await sio.get_session(sid)
+            subscribed = set(session.get("subscribed_topics", []))
 
-        left = []
+            left = []
 
-        for topic in topics:
-            if topic in subscribed:
-                room = f"topic_{topic}"
-                await sio.leave_room(sid, room)
-                subscribed.discard(topic)
-                left.append(topic)
-                logger.debug(f"{sid} unsubscribed from {topic}")
+            for topic in topics:
+                if topic in subscribed:
+                    room = f"topic_{topic}"
+                    await sio.leave_room(sid, room)
+                    subscribed.discard(topic)
+                    left.append(topic)
+                    logger.debug(f"{sid} unsubscribed from {topic}")
 
-        session["subscribed_topics"] = list(subscribed)
-        await sio.save_session(sid, session)
+            session["subscribed_topics"] = list(subscribed)
+            await sio.save_session(sid, session)
 
         await sio.emit(
             "unsubscribed",
@@ -422,19 +433,20 @@ class MainNamespace(
 
     async def _join_default_rooms(self, sid: str, user):
         """Join default rooms based on user permissions."""
-        session = await sio.get_session(sid)
-        subscribed = set(session.get("subscribed_topics", []))
+        async with self._session_lock(sid):
+            session = await sio.get_session(sid)
+            subscribed = set(session.get("subscribed_topics", []))
 
-        if await check_topic_permission(user, "aircraft"):
-            await sio.enter_room(sid, "topic_aircraft")
-            subscribed.add("aircraft")
+            if await check_topic_permission(user, "aircraft"):
+                await sio.enter_room(sid, "topic_aircraft")
+                subscribed.add("aircraft")
 
-        if await check_topic_permission(user, "stats"):
-            await sio.enter_room(sid, "topic_stats")
-            subscribed.add("stats")
+            if await check_topic_permission(user, "stats"):
+                await sio.enter_room(sid, "topic_stats")
+                subscribed.add("stats")
 
-        session["subscribed_topics"] = list(subscribed)
-        await sio.save_session(sid, session)
+            session["subscribed_topics"] = list(subscribed)
+            await sio.save_session(sid, session)
 
     async def _send_initial_state(self, sid: str):
         """Send initial snapshots on connect for all subscribed data types."""

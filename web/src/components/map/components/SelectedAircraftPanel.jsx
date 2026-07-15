@@ -1,14 +1,5 @@
 import React from 'react';
-import {
-  Plane,
-  X,
-  Shield,
-  AlertTriangle,
-  ExternalLink,
-  Crosshair,
-  Bell,
-  Zap,
-} from 'lucide-react';
+import { Plane, X, Shield, AlertTriangle, ExternalLink, Crosshair, Bell, Zap } from 'lucide-react';
 import { getTailInfo } from '../../../utils';
 
 /**
@@ -66,9 +57,7 @@ export function SelectedAircraftPanel({
         hex1: safetyEvent.icao,
         hex2: safetyEvent.icao_2,
         horizontalNm:
-          safetyEvent.horizontalNm ||
-          safetyEvent.details?.horizontal_nm?.toFixed(1) ||
-          '--',
+          safetyEvent.horizontalNm || safetyEvent.details?.horizontal_nm?.toFixed(1) || '--',
         verticalFt: safetyEvent.verticalFt || safetyEvent.details?.altitude_diff_ft || '--',
       }
     : null;
@@ -82,8 +71,7 @@ export function SelectedAircraftPanel({
   // Other aircraft vertical rate
   const otherVr = otherAircraft?.vr || 0;
   const otherAbsVr = Math.abs(otherVr);
-  const otherVrArrows =
-    otherAbsVr > 2000 ? 3 : otherAbsVr > 1000 ? 2 : otherAbsVr > 300 ? 1 : 0;
+  const otherVrArrows = otherAbsVr > 2000 ? 3 : otherAbsVr > 1000 ? 2 : otherAbsVr > 300 ? 1 : 0;
   const otherVrChevron = otherVr > 0 ? '\u25B2' : otherVr < 0 ? '\u25BC' : '';
 
   return (
@@ -115,9 +103,7 @@ export function SelectedAircraftPanel({
               {'\u26A0\uFE0F'} {conflictTitle}
             </span>
           )}
-          {isEmergency && squawkLabel && (
-            <span className="popup-squawk-tag">{squawkLabel}</span>
-          )}
+          {isEmergency && squawkLabel && <span className="popup-squawk-tag">{squawkLabel}</span>}
           {liveAircraft.military && <Shield size={14} className="military-badge" />}
         </div>
 
@@ -165,9 +151,7 @@ export function SelectedAircraftPanel({
           </div>
           <div className="detail-row">
             <span>V/S</span>
-            <span
-              className={`vs-value ${vr > 0 ? 'climbing' : vr < 0 ? 'descending' : ''}`}
-            >
+            <span className={`vs-value ${vr > 0 ? 'climbing' : vr < 0 ? 'descending' : ''}`}>
               {vrArrows > 0 && (
                 <span className={`vs-chevrons chevrons-${vrArrows}`}>
                   {Array(vrArrows)
@@ -184,9 +168,7 @@ export function SelectedAircraftPanel({
           </div>
           <div className="detail-row">
             <span>Squawk</span>
-            <span
-              className={liveAircraft.squawk?.match(/^7[567]00$/) ? 'emergency-squawk' : ''}
-            >
+            <span className={liveAircraft.squawk?.match(/^7[567]00$/) ? 'emergency-squawk' : ''}>
               {liveAircraft.squawk || '--'}
             </span>
           </div>
@@ -312,9 +294,7 @@ export function SelectedAircraftPanel({
         <div
           className={`conflict-side-panel ${config.mapMode === 'pro' ? 'pro-style' : ''} ${getSeverityClass(conflictSeverity)}`}
         >
-          <div
-            className={`conflict-separation-header ${getSeverityClass(conflictSeverity)}`}
-          >
+          <div className={`conflict-separation-header ${getSeverityClass(conflictSeverity)}`}>
             <AlertTriangle size={16} />
             <span>{conflictTitle}</span>
           </div>

@@ -381,8 +381,36 @@ describe('useAlertNotifications', () => {
         await result.current.acknowledgeAlert(123);
       });
 
+      // DRF DefaultRouter only registers the trailing-slash route; a slashless
+      // POST cannot be redirected with its body, so the ack would be dropped
       expect(mockFetch).toHaveBeenCalledWith(
-        'http://localhost:8000/api/v1/alerts/history/123/acknowledge',
+        'http://localhost:8000/api/v1/alerts/history/123/acknowledge/',
+        { method: 'POST' }
+      );
+    });
+
+    it('should acknowledge all via HTTP with trailing slash when WebSocket not available', async () => {
+      vi.useRealTimers();
+
+      mockFetch.mockResolvedValue({ ok: true });
+
+      const { result } = renderHook(() =>
+        useAlertNotifications({
+          toast: mockToast,
+          apiBase: 'http://localhost:8000',
+        })
+      );
+
+      act(() => {
+        result.current.handleAlertTriggered({ id: 1, rule_name: 'Test 1' });
+      });
+
+      await act(async () => {
+        await result.current.acknowledgeAll();
+      });
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:8000/api/v1/alerts/history/acknowledge-all/',
         { method: 'POST' }
       );
     });

@@ -4,14 +4,7 @@ import { X, AlertTriangle } from 'lucide-react';
 /**
  * Convective SIGMET popup component
  */
-export function SigmetPopup({
-  sigmet,
-  config,
-  popupPosition,
-  isDragging,
-  onClose,
-  onMouseDown,
-}) {
+export function SigmetPopup({ sigmet, config, popupPosition, isDragging, onClose, onMouseDown }) {
   if (!sigmet) return null;
 
   return (

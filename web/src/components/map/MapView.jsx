@@ -22,6 +22,7 @@ import { NotamPanel } from './components/NotamPanel';
 import { KeyboardShortcutHelp } from './components/KeyboardShortcutHelp';
 import {
   useDataBlockPositions,
+  useDataBlockKeepAlive,
   DATA_BLOCK_DEFAULT_X,
   DATA_BLOCK_DEFAULT_Y,
   useMapAlarms,
@@ -623,12 +624,16 @@ function MapView({
     isDragging: isDataBlockDragging,
     hasCustomOffset: hasCustomDataBlockOffset,
     hitTestDataBlock,
-    pruneStaleAircraft: _pruneStaleDataBlockPositions,
+    pruneStaleAircraft: pruneStaleDataBlockPositions,
     customPositionCount: dataBlockCustomPositionCount,
-    updateLastSeen: _updateDataBlockLastSeen,
+    updateLastSeen: updateDataBlockLastSeen,
     maybeDeconflict,
     autoDeconflictEnabled,
   } = useDataBlockPositions();
+
+  // Keep custom data block positions alive for tracked aircraft (prevents the
+  // 30-min expiry from wiping Shift+drag positions on still-visible aircraft)
+  useDataBlockKeepAlive(aircraft, updateDataBlockLastSeen, pruneStaleDataBlockPositions);
 
   // Toast context for notifications (gracefully handles if not in provider)
   const toastContext = useToastContextSafe();

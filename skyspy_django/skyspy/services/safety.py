@@ -843,6 +843,8 @@ class SafetyMonitor:
                 if lat_diff > deg_threshold:
                     continue
                 lon_diff = abs(pos1["lon"] - pos2["lon"])
+                if lon_diff > 180:
+                    lon_diff = 360 - lon_diff  # Wrap across the antimeridian
                 if lon_diff > deg_threshold:
                     continue
 

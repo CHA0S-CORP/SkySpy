@@ -39,7 +39,13 @@ export function buildConflictAircraftSet(activeConflicts) {
  */
 export function drawConflictCPALines(ctx, geo, data) {
   const { width, height, isPro, latLonToScreen, frameCount } = geo;
-  const { showConflictVisualization, activeConflicts, sortedAircraft, calculateCPA, formatTimeToCPA } = data;
+  const {
+    showConflictVisualization,
+    activeConflicts,
+    sortedAircraft,
+    calculateCPA,
+    formatTimeToCPA,
+  } = data;
 
   if (!showConflictVisualization || !isPro || !activeConflicts.length) return;
 
@@ -55,12 +61,8 @@ export function drawConflictCPALines(ctx, geo, data) {
     drawnPairs.add(pairKey);
 
     // Find both aircraft
-    const ac1 = sortedAircraft.find(
-      (ac) => ac.hex?.toUpperCase() === event.icao?.toUpperCase()
-    );
-    const ac2 = sortedAircraft.find(
-      (ac) => ac.hex?.toUpperCase() === event.icao_2?.toUpperCase()
-    );
+    const ac1 = sortedAircraft.find((ac) => ac.hex?.toUpperCase() === event.icao?.toUpperCase());
+    const ac2 = sortedAircraft.find((ac) => ac.hex?.toUpperCase() === event.icao_2?.toUpperCase());
 
     if (!ac1 || !ac2 || !ac1.lat || !ac2.lat) return;
 
@@ -102,8 +104,7 @@ export function drawConflictCPALines(ctx, geo, data) {
     const isCriticalAlt = altDiff < 1000;
 
     // Draw relative altitude label
-    const relAltText =
-      alt1 > alt2 ? `△${Math.round(altDiff)}ft` : `▽${Math.round(altDiff)}ft`;
+    const relAltText = alt1 > alt2 ? `△${Math.round(altDiff)}ft` : `▽${Math.round(altDiff)}ft`;
 
     ctx.font = 'bold 11px "JetBrains Mono", monospace';
     const labelWidth = ctx.measureText(relAltText).width + 10;
@@ -189,7 +190,8 @@ export function drawConflictWedges(ctx, geo, data) {
       : [];
 
   wedgesToDraw.forEach((ac) => {
-    if (!ac.lat || !ac.lon || !ac.track || !ac.gs) return;
+    // track === 0 (due north) is valid — only bail on missing values
+    if (ac.lat == null || ac.lon == null || ac.track == null || !ac.gs) return;
 
     const pos = latLonToScreen(ac.lat, ac.lon);
     if (pos.x < -50 || pos.x > width + 50 || pos.y < -50 || pos.y > height + 50) return;
@@ -220,14 +222,8 @@ export function drawConflictWedges(ctx, geo, data) {
     // Draw the wedge (triangle from aircraft position)
     ctx.beginPath();
     ctx.moveTo(pos.x, pos.y);
-    ctx.lineTo(
-      pos.x + Math.cos(leftRad) * lookaheadPx,
-      pos.y + Math.sin(leftRad) * lookaheadPx
-    );
-    ctx.lineTo(
-      pos.x + Math.cos(rightRad) * lookaheadPx,
-      pos.y + Math.sin(rightRad) * lookaheadPx
-    );
+    ctx.lineTo(pos.x + Math.cos(leftRad) * lookaheadPx, pos.y + Math.sin(leftRad) * lookaheadPx);
+    ctx.lineTo(pos.x + Math.cos(rightRad) * lookaheadPx, pos.y + Math.sin(rightRad) * lookaheadPx);
     ctx.closePath();
 
     ctx.fillStyle = wedgeColor;
@@ -244,9 +240,7 @@ export function drawConflictWedges(ctx, geo, data) {
       pos.y + Math.sin(headingRad) * lookaheadPx
     );
     ctx.setLineDash([4, 4]);
-    ctx.strokeStyle = isInCriticalConflict
-      ? 'rgba(255, 80, 150, 0.5)'
-      : 'rgba(255, 180, 0, 0.4)';
+    ctx.strokeStyle = isInCriticalConflict ? 'rgba(255, 80, 150, 0.5)' : 'rgba(255, 180, 0, 0.4)';
     ctx.stroke();
     ctx.setLineDash([]);
   });
@@ -276,12 +270,7 @@ export function drawJRings(ctx, geo, data) {
   const acPos = latLonToScreen(selectedAircraft.lat, selectedAircraft.lon);
 
   // Skip if aircraft is too far off screen
-  if (
-    acPos.x >= -200 &&
-    acPos.x <= width + 200 &&
-    acPos.y >= -200 &&
-    acPos.y <= height + 200
-  ) {
+  if (acPos.x >= -200 && acPos.x <= width + 200 && acPos.y >= -200 && acPos.y <= height + 200) {
     // J-Ring distances in nautical miles (configurable)
     const jRingDistances = [5, 10, 20];
 

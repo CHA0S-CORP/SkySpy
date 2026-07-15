@@ -686,10 +686,11 @@ def flush_stream_to_database(self):
 
     except Exception as e:
         logger.error(f"Failed to flush stream data to database: {e}")
-        # Re-queue failed data (up to a limit)
+        # Re-queue the whole failed batch ahead of newly buffered rows so
+        # nothing is silently dropped; the deque's maxlen=10000 is the sole
+        # loss bound. extendleft(reversed(...)) preserves chronological order.
         with _db_buffer_lock:
-            for ac in to_write[:1000]:
-                _db_write_buffer.append(ac)
+            _db_write_buffer.extendleft(reversed(to_write))
 
 
 @shared_task(bind=True, max_retries=1, ignore_result=True)

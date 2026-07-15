@@ -211,10 +211,8 @@ describe('LinkedGraphPanel', () => {
 
   describe('selected index marker', () => {
     it('should show selected position marker', () => {
-      const { container } = render(<LinkedGraphPanel {...defaultProps} selectedIndex={2} />);
+      render(<LinkedGraphPanel {...defaultProps} selectedIndex={2} />);
       // Should render a vertical line at the selected position
-      const svgs = container.querySelectorAll('svg');
-      // Each svg should have a line element for selected position
     });
   });
 
@@ -302,7 +300,7 @@ describe('LinkedGraphPanel', () => {
 
   describe('value formatting', () => {
     it('should format altitude in k notation', () => {
-      const { container } = render(<LinkedGraphPanel {...defaultProps} />);
+      render(<LinkedGraphPanel {...defaultProps} />);
       // Tooltip should show formatted values when hovering
     });
 
@@ -318,10 +316,8 @@ describe('LinkedGraphPanel', () => {
 
   describe('baseline rendering', () => {
     it('should render baseline for V/S graph', () => {
-      const { container } = render(<LinkedGraphPanel {...defaultProps} />);
+      render(<LinkedGraphPanel {...defaultProps} />);
       // V/S graph should have a dashed baseline at 0
-      const svgs = container.querySelectorAll('svg');
-      // One of them should have a baseline line
     });
   });
 

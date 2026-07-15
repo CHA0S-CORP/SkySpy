@@ -2753,7 +2753,9 @@ if __name__ == "__main__":
     print(f"Coverage center:  {COVERAGE_CENTER_LAT:.4f}, {COVERAGE_CENTER_LON:.4f}")
     print(f"Coverage radius:  {COVERAGE_RADIUS_NM} NM")
     if DATA_SOURCE == "live":
-        print(f"Data source:      LIVE via {LIVE_SOURCE} (poll {LIVE_POLL_INTERVAL:.0f}s, radius {LIVE_RADIUS_NM:.0f} NM)")
+        print(
+            f"Data source:      LIVE via {LIVE_SOURCE} (poll {LIVE_POLL_INTERVAL:.0f}s, radius {LIVE_RADIUS_NM:.0f} NM)"
+        )
     else:
         print("Data source:      simulated")
     print(f"Traffic density:  {TRAFFIC_DENSITY} ({len(active_templates)} aircraft)")

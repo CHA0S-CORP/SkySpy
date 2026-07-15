@@ -182,16 +182,23 @@ class SystemHandlerMixin:
 
     @sync_to_async
     def _is_feature_public(self, permission: str) -> bool:
-        """Check if the feature for this permission is publicly accessible."""
-        from skyspy.models.auth import FeatureAccess
+        """Check if the feature for this permission is publicly accessible.
 
-        feature = permission.split(".")[0]
+        Mutating permissions (e.g. 'alerts.manage') are gated on
+        FeatureAccess.write_access; read permissions use read_access.
+        """
+        from skyspy.models.auth import FeatureAccess
+        from skyspy.socketio.middleware.permissions import WRITE_ACTIONS
+
+        feature, _, action = permission.partition(".")
 
         try:
             config = FeatureAccess.objects.get(feature=feature)
-            return config.read_access == "public"
         except FeatureAccess.DoesNotExist:
             return False
+
+        access = config.write_access if action in WRITE_ACTIONS else config.read_access
+        return access == "public"
 
     @sync_to_async
     def _check_user_permission(self, user, permission: str) -> bool:

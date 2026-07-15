@@ -138,8 +138,7 @@ export function drawFpsCounter(ctx, geo, { showFpsCounter, fpsRef }) {
   ctx.fillStyle = 'rgba(15, 25, 35, 0.8)';
   ctx.fillRect(width - 70, 10, 60, 22);
   ctx.font = '12px "JetBrains Mono", monospace';
-  ctx.fillStyle =
-    fpsRef.current.fps >= 30 ? 'rgba(0, 255, 100, 0.9)' : 'rgba(255, 150, 0, 0.9)';
+  ctx.fillStyle = fpsRef.current.fps >= 30 ? 'rgba(0, 255, 100, 0.9)' : 'rgba(255, 150, 0, 0.9)';
   ctx.textAlign = 'right';
   ctx.fillText(`${fpsRef.current.fps} FPS`, width - 15, 26);
   ctx.restore();

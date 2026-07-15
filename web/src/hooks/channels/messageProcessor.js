@@ -203,21 +203,25 @@ export function processAircraftUpdate(data, setAircraft) {
     const updated = payload?.updated || [];
     const removed = payload?.removed || [];
 
-    // Process added and updated aircraft
-    const allUpdates = [...added, ...updated];
-    if (allUpdates.length > 0) {
-      const updates = {};
-      allUpdates.forEach((ac) => {
+    // Process added and updated aircraft. 'added' entries are full records;
+    // 'updated' entries carry only the changed fields, so normalize them in
+    // partial mode (absent fields become null and mergeAircraftFields keeps
+    // the previously-known values instead of clobbering with false/0 defaults)
+    const updates = {};
+    const collectUpdates = (list, options) => {
+      list.forEach((ac) => {
         if (ac && typeof ac === 'object') {
-          const normalized = normalizeAircraft(ac);
+          const normalized = normalizeAircraft(ac, options);
           if (normalized.hex) {
-            updates[normalized.hex] = normalized;
+            updates[normalized.hex] = mergeAircraftFields(updates[normalized.hex], normalized);
           }
         }
       });
-      if (Object.keys(updates).length > 0) {
-        queueAircraftUpdate(updates, setAircraft);
-      }
+    };
+    collectUpdates(added);
+    collectUpdates(updated, { partial: true });
+    if (Object.keys(updates).length > 0) {
+      queueAircraftUpdate(updates, setAircraft);
     }
 
     // Process removed aircraft

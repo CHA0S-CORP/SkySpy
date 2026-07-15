@@ -10,6 +10,7 @@ export {
   DATA_BLOCK_DEFAULT_X,
   DATA_BLOCK_DEFAULT_Y,
 } from './useDataBlockPositions';
+export { useDataBlockKeepAlive } from './useDataBlockKeepAlive';
 export { useMapAircraftNotes } from './useMapAircraftNotes';
 export { usePlaybackMode, TIME_RANGE_PRESETS, PLAYBACK_SPEEDS } from './usePlaybackMode';
 export { useProKeyboardShortcuts } from './useProKeyboardShortcuts';

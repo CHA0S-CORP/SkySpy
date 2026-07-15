@@ -530,8 +530,18 @@ func (m *Model) handleAircraftMsg(msg ws.Message) {
 	case string(ws.AircraftSnapshot):
 		aircraft, err := ws.ParseAircraftSnapshot(msg.Data)
 		if err == nil {
+			// Snapshot is authoritative: aircraft:remove events missed
+			// during a disconnect must not leave ghost targets behind.
+			seen := make(map[string]bool, len(aircraft))
 			for _, ac := range aircraft {
 				m.updateTarget(&ac, false)
+				seen[ac.Hex] = true
+			}
+			for hex := range m.aircraft {
+				if !seen[hex] {
+					delete(m.aircraft, hex)
+					delete(m.alertedAircraft, hex)
+				}
 			}
 		}
 	case string(ws.AircraftNew):
@@ -751,8 +761,9 @@ func (m *Model) updateVUMeters() {
 
 // updateSpectrum updates the spectrum display from aircraft RSSI data by distance band
 func (m *Model) updateSpectrum() {
-	// Reset analyzer and feed current aircraft data
-	m.spectrumAnalyzer.Reset()
+	// Rebuild the per-tick aircraft data while preserving the analyzer's
+	// temporal smoothing and peak-hold state (Reset() would wipe them).
+	m.spectrumAnalyzer.ResetSamples()
 
 	// Add all aircraft with RSSI and distance data
 	for hex, t := range m.aircraft {

@@ -113,7 +113,7 @@ export function AlertHistory({ apiBase = '', wsRequest, wsConnected, onToast }) 
       // Optimistic update
       setLocalAcknowledgedIds((prev) => new Set([...prev, id]));
 
-      const res = await fetch(`${apiBase}/api/v1/alerts/history/${id}`, {
+      const res = await fetch(`${apiBase}/api/v1/alerts/history/${id}/`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ acknowledged: true }),
@@ -157,7 +157,7 @@ export function AlertHistory({ apiBase = '', wsRequest, wsConnected, onToast }) 
     });
 
     try {
-      const res = await fetch(`${apiBase}/api/v1/alerts/history/acknowledge-all`, {
+      const res = await fetch(`${apiBase}/api/v1/alerts/history/acknowledge-all/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       });
@@ -166,7 +166,7 @@ export function AlertHistory({ apiBase = '', wsRequest, wsConnected, onToast }) 
         // Fallback to individual acknowledgments
         await Promise.all(
           unacknowledgedAlerts.map((alert) =>
-            fetch(`${apiBase}/api/v1/alerts/history/${alert.id}/acknowledge`, {
+            fetch(`${apiBase}/api/v1/alerts/history/${alert.id}/acknowledge/`, {
               method: 'POST',
             })
           )
@@ -191,7 +191,7 @@ export function AlertHistory({ apiBase = '', wsRequest, wsConnected, onToast }) 
     setConfirmModal({ isOpen: false, type: null });
 
     try {
-      const res = await fetch(`${apiBase}/api/v1/alerts/history/clear`, {
+      const res = await fetch(`${apiBase}/api/v1/alerts/history/clear/`, {
         method: 'DELETE',
       });
 

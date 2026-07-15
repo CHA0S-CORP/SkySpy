@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { SettingsModal } from './SettingsModal';
 
 // Mock the saveConfig function
@@ -154,8 +154,6 @@ describe('SettingsModal', () => {
   describe('save functionality', () => {
     it('should call setConfig with form values when saved', async () => {
       const setConfig = vi.fn();
-      const { saveConfig } = await import('../../utils/config');
-
       render(<SettingsModal {...defaultProps} setConfig={setConfig} />);
 
       // Change a value

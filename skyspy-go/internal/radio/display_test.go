@@ -295,6 +295,35 @@ func TestHandleAircraftMsg(t *testing.T) {
 		}
 	})
 
+	// Test snapshot reconciliation: aircraft:remove events missed during a
+	// reconnect must not leave ghost aircraft behind
+	t.Run("snapshot removes stale aircraft", func(t *testing.T) {
+		m := NewModel(cfg, ModeBasic)
+		m.Aircraft["STALE1"] = &Aircraft{Hex: "STALE1"}
+
+		snapshotData := map[string]interface{}{
+			"aircraft": map[string]interface{}{
+				"ABC123": map[string]interface{}{
+					"hex":    "ABC123",
+					"flight": "UAL123",
+				},
+			},
+		}
+		data, _ := json.Marshal(snapshotData)
+		msg := ws.Message{Type: string(ws.AircraftSnapshot), Data: data}
+		m.handleAircraftMsg(msg)
+
+		if _, exists := m.Aircraft["STALE1"]; exists {
+			t.Error("STALE1 should be removed by authoritative snapshot")
+		}
+		if _, exists := m.Aircraft["ABC123"]; !exists {
+			t.Error("ABC123 from snapshot should exist")
+		}
+		if len(m.Aircraft) != 1 {
+			t.Errorf("Aircraft count = %d, want 1", len(m.Aircraft))
+		}
+	})
+
 	// Test update message
 	t.Run("update", func(t *testing.T) {
 		m := NewModel(cfg, ModeBasic)

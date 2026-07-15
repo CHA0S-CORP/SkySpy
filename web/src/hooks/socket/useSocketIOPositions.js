@@ -187,18 +187,34 @@ export function useSocketIOPositions(enabled, apiBase, interpolate = true, inter
             continue;
           }
 
+          // Delta 'updated' entries carry only the changed fields, so merge
+          // field-wise into the existing target instead of wholesale-replacing
+          // it (which would clobber known alt/track/gs/vr with undefined)
+          const existing = targetPositionsRef.current[icao];
           const posData = {
             lat: ac.lat,
             lon: ac.lon,
-            alt: ac.alt_baro || ac.alt,
-            track: ac.track,
-            gs: ac.gs,
-            vr: ac.vr || ac.baro_rate,
+            alt: ac.alt_baro ?? ac.alt ?? existing?.alt,
+            track: ac.track ?? existing?.track,
+            gs: ac.gs ?? existing?.gs,
+            vr: ac.vr ?? ac.baro_rate ?? existing?.vr,
           };
 
+          if (existing && existing.lat === ac.lat && existing.lon === ac.lon) {
+            // Position unchanged (e.g. the delta mirrors the positions:update
+            // from the same broadcast cycle) - update non-position fields but
+            // don't reset prev/lastUpdate, or the in-flight interpolation
+            // would snap to the target instead of animating
+            targetPositionsRef.current[icao] = posData;
+            if (!interpolateRef.current) {
+              interpolatedPositionsRef.current[icao] = posData;
+            }
+            continue;
+          }
+
           // Store current target as previous for interpolation
-          if (targetPositionsRef.current[icao]) {
-            prevPositionsRef.current[icao] = { ...targetPositionsRef.current[icao] };
+          if (existing) {
+            prevPositionsRef.current[icao] = { ...existing };
           } else {
             prevPositionsRef.current[icao] = posData;
           }

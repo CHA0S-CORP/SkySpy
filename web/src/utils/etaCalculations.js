@@ -64,7 +64,12 @@ export function calculateBearing(lat1, lon1, lat2, lon2) {
  *   - closingSpeed: Effective speed toward target in knots
  */
 export function calculateETAToPoint(aircraft, target) {
-  if (!aircraft?.lat || !aircraft?.lon || !target?.lat || !target?.lon) {
+  if (
+    !Number.isFinite(aircraft?.lat) ||
+    !Number.isFinite(aircraft?.lon) ||
+    !Number.isFinite(target?.lat) ||
+    !Number.isFinite(target?.lon)
+  ) {
     return {
       distanceNm: null,
       bearing: null,
@@ -156,13 +161,13 @@ export function calculateETAToPoint(aircraft, target) {
 export function calculateETAToNearbyAirports(aircraft, airports, options = {}) {
   const { maxDistance = 100, maxResults = 5 } = options;
 
-  if (!aircraft?.lat || !aircraft?.lon || !airports?.length) {
+  if (!Number.isFinite(aircraft?.lat) || !Number.isFinite(aircraft?.lon) || !airports?.length) {
     return [];
   }
 
   const airportETAs = airports
     .map((airport) => {
-      if (!airport?.lat || !airport?.lon) return null;
+      if (!Number.isFinite(airport?.lat) || !Number.isFinite(airport?.lon)) return null;
 
       const eta = calculateETAToPoint(aircraft, airport);
 
@@ -293,7 +298,12 @@ export function bearingToCardinal(bearing) {
  * @returns {Object} {lat, lon} predicted position
  */
 export function calculatePredictedPosition(aircraft, seconds) {
-  if (!aircraft?.lat || !aircraft?.lon || !seconds) {
+  if (
+    !Number.isFinite(aircraft?.lat) ||
+    !Number.isFinite(aircraft?.lon) ||
+    seconds == null ||
+    seconds <= 0
+  ) {
     return { lat: aircraft?.lat, lon: aircraft?.lon };
   }
 

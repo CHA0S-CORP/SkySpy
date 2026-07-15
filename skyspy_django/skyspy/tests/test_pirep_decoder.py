@@ -201,6 +201,33 @@ class IcingDecodingTests(TestCase):
         self.assertEqual(result["label"], "Severe")
         self.assertEqual(result["level"], 5)
 
+    def test_decode_icing_compound_light_mod(self):
+        """Test decoding compound icing (light to moderate) is not inflated to moderate."""
+        pirep = create_mock_pirep(icing_intensity="LGT-MOD")
+        result = decode_icing(pirep)
+
+        self.assertEqual(result["code"], "LGT-MOD")
+        self.assertEqual(result["label"], "Light to Moderate")
+        self.assertEqual(result["level"], 2)
+
+    def test_decode_icing_compound_mod_sev(self):
+        """Test decoding compound icing (moderate to severe) is not inflated to severe."""
+        pirep = create_mock_pirep(icing_intensity="MOD-SEV")
+        result = decode_icing(pirep)
+
+        self.assertEqual(result["code"], "MOD-SEV")
+        self.assertEqual(result["label"], "Moderate to Severe")
+        self.assertEqual(result["level"], 4)
+
+    def test_decode_icing_compound_trc_lgt(self):
+        """Test decoding compound icing (trace to light) is not inflated to light."""
+        pirep = create_mock_pirep(icing_intensity="TRC-LGT")
+        result = decode_icing(pirep)
+
+        self.assertEqual(result["code"], "TRC-LGT")
+        self.assertEqual(result["label"], "Trace to Light")
+        self.assertEqual(result["level"], 1)
+
     def test_decode_icing_with_rime_type(self):
         """Test decoding icing with rime ice type."""
         pirep = create_mock_pirep(icing_type="MOD RIME")

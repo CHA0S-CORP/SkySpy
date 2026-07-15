@@ -69,7 +69,14 @@ export function drawConvectiveSigmetPolygons(ctx, geo, data) {
  * Draw a GeoJSON-style polygon/line path on the canvas.
  * Local helper used by drawTerrainBoundaries.
  */
-function drawBoundaryPath(ctx, latLonToScreen, coords, strokeColor, fillColor = null, lineWidth = 1) {
+function drawBoundaryPath(
+  ctx,
+  latLonToScreen,
+  coords,
+  strokeColor,
+  fillColor = null,
+  lineWidth = 1
+) {
   if (!coords || coords.length < 2) return;
   ctx.beginPath();
   coords.forEach((coord, i) => {
@@ -116,12 +123,7 @@ export function drawTerrainBoundaries(ctx, geo, data) {
   if (overlays.water && terrainData.water?.length > 0) {
     terrainData.water.forEach((feature) => {
       if (feature.type === 'polygon') {
-        _draw(
-          feature.coords,
-          'rgba(40, 120, 180, 0.5)',
-          'rgba(20, 60, 100, 0.25)',
-          1
-        );
+        _draw(feature.coords, 'rgba(40, 120, 180, 0.5)', 'rgba(20, 60, 100, 0.25)', 1);
       } else {
         _draw(feature.coords, 'rgba(40, 120, 180, 0.4)', null, 1);
       }
@@ -167,12 +169,7 @@ export function drawTerrainBoundaries(ctx, geo, data) {
     ctx.setLineDash([6, 3]);
     aviationOverlayData.usRefueling.forEach((feature) => {
       if (feature.type === 'polygon') {
-        _draw(
-          feature.coords,
-          'rgba(255, 180, 0, 0.7)',
-          'rgba(255, 180, 0, 0.15)',
-          2
-        );
+        _draw(feature.coords, 'rgba(255, 180, 0, 0.7)', 'rgba(255, 180, 0, 0.15)', 2);
       } else {
         _draw(feature.coords, 'rgba(255, 180, 0, 0.8)', null, 2);
       }
@@ -190,28 +187,13 @@ export function drawTerrainBoundaries(ctx, geo, data) {
       const isAar = feature.sourceType?.includes('aar');
       if (isAwacs) {
         // AWACS orbits - purple dashed circles/polygons
-        _draw(
-          feature.coords,
-          'rgba(180, 100, 255, 0.7)',
-          'rgba(180, 100, 255, 0.1)',
-          2
-        );
+        _draw(feature.coords, 'rgba(180, 100, 255, 0.7)', 'rgba(180, 100, 255, 0.1)', 2);
       } else if (isAar) {
         // AAR zones - magenta
-        _draw(
-          feature.coords,
-          'rgba(255, 50, 150, 0.7)',
-          'rgba(255, 50, 150, 0.1)',
-          2
-        );
+        _draw(feature.coords, 'rgba(255, 50, 150, 0.7)', 'rgba(255, 50, 150, 0.1)', 2);
       } else {
         // RC (restricted/controlled) - red
-        _draw(
-          feature.coords,
-          'rgba(255, 80, 80, 0.6)',
-          'rgba(255, 80, 80, 0.1)',
-          1.5
-        );
+        _draw(feature.coords, 'rgba(255, 80, 80, 0.6)', 'rgba(255, 80, 80, 0.1)', 1.5);
       }
     });
     ctx.setLineDash([]);
@@ -223,12 +205,7 @@ export function drawTerrainBoundaries(ctx, geo, data) {
     ctx.save();
     ctx.setLineDash([5, 3]);
     aviationOverlayData.euMilAwacs.forEach((feature) => {
-      _draw(
-        feature.coords,
-        'rgba(160, 80, 220, 0.7)',
-        'rgba(160, 80, 220, 0.1)',
-        2
-      );
+      _draw(feature.coords, 'rgba(160, 80, 220, 0.7)', 'rgba(160, 80, 220, 0.1)', 2);
     });
     ctx.setLineDash([]);
     ctx.restore();
@@ -245,12 +222,7 @@ export function drawTerrainBoundaries(ctx, geo, data) {
         _draw(feature.coords, 'rgba(50, 200, 100, 0.8)', null, 2);
       } else {
         // Training areas - green polygons
-        _draw(
-          feature.coords,
-          'rgba(50, 200, 100, 0.6)',
-          'rgba(50, 200, 100, 0.1)',
-          1.5
-        );
+        _draw(feature.coords, 'rgba(50, 200, 100, 0.6)', 'rgba(50, 200, 100, 0.1)', 1.5);
       }
     });
     ctx.setLineDash([]);
@@ -449,11 +421,7 @@ export function drawAirports(ctx, geo, data) {
     let aptMetar = null;
 
     // Check for METAR-based flight category coloring (Pro mode feature)
-    if (
-      overlays.airportFlightCategory &&
-      aviationData.metars &&
-      aviationData.metars.length > 0
-    ) {
+    if (overlays.airportFlightCategory && aviationData.metars && aviationData.metars.length > 0) {
       aptMetar = findMetarForAirport(apt, aviationData.metars);
       if (aptMetar) {
         hasMetar = true;
@@ -847,8 +815,7 @@ export function drawAdvisories(ctx, geo, data) {
 
       if (adv.lower_alt_ft !== undefined && adv.upper_alt_ft !== undefined) {
         ctx.font = '10px "JetBrains Mono", monospace';
-        const lower =
-          adv.lower_alt_ft === 0 ? 'SFC' : `FL${Math.round(adv.lower_alt_ft / 100)}`;
+        const lower = adv.lower_alt_ft === 0 ? 'SFC' : `FL${Math.round(adv.lower_alt_ft / 100)}`;
         const upper =
           adv.upper_alt_ft >= 18000
             ? `FL${Math.round(adv.upper_alt_ft / 100)}`
@@ -1187,12 +1154,7 @@ export function drawPireps(ctx, geo, data) {
         ctx.beginPath();
         ctx.moveTo(-3 * innerScale, yScaled);
         ctx.quadraticCurveTo(-1.5 * innerScale, yScaled - 1.2 * innerScale, 0, yScaled);
-        ctx.quadraticCurveTo(
-          1.5 * innerScale,
-          yScaled + 1.2 * innerScale,
-          3 * innerScale,
-          yScaled
-        );
+        ctx.quadraticCurveTo(1.5 * innerScale, yScaled + 1.2 * innerScale, 3 * innerScale, yScaled);
         ctx.stroke();
       });
     } else if (pirepType === 'icing') {
@@ -1213,15 +1175,9 @@ export function drawPireps(ctx, geo, data) {
         const by = Math.sin(angle) * branchDist;
         ctx.beginPath();
         ctx.moveTo(bx, by);
-        ctx.lineTo(
-          bx + Math.cos(angle + 0.5) * branchLen,
-          by + Math.sin(angle + 0.5) * branchLen
-        );
+        ctx.lineTo(bx + Math.cos(angle + 0.5) * branchLen, by + Math.sin(angle + 0.5) * branchLen);
         ctx.moveTo(bx, by);
-        ctx.lineTo(
-          bx + Math.cos(angle - 0.5) * branchLen,
-          by + Math.sin(angle - 0.5) * branchLen
-        );
+        ctx.lineTo(bx + Math.cos(angle - 0.5) * branchLen, by + Math.sin(angle - 0.5) * branchLen);
         ctx.stroke();
       }
     } else if (pirepType === 'windshear') {
@@ -1286,10 +1242,8 @@ export function drawWindsAloft(ctx, geo, data) {
   if (!isPro || !overlays.windsAloft || !windGrid || windGrid.length === 0) return;
 
   // Adapt barb size to zoom level
-  const barbSize =
-    radarRange <= 25 ? 30 : radarRange <= 50 ? 25 : radarRange <= 100 ? 22 : 18;
-  const minSpacing =
-    radarRange <= 25 ? 50 : radarRange <= 50 ? 45 : radarRange <= 100 ? 40 : 35;
+  const barbSize = radarRange <= 25 ? 30 : radarRange <= 50 ? 25 : radarRange <= 100 ? 22 : 18;
+  const minSpacing = radarRange <= 25 ? 50 : radarRange <= 50 ? 45 : radarRange <= 100 ? 40 : 35;
 
   drawWindBarbs(ctx, windGrid, latLonToScreen, {
     size: barbSize,

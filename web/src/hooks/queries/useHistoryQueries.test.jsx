@@ -7,7 +7,7 @@ import api from '../../lib/api';
 // Mock the api module
 vi.mock('../../lib/api', () => ({
   default: {
-    get: vi.fn(),
+    getHistoryFlights: vi.fn(),
   },
 }));
 
@@ -76,7 +76,7 @@ describe('useHistoryQueries', () => {
         ],
       };
 
-      api.get.mockResolvedValue(mockFlights);
+      api.getHistoryFlights.mockResolvedValue(mockFlights);
 
       const { result } = renderHook(() => useHistoryFlights(), {
         wrapper: createWrapper(),
@@ -89,12 +89,12 @@ describe('useHistoryQueries', () => {
       });
 
       expect(result.current.data).toEqual(mockFlights);
-      expect(api.get).toHaveBeenCalledWith('/history/flights/', { params: {} });
+      expect(api.getHistoryFlights).toHaveBeenCalledWith({});
     });
 
     it('should fetch with parameters', async () => {
       const mockFlights = { count: 10, results: [] };
-      api.get.mockResolvedValue(mockFlights);
+      api.getHistoryFlights.mockResolvedValue(mockFlights);
 
       const params = { hours: 12, limit: 50 };
 
@@ -106,12 +106,12 @@ describe('useHistoryQueries', () => {
         expect(result.current.isSuccess).toBe(true);
       });
 
-      expect(api.get).toHaveBeenCalledWith('/history/flights/', { params });
+      expect(api.getHistoryFlights).toHaveBeenCalledWith(params);
     });
 
     it('should handle pagination parameters', async () => {
       const mockFlights = { count: 100, results: [], next: null, previous: null };
-      api.get.mockResolvedValue(mockFlights);
+      api.getHistoryFlights.mockResolvedValue(mockFlights);
 
       const params = { page: 2, limit: 25 };
 
@@ -123,12 +123,12 @@ describe('useHistoryQueries', () => {
         expect(result.current.isSuccess).toBe(true);
       });
 
-      expect(api.get).toHaveBeenCalledWith('/history/flights/', { params });
+      expect(api.getHistoryFlights).toHaveBeenCalledWith(params);
     });
 
     it('should handle fetch error', async () => {
       const mockError = new Error('Failed to fetch flight history');
-      api.get.mockRejectedValue(mockError);
+      api.getHistoryFlights.mockRejectedValue(mockError);
 
       const { result } = renderHook(() => useHistoryFlights(), {
         wrapper: createWrapper(),
@@ -142,7 +142,7 @@ describe('useHistoryQueries', () => {
     });
 
     it('should accept custom options', async () => {
-      api.get.mockResolvedValue({ count: 0, results: [] });
+      api.getHistoryFlights.mockResolvedValue({ count: 0, results: [] });
 
       const { result } = renderHook(() => useHistoryFlights({}, { enabled: false }), {
         wrapper: createWrapper(),
@@ -150,7 +150,7 @@ describe('useHistoryQueries', () => {
 
       expect(result.current.isLoading).toBe(false);
       expect(result.current.isFetched).toBe(false);
-      expect(api.get).not.toHaveBeenCalled();
+      expect(api.getHistoryFlights).not.toHaveBeenCalled();
     });
 
     it('should filter by ICAO hex', async () => {
@@ -161,7 +161,7 @@ describe('useHistoryQueries', () => {
           { id: 2, icao_hex: 'ABC123', callsign: 'UAL456' },
         ],
       };
-      api.get.mockResolvedValue(mockFlights);
+      api.getHistoryFlights.mockResolvedValue(mockFlights);
 
       const params = { icao: 'ABC123' };
 
@@ -173,7 +173,7 @@ describe('useHistoryQueries', () => {
         expect(result.current.isSuccess).toBe(true);
       });
 
-      expect(api.get).toHaveBeenCalledWith('/history/flights/', { params });
+      expect(api.getHistoryFlights).toHaveBeenCalledWith(params);
       expect(result.current.data.results).toHaveLength(2);
     });
 
@@ -182,7 +182,7 @@ describe('useHistoryQueries', () => {
         count: 3,
         results: [{ id: 1, icao_hex: 'ABC123', callsign: 'UAL123' }],
       };
-      api.get.mockResolvedValue(mockFlights);
+      api.getHistoryFlights.mockResolvedValue(mockFlights);
 
       const params = { callsign: 'UAL123' };
 
@@ -194,7 +194,7 @@ describe('useHistoryQueries', () => {
         expect(result.current.isSuccess).toBe(true);
       });
 
-      expect(api.get).toHaveBeenCalledWith('/history/flights/', { params });
+      expect(api.getHistoryFlights).toHaveBeenCalledWith(params);
     });
 
     it('should filter by military_only', async () => {
@@ -202,7 +202,7 @@ describe('useHistoryQueries', () => {
         count: 2,
         results: [{ id: 1, icao_hex: 'AE1234', callsign: 'EVAC01', is_military: true }],
       };
-      api.get.mockResolvedValue(mockFlights);
+      api.getHistoryFlights.mockResolvedValue(mockFlights);
 
       const params = { military_only: true };
 
@@ -214,11 +214,16 @@ describe('useHistoryQueries', () => {
         expect(result.current.isSuccess).toBe(true);
       });
 
-      expect(api.get).toHaveBeenCalledWith('/history/flights/', { params });
+      expect(api.getHistoryFlights).toHaveBeenCalledWith(params);
     });
 
     it('should return empty results', async () => {
-      api.get.mockResolvedValue({ count: 0, results: [], next: null, previous: null });
+      api.getHistoryFlights.mockResolvedValue({
+        count: 0,
+        results: [],
+        next: null,
+        previous: null,
+      });
 
       const { result } = renderHook(() => useHistoryFlights(), {
         wrapper: createWrapper(),
@@ -236,7 +241,7 @@ describe('useHistoryQueries', () => {
       const initialData = { count: 5, results: [{ id: 1 }] };
       const newData = { count: 10, results: [{ id: 1 }, { id: 2 }] };
 
-      api.get.mockResolvedValueOnce(initialData).mockResolvedValueOnce(newData);
+      api.getHistoryFlights.mockResolvedValueOnce(initialData).mockResolvedValueOnce(newData);
 
       const { result, rerender } = renderHook(({ params }) => useHistoryFlights(params), {
         wrapper: createWrapper(),
@@ -258,14 +263,14 @@ describe('useHistoryQueries', () => {
       });
 
       // Verify both API calls were made
-      expect(api.get).toHaveBeenCalledTimes(2);
+      expect(api.getHistoryFlights).toHaveBeenCalledTimes(2);
     });
 
     it('should refetch when params change', async () => {
       const data1 = { count: 5, results: [{ id: 1 }] };
       const data2 = { count: 10, results: [{ id: 2 }] };
 
-      api.get.mockResolvedValueOnce(data1).mockResolvedValueOnce(data2);
+      api.getHistoryFlights.mockResolvedValueOnce(data1).mockResolvedValueOnce(data2);
 
       const { result, rerender } = renderHook(({ params }) => useHistoryFlights(params), {
         wrapper: createWrapper(),
@@ -276,19 +281,15 @@ describe('useHistoryQueries', () => {
         expect(result.current.isSuccess).toBe(true);
       });
 
-      expect(api.get).toHaveBeenCalledWith('/history/flights/', {
-        params: { hours: 24 },
-      });
+      expect(api.getHistoryFlights).toHaveBeenCalledWith({ hours: 24 });
 
       rerender({ params: { hours: 48 } });
 
       await waitFor(() => {
-        expect(api.get).toHaveBeenCalledWith('/history/flights/', {
-          params: { hours: 48 },
-        });
+        expect(api.getHistoryFlights).toHaveBeenCalledWith({ hours: 48 });
       });
 
-      expect(api.get).toHaveBeenCalledTimes(2);
+      expect(api.getHistoryFlights).toHaveBeenCalledTimes(2);
     });
   });
 });

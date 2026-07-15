@@ -48,9 +48,7 @@ describe('ConflictBanner', () => {
         { id: 1, event_type: 'emergency_squawk', severity: 'critical' },
         { id: 2, event_type: 'tcas_ra', severity: 'warning' },
       ];
-      const { container } = render(
-        <ConflictBanner {...defaultProps} safetyEvents={events} />
-      );
+      const { container } = render(<ConflictBanner {...defaultProps} safetyEvents={events} />);
       expect(container.innerHTML).toBe('');
     });
 
@@ -147,9 +145,7 @@ describe('ConflictBanner', () => {
         makeConflict({ id: 1, severity: 'info' }),
         makeConflict({ id: 2, severity: 'critical' }),
       ];
-      const { container } = render(
-        <ConflictBanner {...defaultProps} safetyEvents={events} />
-      );
+      const { container } = render(<ConflictBanner {...defaultProps} safetyEvents={events} />);
 
       expect(container.querySelector('.conflict-banner')).toHaveClass('severity-critical');
     });
@@ -159,18 +155,14 @@ describe('ConflictBanner', () => {
         makeConflict({ id: 1, severity: 'info' }),
         makeConflict({ id: 2, severity: 'warning' }),
       ];
-      const { container } = render(
-        <ConflictBanner {...defaultProps} safetyEvents={events} />
-      );
+      const { container } = render(<ConflictBanner {...defaultProps} safetyEvents={events} />);
 
       expect(container.querySelector('.conflict-banner')).toHaveClass('severity-warning');
     });
 
     it('should apply info severity when all conflicts are info', () => {
       const events = [makeConflict({ severity: 'info' })];
-      const { container } = render(
-        <ConflictBanner {...defaultProps} safetyEvents={events} />
-      );
+      const { container } = render(<ConflictBanner {...defaultProps} safetyEvents={events} />);
 
       expect(container.querySelector('.conflict-banner')).toHaveClass('severity-info');
     });
@@ -180,9 +172,7 @@ describe('ConflictBanner', () => {
         makeConflict({ id: 1, severity: 'critical' }),
         makeConflict({ id: 2, severity: 'warning' }),
       ];
-      const { container } = render(
-        <ConflictBanner {...defaultProps} safetyEvents={events} />
-      );
+      const { container } = render(<ConflictBanner {...defaultProps} safetyEvents={events} />);
 
       const items = container.querySelectorAll('.conflict-item');
       expect(items[0]).toHaveClass('severity-critical');
@@ -193,18 +183,14 @@ describe('ConflictBanner', () => {
   describe('mute button', () => {
     it('should show Mute alarms title when sound is not muted', () => {
       const events = [makeConflict()];
-      render(
-        <ConflictBanner {...defaultProps} safetyEvents={events} soundMuted={false} />
-      );
+      render(<ConflictBanner {...defaultProps} safetyEvents={events} soundMuted={false} />);
 
       expect(screen.getByTitle('Mute alarms')).toBeInTheDocument();
     });
 
     it('should show Unmute alarms title when sound is muted', () => {
       const events = [makeConflict()];
-      render(
-        <ConflictBanner {...defaultProps} safetyEvents={events} soundMuted={true} />
-      );
+      render(<ConflictBanner {...defaultProps} safetyEvents={events} soundMuted={true} />);
 
       expect(screen.getByTitle('Unmute alarms')).toBeInTheDocument();
     });
@@ -275,11 +261,7 @@ describe('ConflictBanner', () => {
       const user = userEvent.setup();
       const events = [makeConflict()];
       render(
-        <ConflictBanner
-          {...defaultProps}
-          safetyEvents={events}
-          onSelectAircraft={undefined}
-        />
+        <ConflictBanner {...defaultProps} safetyEvents={events} onSelectAircraft={undefined} />
       );
 
       // Should not throw
@@ -289,13 +271,7 @@ describe('ConflictBanner', () => {
     it('should not throw when onAcknowledge is undefined', async () => {
       const user = userEvent.setup();
       const events = [makeConflict()];
-      render(
-        <ConflictBanner
-          {...defaultProps}
-          safetyEvents={events}
-          onAcknowledge={undefined}
-        />
-      );
+      render(<ConflictBanner {...defaultProps} safetyEvents={events} onAcknowledge={undefined} />);
 
       await user.click(screen.getByTitle('Acknowledge'));
     });
@@ -309,11 +285,7 @@ describe('ConflictBanner', () => {
         { id: 3, event_type: 'emergency_squawk', severity: 'critical' },
       ];
       render(
-        <ConflictBanner
-          {...defaultProps}
-          safetyEvents={events}
-          acknowledgedEvents={new Set([2])}
-        />
+        <ConflictBanner {...defaultProps} safetyEvents={events} acknowledgedEvents={new Set([2])} />
       );
 
       expect(screen.getByText('VISIBLE')).toBeInTheDocument();

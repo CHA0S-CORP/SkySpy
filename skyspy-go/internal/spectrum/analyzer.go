@@ -229,18 +229,33 @@ func (a *Analyzer) Reset() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
+	a.resetBandsLocked()
+	for i := range a.prevSpectrum {
+		a.prevSpectrum[i] = 0
+	}
+	for i := range a.peakValues {
+		a.peakValues[i] = 0
+	}
+}
+
+// ResetSamples clears accumulated band data while preserving the temporal
+// smoothing (prevSpectrum) and peak-hold (peakValues) state. Use this for
+// per-tick rebuilds of the aircraft set so smoothing carries across ticks.
+func (a *Analyzer) ResetSamples() {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	a.resetBandsLocked()
+}
+
+// resetBandsLocked reinitializes all band data; caller must hold a.mu.
+func (a *Analyzer) resetBandsLocked() {
 	for i := range a.bands {
 		a.bands[i] = BandData{
 			MaxRSSI:     -100,
 			MinRSSI:     0,
 			aircraftSet: make(map[string]bool),
 		}
-	}
-	for i := range a.prevSpectrum {
-		a.prevSpectrum[i] = 0
-	}
-	for i := range a.peakValues {
-		a.peakValues[i] = 0
 	}
 }
 

@@ -104,7 +104,9 @@ from skyspy.auth.views import (
 )
 
 # Create router and register viewsets
-# Use default trailing_slash=True which allows both with/without trailing slash
+# Default trailing_slash=True: routes REQUIRE the trailing slash. Slashless
+# non-GET requests are NOT redirected (APPEND_SLASH only helps GET) - clients
+# must always call e.g. /api/v1/alerts/history/<id>/acknowledge/ with the slash.
 router = DefaultRouter()
 router.register(r"aircraft", AircraftViewSet, basename="aircraft")
 router.register(r"sightings", SightingViewSet, basename="sightings")

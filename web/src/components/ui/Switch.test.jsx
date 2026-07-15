@@ -177,7 +177,7 @@ describe('Switch', () => {
     it('should pass through name', () => {
       // Radix UI Switch may not expose name directly on the button element
       // but it works with form submission. Test that it renders without error.
-      const { container } = render(<Switch name="switch-name" />);
+      render(<Switch name="switch-name" />);
 
       // The switch should render and be functional
       expect(screen.getByRole('switch')).toBeInTheDocument();

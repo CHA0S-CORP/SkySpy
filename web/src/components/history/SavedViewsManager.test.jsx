@@ -57,7 +57,7 @@ describe('SavedViewsManager', () => {
     });
 
     it('should close dropdown on outside click', () => {
-      const { container } = render(
+      render(
         <div>
           <SavedViewsManager {...defaultProps} savedViews={sampleViews} />
           <div data-testid="outside">Outside</div>
