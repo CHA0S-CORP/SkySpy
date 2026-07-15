@@ -132,13 +132,13 @@ Configure API endpoints, map display modes, and themes.
 
 ## Tech Stack
 
-**Backend (adsb-api)**
+**Backend (skyspy_django)**
 - Python 3.12+
-- FastAPI with async/await
-- SQLAlchemy 2.0+ (async ORM)
-- Socket.IO for real-time streaming
-- PostgreSQL for data persistence
-- Redis for pub/sub messaging
+- Django + Django REST Framework
+- Django ASGI (Daphne) with Socket.IO for real-time streaming
+- Celery for background tasks (6 queues)
+- PostgreSQL (via PgBouncer) for data persistence
+- Redis for cache and pub/sub messaging
 - Apprise for notifications
 
 **Frontend (web)**
@@ -200,9 +200,10 @@ make dev-down
 
 ```bash
 # Backend
-cd adsb-api
-pip install -e ".[dev]"
-uvicorn app.main:app --host 0.0.0.0 --port 5000 --reload
+cd skyspy_django
+uv sync
+python manage.py migrate
+python manage.py runserver 0.0.0.0:8000
 
 # Frontend
 cd web
@@ -362,26 +363,29 @@ Safety events are logged, displayed on the dashboard, and can trigger push notif
 make test
 
 # Run backend tests locally
-cd adsb-api
+cd skyspy_django
 pytest
 
 # Run with coverage
-pytest --cov=app --cov-report=html
+pytest --cov=skyspy --cov-report=html
 ```
 
 ## Project Structure
 
 ```
 skyspy/
-├── adsb-api/                 # Backend API
-│   ├── app/
-│   │   ├── main.py           # FastAPI application
-│   │   ├── models.py         # SQLAlchemy models
-│   │   ├── schemas.py        # Pydantic schemas
-│   │   ├── routers/          # API endpoints
-│   │   └── services/         # Business logic
-│   ├── tests/                # Test suite
-│   └── pyproject.toml        # Python dependencies
+├── skyspy_django/            # Django backend API
+│   ├── skyspy/
+│   │   ├── settings.py       # Django settings
+│   │   ├── models/           # Django models (by domain)
+│   │   ├── api/              # DRF ViewSets (/api/v1/)
+│   │   ├── serializers/      # DRF serializers
+│   │   ├── services/         # Business logic layer
+│   │   ├── tasks/            # Celery background tasks
+│   │   ├── socketio/         # Socket.IO namespaces + mixins
+│   │   └── tests/            # Test suite (pytest)
+│   ├── manage.py
+│   └── pytest.ini            # Test config (--reuse-db)
 │
 ├── web/                      # Frontend dashboard
 │   ├── src/
@@ -389,6 +393,9 @@ skyspy/
 │   │   ├── hooks/            # Custom hooks
 │   │   └── utils/            # Utilities
 │   └── package.json          # Node dependencies
+│
+├── skyspy-go/                # Go CLI TUI radar client (Bubble Tea + Cobra)
+├── skyspy_common/            # Shared Python package (libacars CFFI bindings)
 │
 ├── test/                     # Test infrastructure
 │   ├── mock-1090/            # Mock ADS-B receiver

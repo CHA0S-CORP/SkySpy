@@ -86,6 +86,7 @@ func SetupCommands() {
 	rootCmd.AddCommand(radioProCmd)
 	rootCmd.AddCommand(configureCmd)
 	rootCmd.AddCommand(airbandCmd)
+	rootCmd.AddCommand(genDocsCmd)
 }
 
 func main() {

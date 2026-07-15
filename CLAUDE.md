@@ -221,7 +221,7 @@ The 4 API test files (`test_api_aircraft.py`, `test_api_alerts.py`, `test_api_hi
 Remaining top offenders (not yet fixed): `swim_fns.py` (12), `flight_pattern_stats.py` (11), `storage.py` (9), `audio.py` (9).
 
 ### Frontend Tech Debt
-- `MapView.jsx` — ~12,240 lines, no test coverage (keyboard shortcuts extracted to `useProKeyboardShortcuts` hook)
+- `MapView.jsx` — ~3,070 lines (decomposed from ~12,240), still no direct test coverage (keyboard shortcuts extracted to `useProKeyboardShortcuts` hook; see `web/src/components/map/CLAUDE.md`)
 - `react-hooks/exhaustive-deps` ESLint rule is `'off'` ("too many false positives with complex hooks")
 - ESLint `no-console` now set to `['warn', { allow: ['warn', 'error'] }]`, max-warnings lowered from 250 to 150
 

@@ -38,12 +38,20 @@ RED := \033[0;31m
 NC := \033[0m
 
 .PHONY: all build build-all test test-unit test-integration test-coverage test-race test-bench \
-        lint vet fmt fmt-check run clean deps ci help install
+        lint vet fmt fmt-check run clean deps ci help install docs
 
 # Default target
 all: build
 
 ## Build targets
+
+# Generate Markdown CLI reference into ../docs/cli (published by ReadMe sync).
+# Uses the hidden `gen-docs` subcommand so it shares the real command tree.
+docs:
+	@echo "$(GREEN)Generating CLI docs...$(NC)"
+	@mkdir -p ../docs/cli
+	$(GOCMD) run $(MAIN_PACKAGE) gen-docs --dir ../docs/cli
+	@echo "$(GREEN)Wrote CLI docs to ../docs/cli$(NC)"
 
 # Build the CLI binary for current platform
 build:
