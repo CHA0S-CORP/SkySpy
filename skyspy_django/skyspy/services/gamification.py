@@ -140,6 +140,9 @@ DEFAULT_NOTABLE_CALLSIGNS = [
 
 DEFAULT_RARE_TYPES = [
     {"type_code": "B748", "type_name": "Boeing 747-8", "category": "rare", "rarity_score": 6},
+    # A388 is the ICAO designator aircraft actually broadcast; A380 is kept as a
+    # family-code alias for feeds that report it (mirrors migration 0017/0026).
+    {"type_code": "A388", "type_name": "Airbus A380-800", "category": "rare", "rarity_score": 6},
     {"type_code": "A380", "type_name": "Airbus A380", "category": "rare", "rarity_score": 6},
     {"type_code": "A225", "type_name": "Antonov An-225", "category": "historic", "rarity_score": 10},
     {"type_code": "CONC", "type_name": "Concorde", "category": "historic", "rarity_score": 10},
