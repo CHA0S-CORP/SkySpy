@@ -124,7 +124,9 @@ def send_notification_task(
         log_entry.mark_failed("Apprise library not installed")
         return {"status": "failed", "error": "Apprise not installed"}
 
-    except Exception as e:  # broad: Celery task guard; apprise delivery has unknowable failure modes, re-raises for retry
+    except (
+        Exception
+    ) as e:  # broad: Celery task guard; apprise delivery has unknowable failure modes, re-raises for retry
         error_msg = str(e)
         # Track attempts on the log entry (self.request.retries is always 0
         # here because redelivery happens via process_notification_queue,

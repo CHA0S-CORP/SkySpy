@@ -577,7 +577,9 @@ class AcarsService:
                 from skyspy.tasks.acars import decode_acars_message
 
                 decode_acars_message.delay(message_id)
-            except Exception as e:  # broad: enqueue must never break message storage (eager mode can raise SynchronousOnlyOperation)
+            except (
+                Exception
+            ) as e:  # broad: enqueue must never break message storage (eager mode can raise SynchronousOnlyOperation)
                 logger.warning(f"Failed to queue decode task for message {message_id}: {e}")
 
     async def _broadcast_message(self, msg: dict):

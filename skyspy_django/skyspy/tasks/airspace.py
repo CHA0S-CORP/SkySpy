@@ -62,7 +62,9 @@ def refresh_airspace_advisories():
                             room="topic_aircraft",
                         )
                         logger.debug(f"Broadcast {expired_count} expired advisories")
-                    except Exception as e:  # broad: broadcast must never break the caller; sync_emit failure modes unknowable
+                    except (
+                        Exception
+                    ) as e:  # broad: broadcast must never break the caller; sync_emit failure modes unknowable
                         logger.warning(f"Failed to broadcast advisory expiration: {e}")
 
                 # Process new advisories

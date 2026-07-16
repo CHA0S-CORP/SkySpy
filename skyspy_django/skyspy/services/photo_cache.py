@@ -154,7 +154,6 @@ def _upload_photo_to_s3(data: bytes, icao_hex: str, is_thumbnail: bool = False) 
     if not client:
         return None
 
-
     last_error = None
     for attempt in range(MAX_RETRIES):
         try:
@@ -195,7 +194,6 @@ def get_signed_photo_url(icao_hex: str, is_thumbnail: bool = False, expires_in: 
         return None
 
     key = _get_s3_photo_key(icao_hex, is_thumbnail)
-
 
     try:
         url = client.generate_presigned_url(

@@ -76,8 +76,7 @@ def main() -> int:
     lines = [
         "# Socket.IO Request-Type Reference",
         "",
-        "> Generated from source by `scripts/gen_socketio_events.py` "
-        "(`make docs-socketio`). Do not edit by hand.",
+        "> Generated from source by `scripts/gen_socketio_events.py` (`make docs-socketio`). Do not edit by hand.",
         "",
         "Every request type reaches the client via `on_request` on the main "
         "namespace, is dispatched by `_handle_generic_request()`, and requires "

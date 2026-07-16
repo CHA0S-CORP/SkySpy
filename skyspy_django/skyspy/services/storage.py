@@ -177,7 +177,6 @@ def generate_signed_url(filename: str, prefix: str, expires_in: int = 3600) -> s
     key = get_s3_key(filename, prefix)
 
     try:
-
         url = client.generate_presigned_url(
             "get_object",
             Params={
@@ -220,7 +219,6 @@ def upload_to_s3(
     key = get_s3_key(filename, prefix)
 
     try:
-
         client.put_object(
             Bucket=settings.S3_BUCKET,
             Key=key,
