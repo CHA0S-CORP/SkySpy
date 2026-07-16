@@ -445,6 +445,10 @@ services:
       # SSE streaming configuration (ADSBexchange compatible)
       - SSE_ENABLED=${SSE_ENABLED:-true}
       - SSE_INTERVAL_MS=${SSE_INTERVAL_MS:-1000}
+      # Live-data refresh cadence (seconds) for the mock ONLY. Sourced from a
+      # dedicated var so it never collides with Django's int CACHE_TTL — the
+      # mock parses this as a float and can go sub-second (e.g. 0.5 = 500ms).
+      - CACHE_TTL=${MOCK_LIVE_REFRESH_SEC:-5}
     networks:
       - test-network
     ports:
