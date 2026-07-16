@@ -500,9 +500,18 @@ def update_state_and_broadcast(batch: list[dict], full_snapshot: bool = True):
     with _aircraft_state_lock:
         _aircraft_state.update(batch_by_icao)
 
-        # Prune stale aircraft (not seen in 60s)
-        # Check all aircraft in state, not just when > 500
-        stale_icaos = [icao for icao, ac in _aircraft_state.items() if ac.get("seen", 0) > 60]
+        # Prune stale aircraft: only those we've STOPPED receiving. The source
+        # "seen" field is seconds since the aircraft itself last transmitted —
+        # NOT since we last received its record — so an aircraft can legitimately
+        # sit in the feed with seen>60. Pruning those while they're still in the
+        # current batch made them get added, removed, and re-broadcast as removed
+        # every cycle (the map churned / "wasn't updating"). Aircraft in the
+        # current batch are fresh by definition and must never be pruned here.
+        stale_icaos = [
+            icao
+            for icao, ac in _aircraft_state.items()
+            if icao not in current_icaos and ac.get("seen", 0) > 60
+        ]
 
         # Remove both stale and removed aircraft from state
         # Bug fix: removed_icaos were being broadcast but not actually removed from state
