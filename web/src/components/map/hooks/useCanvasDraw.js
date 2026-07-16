@@ -142,6 +142,25 @@ export function useCanvasDraw({
   const fpsRef = useRef({ frames: 0, lastTime: Date.now(), fps: 0 });
   const historyRef = useRef({});
   const trackHistoryRef = useRef({});
+
+  // Per-frame draw inputs (aircraft positions, cursor, tracks, safety events,
+  // measurement points, aviation overlays) are read through this ref so the
+  // canvas animation loop does NOT tear down and restart on every position
+  // update. Restarting the loop each update (~2x/sec) reset blink/pulse
+  // animation phase and hitched the canvas ("alerts don't blink smoothly / break
+  // other canvas things"). Only interaction-level inputs (mode, zoom, selection,
+  // toggles) remain in the draw effect's dependency array.
+  const liveDrawRef = useRef({});
+  liveDrawRef.current = {
+    sortedAircraft,
+    cursorInfo,
+    trackHistory,
+    shortTrackHistory,
+    safetyEvents,
+    measurementPoints,
+    aviationData,
+    aviationOverlayData,
+  };
   const pinchStateRef = useRef({
     lastDistance: 0,
     startRange: 0,
@@ -456,6 +475,18 @@ export function useCanvasDraw({
     let frameCount = 0;
     const draw = () => {
       frameCount++;
+      // Read the latest per-frame data from the ref (see liveDrawRef above) so
+      // the loop reflects live updates without needing to restart.
+      const {
+        sortedAircraft,
+        cursorInfo,
+        trackHistory,
+        shortTrackHistory,
+        safetyEvents,
+        measurementPoints,
+        aviationData,
+        aviationOverlayData,
+      } = liveDrawRef.current;
       const width = canvas.width / window.devicePixelRatio;
       const height = canvas.height / window.devicePixelRatio;
       const centerX = width / 2;
@@ -724,9 +755,13 @@ export function useCanvasDraw({
         cancelAnimationFrame(animationRef.current);
       }
     };
+    // NOTE: high-frequency per-frame inputs (sortedAircraft, cursorInfo,
+    // trackHistory, shortTrackHistory, safetyEvents, measurementPoints,
+    // aviationData, aviationOverlayData) are intentionally NOT in this dep array
+    // — they are read live from liveDrawRef inside draw() so the animation loop
+    // stays running instead of restarting on every update (smooth blinking).
   }, [
     config.mapMode,
-    sortedAircraft,
     radarRange,
     feederLat,
     feederLon,
@@ -736,15 +771,10 @@ export function useCanvasDraw({
     selectedNavaid,
     selectedAirport,
     overlays,
-    aviationData,
-    aviationOverlayData,
     proPanOffset,
     followingAircraft,
-    trackHistory,
     showSelectedTrack,
-    safetyEvents,
     showShortTracks,
-    shortTrackHistory,
     config.shortTrackLength,
     gridOpacity,
     showCompassRose,
@@ -753,8 +783,6 @@ export function useCanvasDraw({
     predictionSeconds,
     showConflictVisualization,
     showDataBlocks,
-    measurementPoints,
-    cursorInfo,
     showFpsCounter,
     showAltitudeTrails,
     reducedMotion,
