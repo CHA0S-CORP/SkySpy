@@ -30,7 +30,3 @@ var genDocsCmd = &cobra.Command{
 		return nil
 	},
 }
-
-func init() {
-	genDocsCmd.Flags().StringVar(&genDocsDir, "dir", "", "Output directory for generated Markdown")
-}

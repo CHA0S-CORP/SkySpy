@@ -200,6 +200,7 @@ func (c *Client) runACARSConnection() {
 	c.runConnection(url, c.acarsMsgCh, "messages", c.setACARSState)
 }
 
+//nolint:gocyclo // reconnect/read state machine — cohesive, splitting hurts readability
 func (c *Client) runConnection(url string, msgCh chan<- Message, topic string, setState func(ClientState)) {
 	for {
 		select {
