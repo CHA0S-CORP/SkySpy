@@ -112,11 +112,15 @@ const getSignalStrengthClass = (rssi) => {
   return 'weak';
 };
 
-// Resolve photo URL
-const resolvePhotoUrl = (url) => {
+// Resolve photo URL — mirror usePhotoFetch.js: pass through absolute URLs
+// (signed S3/Wasabi links), and prefix relative /api/ indirection paths with
+// the API base for cross-origin dev. Never synthesize a bucket hostname.
+const resolvePhotoUrl = (url, apiBaseUrl) => {
   if (!url) return null;
-  if (url.startsWith('http://') || url.startsWith('https://')) return url;
-  return `https://skyspy-photos.s3.amazonaws.com${url.startsWith('/') ? '' : '/'}${url}`;
+  if (url.startsWith('/api/')) {
+    return `${apiBaseUrl || ''}${url}`;
+  }
+  return url;
 };
 
 // Get trend icon based on distance trend
@@ -484,7 +488,10 @@ const PhotoSection = memo(function PhotoSection({
 
         if (data?.photo_url || data?.photo_thumbnail_url || data?.thumbnail_url) {
           setPhotoUrl(
-            resolvePhotoUrl(data.photo_url || data.photo_thumbnail_url || data.thumbnail_url)
+            resolvePhotoUrl(
+              data.photo_url || data.photo_thumbnail_url || data.thumbnail_url,
+              config.apiBaseUrl
+            )
           );
           if (photoRetryRef.current) {
             clearInterval(photoRetryRef.current);

@@ -784,9 +784,38 @@ def update_cached_photo_set():
         return {"cached": 0, "enabled": False}
 
     if getattr(settings, "S3_ENABLED", False):
-        # For S3, we rely on the photo_cache service's existing logic
-        # This task is mainly for local filesystem caching
-        return {"cached": 0, "s3_mode": True}
+        # Build the Redis existence set by listing the S3 prefix once, so
+        # per-view existence checks become an O(1) Redis lookup instead of a
+        # live Wasabi HEAD round-trip (~40-260ms each).
+        icaos: set[str] = set()
+        thumbs: set[str] = set()
+        try:
+            from skyspy.services.storage import _get_s3_client
+
+            client = _get_s3_client()
+            if not client:
+                return {"cached": 0, "s3_mode": True, "no_client": True}
+
+            prefix = settings.S3_PREFIX.strip("/") + "/"
+            paginator = client.get_paginator("list_objects_v2")
+            for page in paginator.paginate(Bucket=settings.S3_BUCKET, Prefix=prefix):
+                for obj in page.get("Contents", []):
+                    key = obj.get("Key", "")
+                    if not key.endswith(".jpg") or obj.get("Size", 0) <= 0:
+                        continue
+                    name = key[len(prefix) :].removesuffix(".jpg").upper()
+                    if name.endswith("_THUMB"):
+                        thumbs.add(name.removesuffix("_THUMB"))
+                    else:
+                        icaos.add(name)
+
+            cache.set("cached_photo_icaos", icaos, timeout=600)
+            cache.set("cached_photo_thumb_icaos", thumbs, timeout=600)
+            logger.info(f"Updated S3 cached photo set: {len(icaos)} photos, {len(thumbs)} thumbnails")
+            return {"cached": len(icaos), "thumbnails": len(thumbs), "s3_mode": True}
+        except Exception as e:  # broad: Celery task top-level guard, returns error dict on any failure
+            logger.error(f"Error updating S3 cached photo set: {e}")
+            return {"error": str(e), "s3_mode": True}
 
     cache_dir = Path(getattr(settings, "PHOTO_CACHE_DIR", "/tmp/photo_cache"))  # nosec B108
     if not cache_dir.exists():

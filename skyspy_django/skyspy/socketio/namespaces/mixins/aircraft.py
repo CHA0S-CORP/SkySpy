@@ -334,12 +334,23 @@ class AircraftHandlerMixin:
 
         if getattr(settings, "PHOTO_CACHE_ENABLED", False):
             if getattr(settings, "S3_ENABLED", False):
+                from concurrent.futures import ThreadPoolExecutor
+
                 from skyspy.services.photo_cache import get_photo_url as get_cached_url
 
-                if get_cached_url(icao, is_thumbnail=False, verify_exists=True):
-                    photo_url = f"/api/v1/photos/{icao}"
-                if get_cached_url(icao, is_thumbnail=True, verify_exists=True):
-                    thumbnail_url = f"/api/v1/photos/{icao}/thumb"
+                # Run the full + thumbnail existence checks concurrently. Each
+                # is an independent Wasabi HEAD (~40-260ms cold); running them
+                # serially doubled the resolve latency. The signed URL is
+                # returned directly so the browser hits Wasabi without a
+                # redundant 3rd HEAD + presign via PhotoServeView.
+                def _resolve(is_thumbnail: bool):
+                    return get_cached_url(icao, is_thumbnail=is_thumbnail, signed=True, verify_exists=True)
+
+                with ThreadPoolExecutor(max_workers=2) as pool:
+                    full_future = pool.submit(_resolve, False)
+                    thumb_future = pool.submit(_resolve, True)
+                    photo_url = full_future.result()
+                    thumbnail_url = thumb_future.result()
             else:
                 cache_dir = Path(settings.PHOTO_CACHE_DIR)
                 photo_path = cache_dir / f"{icao}.jpg"

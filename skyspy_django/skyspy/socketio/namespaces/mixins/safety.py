@@ -89,10 +89,18 @@ class SafetyHandlerMixin:
                     "id": str(e.id),
                     "event_type": e.event_type,
                     "severity": e.severity,
+                    # Frontend consumer (useSafetyEvents) keys off icao/icao_2/details;
+                    # keep icao_hex/icao_hex_2 for back-compat. Matches the live
+                    # safety:event push shape (services/safety.py).
+                    "icao": e.icao_hex,
                     "icao_hex": e.icao_hex,
+                    "icao_2": e.icao_hex_2,
+                    "icao_hex_2": e.icao_hex_2,
                     "callsign": e.callsign,
+                    "callsign_2": e.callsign_2,
                     "timestamp": e.timestamp.isoformat() if e.timestamp else None,
                     "message": e.message,
+                    "details": e.details or {},
                     "acknowledged": e.acknowledged,
                 }
             )

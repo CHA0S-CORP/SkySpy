@@ -963,10 +963,20 @@ class SafetyMonitor:
         }
         socket_event = event_name_map.get(event_type, "safety:event")
 
+        # Emit the DB id as the shared `id` so live pushes match snapshot-loaded
+        # events (the snapshot uses str(SafetyEvent.id)). Preserve the internal
+        # string id (the _active_events key) as `internal_id` for debugging.
+        payload = {**event, "event_action": event_type, "timestamp": timezone.now().isoformat().replace("+00:00", "Z")}
+        internal_id = payload.get("id")
+        db_id = payload.get("db_id")
+        if db_id is not None:
+            payload["id"] = str(db_id)
+            payload["internal_id"] = internal_id
+
         try:
             sync_emit(
                 socket_event,
-                {**event, "event_action": event_type, "timestamp": timezone.now().isoformat().replace("+00:00", "Z")},
+                payload,
                 room="topic_safety",
             )
         except (ConnectionError, OSError, RuntimeError) as e:
@@ -992,7 +1002,9 @@ class SafetyMonitor:
                 cpa_lat=event.get("cpa_lat"),
                 cpa_lon=event.get("cpa_lon"),
             )
-            # Store DB ID back in active event (with lock)
+            # Store DB ID back in active event (with lock) and on the local dict
+            # so the broadcast below carries it as the shared `id`.
+            event["db_id"] = db_event.id
             event_id = event.get("id")
             if event_id:
                 with self._events_lock:

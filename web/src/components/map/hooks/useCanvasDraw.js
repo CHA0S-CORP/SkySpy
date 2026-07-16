@@ -59,6 +59,7 @@ export function useCanvasDraw({
   setHashParams,
   // Aircraft
   sortedAircraft,
+  positionsRef,
   selectedAircraft,
   aircraftInfo,
   activeConflicts,
@@ -153,6 +154,7 @@ export function useCanvasDraw({
   const liveDrawRef = useRef({});
   liveDrawRef.current = {
     sortedAircraft,
+    positionsRef,
     cursorInfo,
     trackHistory,
     shortTrackHistory,
@@ -478,7 +480,8 @@ export function useCanvasDraw({
       // Read the latest per-frame data from the ref (see liveDrawRef above) so
       // the loop reflects live updates without needing to restart.
       const {
-        sortedAircraft,
+        sortedAircraft: rawAircraft,
+        positionsRef,
         cursorInfo,
         trackHistory,
         shortTrackHistory,
@@ -487,6 +490,30 @@ export function useCanvasDraw({
         aviationData,
         aviationOverlayData,
       } = liveDrawRef.current;
+
+      // Overlay the high-frequency interpolated positions (from
+      // useSocketIOPositions' rAF loop) onto the React-state aircraft so the
+      // canvas renders gliding motion instead of snapping to each ~2Hz delta.
+      // positionsRef is a stable ref updated ~60x/sec; reading it here (not in
+      // the draw-effect deps) keeps the loop continuous. Falls back to the raw
+      // lat/lon when no interpolated sample exists for a hex.
+      const interp = positionsRef?.current || null;
+      const sortedAircraft =
+        interp && rawAircraft
+          ? rawAircraft.map((ac) => {
+              const p = interp[ac.hex?.toUpperCase()];
+              return p && Number.isFinite(p.lat) && Number.isFinite(p.lon)
+                ? { ...ac, lat: p.lat, lon: p.lon, track: Number.isFinite(p.track) ? p.track : ac.track }
+                : ac;
+            })
+          : rawAircraft;
+
+      // Dev-only: expose the exact positions the canvas is rendering this frame
+      // so smoothness can be verified (interpolated motion should advance in
+      // small increments per frame, not ~1s jumps). Never shipped to prod.
+      if (import.meta.env?.DEV) {
+        window.__skyspyCanvasDraw = { t: performance.now(), aircraft: sortedAircraft };
+      }
       const width = canvas.width / window.devicePixelRatio;
       const height = canvas.height / window.devicePixelRatio;
       const centerX = width / 2;
