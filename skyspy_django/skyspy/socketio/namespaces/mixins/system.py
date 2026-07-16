@@ -66,6 +66,13 @@ class SystemHandlerMixin:
             "online": adsb_online,
             "aircraft_count": len(aircraft_list),
             "celery_running": celery_ok,
+            # Feeder location — must mirror the REST StatusView so the dashboard
+            # (which prefers this WS 'status' request over REST) can centre the
+            # map on the feeder instead of falling back to a hard-coded default.
+            "location": {
+                "latitude": getattr(settings, "FEEDER_LAT", None),
+                "longitude": getattr(settings, "FEEDER_LON", None),
+            },
             "timestamp": datetime.utcnow().isoformat() + "Z",
         }
 

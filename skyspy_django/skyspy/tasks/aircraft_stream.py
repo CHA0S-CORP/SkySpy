@@ -461,12 +461,21 @@ def broadcast_heartbeat(aircraft_count: int, timestamp: str):
     )
 
 
-def update_state_and_broadcast(batch: list[dict]):
+def update_state_and_broadcast(batch: list[dict], full_snapshot: bool = True):
     """
     Hot path: Update in-memory state and broadcast to clients.
 
     This is the critical path - no database operations here.
     Thread-safe: Uses locks for all shared state access.
+
+    full_snapshot: True when `batch` is the complete current aircraft set (the
+    polling path). False when it is only a partial slice (the SSE path splits a
+    frame into <=50-aircraft batches). Removed-aircraft detection diffs the batch
+    against the previous set, which is only valid for a full snapshot — treating a
+    partial batch as a snapshot marks every aircraft NOT in that slice as
+    "removed" and prunes it, churning _aircraft_state toward empty (the cause of
+    the "0 active aircraft" / frozen-map bug in SSE mode). For partial batches we
+    skip removed-detection and let the 60s stale timer handle departures.
     """
     global _previous_icaos
 
@@ -479,10 +488,11 @@ def update_state_and_broadcast(batch: list[dict]):
     batch_by_icao = {ac["hex"]: ac for ac in batch if ac.get("hex")}
     current_icaos = set(batch_by_icao.keys())
 
-    # Detect new and removed aircraft (thread-safe read of previous state)
+    # Detect new and removed aircraft (thread-safe read of previous state).
+    # Removed-detection is only valid for a full snapshot (see docstring).
     with _previous_icaos_lock:
         new_icaos = current_icaos - _previous_icaos
-        removed_icaos = list(_previous_icaos - current_icaos)
+        removed_icaos = list(_previous_icaos - current_icaos) if full_snapshot else []
 
     # Update in-memory aircraft state and detect stale aircraft
     stale_icaos = []
@@ -554,9 +564,14 @@ def update_state_and_broadcast(batch: list[dict]):
     except Exception as e:  # broad: hot-path broadcast (sync_emit) must never crash the stream loop
         logger.warning(f"Broadcast error: {e}")
 
-    # Update previous state for change detection (thread-safe)
+    # Update previous state for change detection (thread-safe). A full snapshot
+    # replaces the set; a partial (SSE) batch unions into it so aircraft carried
+    # across batches aren't seen as "removed" on the next full snapshot.
     with _previous_icaos_lock:
-        _previous_icaos = current_icaos
+        if full_snapshot:
+            _previous_icaos = current_icaos
+        else:
+            _previous_icaos |= current_icaos
 
     # Buffer for database write (non-blocking append)
     with _db_buffer_lock:
@@ -880,10 +895,12 @@ def stream_sse(url: str, feeder_lat: float, feeder_lon: float, batch_ms: int):
 
             now = time.time()
 
-            # Broadcast when batch interval reached or batch is large enough
+            # Broadcast when batch interval reached or batch is large enough.
+            # SSE frames are split into <=50-aircraft batches, so each is a
+            # partial slice, not a full snapshot (full_snapshot=False).
             if (now - last_broadcast) >= batch_interval or len(batch) >= 50:
                 if batch:
-                    update_state_and_broadcast(batch)
+                    update_state_and_broadcast(batch, full_snapshot=False)
                     batches_sent += 1
                     batch = []
                 last_broadcast = now
@@ -971,9 +988,11 @@ def stream_tcp(host: str, port: int, feeder_lat: float, feeder_lon: float, batch
 
             now = time.time()
 
-            # Broadcast when batch interval reached or batch is large enough
+            # Broadcast when batch interval reached or batch is large enough.
+            # TCP streams aircraft one-per-line into <=50 batches — partial, not
+            # a full snapshot (full_snapshot=False).
             if (now - last_broadcast) >= batch_interval or len(batch) >= 50:
-                update_state_and_broadcast(batch)
+                update_state_and_broadcast(batch, full_snapshot=False)
                 batches_sent += 1
                 batch = []
                 last_broadcast = now
