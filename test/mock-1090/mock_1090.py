@@ -33,7 +33,10 @@ ADSBX_API_KEY = os.getenv("ADSBX_API_KEY", "").strip() or None
 COVERAGE_CENTER_LAT = float(os.getenv("COVERAGE_LAT", "47.9377"))
 COVERAGE_CENTER_LON = float(os.getenv("COVERAGE_LON", "-121.9687"))
 COVERAGE_RADIUS_NM = float(os.getenv("COVERAGE_RADIUS_NM", "250"))
-CACHE_TTL = int(os.getenv("CACHE_TTL", "5"))
+# Float so sub-second live-refresh (e.g. CACHE_TTL=0.5) is possible. Note that
+# values below ~1s exceed adsb.lol's community ≤1 req/s guidance and may be
+# rate-limited (the fetch backs off to synthetic data on 429).
+CACHE_TTL = float(os.getenv("CACHE_TTL", "5"))
 
 # Conflict detection thresholds
 CONFLICT_HORIZONTAL_NM = 3.0
