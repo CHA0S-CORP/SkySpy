@@ -508,9 +508,7 @@ def update_state_and_broadcast(batch: list[dict], full_snapshot: bool = True):
         # every cycle (the map churned / "wasn't updating"). Aircraft in the
         # current batch are fresh by definition and must never be pruned here.
         stale_icaos = [
-            icao
-            for icao, ac in _aircraft_state.items()
-            if icao not in current_icaos and ac.get("seen", 0) > 60
+            icao for icao, ac in _aircraft_state.items() if icao not in current_icaos and ac.get("seen", 0) > 60
         ]
 
         # Remove both stale and removed aircraft from state

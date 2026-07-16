@@ -503,7 +503,12 @@ export function useCanvasDraw({
           ? rawAircraft.map((ac) => {
               const p = interp[ac.hex?.toUpperCase()];
               return p && Number.isFinite(p.lat) && Number.isFinite(p.lon)
-                ? { ...ac, lat: p.lat, lon: p.lon, track: Number.isFinite(p.track) ? p.track : ac.track }
+                ? {
+                    ...ac,
+                    lat: p.lat,
+                    lon: p.lon,
+                    track: Number.isFinite(p.track) ? p.track : ac.track,
+                  }
                 : ac;
             })
           : rawAircraft;
