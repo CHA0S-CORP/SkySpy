@@ -151,6 +151,54 @@ class AircraftInfo(models.Model):
         return f"{self.icao_hex} - {self.registration or 'Unknown'}"
 
 
+class AircraftIncident(models.Model):
+    """
+    A safety incident/accident record for an airframe, from a public registry.
+
+    Keyed by registration (the stable identity across an airframe's life) and
+    linked to ICAO hex when known. One row per source record (e.g. an NTSB
+    case), deduped on (source, external_id).
+    """
+
+    SOURCE_CHOICES = [
+        ("ntsb", "NTSB (US)"),
+        ("asn", "Aviation Safety Network"),
+    ]
+
+    icao_hex = models.CharField(max_length=10, blank=True, null=True, db_index=True)
+    registration = models.CharField(max_length=20, db_index=True)
+    source = models.CharField(max_length=20, choices=SOURCE_CHOICES, default="ntsb", db_index=True)
+    external_id = models.CharField(max_length=50, db_index=True)  # e.g. NTSB number
+
+    event_type = models.CharField(max_length=50, blank=True, null=True)  # Accident / Incident
+    event_date = models.DateTimeField(blank=True, null=True, db_index=True)
+    severity = models.CharField(max_length=50, blank=True, null=True)  # highest injury / damage
+    city = models.CharField(max_length=100, blank=True, null=True)
+    state = models.CharField(max_length=50, blank=True, null=True)
+    country = models.CharField(max_length=50, blank=True, null=True)
+    make = models.CharField(max_length=100, blank=True, null=True)
+    model = models.CharField(max_length=100, blank=True, null=True)
+    report_number = models.CharField(max_length=50, blank=True, null=True)
+    narrative = models.TextField(blank=True, null=True)
+    url = models.CharField(max_length=500, blank=True, null=True)
+
+    # Full source record for audit / RAG.
+    raw_data = models.JSONField(default=dict)
+
+    fetched_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "aircraft_incident"
+        unique_together = [["source", "external_id"]]
+        indexes = [
+            models.Index(fields=["registration", "event_date"], name="idx_incident_reg_date"),
+        ]
+
+    def __str__(self):
+        return f"{self.registration} - {self.source}:{self.external_id}"
+
+
 class AirframeSourceData(models.Model):
     """
     Stores raw airframe data from each data source separately.

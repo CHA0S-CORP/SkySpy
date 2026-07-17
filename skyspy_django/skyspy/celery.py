@@ -434,6 +434,14 @@ app.conf.beat_schedule = {
         "task": "skyspy.tasks.monitoring.cleanup_stale_task_metrics",
         "schedule": crontab(hour=2, minute=0),
     },
+    # ==========================================================================
+    # Aircraft Incident Records (NTSB)
+    # ==========================================================================
+    # Enrich NTSB incident/accident records for tracked airframes - daily at 6:30 AM UTC
+    "refresh-aircraft-incidents-daily": {
+        "task": "skyspy.tasks.incidents.refresh_aircraft_incidents",
+        "schedule": crontab(hour=6, minute=30),
+    },
 }
 
 
@@ -545,6 +553,8 @@ app.conf.task_routes = {
     "skyspy.tasks.notifications.*": {"queue": "notifications"},
     # Terrain tasks (tile downloads, not time-sensitive)
     "skyspy.tasks.terrain.*": {"queue": "database"},
+    # Incident enrichment (external API + DB writes, not time-sensitive)
+    "skyspy.tasks.incidents.*": {"queue": "database"},
     # Cannonball tasks (pattern analysis is time-sensitive)
     "skyspy.tasks.cannonball.analyze_aircraft_patterns": {"queue": "polling"},
     "skyspy.tasks.cannonball.cleanup_cannonball_sessions": {"queue": "database"},

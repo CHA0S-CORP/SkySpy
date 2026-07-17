@@ -23,6 +23,7 @@ from skyspy.tasks import (
     cleanup,
     external_db,
     geodata,
+    incidents,
     le_data_sync,
     monitoring,
     notams,
