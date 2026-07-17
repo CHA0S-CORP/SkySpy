@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Icon } from '../primitives';
+import { Icon, LiveIndicator } from '../primitives';
 import { useAlertNotifications } from '../../../hooks/useAlertNotifications';
 import { useAuth } from '../../../contexts/AuthContext';
 
@@ -9,10 +9,12 @@ const NAV_ITEMS = [
   { id: 'map', icon: 'map', label: 'Live Map', feature: 'aircraft' },
   { id: 'aircraft', icon: 'plane', label: 'Aircraft List', feature: 'aircraft' },
   { id: 'stats', icon: 'bar-chart', label: 'Statistics', feature: 'aircraft' },
+  { id: 'analytics', icon: 'line-chart', label: 'Analytics', feature: 'aircraft' },
   { id: 'history', icon: 'history', label: 'History', feature: 'history' },
   { id: 'audio', icon: 'wave', label: 'Radio', feature: 'audio' },
   { id: 'alerts', icon: 'bell', label: 'Alerts', feature: 'alerts' },
   { id: 'system', icon: 'activity', label: 'System', feature: 'system' },
+  { id: 'assistant', icon: 'message', label: 'Assistant', feature: 'aircraft' },
   {
     id: 'admin',
     icon: 'sliders',
@@ -138,9 +140,8 @@ export function NavRail({ activeTab, onNavigate, connected, className = '' }) {
       </div>
 
       <div className="v2-nav__spacer" />
-      <div className={`v2-nav__live ${connected ? '' : 'v2-nav__live--offline'}`}>
-        <span className="v2-nav__live-dot" />
-        <span className="v2-nav__live-label">{connected ? 'LIVE' : 'OFFLINE'}</span>
+      <div className="v2-nav__live">
+        <LiveIndicator connected={connected} />
         <span className="v2-nav__version">v2.5.0</span>
       </div>
       <div className="v2-nav__copyright">© CHAOS CORP</div>

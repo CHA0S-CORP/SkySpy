@@ -6,10 +6,12 @@ import { SettingsModal } from './components/layout';
 import { AppShell } from './components/v2/shell';
 import { AircraftListScreen } from './components/v2/screens/list/AircraftListScreen';
 import { SystemScreen } from './components/v2/screens/system/SystemScreen';
+import { AssistantScreen } from './components/v2/screens/assistant/AssistantScreen';
 import { AlertsScreen } from './components/v2/screens/alerts/AlertsScreen';
 import { RadioScreen } from './components/v2/screens/radio/RadioScreen';
 import { HistoryScreen } from './components/v2/screens/history/HistoryScreen';
 import { StatsScreen } from './components/v2/screens/stats/StatsScreen';
+import { AdvancedAnalyticsScreen } from './components/v2/screens/analytics/AdvancedAnalyticsScreen';
 
 // View components
 // Note: NotamsView and ArchiveView are now integrated into HistoryView
@@ -55,6 +57,7 @@ const VALID_TABS = [
   'map',
   'aircraft',
   'stats',
+  'analytics',
   'history',
   'audio',
   'notams',
@@ -62,6 +65,7 @@ const VALID_TABS = [
   'archive',
   'alerts',
   'system',
+  'assistant',
   'admin',
   'airframe',
   'event',
@@ -282,6 +286,9 @@ export default function App() {
     if (activeTab !== 'airframe' || !hashParams.tail) return;
 
     const tail = hashParams.tail.trim().toUpperCase();
+    // Whitespace-only tail passes the truthy guard above but trims to '' -
+    // don't issue a spurious /airframes/registration// lookup for it
+    if (!tail) return;
 
     // Already cached or lookup in progress - nothing to do
     if (tail in tailHexLookup) return;
@@ -404,6 +411,12 @@ export default function App() {
               onSelectAircraft={(hex) => setActiveTab('airframe', { icao: hex })}
             />
           )}
+          {activeTab === 'analytics' && (
+            <AdvancedAnalyticsScreen
+              apiBase={config.apiBaseUrl}
+              onSelectAircraft={(hex) => setActiveTab('airframe', { icao: hex })}
+            />
+          )}
           {/* History view includes Sessions/Sightings/ACARS/Safety/NOTAMs/PIREPs/Archive tabs */}
           {activeTab === 'history' && (
             <HistoryScreen
@@ -437,6 +450,7 @@ export default function App() {
               feederLocation={status?.location}
             />
           )}
+          {activeTab === 'assistant' && <AssistantScreen />}
           {activeTab === 'admin' && <AdminConfigView apiBase={config.apiBaseUrl} />}
           {activeTab === 'airframe' &&
             (hashParams.icao || hashParams.call || hashParams.tail) &&
@@ -487,6 +501,8 @@ export default function App() {
                   hex={hex}
                   apiBase={config.apiBaseUrl}
                   live={foundAircraft}
+                  call={hashParams.call}
+                  connected={isReady}
                   onClose={() => window.history.back()}
                   onViewEvent={(eventId) => setActiveTab('event', { id: eventId })}
                 />

@@ -655,6 +655,14 @@ EMBEDDING_API_KEY = get_env("EMBEDDING_API_KEY", "")
 EMBEDDING_MODEL = get_env("EMBEDDING_MODEL", "text-embedding-3-small")
 EMBEDDING_DIM = get_env("EMBEDDING_DIM", "1536", int)  # text-embedding-3-small = 1536
 
+# LLM Assistant (LangChain tool-calling agent over the analytics/search services).
+# Requires LLM_ENABLED and a chat model that supports tool/function calling
+# (served by vLLM in prod, or OpenAI/Ollama in dev — any OpenAI-compatible URL).
+ASSISTANT_ENABLED = get_env("ASSISTANT_ENABLED", "False", bool)
+ASSISTANT_MODEL = get_env("ASSISTANT_MODEL", "") or LLM_MODEL
+ASSISTANT_MAX_STEPS = get_env("ASSISTANT_MAX_STEPS", "6", int)  # tool-call budget per query
+ASSISTANT_TIMEOUT = get_env("ASSISTANT_TIMEOUT", "60", int)
+
 # OpenSky Database
 OPENSKY_DB_PATH = get_env("OPENSKY_DB_PATH", "/data/opensky/aircraft-database.csv")
 OPENSKY_DB_ENABLED = get_env("OPENSKY_DB_ENABLED", "True", bool)

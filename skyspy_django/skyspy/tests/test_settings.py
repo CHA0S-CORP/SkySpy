@@ -327,6 +327,12 @@ EMBEDDING_API_KEY = ""
 EMBEDDING_MODEL = "test-embedding-model"
 EMBEDDING_DIM = 1536
 
+# LLM assistant - disabled for tests (tool-selection tests stub the model)
+ASSISTANT_ENABLED = False
+ASSISTANT_MODEL = "test-model"
+ASSISTANT_MAX_STEPS = 6
+ASSISTANT_TIMEOUT = 60
+
 # Sentry - disabled for tests
 SENTRY_DSN = None
 SENTRY_ENVIRONMENT = "test"

@@ -134,6 +134,13 @@ services:
       LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-500}
       LLM_TEMPERATURE: ${LLM_TEMPERATURE:-0.1}
 
+      # LLM Assistant (LangChain tool-calling agent). Point LLM_API_URL at the
+      # vllm service (http://vllm:8000/v1) where a GPU is available.
+      ASSISTANT_ENABLED: ${ASSISTANT_ENABLED:-False}
+      ASSISTANT_MODEL: ${ASSISTANT_MODEL:-}
+      ASSISTANT_MAX_STEPS: ${ASSISTANT_MAX_STEPS:-6}
+      ASSISTANT_TIMEOUT: ${ASSISTANT_TIMEOUT:-60}
+
       # OpenSky Database
       OPENSKY_DB_ENABLED: ${OPENSKY_DB_ENABLED:-True}
       OPENSKY_DB_PATH: /data/opensky/aircraft-database.csv
@@ -335,6 +342,40 @@ services:
     networks:
       - skyspy-network
     command: python manage.py run_acars
+
+  # ---------------------------------------------------------------------------
+  # vLLM — self-hosted OpenAI-compatible model server (GPU only)
+  # ---------------------------------------------------------------------------
+  # Behind the `gpu` profile so it never starts on a machine without CUDA.
+  # Where a GPU exists: `docker compose --profile gpu up -d vllm` and set
+  #   LLM_API_URL=http://vllm:8000/v1
+  #   ASSISTANT_MODEL / LLM_MODEL=<the served model>
+  # Use a tool-calling-capable model; the parser must match it (hermes shown).
+  vllm:
+    image: vllm/vllm-openai:latest
+    container_name: skyspy-vllm
+    restart: unless-stopped
+    profiles:
+      - gpu
+    environment:
+      HUGGING_FACE_HUB_TOKEN: ${HUGGING_FACE_HUB_TOKEN:-}
+    command: >
+      --model ${VLLM_MODEL:-Qwen/Qwen2.5-7B-Instruct}
+      --served-model-name ${ASSISTANT_MODEL:-Qwen/Qwen2.5-7B-Instruct}
+      --enable-auto-tool-choice
+      --tool-call-parser ${VLLM_TOOL_PARSER:-hermes}
+      --port 8000
+    ports:
+      - "${VLLM_PORT:-8000}:8000"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    networks:
+      - skyspy-network
 
 # =============================================================================
 # Networks

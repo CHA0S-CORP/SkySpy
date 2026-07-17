@@ -203,6 +203,15 @@ EMBEDDING_API_URL=       # defaults to LLM_API_URL
 EMBEDDING_API_KEY=       # defaults to LLM_API_KEY
 EMBEDDING_MODEL=text-embedding-3-small
 EMBEDDING_DIM=1536
+
+# LLM assistant (LangChain tool-calling agent over analytics/search services,
+# served by an OpenAI-compatible endpoint — vLLM in prod behind the compose
+# `gpu` profile, OpenAI/Ollama in dev). Requires LLM_ENABLED + a tool-calling
+# model. Endpoint at POST /api/v1/assistant/ask/ and SSE /api/v1/assistant/stream/.
+ASSISTANT_ENABLED=False
+ASSISTANT_MODEL=         # defaults to LLM_MODEL
+ASSISTANT_MAX_STEPS=6
+ASSISTANT_TIMEOUT=60
 ```
 
 ### Redis Layout
