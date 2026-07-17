@@ -216,7 +216,7 @@ class AirframeViewSet(viewsets.ViewSet):
 
         # Safely parse limit with fallback
         try:
-            limit = min(int(request.query_params.get("limit", 50)), 500)
+            limit = max(0, min(int(request.query_params.get("limit", 50)), 500))
         except (ValueError, TypeError):
             limit = 50
 

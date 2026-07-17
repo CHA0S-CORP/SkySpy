@@ -129,7 +129,7 @@ def run_safety_and_alert_checks(aircraft_list: list):
         logger.exception("Unexpected error in alert evaluation")
 
 
-@shared_task(bind=True, max_retries=0)
+@shared_task(bind=True, max_retries=0, ignore_result=True)
 def poll_aircraft(self):
     """
     Poll aircraft from ultrafeeder and update cache.
@@ -358,7 +358,7 @@ def store_aircraft_sightings(aircraft_data: list):
             logger.debug(f"Stored {len(sightings)} sightings")
 
 
-@shared_task
+@shared_task(ignore_result=True)
 def update_aircraft_sessions_from_cache():
     """
     Periodic task to update aircraft sessions from cached aircraft data.
@@ -483,7 +483,7 @@ def _update_aircraft_sessions(aircraft_data: list):
                 )
 
 
-@shared_task
+@shared_task(ignore_result=True)
 def update_stats_cache():
     """
     Update cached statistics for quick retrieval.

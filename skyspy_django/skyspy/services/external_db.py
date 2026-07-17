@@ -27,7 +27,7 @@ from threading import Lock
 import httpx
 from django.conf import settings
 from django.db import DatabaseError, transaction
-from tenacity import retry, stop_after_attempt, wait_exponential
+from tenacity import RetryError, retry, stop_after_attempt, wait_exponential
 
 from skyspy.models import AircraftInfo, AirframeSourceData
 
@@ -167,7 +167,7 @@ REGISTRATION_PREFIXES = {
 # =============================================================================
 
 
-@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=30))
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=30), reraise=True)
 def fetch_with_retry(url: str, timeout: float = 60, stream: bool = False, **kwargs) -> httpx.Response:
     """
     Fetch a URL with retry logic for resilience.
@@ -190,7 +190,7 @@ def fetch_with_retry(url: str, timeout: float = 60, stream: bool = False, **kwar
         return response
 
 
-@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=30))
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=30), reraise=True)
 def stream_with_retry(
     url: str, target_path: Path, timeout: float = 60, chunk_size: int = 8192 * 1024, **kwargs
 ) -> Path:
@@ -308,7 +308,7 @@ def download_adsbx_database() -> Path | None:
         logger.info(f"Downloaded ADS-B Exchange database: {file_size / 1024 / 1024:.1f}MB in {duration:.1f}s")
         return target_path
 
-    except (httpx.HTTPError, ConnectionError, OSError) as e:
+    except (httpx.HTTPError, ConnectionError, OSError, RetryError) as e:
         logger.error(f"Failed to download ADS-B Exchange database: {type(e).__name__}: {e}")
         return None
 
@@ -416,7 +416,7 @@ def download_tar1090_database() -> Path | None:
         logger.info(f"Downloaded tar1090-db: {file_size / 1024 / 1024:.1f}MB in {duration:.1f}s")
         return target_path
 
-    except (httpx.HTTPError, ConnectionError, OSError) as e:
+    except (httpx.HTTPError, ConnectionError, OSError, RetryError) as e:
         logger.error(f"Failed to download tar1090-db: {type(e).__name__}: {e}")
         return None
 
@@ -540,7 +540,7 @@ def download_faa_database() -> Path | None:
         zip_path.unlink()
         return target_path
 
-    except (httpx.HTTPError, ConnectionError, OSError, zipfile.BadZipFile) as e:
+    except (httpx.HTTPError, ConnectionError, OSError, zipfile.BadZipFile, RetryError) as e:
         logger.error(f"Failed to download FAA Registry: {type(e).__name__}: {e}")
         return None
 
@@ -655,7 +655,7 @@ def download_opensky_database() -> Path | None:
         logger.info(f"Downloaded OpenSky database: {file_size / 1024 / 1024:.1f}MB in {duration:.1f}s")
         return target_path
 
-    except (httpx.HTTPError, ConnectionError, OSError) as e:
+    except (httpx.HTTPError, ConnectionError, OSError, RetryError) as e:
         logger.error(f"Failed to download OpenSky database: {type(e).__name__}: {e}")
         if target_path.exists():
             try:
@@ -1020,6 +1020,8 @@ def init_databases(auto_download: bool = True):
 
 def update_databases_if_stale():
     """Check and update databases if older than UPDATE_INTERVAL_HOURS."""
+    global _opensky_loaded
+
     now = datetime.utcnow()
     updated_any = False
 
@@ -1044,6 +1046,9 @@ def update_databases_if_stale():
                 updated_any = True
             elif db_name == "opensky":
                 download_opensky_database()
+                # load_opensky_database short-circuits when already loaded -
+                # reset the flag so the freshly downloaded CSV is re-parsed
+                _opensky_loaded = False
                 load_opensky_database(auto_download=False)
                 updated_any = True
 

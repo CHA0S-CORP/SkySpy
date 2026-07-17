@@ -16,6 +16,7 @@ Request/Response types:
 - stats - Get audio statistics
 """
 
+import asyncio
 import logging
 from datetime import datetime, timedelta
 
@@ -166,37 +167,47 @@ class AudioNamespace(socketio.AsyncNamespace):
         if not isinstance(params, dict):
             params = {}
 
-        if request_type == "transmissions":
-            transmissions = await self._get_transmissions(
-                frequency=params.get("frequency"),
-                channel_name=params.get("channel_name"),
-                transcription_status=params.get("transcription_status"),
-                limit=parse_int_param(params.get("limit"), 50, min_val=1, max_val=500),
-            )
-            await self.emit(
-                "response", {"request_id": request_id, "request_type": "transmissions", "data": transmissions}, room=sid
-            )
-
-        elif request_type == "transmission":
-            transmission_id = params.get("id")
-            if transmission_id:
-                transmission = await self._get_transmission(transmission_id)
+        try:
+            if request_type == "transmissions":
+                transmissions = await self._get_transmissions(
+                    frequency=params.get("frequency"),
+                    channel_name=params.get("channel_name"),
+                    transcription_status=params.get("transcription_status"),
+                    limit=parse_int_param(params.get("limit"), 50, min_val=1, max_val=500),
+                )
                 await self.emit(
                     "response",
-                    {"request_id": request_id, "request_type": "transmission", "data": transmission},
+                    {"request_id": request_id, "request_type": "transmissions", "data": transmissions},
                     room=sid,
                 )
+
+            elif request_type == "transmission":
+                transmission_id = params.get("id")
+                if transmission_id:
+                    transmission = await self._get_transmission(transmission_id)
+                    await self.emit(
+                        "response",
+                        {"request_id": request_id, "request_type": "transmission", "data": transmission},
+                        room=sid,
+                    )
+                else:
+                    await self.emit("error", {"request_id": request_id, "message": "Missing id parameter"}, room=sid)
+
+            elif request_type == "stats":
+                stats = await self._get_stats()
+                await self.emit(
+                    "response", {"request_id": request_id, "request_type": "stats", "data": stats}, room=sid
+                )
+
             else:
-                await self.emit("error", {"request_id": request_id, "message": "Missing id parameter"}, room=sid)
-
-        elif request_type == "stats":
-            stats = await self._get_stats()
-            await self.emit("response", {"request_id": request_id, "request_type": "stats", "data": stats}, room=sid)
-
-        else:
-            await self.emit(
-                "error", {"request_id": request_id, "message": f"Unknown request type: {request_type}"}, room=sid
-            )
+                await self.emit(
+                    "error", {"request_id": request_id, "message": f"Unknown request type: {request_type}"}, room=sid
+                )
+        except asyncio.CancelledError:
+            logger.debug(f"Audio request {request_type} cancelled for {sid} (client disconnected)")
+        except Exception as e:  # broad: top-level dispatch guard; must degrade to error response, not a hung client
+            logger.exception(f"Error handling audio request {request_type} for {sid}: {e}")
+            await self.emit("error", {"request_id": request_id, "message": "Internal server error"}, room=sid)
 
     async def on_subscribe(self, sid, data):
         """

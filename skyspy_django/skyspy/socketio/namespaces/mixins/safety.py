@@ -113,10 +113,15 @@ class SafetyHandlerMixin:
         tracked_aircraft = 0
 
         try:
+            # Detection runs in the celery worker, which publishes its stats to
+            # the shared cache; this process's monitor never tracks aircraft.
+            from django.core.cache import cache
+
             from skyspy.services.safety import safety_monitor
 
-            stats = safety_monitor.get_stats()
+            stats = cache.get("safety:monitor_stats") or safety_monitor.get_stats()
             tracked_aircraft = stats.get("tracked_aircraft", 0)
+            enabled = stats.get("monitoring_enabled", enabled)
         except (ImportError, AttributeError, TypeError, KeyError):
             pass
 
@@ -165,6 +170,11 @@ class SafetyHandlerMixin:
             event.acknowledged = True
             event.acknowledged_at = timezone.now()
             event.save(update_fields=["acknowledged", "acknowledged_at"])
+            # Broadcast so every other connected client sees the ack; the
+            # worker's monitor picks the DB flag up via its periodic ack sync.
+            from skyspy.services.safety import safety_monitor
+
+            safety_monitor.broadcast_event_updated({"id": str(event.id), "db_id": event.id, "acknowledged": True})
             return {
                 "success": True,
                 "id": str(event.id),

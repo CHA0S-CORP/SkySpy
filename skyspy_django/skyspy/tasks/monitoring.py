@@ -29,7 +29,7 @@ _REDIS_OP_ERRORS = (ImportError, ConnectionError, OSError, TimeoutError, *_REDIS
 logger = logging.getLogger(__name__)
 
 
-@shared_task
+@shared_task(ignore_result=True)
 def update_queue_metrics():
     """
     Update queue depth metrics.
@@ -88,7 +88,7 @@ def update_queue_metrics():
         return {"status": "error", "error": str(e)}
 
 
-@shared_task
+@shared_task(ignore_result=True)
 def check_task_health():
     """
     Check for stale or failing tasks.

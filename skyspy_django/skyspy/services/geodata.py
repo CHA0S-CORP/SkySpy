@@ -167,7 +167,6 @@ def calculate_bbox(geometry: dict) -> tuple:
     return (min(lats), max(lats), min(lons), max(lons))
 
 
-@transaction.atomic
 def refresh_airports() -> int:
     """Fetch and cache airport data using UPSERT."""
     logger.info("Refreshing cached airports...")
@@ -184,9 +183,6 @@ def refresh_airports() -> int:
     if not isinstance(data, list):
         logger.warning(f"Unexpected airport data format: {type(data)}")
         return 0
-
-    # Clear old data
-    CachedAirport.objects.all().delete()
 
     # Deduplicate by ICAO
     unique_airports = {}
@@ -214,14 +210,22 @@ def refresh_airports() -> int:
             source_data=apt,
         )
 
-    if unique_airports:
+    if not unique_airports:
+        # Empty (but 200 OK) responses happen during AWC maintenance windows -
+        # keep serving the previous data instead of wiping the table.
+        logger.warning("AWC airport response contained no usable rows; keeping existing cache")
+        return 0
+
+    # Short transaction: all fetching/parsing happened above, so the swap
+    # never holds a DB transaction open across slow HTTP calls (PgBouncer).
+    with transaction.atomic():
+        CachedAirport.objects.all().delete()
         CachedAirport.objects.bulk_create(unique_airports.values())
-        logger.info(f"Cached {len(unique_airports)} airports")
+    logger.info(f"Cached {len(unique_airports)} airports")
 
     return len(unique_airports)
 
 
-@transaction.atomic
 def refresh_navaids() -> int:
     """Fetch and cache navaid data."""
     logger.info("Refreshing cached navaids...")
@@ -238,9 +242,6 @@ def refresh_navaids() -> int:
     if not isinstance(data, list):
         logger.warning(f"Unexpected navaid data format: {type(data)}")
         return 0
-
-    # Clear old data
-    CachedNavaid.objects.all().delete()
 
     # Deduplicate by composite key (ident, lat, lon)
     unique_navaids = {}
@@ -269,14 +270,18 @@ def refresh_navaids() -> int:
             source_data=nav,
         )
 
-    if unique_navaids:
+    if not unique_navaids:
+        logger.warning("AWC navaid response contained no usable rows; keeping existing cache")
+        return 0
+
+    with transaction.atomic():
+        CachedNavaid.objects.all().delete()
         CachedNavaid.objects.bulk_create(unique_navaids.values())
-        logger.info(f"Cached {len(unique_navaids)} navaids")
+    logger.info(f"Cached {len(unique_navaids)} navaids")
 
     return len(unique_navaids)
 
 
-@transaction.atomic
 def refresh_geojson() -> int:
     """Fetch and cache GeoJSON boundary data."""
     logger.info("Refreshing cached GeoJSON boundaries...")
@@ -293,9 +298,6 @@ def refresh_geojson() -> int:
         if not geojson:
             logger.warning(f"Failed to fetch {data_type} GeoJSON")
             continue
-
-        # Clear old data for this type
-        CachedGeoJSON.objects.filter(data_type=data_type).delete()
 
         # Handle different GeoJSON formats
         if "features" in geojson:
@@ -380,7 +382,11 @@ def refresh_geojson() -> int:
             )
 
         if features:
-            CachedGeoJSON.objects.bulk_create(features)
+            # Short per-type transaction: swap old rows for new without holding
+            # a transaction across the remaining HTTP fetches (PgBouncer).
+            with transaction.atomic():
+                CachedGeoJSON.objects.filter(data_type=data_type).delete()
+                CachedGeoJSON.objects.bulk_create(features)
             logger.info(f"Cached {len(features)} {data_type} features")
             total += len(features)
 

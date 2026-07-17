@@ -14,14 +14,21 @@ class SafetyEvent(models.Model):
         ("extreme_vs", "Extreme Vertical Speed"),
         ("vs_reversal", "Vertical Speed Reversal"),
         ("proximity_conflict", "Proximity Conflict"),
-        ("emergency_squawk", "Emergency Squawk"),
-        ("7500", "Squawk 7500 (Hijack)"),
-        ("7600", "Squawk 7600 (Radio Failure)"),
-        ("7700", "Squawk 7700 (Emergency)"),
+        # Values written by SafetyMonitor._check_emergency_squawk
+        # ("squawk_" + EMERGENCY_SQUAWKS type)
+        ("squawk_hijack", "Squawk 7500 (Hijack)"),
+        ("squawk_radio_failure", "Squawk 7600 (Radio Failure)"),
+        ("squawk_emergency", "Squawk 7700 (Emergency)"),
+        # Legacy values kept for old rows / API back-compat
+        ("emergency_squawk", "Emergency Squawk (legacy)"),
+        ("7500", "Squawk 7500 (legacy)"),
+        ("7600", "Squawk 7600 (legacy)"),
+        ("7700", "Squawk 7700 (legacy)"),
     ]
 
     SEVERITY_CHOICES = [
-        ("info", "Info"),
+        ("info", "Info (legacy)"),
+        ("low", "Low"),
         ("warning", "Warning"),
         ("critical", "Critical"),
     ]

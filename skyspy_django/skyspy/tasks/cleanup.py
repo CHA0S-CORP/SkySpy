@@ -288,6 +288,75 @@ def cleanup_old_acars_messages():
 
 
 @shared_task
+def cleanup_old_audio_transmissions():
+    """
+    Clean up old radio transmissions based on retention policy.
+
+    Retention: RADIO_RETENTION_DAYS (default: 7 days)
+
+    Deletes both the AudioTransmission rows and their local audio files
+    under RADIO_AUDIO_DIR (S3-stored audio keeps only the DB row removal;
+    S3 lifecycle rules own remote expiry).
+    """
+    import os
+
+    from django.conf import settings
+
+    from skyspy.models import AudioTransmission
+
+    retention_days = _get_retention_days("RADIO_RETENTION_DAYS", 7)
+    cutoff = timezone.now() - timedelta(days=retention_days)
+    audio_dir = getattr(settings, "RADIO_AUDIO_DIR", "/data/radio")
+
+    try:
+        batch_size = 1000
+        total_deleted = 0
+        files_deleted = 0
+
+        while True:
+            batch = list(AudioTransmission.objects.filter(created_at__lt=cutoff).values("id", "filename")[:batch_size])
+            if not batch:
+                break
+
+            for row in batch:
+                filename = row.get("filename")
+                if not filename:
+                    continue
+                # filenames are stored bare; refuse anything path-like
+                if os.path.basename(filename) != filename:
+                    logger.warning(f"Skipping suspicious audio filename during cleanup: {filename!r}")
+                    continue
+                path = os.path.join(audio_dir, filename)
+                try:
+                    os.remove(path)
+                    files_deleted += 1
+                except FileNotFoundError:
+                    pass
+                except OSError as e:
+                    logger.warning(f"Could not delete audio file {path}: {e}")
+
+            deleted, _ = AudioTransmission.objects.filter(id__in=[row["id"] for row in batch]).delete()
+            total_deleted += deleted
+
+        if total_deleted:
+            logger.info(
+                f"Audio cleanup: deleted {total_deleted} transmissions ({files_deleted} files) "
+                f"older than {retention_days} days"
+            )
+
+        return {
+            "deleted": total_deleted,
+            "files_deleted": files_deleted,
+            "retention_days": retention_days,
+            "cutoff": cutoff.isoformat(),
+        }
+
+    except DatabaseError as e:
+        logger.error(f"Error cleaning up old audio transmissions: {e}")
+        raise
+
+
+@shared_task
 def run_all_cleanup_tasks():
     """
     Run all data retention cleanup tasks.
@@ -332,6 +401,11 @@ def run_all_cleanup_tasks():
         results["acars_messages"] = cleanup_old_acars_messages()
     except Exception as e:  # broad: isolate sub-task failure so remaining cleanups still run
         results["acars_messages"] = {"error": str(e)}
+
+    try:
+        results["audio_transmissions"] = cleanup_old_audio_transmissions()
+    except Exception as e:  # broad: isolate sub-task failure so remaining cleanups still run
+        results["audio_transmissions"] = {"error": str(e)}
 
     # Calculate totals
     total_deleted = sum(

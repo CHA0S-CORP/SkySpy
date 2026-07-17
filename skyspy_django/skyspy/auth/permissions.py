@@ -69,6 +69,7 @@ class FeatureBasedPermission(permissions.BasePermission):
         "NotificationViewSet": "alerts",
         # Safety
         "SafetyEventViewSet": "safety",
+        "ActiveSafetyEventAcknowledgeView": "safety",
         # Audio
         "AudioViewSet": "audio",
         "AudioTransmissionViewSet": "audio",
@@ -577,6 +578,23 @@ class CanAccessAlert(permissions.BasePermission):
     """
 
     def has_permission(self, request, view):
+        # Scoped API keys must carry an alerts.* scope regardless of the
+        # owning user's role permissions (empty scopes = all user perms).
+        api_key_scopes = getattr(request, "api_key_scopes", None)
+        if api_key_scopes:
+            required = (
+                "alerts.view"
+                if request.method in permissions.SAFE_METHODS
+                else {
+                    "POST": "alerts.create",
+                    "PUT": "alerts.edit",
+                    "PATCH": "alerts.edit",
+                    "DELETE": "alerts.delete",
+                }.get(request.method)
+            )
+            if required and required not in api_key_scopes:
+                return False
+
         auth_mode = getattr(settings, "AUTH_MODE", "hybrid")
         if auth_mode == "public":
             return True

@@ -197,7 +197,7 @@ class AlertHandlerMixin:
                     "priority": alert.priority,
                     "triggered_at": alert.triggered_at.isoformat() if alert.triggered_at else None,
                     "message": alert.message,
-                    "data": alert.data,
+                    "data": alert.aircraft_data,
                 }
             )
 

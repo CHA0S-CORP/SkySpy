@@ -108,8 +108,15 @@ class AircraftHandlerMixin:
 
         military_only = filters.get("military_only")
         category = filters.get("category")
-        min_alt = filters.get("min_altitude")
-        max_alt = filters.get("max_altitude")
+
+        def _num_or_none(v):
+            try:
+                return None if v is None else float(v)
+            except (ValueError, TypeError):
+                return None
+
+        min_alt = _num_or_none(filters.get("min_altitude"))
+        max_alt = _num_or_none(filters.get("max_altitude"))
 
         if not any([military_only, category, min_alt is not None, max_alt is not None]):
             return cached
@@ -120,7 +127,8 @@ class AircraftHandlerMixin:
                 return False
             if category and ac.get("category") != category:
                 return False
-            alt = ac.get("alt_baro") or 0
+            # alt_baro can be the string "ground" (readsb) - use the numeric helper
+            alt = _numeric_altitude(ac)
             if min_alt is not None and alt < min_alt:
                 return False
             return not (max_alt is not None and alt > max_alt)

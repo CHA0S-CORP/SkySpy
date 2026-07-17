@@ -391,22 +391,24 @@ class MainNamespace(
         if not isinstance(params, dict):
             params = {}
 
-        if not request_type:
+        if not request_type or not isinstance(request_type, str):
             await self._emit_error(sid, request_id, "Missing request type")
             return
 
-        # Enforce per-session request rate limiting
-        session = await sio.get_session(sid)
-        rate_limiter = session.get("rate_limiter")
-        if rate_limiter and not rate_limiter.can_send("request"):
-            await self._emit_error(sid, request_id, "Rate limit exceeded, please slow down")
-            return
-
-        if not await self._check_request_permission(sid, request_type):
-            await self._emit_error(sid, request_id, "Permission denied")
-            return
-
         try:
+            # Pre-dispatch (session fetch, rate limit, permission) must run
+            # inside the guard too - an escape here would leave the client
+            # hanging with no response until its timeout.
+            session = await sio.get_session(sid)
+            rate_limiter = session.get("rate_limiter")
+            if rate_limiter and not rate_limiter.can_send("request"):
+                await self._emit_error(sid, request_id, "Rate limit exceeded, please slow down")
+                return
+
+            if not await self._check_request_permission(sid, request_type):
+                await self._emit_error(sid, request_id, "Permission denied")
+                return
+
             handler = getattr(self, f"_handle_{request_type.replace('-', '_')}", None)
             if handler:
                 result = await handler(params)

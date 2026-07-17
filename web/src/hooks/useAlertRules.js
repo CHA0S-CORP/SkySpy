@@ -61,13 +61,25 @@ export function useAlertRules({ apiBase, wsRequest, wsConnected, onToast }) {
     return { rules: [] };
   }, [rulesData]);
 
-  // Socket.IO for real-time alert notifications
-  const { connected: alertsConnected, on: onAlertEvent } = useSocketIO({
+  // Real-time alert notifications ride the main '/' namespace (the backend
+  // registers no '/alerts' namespace); alert:triggered is emitted to the
+  // topic_alerts room, joined via the subscribe message below.
+  const {
+    connected: alertsConnected,
+    on: onAlertEvent,
+    emit: emitAlertNs,
+  } = useSocketIO({
     enabled: true,
     apiBase,
-    namespace: '/alerts',
+    namespace: '/',
     path: '/socket.io',
   });
+
+  useEffect(() => {
+    if (alertsConnected) {
+      emitAlertNs('subscribe', { topics: ['alerts'] });
+    }
+  }, [alertsConnected, emitAlertNs]);
 
   // Track event listener unsubscribers to prevent stacking on reconnect
   const alertListenersRef = useRef({ triggered: null, snapshot: null });

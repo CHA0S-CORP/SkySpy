@@ -111,6 +111,20 @@ class TestSafetyEventListView:
         for event in data["events"]:
             assert event["event_type"] == "tcas_ra"
 
+    def test_list_filter_by_real_squawk_type(self, api_client):
+        """Filtering by the event_type values the monitor actually writes must
+        not 400 (the filterset validates against model choices)."""
+        SafetyEvent.objects.create(event_type="squawk_hijack", severity="critical", icao_hex="HJK001")
+
+        response = api_client.get("/api/v1/safety/events/?event_type=squawk_hijack")
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["count"] == 1
+        assert data["events"][0]["icao"] == "HJK001"
+
+        response = api_client.get("/api/v1/safety/events/?severity=low")
+        assert response.status_code == status.HTTP_200_OK
+
     def test_list_filter_by_severity(self, api_client):
         """Test filtering events by severity."""
         SafetyEvent.objects.create(event_type="tcas_ra", severity="critical", icao_hex="A")
@@ -208,6 +222,16 @@ class TestSafetyEventRetrieveView:
         assert data["icao"] == "ABC123"
         assert data["callsign"] == "UAL123"
         assert data["message"] == "TCAS RA: Climb"
+
+    def test_retrieve_event_older_than_24h(self, api_client):
+        """Detail routes must not be limited by the list view's default 24h window."""
+        old_event = SafetyEvent.objects.create(event_type="tcas_ra", icao_hex="OLD456")
+        old_event.timestamp = timezone.now() - timedelta(hours=72)
+        old_event.save()
+
+        response = api_client.get(f"/api/v1/safety/events/{old_event.id}/")
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json()["icao"] == "OLD456"
 
     def test_retrieve_nonexistent_event(self, api_client):
         """Test retrieving non-existent event returns 404."""
@@ -516,6 +540,17 @@ class TestSafetyEventAcknowledgeView:
         response = api_client.post("/api/v1/safety/events/99999/acknowledge/")
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
+    def test_acknowledge_event_older_than_24h(self, api_client):
+        """Acknowledging an event older than the default list window must work."""
+        self.event.timestamp = timezone.now() - timedelta(hours=72)
+        self.event.save()
+
+        response = api_client.post(f"/api/v1/safety/events/{self.event.id}/acknowledge/")
+        assert response.status_code == status.HTTP_200_OK
+
+        self.event.refresh_from_db()
+        assert self.event.acknowledged
+
     def test_acknowledge_already_acknowledged(self, api_client):
         """Test acknowledging an already acknowledged event."""
         self.event.acknowledged = True
@@ -634,6 +669,11 @@ class TestSafetyEventValidation:
             "extreme_vs",
             "vs_reversal",
             "proximity_conflict",
+            # Values the SafetyMonitor actually writes
+            "squawk_hijack",
+            "squawk_radio_failure",
+            "squawk_emergency",
+            # Legacy values
             "emergency_squawk",
             "7500",
             "7600",
@@ -649,7 +689,7 @@ class TestSafetyEventValidation:
 
     def test_severity_levels(self):
         """Test that all severity levels are valid."""
-        valid_severities = ["info", "warning", "critical"]
+        valid_severities = ["info", "low", "warning", "critical"]
 
         for severity in valid_severities:
             event = SafetyEvent.objects.create(
@@ -784,39 +824,63 @@ class TestActiveSafetyEventAcknowledge:
         response = api_client.post("/api/v1/safety/active/vs_reversal:NOPE99/acknowledge")
         assert response.status_code == 404
 
+    def test_acknowledge_by_db_id_cross_process(self, api_client):
+        """Acknowledging by DB id must work when the event is NOT in this
+        process's monitor (production: detection runs in the celery worker)."""
+        event = SafetyEvent.objects.create(
+            event_type="squawk_emergency",
+            severity="critical",
+            icao_hex="XPROC1",
+            acknowledged=False,
+        )
+
+        response = api_client.post(f"/api/v1/safety/active/{event.id}/acknowledge")
+        assert response.status_code == 200
+        assert response.json()["acknowledged"] is True
+
+        event.refresh_from_db()
+        assert event.acknowledged
+        assert event.acknowledged_at is not None
+
 
 @pytest.mark.django_db
 class TestGenerateTestEvents:
     """Tests for POST /api/v1/safety/events/test/ (synthetic event generation)."""
-
-    def _cleanup(self):
-        from skyspy.services.safety import safety_monitor
-
-        with safety_monitor._events_lock:
-            for key in [k for k in safety_monitor._active_events if k.startswith("test_")]:
-                safety_monitor._active_events.pop(key, None)
 
     def test_generate_requires_authentication(self, api_client):
         """Anonymous clients must not be able to fabricate safety events."""
         response = api_client.post("/api/v1/safety/events/test/")
         assert response.status_code in (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN)
 
-    def test_generate_creates_active_test_events(self, api_client, django_user_model):
-        """Authenticated POST generates is_test events in the active monitor set."""
-        from skyspy.services.safety import safety_monitor
+    def test_generate_broadcasts_but_never_persists_or_notifies(self, api_client, django_user_model):
+        """Authenticated POST broadcasts is_test events without side effects.
+
+        Test events must reach connected dashboards live, but must NOT be
+        written to SafetyEvent history (they would pollute the History tab and
+        be rehydrated as active alarms on worker restart) and must NOT reach
+        the notification pipeline (a fake hijack must never page real channels).
+        """
+        from unittest.mock import patch
 
         user = django_user_model.objects.create_user(username="safety_tester", password="testpass")
         api_client.force_authenticate(user=user)
-        try:
+        with (
+            patch("skyspy.socketio.utils.sync_emit", return_value=True) as mock_emit,
+            patch(
+                "skyspy.services.notification_dispatcher.notification_dispatcher.dispatch_safety_event"
+            ) as mock_dispatch,
+        ):
             response = api_client.post("/api/v1/safety/events/test/")
-            assert response.status_code == status.HTTP_201_CREATED
-            data = response.json()
-            assert data["generated"] == len(data["events"]) > 0
-            assert all(e["is_test"] for e in data["events"])
-            event_types = {e["event_type"] for e in data["events"]}
-            assert "squawk_emergency" in event_types
-            with safety_monitor._events_lock:
-                active_test_keys = [k for k in safety_monitor._active_events if k.startswith("test_")]
-            assert len(active_test_keys) >= data["generated"]
-        finally:
-            self._cleanup()
+        assert response.status_code == status.HTTP_201_CREATED
+        data = response.json()
+        assert data["generated"] == len(data["events"]) > 0
+        assert all(e["is_test"] for e in data["events"])
+        event_types = {e["event_type"] for e in data["events"]}
+        assert "squawk_emergency" in event_types
+        # NOT persisted to the DB
+        assert SafetyEvent.objects.filter(details__is_test=True).count() == 0
+        # NOT routed to notifications
+        mock_dispatch.assert_not_called()
+        # Broadcast to connected clients
+        emitted = [c.args[0] for c in mock_emit.call_args_list]
+        assert emitted.count("safety:event") == data["generated"]

@@ -38,6 +38,7 @@ from skyspy.services.law_enforcement_db import (
 )
 from skyspy.socketio.middleware import authenticate_socket, check_topic_permission
 from skyspy.socketio.server import sio
+from skyspy.socketio.utils.rate_limiter import RateLimiter
 
 logger = logging.getLogger(__name__)
 
@@ -120,6 +121,7 @@ class CannonballNamespace(socketio.AsyncNamespace):
                 "previous_position": None,
                 "heading": None,
                 "threat_radius_nm": 25.0,
+                "rate_limiter": RateLimiter(),
             },
             namespace="/cannonball",
         )
@@ -229,8 +231,21 @@ class CannonballNamespace(socketio.AsyncNamespace):
             )
             return
 
+        # Validate heading before touching the session - a bad value must not
+        # leave the position half-updated with no threats recomputation
+        if heading is not None:
+            try:
+                heading = float(heading) % 360
+            except (ValueError, TypeError):
+                heading = None
+
         # Get current session
         session = await sio.get_session(sid, namespace="/cannonball")
+
+        # Rate limit: position updates trigger a full aircraft-cache LE scan
+        rate_limiter = session.get("rate_limiter")
+        if rate_limiter and not rate_limiter.can_send("aircraft:position"):
+            return
 
         # Store previous position for trend calculation
         previous_position = session.get("position")
@@ -241,7 +256,7 @@ class CannonballNamespace(socketio.AsyncNamespace):
         session["position"] = current_position
 
         if heading is not None:
-            session["heading"] = float(heading)
+            session["heading"] = heading
 
         # Save updated session
         await sio.save_session(sid, session, namespace="/cannonball")
@@ -325,6 +340,13 @@ class CannonballNamespace(socketio.AsyncNamespace):
     async def on_get_threats(self, sid):
         """Handle request for current threats without position update."""
         session = await sio.get_session(sid, namespace="/cannonball")
+
+        # Rate limit: threats recomputation scans the full aircraft cache
+        rate_limiter = session.get("rate_limiter")
+        if rate_limiter and not rate_limiter.can_send("request"):
+            await self.emit("error", {"message": "Rate limit exceeded, please slow down"}, room=sid)
+            return
+
         position = session.get("position")
 
         if not position:

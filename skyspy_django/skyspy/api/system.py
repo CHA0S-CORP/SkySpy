@@ -28,6 +28,49 @@ from skyspy.serializers.system import (
 logger = logging.getLogger(__name__)
 
 
+def _host_cpu_mem():
+    """Best-effort host CPU% and memory% via stdlib /proc (no psutil dependency).
+
+    Returns (cpu_percent, memory_percent, load_average); any value may be None
+    on platforms without /proc (e.g. macOS) — callers must handle None.
+    """
+    cpu_percent = None
+    try:
+
+        def _cpu_times():
+            with open("/proc/stat") as f:
+                parts = f.readline().split()[1:]
+            vals = [float(v) for v in parts]
+            idle = vals[3] + (vals[4] if len(vals) > 4 else 0.0)
+            return sum(vals), idle
+
+        total1, idle1 = _cpu_times()
+        time.sleep(0.1)
+        total2, idle2 = _cpu_times()
+        dt = total2 - total1
+        if dt > 0:
+            cpu_percent = round((1 - (idle2 - idle1) / dt) * 100, 1)
+    except (OSError, IndexError, ValueError):
+        pass
+
+    mem_percent = None
+    try:
+        with open("/proc/meminfo") as f:
+            meminfo = dict(line.split(":", 1) for line in f if ":" in line)
+        total = float(meminfo["MemTotal"].strip().split()[0])
+        available = float(meminfo["MemAvailable"].strip().split()[0])
+        if total > 0:
+            mem_percent = round((1 - available / total) * 100, 1)
+    except (OSError, KeyError, ValueError, IndexError):
+        pass
+
+    load = None
+    with contextlib.suppress(OSError, AttributeError):
+        load = round(os.getloadavg()[0], 2)
+
+    return cpu_percent, mem_percent, load
+
+
 class HealthCheckView(APIView):
     """Simple health check endpoint."""
 
@@ -183,12 +226,13 @@ class StatusView(APIView):
         # Get Celery task info
         celery_running = bool(cache.get("celery_heartbeat"))
 
-        # Get safety monitor stats
+        # Get safety monitor stats (detection runs in the celery worker, which
+        # publishes stats to the shared cache; this process tracks nothing)
         safety_tracked_aircraft = 0
         try:
             from skyspy.services.safety import safety_monitor
 
-            safety_stats = safety_monitor.get_stats()
+            safety_stats = cache.get("safety:monitor_stats") or safety_monitor.get_stats()
             safety_tracked_aircraft = safety_stats.get("tracked_aircraft", 0)
         except (AttributeError, KeyError, TypeError):
             pass
@@ -240,11 +284,16 @@ class StatusView(APIView):
         except Exception:  # broad: CFFI binding load may fail in unknowable ways
             libacars_status = {"available": False, "error": "Could not load libacars"}
 
+        cpu_percent, memory_percent, load_average = _host_cpu_mem()
+
         return Response(
             {
                 "version": __version__,
                 "adsb_online": adsb_online,
                 "aircraft_count": aircraft_count,
+                "cpu_percent": cpu_percent,
+                "memory_percent": memory_percent,
+                "load_average": load_average,
                 "total_sightings": total_sightings,
                 "total_sessions": total_sessions,
                 "active_rules": active_rules,

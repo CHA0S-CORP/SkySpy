@@ -18,6 +18,7 @@ from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from skyspy.api.params import parse_int
 from skyspy.auth.authentication import APIKeyAuthentication, OptionalJWTAuthentication
 from skyspy.auth.permissions import FeatureBasedPermission
 from skyspy.serializers.tasks import (
@@ -197,7 +198,7 @@ class TaskResultViewSet(viewsets.ReadOnlyModelViewSet):
         from django.utils import timezone
 
         # Get time range from query params (default: last 24 hours)
-        hours = int(request.query_params.get("hours", 24))
+        hours = parse_int(request.query_params, "hours", 24, min_value=1, max_value=8760)
         cutoff = timezone.now() - timedelta(hours=hours)
 
         # Filter by task name if specified
@@ -334,7 +335,10 @@ class TaskResultViewSet(viewsets.ReadOnlyModelViewSet):
 
         from django.utils import timezone
 
-        days = int(request.data.get("days", 7))
+        try:
+            days = int(request.data.get("days", 7))
+        except (ValueError, TypeError):
+            return Response({"error": "days must be an integer"}, status=status.HTTP_400_BAD_REQUEST)
         if days < 1:
             return Response(
                 {"error": "days must be at least 1"},

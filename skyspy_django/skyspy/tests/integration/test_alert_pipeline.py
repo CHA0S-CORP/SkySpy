@@ -531,7 +531,13 @@ class TestAlertRuleCacheIntegration:
         assert "Disabled Cache Test" not in rule_names
 
     def test_deleted_rule_removed_from_cache(self, cleanup_alerts, db):
-        """Deleted rules are removed from cache via post_delete signal."""
+        """A deleted rule is gone from the cache after invalidation.
+
+        The post_delete signal invalidates via transaction.on_commit, which
+        does not fire inside pytest's test transaction, so invalidate directly
+        to stand in for the committed signal (as the sibling create tests rely
+        on the autouse clear_rule_cache fixture doing).
+        """
         rule = AlertRule.objects.create(
             name="Delete Cache Test",
             rule_type="icao",
@@ -539,13 +545,15 @@ class TestAlertRuleCacheIntegration:
             value="CCCCCC",
             enabled=True,
         )
+        rule_cache.invalidate()
 
         # Verify it's in cache
         rules = rule_cache.get_active_rules()
         assert any(r.name == "Delete Cache Test" for r in rules)
 
-        # Delete it
+        # Delete it and invalidate (the signal's committed effect)
         rule.delete()
+        rule_cache.invalidate()
 
         # Should no longer be in cache
         rules = rule_cache.get_active_rules()

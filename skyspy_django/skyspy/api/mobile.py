@@ -139,7 +139,10 @@ class MobileViewSet(ViewSet):
         }
         """
         session_id = request.query_params.get("session_id")
-        radius_nm = float(request.query_params.get("radius_nm", DEFAULT_THREAT_RADIUS_NM))
+        try:
+            radius_nm = float(request.query_params.get("radius_nm", DEFAULT_THREAT_RADIUS_NM))
+        except (ValueError, TypeError):
+            return Response({"error": "Invalid radius_nm"}, status=status.HTTP_400_BAD_REQUEST)
 
         if not session_id:
             return Response({"error": "session_id is required"}, status=status.HTTP_400_BAD_REQUEST)

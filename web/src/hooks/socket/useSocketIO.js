@@ -368,6 +368,10 @@ export function useSocketIO({
       return () => {};
     }
 
+    // off-then-on keeps attachment idempotent: after a manual reconnect,
+    // connect() re-attaches subscribersRef handlers AND the consuming effect
+    // re-subscribes with the same ref — without off() the handler fires twice.
+    socketRef.current.off(event, handler);
     socketRef.current.on(event, handler);
 
     // Track subscriber for cleanup

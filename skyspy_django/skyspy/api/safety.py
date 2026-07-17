@@ -18,7 +18,9 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from skyspy.api.params import parse_int
 from skyspy.auth.authentication import APIKeyAuthentication, OptionalJWTAuthentication
+from skyspy.auth.permissions import FeatureBasedPermission
 from skyspy.models import SafetyEvent
 from skyspy.serializers.safety import (
     AircraftSafetyStatsSerializer,
@@ -35,6 +37,7 @@ class SafetyEventViewSet(viewsets.ModelViewSet):
     queryset = SafetyEvent.objects.all()
     serializer_class = SafetyEventSerializer
     authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
+    permission_classes = [FeatureBasedPermission]
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ["event_type", "severity", "icao_hex", "acknowledged"]
     http_method_names = ["get", "post", "delete"]
@@ -55,15 +58,13 @@ class SafetyEventViewSet(viewsets.ModelViewSet):
         """Apply query filters."""
         queryset = super().get_queryset()
 
-        # Time range filter
-        hours = self.request.query_params.get("hours", 24)
-        try:
-            hours = int(hours)
-        except ValueError:
-            hours = 24
-
-        cutoff = timezone.now() - timedelta(hours=hours)
-        queryset = queryset.filter(timestamp__gte=cutoff)
+        # Time range filter — list only. Detail actions (retrieve, acknowledge,
+        # unacknowledge, destroy) resolve get_object() through this queryset,
+        # and a default 24h cutoff would 404 any older event.
+        if self.action == "list":
+            hours = parse_int(self.request.query_params, "hours", 24, min_value=1, max_value=24 * 365)
+            cutoff = timezone.now() - timedelta(hours=hours)
+            queryset = queryset.filter(timestamp__gte=cutoff)
 
         return queryset.order_by("-timestamp")
 
@@ -73,13 +74,18 @@ class SafetyEventViewSet(viewsets.ModelViewSet):
             OpenApiParameter(name="hours", type=int, description="Time range in hours"),
             OpenApiParameter(name="event_type", type=str, description="Filter by event type"),
             OpenApiParameter(name="severity", type=str, description="Filter by severity"),
+            OpenApiParameter(name="limit", type=int, description="Max events to return (default 1000, max 10000)"),
+            OpenApiParameter(name="offset", type=int, description="Number of events to skip (for paging)"),
         ],
     )
     def list(self, request, *args, **kwargs):
         """List safety events."""
         queryset = self.filter_queryset(self.get_queryset())
-        serializer = self.get_serializer(queryset, many=True)
-        return Response({"events": serializer.data, "count": queryset.count()})
+        total_count = queryset.count()
+        limit = parse_int(request.query_params, "limit", 1000, min_value=1, max_value=10000)
+        offset = parse_int(request.query_params, "offset", 0, min_value=0)
+        serializer = self.get_serializer(queryset[offset : offset + limit], many=True)
+        return Response({"events": serializer.data, "count": total_count, "limit": limit, "offset": offset})
 
     @extend_schema(
         summary="Get safety monitor status", description="Get the current status of the safety monitoring system"
@@ -91,10 +97,15 @@ class SafetyEventViewSet(viewsets.ModelViewSet):
         tracked_aircraft = 0
 
         try:
+            # Detection runs in the celery worker, which publishes its stats to
+            # the shared cache; this process's monitor never tracks aircraft.
+            from django.core.cache import cache
+
             from skyspy.services.safety import safety_monitor
 
-            stats = safety_monitor.get_stats()
+            stats = cache.get("safety:monitor_stats") or safety_monitor.get_stats()
             tracked_aircraft = stats.get("tracked_aircraft", 0)
+            enabled = stats.get("monitoring_enabled", enabled)
         except (ImportError, AttributeError, TypeError, KeyError):
             pass
 
@@ -112,11 +123,7 @@ class SafetyEventViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["get"])
     def stats(self, request):
         """Get safety monitoring statistics."""
-        try:
-            hours = int(request.query_params.get("hours", 24))
-            hours = min(hours, 720)  # Cap at 30 days
-        except (ValueError, TypeError):
-            hours = 24
+        hours = parse_int(request.query_params, "hours", 24, min_value=1, max_value=720)  # Cap at 30 days
         cutoff = timezone.now() - timedelta(hours=hours)
 
         events = SafetyEvent.objects.filter(timestamp__gte=cutoff)
@@ -276,7 +283,7 @@ class SafetyEventViewSet(viewsets.ModelViewSet):
                     "events_by_severity": by_severity,
                     "worst_severity": "critical"
                     if "critical" in by_severity
-                    else ("warning" if "warning" in by_severity else "info"),
+                    else ("warning" if "warning" in by_severity else ("low" if "low" in by_severity else "info")),
                     "last_event_time": last_event["timestamp"].isoformat() if last_event else None,
                     "last_event_type": last_event["event_type"] if last_event else None,
                 }
@@ -316,6 +323,7 @@ class SafetyEventViewSet(viewsets.ModelViewSet):
         event.acknowledged = True
         event.acknowledged_at = timezone.now()
         event.save()
+        _broadcast_ack_update(event.id, acknowledged=True)
         return Response(SafetyEventSerializer(event).data)
 
     @extend_schema(summary="Unacknowledge safety event", description="Remove acknowledgement from a safety event")
@@ -326,27 +334,56 @@ class SafetyEventViewSet(viewsets.ModelViewSet):
         event.acknowledged = False
         event.acknowledged_at = None
         event.save()
+        _broadcast_ack_update(event.id, acknowledged=False)
         return Response(SafetyEventSerializer(event).data)
 
 
-class ActiveSafetyEventAcknowledgeView(APIView):
-    """Acknowledge an in-memory active safety event by its monitor key.
+def _broadcast_ack_update(db_id: int, acknowledged: bool):
+    """Emit safety:event_updated so all connected clients see an ack change.
 
-    Active events live in the SafetyMonitor singleton under composite string
-    keys (e.g. "vs_reversal:A3F7F6") until they resolve; they are not
-    addressable through the SafetyEvent DB viewset. The map alarm UI posts
-    here to silence an active event.
+    Detection (and the authoritative in-memory event) lives in the celery
+    worker; it picks the DB flag up via its periodic ack sync. The broadcast
+    here gives every other dashboard the update immediately.
+    """
+    from skyspy.services.safety import safety_monitor
+
+    safety_monitor.broadcast_event_updated({"id": str(db_id), "db_id": db_id, "acknowledged": acknowledged})
+
+
+class ActiveSafetyEventAcknowledgeView(APIView):
+    """Acknowledge an active safety event by monitor key or DB id.
+
+    The map alarm UI posts here (with the shared/DB id) to silence an active
+    event. Detection runs in the celery worker, so this process's in-memory
+    monitor usually doesn't hold the event: the DB row is the shared channel —
+    the worker's periodic ack sync applies it to its in-memory event.
     """
 
     authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
+    permission_classes = [FeatureBasedPermission]
 
     @extend_schema(
         summary="Acknowledge active safety event",
-        description="Acknowledge an active (in-memory) safety event by its monitor event key",
+        description="Acknowledge an active safety event by its monitor event key or database id",
     )
     def post(self, request, event_id: str):
         from skyspy.services.safety import safety_monitor
 
-        if safety_monitor.acknowledge_event(event_id):
+        # In-memory ack (works when detection runs in this process, e.g. dev
+        # single-process mode); broadcasts event_updated itself on success.
+        memory_ok = safety_monitor.acknowledge_event(event_id)
+
+        # Persist by DB id — the cross-process path.
+        db_ok = False
+        try:
+            db_id = int(event_id)
+        except (TypeError, ValueError):
+            db_id = None
+        if db_id is not None:
+            db_ok = SafetyEvent.objects.filter(id=db_id).update(acknowledged=True, acknowledged_at=timezone.now()) > 0
+            if db_ok and not memory_ok:
+                _broadcast_ack_update(db_id, acknowledged=True)
+
+        if memory_ok or db_ok:
             return Response({"success": True, "id": event_id, "acknowledged": True})
         return Response({"error": "not_found", "id": event_id}, status=404)

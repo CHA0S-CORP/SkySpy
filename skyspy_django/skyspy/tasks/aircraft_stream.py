@@ -52,6 +52,12 @@ _aircraft_state_lock = Lock()
 
 # Buffer for database writes (cold path - flushed periodically)
 _db_write_buffer: deque[dict] = deque(maxlen=10000)
+
+# Monotonic count of stream messages received this process - synced to the
+# "aircraft_messages" cache key so emit_stats_tick / the REST status endpoint
+# can compute a message rate while streaming (poll_aircraft, the only other
+# writer, early-returns when the stream is active).
+_messages_total = 0
 _db_buffer_lock = Lock()
 
 # Track seen aircraft for info lookups (avoid redundant queries)
@@ -587,6 +593,11 @@ def update_state_and_broadcast(batch: list[dict], full_snapshot: bool = True):
                 _db_write_buffer.append(ac.copy())
 
 
+def _bump_messages_total():
+    global _messages_total
+    _messages_total += 1
+
+
 def sync_cache_state():
     """
     Sync in-memory state to Django cache and broadcast heartbeat.
@@ -608,6 +619,7 @@ def sync_cache_state():
             CACHE_KEY_TIMESTAMP: time.time(),
             CACHE_KEY_ONLINE: True,
             CACHE_KEY_LAST_BROADCAST: timestamp,
+            "aircraft_messages": _messages_total,
         },
         timeout=30,
     )
@@ -895,6 +907,7 @@ def stream_sse(url: str, feeder_lat: float, feeder_lon: float, batch_ms: int):
                                 normalized = normalize_aircraft_fast(ac, feeder_lat, feeder_lon)
                                 batch.append(normalized)
                                 messages_received += 1
+                                _bump_messages_total()
 
                     sse_lines = []
             else:
@@ -990,6 +1003,7 @@ def stream_tcp(host: str, port: int, feeder_lat: float, feeder_lon: float, batch
                 aircraft = normalize_aircraft_fast(aircraft, feeder_lat, feeder_lon)
                 batch.append(aircraft)
                 messages_received += 1
+                _bump_messages_total()
             except json.JSONDecodeError:
                 continue
 

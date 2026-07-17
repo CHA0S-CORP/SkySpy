@@ -9,6 +9,7 @@ import hashlib
 import json
 import logging
 import re
+import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from threading import Lock
@@ -247,6 +248,7 @@ class AlertRuleCache:
     def __init__(self):
         self._local_rules: list[CompiledRule] = []
         self._local_version: str = ""
+        self._local_refreshed_at: float = 0.0
         self._lock = Lock()
         self._redis = None
         self._initialized = False
@@ -274,6 +276,18 @@ class AlertRuleCache:
 
     # Sentinel value indicating no version is set (cannot match legitimate versions)
     _NO_VERSION_SENTINEL = "__NO_VERSION__"
+
+    # Without Redis there is no cross-process version to compare, so refresh
+    # on a short local TTL instead - rule changes in other processes (or via
+    # signals whose on_commit hasn't fired) still land within this window.
+    NO_REDIS_TTL = 30.0
+
+    def _needs_refresh(self, current_version: str) -> bool:
+        if self._local_version != current_version or not self._local_rules:
+            return True
+        return current_version == self._NO_VERSION_SENTINEL and (
+            time.time() - self._local_refreshed_at > self.NO_REDIS_TTL
+        )
 
     def _get_current_version(self) -> str:
         """Get current cache version from Redis or return sentinel value."""
@@ -309,7 +323,7 @@ class AlertRuleCache:
             # Check if local cache is valid
             current_version = self._get_current_version()
 
-            if self._local_version != current_version or not self._local_rules:
+            if self._needs_refresh(current_version):
                 # Refresh from database
                 self._refresh_cache()
 
@@ -355,9 +369,16 @@ class AlertRuleCache:
                     self._local_version = new_version
                 except (*REDIS_ERRORS, TypeError, ValueError) as e:
                     logger.warning(f"Failed to store rules in Redis: {e}")
+                    # Match the sentinel _get_current_version returns when
+                    # Redis is unavailable, or every lookup re-refreshes
+                    self._local_version = self._NO_VERSION_SENTINEL
             else:
-                self._local_version = self._generate_version()
+                # No Redis: _get_current_version always returns the sentinel,
+                # so the local version must match it - a random version here
+                # forced a full DB reload + regex recompile per aircraft.
+                self._local_version = self._NO_VERSION_SENTINEL
 
+            self._local_refreshed_at = time.time()
             logger.debug(f"Refreshed rule cache with {len(self._local_rules)} rules")
 
             # Build segmented indexes for O(1) lookup
@@ -510,7 +531,7 @@ class AlertRuleCache:
         with self._lock:
             # Ensure cache is valid before accessing indexes
             current_version = self._get_current_version()
-            if self._local_version != current_version or not self._local_rules:
+            if self._needs_refresh(current_version):
                 self._refresh_cache()
 
             rules: list[CompiledRule] = []
@@ -542,6 +563,7 @@ class AlertRuleCache:
         """
         with self._lock:
             self._local_version = ""
+            self._local_refreshed_at = 0.0
             self._local_rules = []
             # Clear segmented indexes
             self._rules_by_icao = {}

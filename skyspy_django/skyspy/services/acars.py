@@ -285,8 +285,12 @@ class AcarsService:
                     with self._stats_lock:
                         self._frequency_counts[freq_mhz] += 1
 
-                # Enrich message with airline and label info (skip text decode - done via Celery)
-                enriched = enrich_acars_message(normalized, decode_text=False)
+                # Enrich message with airline and label info (skip text decode - done
+                # via Celery). Enrichment hits the ORM (airline lookup), which Django
+                # forbids from an async context - run it on the sync thread.
+                from asgiref.sync import sync_to_async
+
+                enriched = await sync_to_async(enrich_acars_message)(normalized, decode_text=False)
 
                 # Update statistics
                 with self._stats_lock:

@@ -794,22 +794,21 @@ def fetch_winds_aloft(lat: float, lon: float, ttl: int = 3600) -> dict | None:
         return cached
 
     try:
-        data = _fetch_awc_data(
-            "windtemp",
-            {
-                "lat": lat,
-                "lon": lon,
-                "format": "json",
-            },
-        )
-
-        if isinstance(data, dict) and "error" in data:
-            logger.warning(f"Failed to fetch winds aloft: {data.get('error')}")
-            return None
+        # The AWC windtemp endpoint has no JSON representation - it returns raw
+        # FB winds text (e.g. "FBUS31 KWNO ...") even with format=json, which
+        # would fail json parsing on every poll. Fetch directly and detect that.
+        response = _http_get_awc(f"{AWC_BASE}/windtemp", {"lat": lat, "lon": lon, "format": "json"}, timeout=15.0)
+        text = response.text or ""
+        try:
+            data = response.json() if text else []
+        except ValueError:
+            logger.debug("AWC windtemp returned raw FB text (no JSON upstream); winds aloft unavailable")
+            cache.set(cache_key, [], ttl)
+            return []
 
         cache.set(cache_key, data, ttl)
         return data
-    except (ValueError, KeyError, TypeError, ConnectionError, OSError) as e:
+    except (httpx.HTTPError, ValueError, KeyError, TypeError, ConnectionError, OSError) as e:
         logger.warning(f"Failed to fetch winds aloft: {e}")
         return None
 

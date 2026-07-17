@@ -73,6 +73,7 @@ class SessionSerializer(serializers.ModelSerializer):
             "min_rssi",
             "max_rssi",
             "is_military",
+            "category",
             "type",
             "safety_event_count",
         ]

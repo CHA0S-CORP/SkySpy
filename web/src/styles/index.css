@@ -71,5 +71,9 @@
 /* 11. Responsive - Breakpoints, mobile menu, touch improvements */
 @import './responsive.css';
 
+/* 12. v2 design system (design_handoff_skyspy_ui migration) - after legacy so
+   v2- prefixed classes win ties; screen CSS files register in v2/index.css */
+@import './v2/index.css';
+
 /* Tailwind CSS v4 - imported last to ensure utilities can override existing styles */
 @import 'tailwindcss';

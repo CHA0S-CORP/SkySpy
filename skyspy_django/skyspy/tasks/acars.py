@@ -76,7 +76,7 @@ def decode_acars_message(self, message_id: int):
             raise self.retry(exc=e)
 
 
-@shared_task
+@shared_task(ignore_result=True)
 def process_acars_decode_queue():
     """
     Process batch of ACARS messages that haven't been decoded yet.

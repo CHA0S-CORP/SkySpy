@@ -158,7 +158,7 @@ def send_notification_task(
         raise
 
 
-@shared_task
+@shared_task(ignore_result=True)
 def process_notification_queue():
     """
     Process pending notification retries.
@@ -362,16 +362,17 @@ def send_webhook_task(
     """
     import httpx
 
-    from skyspy.services.notifications import _is_safe_url
+    from skyspy.services.notifications import pin_and_validate_url
 
-    # Validate URL safety (SSRF prevention)
-    if not _is_safe_url(url):
+    # Validate URL safety and pin the resolved IP (SSRF / DNS-rebinding prevention)
+    request_url, extra_headers = pin_and_validate_url(url)
+    if request_url is None:
         logger.warning(f"Blocked unsafe webhook URL for rule {rule_id}: {url[:100]}")
         return {"status": "blocked", "reason": "unsafe_url"}
 
     try:
         with httpx.Client(timeout=timeout) as client:
-            response = client.post(url, json=data)
+            response = client.post(request_url, json=data, headers=extra_headers or None)
             response.raise_for_status()
 
             logger.debug(f"Webhook delivered to {url[:50]}... status={response.status_code}")

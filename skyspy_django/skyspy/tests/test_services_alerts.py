@@ -1202,10 +1202,11 @@ class TestAltitudeZeroRegression:
 
 @pytest.mark.django_db
 class TestPerChannelNotificationStatus:
-    """Regression: per-channel delivery results must be logged individually,
-    not one aggregate boolean applied to every channel."""
+    """Delivery is deferred to Celery (send_notification_task) so slow
+    notification endpoints never stall the polling hot path; each channel
+    must be enqueued individually (the task owns per-channel logging)."""
 
-    def test_mixed_channel_results_logged_individually(self):
+    def test_each_channel_enqueued_individually(self):
         config = NotificationConfig.get_config()
         config.enabled = True
         config.apprise_urls = "json://good.example.com;json://bad.example.com"
@@ -1213,27 +1214,22 @@ class TestPerChannelNotificationStatus:
 
         alert_data = {"rule_name": "Test Alert", "message": "msg", "priority": "info", "icao": "ABC123"}
 
-        good = MagicMock()
-        good.notify.return_value = True
-        bad = MagicMock()
-        bad.notify.return_value = False
-
-        with patch("apprise.Apprise", side_effect=[good, bad]), patch("apprise.NotifyType"):
+        with patch("skyspy.tasks.notifications.send_notification_task") as mock_task:
             AlertService()._send_notification(alert_data)
 
-        statuses = {log.channel_url: log.status for log in NotificationLog.objects.all()}
-        assert statuses == {
-            "json://good.example.com": "sent",
-            "json://bad.example.com": "failed",
-        }
+        urls = [c.kwargs["channel_url"] for c in mock_task.delay.call_args_list]
+        assert urls == ["json://good.example.com", "json://bad.example.com"]
+        for c in mock_task.delay.call_args_list:
+            assert c.kwargs["event_type"] == "alert"
+            assert c.kwargs["body"] == "msg"
 
 
 @pytest.mark.django_db
 class TestPerChannelNotificationIsolation:
-    """Regression: one channel's failure (e.g. a DB error writing its
-    NotificationLog row) must not skip delivery to the remaining channels."""
+    """Regression: one channel's failure (e.g. a broker error enqueueing its
+    delivery task) must not skip delivery to the remaining channels."""
 
-    def test_db_error_on_first_channel_log_does_not_skip_remaining(self):
+    def test_enqueue_error_on_first_channel_does_not_skip_remaining(self):
         config = NotificationConfig.get_config()
         config.enabled = True
         config.apprise_urls = "json://one.example.com;json://two.example.com"
@@ -1241,31 +1237,13 @@ class TestPerChannelNotificationIsolation:
 
         alert_data = {"rule_name": "Test Alert", "message": "msg", "priority": "info", "icao": "ABC123"}
 
-        first = MagicMock()
-        first.notify.return_value = True
-        second = MagicMock()
-        second.notify.return_value = True
-
-        real_create = NotificationLog.objects.create
-        call_count = {"n": 0}
-
-        def flaky_create(**kwargs):
-            call_count["n"] += 1
-            if call_count["n"] == 1:
-                raise DatabaseError("transient log write failure")
-            return real_create(**kwargs)
-
-        with (
-            patch("apprise.Apprise", side_effect=[first, second]),
-            patch("apprise.NotifyType"),
-            patch.object(NotificationLog.objects, "create", side_effect=flaky_create),
-        ):
+        with patch("skyspy.tasks.notifications.send_notification_task") as mock_task:
+            mock_task.delay.side_effect = [RuntimeError("broker down"), None]
             AlertService()._send_notification(alert_data)
 
-        # The second channel must still be delivered and logged even though
-        # the first channel's NotificationLog write raised.
-        assert second.notify.called
-        assert [log.channel_url for log in NotificationLog.objects.all()] == ["json://two.example.com"]
+        # The second channel must still be enqueued even though the first raised.
+        assert mock_task.delay.call_count == 2
+        assert mock_task.delay.call_args_list[1].kwargs["channel_url"] == "json://two.example.com"
 
 
 @pytest.mark.django_db

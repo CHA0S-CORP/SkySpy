@@ -20,7 +20,7 @@ from django.utils import timezone
 
 # Maximum allowed regex pattern length to prevent ReDoS attacks
 MAX_REGEX_PATTERN_LENGTH = 500
-from skyspy.models import AlertHistory, AlertRule, NotificationConfig, NotificationLog
+from skyspy.models import AlertHistory, AlertRule, NotificationConfig
 from skyspy.services.alert_cooldowns import cooldown_manager
 from skyspy.services.alert_metrics import EvaluationTimer, alert_metrics
 from skyspy.services.alert_rule_cache import CompiledRule, rule_cache
@@ -491,15 +491,6 @@ class AlertService:
         2. Global config (APPRISE_URLS from NotificationConfig) if use_global_notifications is True
         """
         try:
-            import apprise
-
-            # Determine notification type based on priority
-            notify_type = apprise.NotifyType.INFO
-            if alert_data["priority"] == "warning":
-                notify_type = apprise.NotifyType.WARNING
-            elif alert_data["priority"] == "critical":
-                notify_type = apprise.NotifyType.FAILURE
-
             # Use list of tuples (url, channel_id) to keep them aligned
             url_channel_pairs = []
             seen_urls = set()
@@ -531,39 +522,33 @@ class AlertService:
                 logger.debug("No notification URLs configured, skipping notification")
                 return
 
-            # Notify each URL separately so we get a per-channel result;
-            # a single aggregate notify() would mark every channel failed
-            # when only one of them actually failed.
+            # Deliver via Celery so slow/timing-out notification endpoints
+            # never stall the aircraft polling hot path (mirrors the existing
+            # _call_webhook -> send_webhook_task pattern). The task owns the
+            # NotificationLog write and per-channel retry handling.
+            from skyspy.tasks.notifications import send_notification_task
+
             title = f"SkysPy Alert: {alert_data['rule_name']}"
             for url, channel_id in url_channel_pairs:
-                # Isolate each iteration: a failure delivering or logging one
-                # channel must not skip delivery to the remaining channels.
+                # Isolate each iteration: a failure queueing one channel must
+                # not skip delivery to the remaining channels.
                 try:
-                    apobj = apprise.Apprise()
-                    apobj.add(url)
-                    # notify() returns False (or None for invalid URLs) on failure
-                    success = bool(apobj.notify(title=title, body=alert_data["message"], notify_type=notify_type))
-                    if not success:
-                        logger.warning(f"Apprise notification failed for alert rule '{alert_data['rule_name']}'")
-
-                    NotificationLog.objects.create(
-                        notification_type="alert",
-                        icao_hex=alert_data["icao"],
-                        callsign=alert_data.get("callsign"),
-                        message=alert_data["message"],
-                        details=alert_data,
-                        channel_id=channel_id,
+                    send_notification_task.delay(
                         channel_url=url,
-                        status="sent" if success else "failed",
+                        title=title,
+                        body=alert_data["message"],
+                        priority=alert_data.get("priority", "info"),
+                        event_type="alert",
+                        channel_id=channel_id,
+                        context=alert_data,
                     )
-                except (DatabaseError, ConnectionError, OSError, ValueError, TypeError) as e:
+                except Exception as e:  # broad: broker enqueue must never break the alert hot path
                     logger.error(
-                        f"Notification channel {channel_id if channel_id is not None else url[:50]} failed "
-                        f"for alert rule '{alert_data['rule_name']}': {type(e).__name__}: {e}"
+                        f"Failed to queue notification for channel "
+                        f"{channel_id if channel_id is not None else url[:50]} "
+                        f"(rule '{alert_data['rule_name']}'): {type(e).__name__}: {e}"
                     )
 
-        except ImportError:
-            logger.debug("Apprise not installed, skipping notification")
         except (DatabaseError, ConnectionError, OSError, ValueError, TypeError) as e:
             logger.error(f"Failed to send notification: {type(e).__name__}: {e}")
 

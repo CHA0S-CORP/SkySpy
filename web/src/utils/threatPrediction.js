@@ -74,14 +74,44 @@ export function calculateETA(threat, closingSpeed) {
     };
   }
 
-  // Estimate closest point of approach
-  // This is a simplified calculation - assumes linear motion
-  const cpaDistance = Math.max(0, threat.distance_nm - closingSpeed * (etaSeconds / 3600));
+  // True CPA needs cross-track geometry: extrapolating the radial closing
+  // speed to zero range is the identity d - v*(d/v) = 0, which flagged every
+  // approaching aircraft as an intercept. Model the aircraft as a point
+  // moving linearly relative to the (locally stationary) user at the origin:
+  // p = position from bearing/distance, v = velocity from track/ground speed,
+  // t* = -(p.v)/|v|^2, cpa = |p + v*t*|.
+  const track = threat.track ?? threat.heading;
+  const gs = threat.ground_speed ?? threat.gs;
+  if (typeof track === 'number' && typeof gs === 'number' && gs > 0 && typeof threat.bearing === 'number') {
+    const brg = (threat.bearing * Math.PI) / 180;
+    const trk = (track * Math.PI) / 180;
+    const px = threat.distance_nm * Math.sin(brg);
+    const py = threat.distance_nm * Math.cos(brg);
+    const vx = gs * Math.sin(trk);
+    const vy = gs * Math.cos(trk);
+    const v2 = vx * vx + vy * vy;
+    const tStar = Math.max(0, -(px * vx + py * vy) / v2); // hours
+    const cx = px + vx * tStar;
+    const cy = py + vy * tStar;
+    const cpaDistance = Math.sqrt(cx * cx + cy * cy);
+    const cpaEtaSeconds = Math.round(tStar * 3600);
 
+    if (cpaEtaSeconds > 1800) {
+      return { eta: null, cpaDistance: Math.round(cpaDistance * 10) / 10, willIntercept: false };
+    }
+    return {
+      eta: cpaEtaSeconds,
+      cpaDistance: Math.round(cpaDistance * 10) / 10,
+      willIntercept: cpaDistance < 1, // Within 1nm is considered intercept
+    };
+  }
+
+  // No track/speed geometry available - radial closing speed alone cannot
+  // distinguish a flyby from an intercept, so don't claim one
   return {
     eta: etaSeconds,
-    cpaDistance: Math.round(cpaDistance * 10) / 10,
-    willIntercept: cpaDistance < 1, // Within 1nm is considered intercept
+    cpaDistance: null,
+    willIntercept: false,
   };
 }
 

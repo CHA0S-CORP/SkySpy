@@ -1,0 +1,339 @@
+/**
+ * v2 primitive component styles. Values lifted from the design mocks
+ * (design_handoff_skyspy_ui/designs/*.dc.html). All classes are v2-prefixed
+ * so legacy global styles (views.css, components.css) cannot bleed in.
+ */
+
+/* ---- Card (mock: --bg1 + 1px --bord, radius 12-14, optional accent bar) ---- */
+.v2-card {
+  background: var(--bg1);
+  border: 1px solid var(--bord);
+  border-radius: 13px;
+}
+.v2-card--raised {
+  background: var(--bg2);
+}
+.v2-card--inset {
+  background: var(--bg0);
+}
+.v2-card--accent-left {
+  border-left: 3px solid var(--v2-accent-bar, var(--accent));
+}
+.v2-card--hover:hover {
+  background: var(--bg2);
+}
+
+/* ---- Chip ---- */
+.v2-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  border-radius: 7px;
+  background: var(--bg2);
+  border: 1px solid var(--bord);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--dim);
+  white-space: nowrap;
+}
+.v2-chip--mono {
+  font-family: var(--font-mono);
+}
+.v2-chip--interactive {
+  cursor: pointer;
+  background: transparent;
+}
+.v2-chip--interactive:hover {
+  background: var(--bg2);
+  color: var(--txt);
+}
+.v2-chip--active {
+  background: color-mix(in srgb, var(--v2-chip-color, var(--accent)) 14%, transparent);
+  border-color: color-mix(in srgb, var(--v2-chip-color, var(--accent)) 45%, transparent);
+  color: var(--v2-chip-color, var(--accent));
+}
+
+/* ---- Switch (mock: 44×24 pill, radius 14, 18px white knob, left 3px↔23px) ---- */
+.v2-switch {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  border-radius: 14px;
+  border: none;
+  cursor: pointer;
+  background: var(--bord2);
+  flex: 0 0 auto;
+  padding: 0;
+}
+.v2-switch[data-state='checked'] {
+  background: var(--accent);
+}
+.v2-switch__thumb {
+  display: block;
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  transition: left 0.15s;
+}
+.v2-switch[data-state='checked'] .v2-switch__thumb {
+  left: 23px;
+}
+.v2-switch:focus-visible {
+  outline: 2px solid var(--accent2);
+  outline-offset: 2px;
+}
+
+/* ---- Segmented control / tabs ---- */
+.v2-seg {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 9px;
+  background: var(--bg0);
+  border: 1px solid var(--bord);
+}
+.v2-seg__btn {
+  border: none;
+  background: transparent;
+  color: var(--dim);
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  padding: 5px 12px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.v2-seg__btn:hover {
+  color: var(--txt);
+}
+.v2-seg__btn[aria-checked='true'],
+.v2-seg__btn--active {
+  background: color-mix(in srgb, var(--v2-seg-color, var(--accent)) 14%, transparent);
+  color: var(--v2-seg-color, var(--accent));
+}
+
+.v2-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-bottom: 1px solid var(--bord);
+}
+.v2-tabs__tab {
+  border: none;
+  background: transparent;
+  color: var(--dim);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  padding: 9px 14px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+.v2-tabs__tab:hover {
+  color: var(--txt);
+}
+.v2-tabs__tab[aria-selected='true'] {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+/* ---- Select (mock: custom-styled native select, option bg --bg2) ---- */
+.v2-select {
+  appearance: none;
+  -webkit-appearance: none;
+  background: var(--bg2);
+  border: 1px solid var(--bord2);
+  color: var(--txt);
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 8px 30px 8px 11px;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238b98a7' stroke-width='2'><path d='M6 9l6 6 6-6'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+}
+.v2-select option {
+  background: var(--bg2);
+  color: var(--txt);
+}
+.v2-select:focus-visible {
+  outline: 2px solid var(--accent2);
+  outline-offset: 1px;
+}
+
+/* ---- Inputs ---- */
+.v2-input {
+  background: var(--bg0);
+  border: 1px solid var(--bord2);
+  color: var(--txt);
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 13px;
+  padding: 8px 11px;
+  height: 34px;
+}
+.v2-input::placeholder {
+  color: var(--dim2);
+}
+.v2-input:focus-visible {
+  outline: 2px solid var(--accent2);
+  outline-offset: 1px;
+}
+
+/* ---- Buttons ---- */
+.v2-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border-radius: 9px;
+  border: 1px solid var(--bord2);
+  background: var(--bg2);
+  color: var(--txt);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  height: 34px;
+  padding: 0 14px;
+  cursor: pointer;
+}
+.v2-btn:hover {
+  background: var(--bg3);
+}
+.v2-btn--primary {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--accent) 88%, #fff 12%),
+    var(--accent)
+  );
+  border-color: transparent;
+  color: #08130c;
+}
+.v2-btn--primary:hover {
+  filter: brightness(1.06);
+}
+.v2-btn--danger {
+  background: color-mix(in srgb, var(--danger) 16%, transparent);
+  border-color: color-mix(in srgb, var(--danger) 45%, transparent);
+  color: var(--danger);
+}
+.v2-iconbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  border: none;
+  background: transparent;
+  color: var(--dim);
+  cursor: pointer;
+}
+.v2-iconbtn:hover {
+  background: var(--bg2);
+  color: var(--txt);
+}
+
+/* ---- Toast (mock: fixed bottom-right pill, --bg2, 1px --accent border) ---- */
+.v2-toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 20px;
+  border-radius: 12px;
+  background: var(--bg2);
+  border: 1px solid var(--accent);
+  color: var(--txt);
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.5);
+  animation: v2-toast-in 0.2s ease-out;
+}
+
+/* ---- Empty state ---- */
+.v2-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 48px 24px;
+  color: var(--dim);
+  text-align: center;
+}
+.v2-empty__icon {
+  color: var(--dim2);
+}
+.v2-empty__msg {
+  font-size: 13px;
+  max-width: 340px;
+}
+
+/* ---- Stat card ---- */
+.v2-statcard {
+  background: var(--bg1);
+  border: 1px solid var(--bord);
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.v2-statcard__value {
+  font-family: var(--font-mono);
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--txt);
+}
+.v2-statcard__sub {
+  font-size: 11px;
+  color: var(--dim2);
+}
+
+/* ---- Modal (Radix dialog skin) ---- */
+.v2-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 6, 10, 0.72);
+  z-index: 50;
+  overflow-y: auto;
+  display: grid;
+  place-items: center;
+  padding: 32px 16px;
+}
+.v2-modal {
+  background: var(--bg1);
+  border: 1px solid var(--bord2);
+  border-radius: 14px;
+  width: min(680px, 94vw);
+  max-height: none;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.6);
+  color: var(--txt);
+}
+.v2-modal__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--bord);
+}
+.v2-modal__title {
+  font-size: 16px;
+  font-weight: 700;
+}
+.v2-modal__body {
+  padding: 22px;
+}

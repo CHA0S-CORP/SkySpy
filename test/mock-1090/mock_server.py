@@ -98,14 +98,22 @@ message_count = 0
 # ============================================================================
 DATA_SOURCE = os.getenv("DATA_SOURCE", "simulated").lower()
 LIVE_SOURCE = os.getenv("LIVE_SOURCE", "adsb_lol").lower()
-LIVE_POLL_INTERVAL = max(2.0, float(os.getenv("LIVE_POLL_INTERVAL", "5")))
+# ADS-B Exchange (RapidAPI) is a keyed source with a faster refresh; it allows a
+# 1s floor. The keyless community APIs ask for ~1 req/s max, so keep a 2s floor.
+_POLL_FLOOR = 1.0 if LIVE_SOURCE == "adsbexchange" else 2.0
+LIVE_POLL_INTERVAL = max(_POLL_FLOOR, float(os.getenv("LIVE_POLL_INTERVAL", "5")))
 LIVE_RADIUS_NM = min(float(os.getenv("LIVE_RADIUS_NM", str(COVERAGE_RADIUS_NM))), 250)
+# RapidAPI key for the adsbexchange source (empty for keyless community sources)
+LIVE_API_KEY = os.getenv("LIVE_API_KEY", "").strip()
+ADSBX_RAPIDAPI_HOST = "adsbexchange-com1.p.rapidapi.com"
 
-# All three return readsb-style aircraft dicts in an "ac" array, no API key.
+# adsb_lol/adsb_fi/airplanes_live are keyless; adsbexchange needs a RapidAPI key.
+# All return readsb-style aircraft dicts in an "ac" array.
 LIVE_SOURCE_URLS = {
     "adsb_lol": "https://api.adsb.lol/v2/point/{lat}/{lon}/{radius}",
     "adsb_fi": "https://opendata.adsb.fi/api/v2/lat/{lat}/lon/{lon}/dist/{radius}",
     "airplanes_live": "https://api.airplanes.live/v2/point/{lat}/{lon}/{radius}",
+    "adsbexchange": f"https://{ADSBX_RAPIDAPI_HOST}/v2/lat/{{lat}}/lon/{{lon}}/dist/{{radius}}/",
 }
 
 _live_state: dict[str, dict] = {}
@@ -158,7 +166,11 @@ def _fetch_live_aircraft() -> dict[str, dict]:
     url = LIVE_SOURCE_URLS[LIVE_SOURCE].format(
         lat=f"{COVERAGE_CENTER_LAT:.4f}", lon=f"{COVERAGE_CENTER_LON:.4f}", radius=int(LIVE_RADIUS_NM)
     )
-    resp = requests.get(url, timeout=10, headers={"User-Agent": "SkySpy-mock/2.4 (dev environment)"})
+    headers = {"User-Agent": "SkySpy-mock/2.4 (dev environment)"}
+    if LIVE_SOURCE == "adsbexchange":
+        headers["x-rapidapi-host"] = ADSBX_RAPIDAPI_HOST
+        headers["x-rapidapi-key"] = LIVE_API_KEY
+    resp = requests.get(url, timeout=10, headers=headers)
     resp.raise_for_status()
     data = resp.json()
 
@@ -171,9 +183,23 @@ def _fetch_live_aircraft() -> dict[str, dict]:
 
 
 def _live_poll_loop():
-    """Background poller: refresh _live_state every LIVE_POLL_INTERVAL seconds."""
+    """Background poller: refresh _live_state every LIVE_POLL_INTERVAL seconds.
+
+    Rate-limit aware: upstream 429/405 responses trigger exponential backoff
+    (up to 60s) instead of hammering the API at the configured interval and
+    burning through the RapidAPI quota; auth failures (401/403 — missing or
+    expired API key) back off up to 300s since retrying can't succeed until
+    the key is fixed; any successful poll resets the pace.
+    """
     global _live_last_success, _live_last_error, message_count
 
+    if LIVE_SOURCE == "adsbexchange" and not LIVE_API_KEY:
+        print(
+            "WARNING: LIVE_SOURCE=adsbexchange but LIVE_API_KEY is not set - "
+            "every poll will fail with 401/403. Set MOCK_LIVE_API_KEY in .env.test."
+        )
+
+    backoff = 0.0
     while True:
         try:
             snapshot = _fetch_live_aircraft()
@@ -183,10 +209,26 @@ def _live_poll_loop():
                 _live_last_success = time.time()
                 _live_last_error = ""
             message_count += max(len(snapshot), 1)
+            if backoff:
+                print(f"Live source {LIVE_SOURCE} recovered; resuming {LIVE_POLL_INTERVAL:.0f}s polling")
+            backoff = 0.0
         except Exception as e:  # noqa: BLE001 - keep the poller alive on any upstream failure
             _live_last_error = str(e)
-            print(f"Live source {LIVE_SOURCE} poll failed: {e}")
-        time.sleep(LIVE_POLL_INTERVAL)
+            msg = str(e)
+            if "401" in msg or "403" in msg:
+                backoff = min(max(backoff * 2, LIVE_POLL_INTERVAL * 2, 30.0), 300.0)
+                print(
+                    f"Live source {LIVE_SOURCE} auth failed ({msg.split(' for url')[0]}); "
+                    f"check LIVE_API_KEY - backing off {backoff:.0f}s"
+                )
+            elif "429" in msg or "405" in msg:
+                backoff = min(max(backoff * 2, LIVE_POLL_INTERVAL * 2, 5.0), 60.0)
+                print(
+                    f"Live source {LIVE_SOURCE} rate-limited ({msg.split(' for url')[0]}); backing off {backoff:.0f}s"
+                )
+            else:
+                print(f"Live source {LIVE_SOURCE} poll failed: {e}")
+        time.sleep(backoff or LIVE_POLL_INTERVAL)
 
 
 def start_live_polling():

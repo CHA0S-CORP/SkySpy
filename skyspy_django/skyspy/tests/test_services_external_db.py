@@ -172,9 +172,13 @@ class FetchWithRetryTests(TestCase):
 
     @patch("skyspy.services.external_db.httpx.Client")
     def test_fetch_retries_on_failure(self, mock_client_class):
-        """Test that fetch retries on failure."""
+        """Test that fetch retries on failure and reraises the real error.
+
+        reraise=True: callers catch httpx errors, not tenacity.RetryError -
+        a wrapped RetryError previously escaped every download error handler
+        and aborted loading all remaining databases.
+        """
         import httpx
-        from tenacity import RetryError
 
         mock_client = Mock()
         mock_client.get.side_effect = httpx.RequestError("Connection failed")
@@ -182,7 +186,7 @@ class FetchWithRetryTests(TestCase):
         mock_client.__exit__ = Mock(return_value=False)
         mock_client_class.return_value = mock_client
 
-        with self.assertRaises(RetryError):
+        with self.assertRaises(httpx.RequestError):
             fetch_with_retry("https://example.com/test")
 
         # Should have retried multiple times (3 attempts)

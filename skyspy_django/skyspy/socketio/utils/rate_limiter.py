@@ -18,6 +18,7 @@ DEFAULT_RATE_LIMITS = {
     "aircraft:update": 10,  # Max 10 Hz
     "aircraft:position": 5,  # Max 5 Hz
     "stats:update": 0.5,  # Max 0.5 Hz (2 second minimum)
+    "stats:tick": 0.2,  # Max 0.2 Hz (5s minimum — beat emits every 10s)
     "default": 5,  # Default rate limit
     "request": 10,  # Max 10 requests per second sustained
 }

@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing:border-box; margin:0; padding:0; }
+  :root {
+    --bg0:#080b11; --bg1:#0d131b; --bg2:#141d28; --bg3:#1a2531;
+    --bord:#1b2531; --bord2:#28343f;
+    --txt:#e8eff6; --dim:#8b98a7; --dim2:#586472;
+    --accent:#3ddc84; --accent2:#4cc9f0; --warn:#f5b544; --danger:#f2585d; --mil:#b39dff;
+  }
+  [data-theme="slate"] { --bg0:#0a111e; --bg1:#101a2b; --bg2:#182437; --bg3:#1f2d43; --bord:#1e2c40; --bord2:#2b3c54; --txt:#eaf1f9; --dim:#93a1b5; --dim2:#5a6a80; --accent:#4cc9f0; --accent2:#5eead4; }
+  [data-theme="amber"] { --bg0:#0c0a06; --bg1:#15110a; --bg2:#1f1810; --bg3:#291f13; --bord:#2a2113; --bord2:#3a2e1c; --txt:#f4ead6; --dim:#b39c78; --dim2:#7a6a4d; --accent:#f5b544; --accent2:#ffd479; }
+  html,body { height:100%; background:var(--bg0); }
+  body { font-family:'IBM Plex Sans',system-ui,sans-serif; -webkit-font-smoothing:antialiased; }
+  a { text-decoration:none; color:inherit; }
+  select { -webkit-appearance:none; appearance:none; background-image:none; }
+  select option { background:var(--bg2); color:var(--txt); }
+  ::-webkit-scrollbar { width:10px; height:10px; }
+  ::-webkit-scrollbar-track { background:transparent; }
+  ::-webkit-scrollbar-thumb { background:var(--bord2); border-radius:6px; border:2px solid var(--bg1); }
+  @keyframes blink { 0%,100%{opacity:1;} 50%{opacity:.25;} }
+</style>
+</helmet>
+<div style="display:flex;flex-direction:column;height:100vh;width:100vw;overflow:hidden;background:var(--bg0);color:var(--txt);font-size:13px;">
+
+  <!-- HEADER -->
+  <header style="display:flex;align-items:center;height:60px;flex:0 0 60px;background:var(--bg1);border-bottom:1px solid var(--bord);padding:0 18px;">
+    <div style="display:flex;align-items:center;gap:11px;width:214px;flex:0 0 214px;">
+      <div style="width:30px;height:30px;border-radius:8px;background:radial-gradient(circle at 30% 30%,var(--accent),transparent 70%),var(--bg3);display:flex;align-items:center;justify-content:center;border:1px solid var(--bord2);"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.9"><circle cx="12" cy="12" r="9"></circle><path d="M12 3v18M3 12h18" opacity=".5"></path><circle cx="12" cy="12" r="3.4" fill="var(--accent)" stroke="none"></circle></svg></div>
+      <div style="font-size:20px;font-weight:700;letter-spacing:-.4px;">Sky<span style="color:var(--accent);">Spy</span></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:22px;padding-left:8px;">
+      <div style="display:flex;align-items:center;gap:8px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.7"><path d="M22 2 15 22 11 13 2 9z"></path></svg><span style="font-family:'IBM Plex Mono';font-size:17px;font-weight:600;color:var(--accent);">193</span><span style="font-size:10px;letter-spacing:1.2px;color:var(--dim);font-weight:600;">AIRCRAFT</span></div>
+      <div style="width:1px;height:22px;background:var(--bord2);"></div>
+      <div style="display:flex;align-items:center;gap:8px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent2)" stroke-width="1.7"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0116 0z"></path><circle cx="12" cy="10" r="2.6"></circle></svg><span style="font-family:'IBM Plex Mono';font-size:15px;font-weight:600;color:var(--accent2);">32.8</span><span style="font-size:10px;letter-spacing:1.2px;color:var(--dim);font-weight:600;">LAT</span></div>
+      <div style="display:flex;align-items:center;gap:8px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent2)" stroke-width="1.7"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0116 0z"></path><circle cx="12" cy="10" r="2.6"></circle></svg><span style="font-family:'IBM Plex Mono';font-size:15px;font-weight:600;color:var(--accent2);">-117.2</span><span style="font-size:10px;letter-spacing:1.2px;color:var(--dim);font-weight:600;">LON</span></div>
+    </div>
+    <div style="flex:1;"></div>
+    <div style="display:flex;align-items:center;gap:4px;">
+      <button title="Notifications" style="display:flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:8px;background:transparent;border:1px solid transparent;color:var(--dim);cursor:pointer;" style-hover="background:var(--bg2);color:var(--txt);"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M18 8a6 6 0 00-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 01-3.4 0"></path><path d="M2 2l20 20" stroke="var(--dim2)"></path></svg></button>
+      <button title="Settings" style="display:flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:8px;background:transparent;border:1px solid transparent;color:var(--dim);cursor:pointer;" style-hover="background:var(--bg2);color:var(--txt);"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="3.2"></circle><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"></path></svg></button>
+      <div style="display:flex;align-items:center;gap:7px;padding:0 6px 0 12px;border-left:1px solid var(--bord2);margin-left:6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--dim)" stroke-width="1.6"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg><span style="font-family:'IBM Plex Mono';font-size:13px;font-weight:500;color:var(--dim);">05:22:33</span><span style="font-size:10px;color:var(--dim2);font-weight:600;">UTC</span></div>
+    </div>
+  </header>
+
+  <div style="display:flex;flex:1;min-height:0;">
+    <!-- NAV -->
+    <nav style="width:214px;flex:0 0 214px;background:var(--bg1);border-right:1px solid var(--bord);display:flex;flex-direction:column;padding:14px 12px;">
+      <div style="font-size:10px;letter-spacing:1.4px;color:var(--dim2);font-weight:600;padding:2px 10px 10px;">NAVIGATION</div>
+      <a href="#" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:9px;color:var(--dim);" style-hover="background:var(--bg2);color:var(--txt);"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3zM9 3v15M15 6v15"></path></svg>Live Map</a>
+      <a href="Aircraft List.dc.html" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:9px;color:var(--dim);margin-top:2px;" style-hover="background:var(--bg2);color:var(--txt);"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 12 15 12 13 21 11 3 9 12 2 12"></path></svg>Aircraft List</a>
+      <a href="#" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:9px;color:var(--dim);margin-top:2px;" style-hover="background:var(--bg2);color:var(--txt);"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"></path></svg>Statistics</a>
+      <a href="#" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:9px;margin-top:2px;background:linear-gradient(90deg,color-mix(in srgb,var(--accent) 16%,transparent),transparent);color:var(--accent);font-weight:600;border-left:2px solid var(--accent);"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12a9 9 0 109-9 9 9 0 00-8 5M3 3v5h5M12 7v5l3 2"></path></svg>History</a>
+      <a href="#" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:9px;color:var(--dim);margin-top:2px;" style-hover="background:var(--bg2);color:var(--txt);"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="2.4"></circle><path d="M7 8a7 7 0 000 8M17 8a7 7 0 010 8M4.5 5a11 11 0 000 14M19.5 5a11 11 0 010 14"></path></svg>Radio</a>
+      <a href="#" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:9px;color:var(--dim);margin-top:2px;" style-hover="background:var(--bg2);color:var(--txt);"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 8a6 6 0 00-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 01-3.4 0"></path></svg>Alerts<span style="margin-left:auto;font-family:'IBM Plex Mono';font-size:10px;font-weight:600;background:color-mix(in srgb,var(--warn) 20%,transparent);color:var(--warn);padding:2px 6px;border-radius:20px;">3</span></a>
+      <a href="#" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:9px;color:var(--dim);margin-top:2px;" style-hover="background:var(--bg2);color:var(--txt);"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12h4l2 6 4-14 2 8h6"></path></svg>System</a>
+      <a href="#" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:9px;margin-top:8px;color:var(--danger);background:color-mix(in srgb,var(--danger) 12%,transparent);border:1px solid color-mix(in srgb,var(--danger) 30%,transparent);font-weight:600;" style-hover="background:color-mix(in srgb,var(--danger) 20%,transparent);"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"></circle><circle cx="12" cy="12" r="4"></circle><path d="M12 1v4M12 19v4M1 12h4M19 12h4"></path></svg>Cannonball</a>
+      <div style="flex:1;"></div>
+      <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;"><span style="width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 8px var(--accent);animation:blink 2s infinite;"></span><span style="font-size:11px;font-weight:600;letter-spacing:.6px;color:var(--accent);">LIVE</span><span style="margin-left:auto;font-family:'IBM Plex Mono';font-size:10px;color:var(--dim2);">v2.5.0</span></div>
+    </nav>
+
+    <!-- MAIN -->
+    <main style="flex:1;min-width:0;display:flex;flex-direction:column;min-height:0;">
+
+      <!-- top controls -->
+      <div style="padding:16px 20px 0;flex:0 0 auto;">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
+          <!-- time range -->
+          <div style="display:flex;gap:3px;padding:3px;border-radius:10px;background:var(--bg1);border:1px solid var(--bord);">
+            <sc-for list="{{ ranges }}" as="rg" hint-placeholder-count="5">
+              <button onClick="{{ rg.onClick }}" style="min-width:38px;height:30px;border:none;border-radius:7px;cursor:pointer;font-family:'IBM Plex Mono';font-size:12px;font-weight:600;color:{{ rg.fg }};background:{{ rg.bg }};">{{ rg.label }}</button>
+            </sc-for>
+          </div>
+          <!-- KPIs -->
+          <div style="flex:1;display:grid;grid-template-columns:repeat(5,1fr);gap:10px;">
+            <div style="display:flex;align-items:center;gap:11px;padding:9px 14px;border-radius:11px;background:var(--bg1);border:1px solid var(--bord);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.7"><path d="M3 3v18h18"></path><path d="M7 14l3-4 3 3 4-6"></path></svg><div><div style="font-size:9px;letter-spacing:.8px;color:var(--dim);font-weight:600;">SESSIONS</div><div style="font-family:'IBM Plex Mono';font-size:19px;font-weight:600;line-height:1.1;">50</div></div></div>
+            <div style="display:flex;align-items:center;gap:11px;padding:9px 14px;border-radius:11px;background:var(--bg1);border:1px solid var(--bord);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent2)" stroke-width="1.7"><path d="M22 2 15 22 11 13 2 9z"></path></svg><div><div style="font-size:9px;letter-spacing:.8px;color:var(--dim);font-weight:600;">AIRCRAFT</div><div style="font-family:'IBM Plex Mono';font-size:19px;font-weight:600;line-height:1.1;">50</div></div></div>
+            <div style="display:flex;align-items:center;gap:11px;padding:9px 14px;border-radius:11px;background:var(--bg1);border:1px solid var(--bord);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent2)" stroke-width="1.7"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg><div><div style="font-size:9px;letter-spacing:.8px;color:var(--dim);font-weight:600;">AVG DURATION</div><div style="display:flex;align-items:baseline;gap:3px;"><span style="font-family:'IBM Plex Mono';font-size:19px;font-weight:600;line-height:1.1;">23</span><span style="font-size:10px;color:var(--dim);">min</span></div></div></div>
+            <div style="display:flex;align-items:center;gap:11px;padding:9px 14px;border-radius:11px;background:var(--bg1);border:1px solid var(--bord);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent2)" stroke-width="1.7"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0116 0z"></path><circle cx="12" cy="10" r="2.4"></circle></svg><div><div style="font-size:9px;letter-spacing:.8px;color:var(--dim);font-weight:600;">MAX RANGE</div><div style="display:flex;align-items:baseline;gap:3px;"><span style="font-family:'IBM Plex Mono';font-size:19px;font-weight:600;line-height:1.1;">150</span><span style="font-size:10px;color:var(--dim);">nm</span></div></div></div>
+            <div style="display:flex;align-items:center;gap:11px;padding:9px 14px;border-radius:11px;background:var(--bg1);border:1px solid color-mix(in srgb,var(--warn) 30%,var(--bord));"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--warn)" stroke-width="1.7"><path d="M10.3 3.9 1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"></path><path d="M12 9v4M12 17h.01"></path></svg><div><div style="font-size:9px;letter-spacing:.8px;color:var(--dim);font-weight:600;">SAFETY EVENTS</div><div style="font-family:'IBM Plex Mono';font-size:19px;font-weight:600;line-height:1.1;color:var(--warn);">5</div></div></div>
+          </div>
+          <button title="Refresh" style="display:flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:10px;background:var(--bg1);border:1px solid var(--bord);color:var(--dim);cursor:pointer;" style-hover="color:var(--accent);border-color:var(--accent);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M21 12a9 9 0 11-3-6.7L21 8M21 3v5h-5"></path></svg></button>
+        </div>
+
+        <!-- activity sparkline -->
+        <div style="display:flex;align-items:center;gap:14px;padding:10px 16px;border-radius:11px;background:var(--bg1);border:1px solid var(--bord);margin-bottom:14px;">
+          <span style="font-size:10px;letter-spacing:1px;color:var(--dim);font-weight:600;flex:0 0 auto;">24H ACTIVITY</span>
+          <div style="flex:1;display:flex;align-items:flex-end;gap:2px;height:34px;">
+            <sc-for list="{{ activity }}" as="v" hint-placeholder-count="48"><span style="flex:1;height:{{ v.h }}%;border-radius:1px;background:{{ v.color }};"></span></sc-for>
+          </div>
+          <span style="font-family:'IBM Plex Mono';font-size:11px;color:var(--dim);flex:0 0 auto;">peak 8 / hr</span>
+        </div>
+
+        <!-- tabs -->
+        <div style="display:flex;gap:6px;border-bottom:1px solid var(--bord);margin-bottom:14px;">
+          <sc-for list="{{ tabs }}" as="tb" hint-placeholder-count="7">
+            <button onClick="{{ tb.onClick }}" style="display:flex;align-items:center;gap:8px;padding:11px 16px;background:transparent;border:none;border-bottom:2px solid {{ tb.border }};color:{{ tb.fg }};cursor:pointer;font-family:inherit;font-size:13px;font-weight:{{ tb.weight }};margin-bottom:-1px;">
+              {{ tb.label }}<sc-if value="{{ tb.hasCount }}" hint-placeholder-val="{{ false }}"><span style="font-family:'IBM Plex Mono';font-size:10px;font-weight:600;background:{{ tb.badgeBg }};color:{{ tb.badgeFg }};padding:1px 7px;border-radius:12px;">{{ tb.count }}</span></sc-if>
+            </button>
+          </sc-for>
+        </div>
+
+        <!-- filter + sort bar -->
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
+          <div style="display:flex;align-items:center;gap:9px;flex:1;min-width:240px;height:40px;padding:0 13px;background:var(--bg1);border:1px solid var(--bord);border-radius:10px;" style-focus-within="border-color:var(--accent);">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--dim)" stroke-width="1.8"><circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4.3-4.3"></path></svg>
+            <input value="{{ query }}" onInput="{{ onSearch }}" placeholder="Search callsign, ICAO, type…" style="flex:1;background:transparent;border:none;outline:none;color:var(--txt);font-family:'IBM Plex Sans';font-size:13px;">
+          </div>
+          <select value="{{ fCat }}" onChange="{{ onCat }}" style="height:40px;padding:0 12px;border-radius:10px;background:var(--bg1);border:1px solid var(--bord);color:var(--txt);font-family:inherit;font-size:12px;cursor:pointer;"><sc-for list="{{ catOpts }}" as="o" hint-placeholder-count="4"><option value="{{ o }}">{{ o }}</option></sc-for></select>
+          <select value="{{ fType }}" onChange="{{ onType }}" style="height:40px;padding:0 12px;border-radius:10px;background:var(--bg1);border:1px solid var(--bord);color:var(--txt);font-family:inherit;font-size:12px;cursor:pointer;"><sc-for list="{{ typeOpts }}" as="o" hint-placeholder-count="6"><option value="{{ o }}">{{ o }}</option></sc-for></select>
+          <select value="{{ fAir }}" onChange="{{ onAir }}" style="height:40px;padding:0 12px;border-radius:10px;background:var(--bg1);border:1px solid var(--bord);color:var(--txt);font-family:inherit;font-size:12px;cursor:pointer;"><sc-for list="{{ airOpts }}" as="o" hint-placeholder-count="6"><option value="{{ o }}">{{ o }}</option></sc-for></select>
+          <button onClick="{{ toggleMil }}" style="display:flex;align-items:center;gap:7px;height:40px;padding:0 14px;border-radius:10px;cursor:pointer;font-family:inherit;font-size:12px;font-weight:500;background:{{ milBg }};border:1px solid {{ milBord }};color:{{ milFg }};"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"></path></svg>Military</button>
+          <button onClick="{{ toggleSafe }}" style="display:flex;align-items:center;gap:7px;height:40px;padding:0 14px;border-radius:10px;cursor:pointer;font-family:inherit;font-size:12px;font-weight:500;background:{{ safeBg }};border:1px solid {{ safeBord }};color:{{ safeFg }};"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M10.3 3.9 1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"></path><path d="M12 9v4M12 17h.01"></path></svg>Safety</button>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
+          <span style="font-size:11px;letter-spacing:.6px;color:var(--dim);font-weight:600;">SORT</span>
+          <sc-for list="{{ sorts }}" as="s" hint-placeholder-count="7">
+            <button onClick="{{ s.onClick }}" style="display:flex;align-items:center;gap:5px;height:30px;padding:0 11px;border-radius:8px;cursor:pointer;font-family:inherit;font-size:12px;font-weight:500;background:{{ s.bg }};border:1px solid {{ s.bord }};color:{{ s.fg }};">{{ s.label }}<span style="font-family:'IBM Plex Mono';font-size:10px;color:var(--accent);">{{ s.arrow }}</span></button>
+          </sc-for>
+          <div style="flex:1;"></div>
+          <span style="font-family:'IBM Plex Mono';font-size:12px;color:var(--dim);">{{ shownCount }} of 50 sessions</span>
+        </div>
+      </div>
+
+      <!-- session grid -->
+      <div style="flex:1;overflow-y:auto;padding:0 20px 20px;">
+        <sc-if value="{{ isSessions }}" hint-placeholder-val="{{ true }}">
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(342px,1fr));gap:14px;">
+            <sc-for list="{{ cards }}" as="c" hint-placeholder-count="12">
+              <a href="Aircraft Detail.dc.html" style="display:block;padding:15px 16px;border-radius:13px;background:var(--bg1);border:1px solid var(--bord);border-left:3px solid {{ c.accent }};cursor:pointer;" style-hover="border-color:var(--accent2);background:var(--bg2);">
+                <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:14px;">
+                  <div style="flex:1;min-width:0;">
+                    <div style="display:flex;align-items:center;gap:8px;">
+                      <span style="font-family:'IBM Plex Mono';font-size:16px;font-weight:700;">{{ c.cs }}</span>
+                      <sc-if value="{{ c.hasSafety }}" hint-placeholder-val="{{ false }}"><span style="display:flex;align-items:center;gap:3px;font-family:'IBM Plex Mono';font-size:10px;font-weight:600;color:var(--warn);background:color-mix(in srgb,var(--warn) 16%,transparent);padding:1px 6px;border-radius:10px;"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.3 3.9 1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"></path></svg>{{ c.safety }}</span></sc-if>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:7px;margin-top:4px;"><span style="font-family:'IBM Plex Mono';font-size:11px;color:var(--dim);">{{ c.hex }}</span><span style="font-family:'IBM Plex Mono';font-size:10px;padding:2px 6px;border-radius:5px;background:{{ c.typeBg }};border:1px solid {{ c.typeBord }};color:{{ c.typeFg }};">{{ c.type }}</span></div>
+                  </div>
+                  <div style="flex:0 0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;width:46px;height:46px;border-radius:10px;background:var(--bg2);border:1px solid var(--bord);"><span style="font-family:'IBM Plex Mono';font-size:16px;font-weight:700;color:var(--accent2);line-height:1;">{{ c.dur }}</span><span style="font-size:8px;letter-spacing:.8px;color:var(--dim);font-weight:600;margin-top:2px;">MIN</span></div>
+                </div>
+
+                <div style="display:flex;align-items:flex-end;gap:16px;margin-bottom:14px;">
+                  <div style="flex:1;">
+                    <div style="font-size:9px;letter-spacing:.8px;color:var(--dim);font-weight:600;margin-bottom:6px;">ALTITUDE</div>
+                    <div style="position:relative;height:16px;border-radius:5px;background:var(--bg3);overflow:hidden;">
+                      <div style="position:absolute;left:0;top:0;bottom:0;width:{{ c.altPct }}%;background:linear-gradient(90deg,var(--accent2),var(--warn) 70%,var(--danger));border-radius:5px;"></div>
+                      <span style="position:absolute;right:7px;top:50%;transform:translateY(-50%);font-family:'IBM Plex Mono';font-size:11px;font-weight:600;color:var(--txt);text-shadow:0 0 4px #000;">{{ c.altk }} ft</span>
+                    </div>
+                  </div>
+                  <div style="flex:0 0 auto;">
+                    <div style="font-size:9px;letter-spacing:.8px;color:var(--dim);font-weight:600;margin-bottom:6px;text-align:right;">SIGNAL</div>
+                    <div style="display:flex;align-items:flex-end;gap:5px;">
+                      <div style="display:flex;align-items:flex-end;gap:2px;height:16px;"><sc-for list="{{ c.bars }}" as="b" hint-placeholder-count="4"><span style="width:3px;height:{{ b.h }}px;border-radius:1px;background:{{ b.color }};"></span></sc-for></div>
+                      <span style="font-family:'IBM Plex Mono';font-size:11px;color:var(--dim);">{{ c.db }} dB</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div style="display:grid;grid-template-columns:1.4fr 1fr .8fr .8fr;gap:8px;padding-top:12px;border-top:1px solid var(--bord);">
+                  <div><div style="font-size:9px;letter-spacing:.6px;color:var(--dim2);font-weight:600;margin-bottom:3px;">DISTANCE</div><div style="font-family:'IBM Plex Mono';font-size:12px;">{{ c.dMin }}–{{ c.dMax }}<span style="color:var(--dim);"> nm</span></div></div>
+                  <div><div style="font-size:9px;letter-spacing:.6px;color:var(--dim2);font-weight:600;margin-bottom:3px;">MAX V/S</div><div style="font-family:'IBM Plex Mono';font-size:12px;color:var(--accent);">{{ c.vs }}<span style="color:var(--dim);"> fpm</span></div></div>
+                  <div><div style="font-size:9px;letter-spacing:.6px;color:var(--dim2);font-weight:600;margin-bottom:3px;">MSGS</div><div style="font-family:'IBM Plex Mono';font-size:12px;">{{ c.msg }}</div></div>
+                  <div><div style="font-size:9px;letter-spacing:.6px;color:var(--dim2);font-weight:600;margin-bottom:3px;">SQK</div><div style="font-family:'IBM Plex Mono';font-size:12px;color:{{ c.sqkColor }};">{{ c.sqk }}</div></div>
+                </div>
+
+                <div style="display:flex;justify-content:space-between;margin-top:12px;font-family:'IBM Plex Mono';font-size:10px;color:var(--dim2);">
+                  <span>First {{ c.first }}</span><span>Last {{ c.last }}</span>
+                </div>
+              </a>
+            </sc-for>
+          </div>
+        </sc-if>
+        <sc-if value="{{ isEmpty }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 20px;color:var(--dim2);gap:14px;">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M3 9h18M8 4v16"></path></svg>
+            <div style="font-size:14px;color:var(--dim);">No {{ tabLabel }} records in this window</div>
+            <div style="font-size:12px;">Try widening the time range or clearing filters.</div>
+          </div>
+        </sc-if>
+      </div>
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{
+  &quot;accentTheme&quot;: { &quot;editor&quot;: &quot;enum&quot;, &quot;options&quot;: [&quot;radar&quot;, &quot;slate&quot;, &quot;amber&quot;], &quot;default&quot;: &quot;radar&quot;, &quot;tsType&quot;: &quot;'radar' | 'slate' | 'amber'&quot;, &quot;section&quot;: &quot;Appearance&quot; }
+}">
+class Component extends DCLogic {
+  state = { theme:'radar', range:'24h', tab:'sessions', query:'', fCat:'All category', fType:'All types', fAir:'All airlines', mil:false, safe:false, sortBy:'time', sortDir:'desc' };
+
+  componentDidMount(){ document.documentElement.setAttribute('data-theme', this.props.accentTheme || this.state.theme); }
+
+  data(){
+    const A={AAL:'American',UAL:'United',DAL:'Delta',ASA:'Alaska',SWA:'Southwest',FFT:'Frontier',UPS:'UPS',WJA:'WestJet',SKW:'SkyWest',CMP:'Copa',CSG:'Cargo',VOI:'Volaris'};
+    const raw=[
+      {cs:'N226LA',hex:'A1F846',type:'AS50',dur:41,altk:1,bars:4,db:-3,dMin:78.2,dMax:91.0,vs:'+1088',msg:466,sqk:null,first:'9:41:37 PM',last:'10:22:22 PM',cat:'ga',safety:4},
+      {cs:'N13593',hex:'A09173',type:'C172',dur:41,altk:5,bars:4,db:-2,dMin:79.4,dMax:96.4,vs:'+1664',msg:465,sqk:null,first:'9:41:37 PM',last:'10:22:22 PM',cat:'ga',safety:0},
+      {cs:'ASA518',hex:'AB1FB0',type:'B38M',dur:29,altk:32,bars:2,db:-6,dMin:61.0,dMax:143.7,vs:'+2176',msg:340,sqk:null,first:'9:53:07 PM',last:'10:22:22 PM',cat:'commercial',safety:0},
+      {cs:'AAL3164',hex:'A55B50',type:'A21N',dur:41,altk:32,bars:2,db:-4,dMin:71.5,dMax:117.1,vs:'+2688',msg:466,sqk:null,first:'9:41:37 PM',last:'10:22:22 PM',cat:'commercial',safety:0},
+      {cs:'AAL10',hex:'A04641',type:'A321',dur:29,altk:23,bars:3,db:-2,dMin:69.3,dMax:91.8,vs:'+2624',msg:300,sqk:null,first:'9:53:07 PM',last:'10:22:22 PM',cat:'commercial',safety:0},
+      {cs:'UPS81',hex:'A83F8C',type:'B748',dur:17,altk:28,bars:2,db:-5,dMin:75.7,dMax:149.7,vs:'+2368',msg:205,sqk:null,first:'10:05:17 PM',last:'10:22:22 PM',cat:'commercial',safety:0},
+      {cs:'VOI1717',hex:'A6E140',type:'A21N',dur:30,altk:22,bars:4,db:-3,dMin:41.8,dMax:91.8,vs:'+2304',msg:350,sqk:null,first:'9:52:02 PM',last:'10:22:22 PM',cat:'commercial',safety:0},
+      {cs:'N886AW',hex:'AC3434',type:'BE30',dur:29,altk:25,bars:1,db:-4,dMin:17.3,dMax:150.0,vs:'+2560',msg:338,sqk:null,first:'9:53:17 PM',last:'10:22:22 PM',cat:'ga',safety:0},
+      {cs:'AAL2289',hex:'A082AC',type:'A321',dur:41,altk:9,bars:4,db:-3,dMin:76.8,dMax:90.0,vs:'+2944',msg:422,sqk:null,first:'9:41:37 PM',last:'10:22:22 PM',cat:'commercial',safety:0},
+      {cs:'AAL3035',hex:'A03FFF',type:'A321',dur:41,altk:0,bars:2,db:-10,dMin:90.0,dMax:90.0,vs:'0',msg:455,sqk:null,first:'9:41:37 PM',last:'10:22:22 PM',cat:'commercial',safety:0},
+      {cs:'FFT3316',hex:'A37DB9',type:'A20N',dur:38,altk:0,bars:1,db:-15,dMin:90.2,dMax:90.2,vs:'--',msg:426,sqk:null,first:'9:44:42 PM',last:'10:22:22 PM',cat:'commercial',safety:0},
+      {cs:'N224LA',hex:'A1F0D8',type:'AS50',dur:41,altk:3,bars:4,db:-2,dMin:83.1,dMax:107.7,vs:'+832',msg:466,sqk:null,first:'9:41:37 PM',last:'10:22:22 PM',cat:'ga',safety:2},
+      {cs:'N882AB',hex:'AC2545',type:'SR20',dur:24,altk:6,bars:2,db:-2,dMin:94.8,dMax:125.6,vs:'+1280',msg:284,sqk:null,first:'9:57:57 PM',last:'10:22:22 PM',cat:'ga',safety:0},
+      {cs:'N413MH',hex:'A4E060',type:'C650',dur:21,altk:23,bars:3,db:-4,dMin:69.7,dMax:91.7,vs:'+2496',msg:215,sqk:null,first:'10:01:47 PM',last:'10:22:22 PM',cat:'ga',safety:0},
+      {cs:'WJA1026',hex:'C004F3',type:'B38M',dur:26,altk:24,bars:3,db:-3,dMin:86.3,dMax:150.0,vs:'+2112',msg:297,sqk:null,first:'9:56:52 PM',last:'10:22:22 PM',cat:'commercial',safety:0},
+      {cs:'UAL1863',hex:'AA7426',type:'B738',dur:22,altk:37,bars:2,db:-5,dMin:5.6,dMax:145.7,vs:'+3136',msg:261,sqk:null,first:'10:00:02 PM',last:'10:22:22 PM',cat:'commercial',safety:0},
+      {cs:'N1307Y',hex:'A07E95',type:'C172',dur:34,altk:6,bars:2,db:-4,dMin:77.2,dMax:125.9,vs:'+960',msg:368,sqk:null,first:'9:48:17 PM',last:'10:22:22 PM',cat:'ga',safety:0},
+      {cs:'UPS991',hex:'A4D9A7',type:'B752',dur:16,altk:33,bars:1,db:-6,dMin:77.2,dMax:149.6,vs:'+4544',msg:188,sqk:null,first:'10:06:48 PM',last:'10:22:22 PM',cat:'commercial',safety:0},
+      {cs:'CSG2513',hex:'7804C7',type:'B77L',dur:24,altk:34,bars:1,db:-5,dMin:53.0,dMax:144.7,vs:'+2304',msg:284,sqk:null,first:'9:57:57 PM',last:'10:22:22 PM',cat:'commercial',safety:1},
+      {cs:'LDACE21',hex:'AE6AA6',type:'V22',dur:33,altk:9,bars:2,db:-7,dMin:12.0,dMax:88.0,vs:'+1440',msg:280,sqk:'1200',first:'9:49:00 PM',last:'10:22:22 PM',cat:'military',safety:0},
+      {cs:'RCH471',hex:'ADF2B7',type:'C17',dur:19,altk:12,bars:3,db:-4,dMin:22.0,dMax:120.0,vs:'+1920',msg:190,sqk:'7700',first:'10:03:00 PM',last:'10:22:22 PM',cat:'military',safety:3},
+      {cs:'N2150Y',hex:'A1CE84',type:'P28A',dur:22,altk:4,bars:2,db:-9,dMin:60.0,dMax:120.0,vs:'+640',msg:210,sqk:null,first:'10:00:00 PM',last:'10:22:22 PM',cat:'ga',safety:0},
+    ];
+    return raw.map(r=>({...r, airline: A[r.cs.slice(0,3)] || (r.cat==='military'?'Military':'General Aviation') }));
+  }
+
+  renderVals(){
+    const S=this.state;
+    const catColor=c=> c==='military'?'var(--mil)':(c==='ga'?'var(--accent2)':'var(--accent)');
+    const raw=this.data();
+
+    // filtering
+    let list=raw.slice();
+    const q=S.query.trim().toLowerCase();
+    if(q) list=list.filter(a=>(a.cs+a.hex+a.type).toLowerCase().includes(q));
+    if(S.fCat!=='All category') list=list.filter(a=>a.cat===S.fCat.toLowerCase());
+    if(S.fType!=='All types') list=list.filter(a=>a.type===S.fType);
+    if(S.fAir!=='All airlines') list=list.filter(a=>a.airline===S.fAir);
+    if(S.mil) list=list.filter(a=>a.cat==='military');
+    if(S.safe) list=list.filter(a=>a.safety>0);
+
+    const kf={ time:a=>a.last, callsign:a=>a.cs, type:a=>a.type, duration:a=>a.dur, distance:a=>a.dMax, signal:a=>a.bars, altitude:a=>a.altk, safety:a=>a.safety }[S.sortBy] || (a=>a.last);
+    list.sort((x,y)=>{ const a=kf(x),b=kf(y); const r=(typeof a==='number')?a-b:String(a).localeCompare(String(b)); return S.sortDir==='asc'?r:-r; });
+
+    const cards=list.map(a=>{
+      const cc=catColor(a.cat);
+      const barColor=a.bars>=3?'var(--accent)':(a.bars===2?'var(--warn)':'var(--danger)');
+      const bars=[6,9,12,15].map((h,i)=>({h, color:i<a.bars?barColor:'var(--bord2)'}));
+      const emerg=['7500','7600','7700'].includes(a.sqk);
+      return {
+        cs:a.cs, hex:a.hex, type:a.type, dur:a.dur, altk:a.altk+'k',
+        altPct:Math.max(4,Math.min(100,a.altk/45*100)),
+        dMin:a.dMin.toFixed(1), dMax:a.dMax.toFixed(1), vs:a.vs, msg:a.msg,
+        sqk:a.sqk||'--', sqkColor:emerg?'var(--danger)':(a.sqk?'var(--txt)':'var(--dim2)'),
+        first:a.first, last:a.last, bars, db:a.db,
+        hasSafety:a.safety>0, safety:a.safety,
+        accent:a.safety>0?'var(--warn)':cc,
+        typeFg:cc, typeBg:'color-mix(in srgb,'+cc+' 12%,transparent)', typeBord:'color-mix(in srgb,'+cc+' 30%,transparent)',
+      };
+    });
+
+    // 24h activity bars
+    const activity=Array.from({length:48},(_,i)=>{ const v=Math.round(30+50*Math.abs(Math.sin(i/5))+ (i%3)*8); const h=Math.min(100,v); return {h, color: i>40?'var(--accent)':'var(--bord2)'}; });
+
+    const mkRange=v=>({ label:v, bg:S.range===v?'var(--accent2)':'transparent', fg:S.range===v?'var(--bg0)':'var(--dim)', onClick:()=>this.setState({range:v}) });
+    const ranges=['1h','6h','24h','48h','7d'].map(mkRange);
+
+    const tabDefs=[['sessions','Sessions',50],['sightings','Sightings',null],['acars','ACARS',null],['safety','Safety',5],['notams','NOTAMs',null],['pireps','PIREPs',null],['archive','Archive',null]];
+    const tabs=tabDefs.map(([key,label,count])=>{
+      const on=S.tab===key;
+      return { label, hasCount:count!=null, count, weight:on?'600':'500',
+        fg:on?'var(--accent2)':'var(--dim)', border:on?'var(--accent2)':'transparent',
+        badgeBg:on?'color-mix(in srgb,var(--accent2) 18%,transparent)':'var(--bg3)', badgeFg:on?'var(--accent2)':'var(--dim)',
+        onClick:()=>this.setState({tab:key}) };
+    });
+
+    const sortDefs=[['time','Time'],['callsign','Callsign'],['type','Type'],['duration','Duration'],['distance','Distance'],['signal','Signal'],['altitude','Altitude'],['safety','Safety']];
+    const sorts=sortDefs.map(([key,label])=>{
+      const on=S.sortBy===key;
+      return { label, arrow:on?(S.sortDir==='asc'?'↑':'↓'):'',
+        bg:on?'color-mix(in srgb,var(--accent) 14%,transparent)':'var(--bg1)', bord:on?'var(--accent)':'var(--bord)', fg:on?'var(--txt)':'var(--dim)',
+        onClick:()=>this.setState(s=>({sortBy:key, sortDir: s.sortBy===key ? (s.sortDir==='asc'?'desc':'asc') : 'desc'})) };
+    });
+
+    const typeOpts=['All types', ...Array.from(new Set(raw.map(a=>a.type))).sort()];
+    const airOpts=['All airlines', ...Array.from(new Set(raw.map(a=>a.airline))).sort()];
+    const tabLabel=(tabDefs.find(t=>t[0]===S.tab)||['','records'])[1].toLowerCase();
+
+    return {
+      ranges, tabs, sorts, activity, cards, shownCount:cards.length,
+      isSessions:S.tab==='sessions', isEmpty:S.tab!=='sessions', tabLabel,
+      query:S.query, onSearch:e=>this.setState({query:e.target.value}),
+      catOpts:['All category','Commercial','Military','GA'], typeOpts, airOpts,
+      fCat:S.fCat, fType:S.fType, fAir:S.fAir,
+      onCat:e=>this.setState({fCat:e.target.value}), onType:e=>this.setState({fType:e.target.value}), onAir:e=>this.setState({fAir:e.target.value}),
+      toggleMil:()=>this.setState(s=>({mil:!s.mil})), toggleSafe:()=>this.setState(s=>({safe:!s.safe})),
+      milBg:S.mil?'color-mix(in srgb,var(--mil) 18%,transparent)':'var(--bg1)', milBord:S.mil?'var(--mil)':'var(--bord)', milFg:S.mil?'var(--txt)':'var(--dim)',
+      safeBg:S.safe?'color-mix(in srgb,var(--warn) 18%,transparent)':'var(--bg1)', safeBord:S.safe?'var(--warn)':'var(--bord)', safeFg:S.safe?'var(--txt)':'var(--dim)',
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -193,6 +193,13 @@ app.conf.beat_schedule = {
         "schedule": 60.0,
         "options": {"expire_seconds": 60.0},
     },
+    # Lightweight KPI tick for the Statistics screen (cache reads only, no DB).
+    # Interval via env STATS_TICK_INTERVAL (seconds); RPi override below.
+    "emit-stats-tick": {
+        "task": "skyspy.tasks.analytics.emit_stats_tick",
+        "schedule": float(os.environ.get("STATS_TICK_INTERVAL", "10")),
+        "options": {"expire_seconds": float(os.environ.get("STATS_TICK_INTERVAL", "10"))},
+    },
     # --------------------------------------------------------------------------
     # Legacy individual stats tasks (commented out - replaced by aggregate_all_stats)
     # Kept for reference and in case individual tasks need to be called directly.
@@ -452,14 +459,17 @@ if _is_rpi_mode():
         "stats_cache", 90.0
     )
 
+    # Slower KPI tick on RPi (30s instead of 10s)
+    app.conf.beat_schedule["emit-stats-tick"]["schedule"] = rpi_intervals.get("stats_tick", 30.0)
+    app.conf.beat_schedule["emit-stats-tick"]["options"]["expire_seconds"] = rpi_intervals.get("stats_tick", 30.0)
+
     # Override expensive analytics tasks with staggered schedules
-    app.conf.beat_schedule["update-flight-pattern-geographic-stats-every-2m"]["schedule"] = crontab(
-        minute="*/10", second=0
-    )
-    app.conf.beat_schedule["update-tracking-quality-stats-every-2m"]["schedule"] = crontab(minute="*/10", second=20)
-    app.conf.beat_schedule["update-engagement-stats-every-2m"]["schedule"] = crontab(minute="*/10", second=40)
+    # celery crontab has no seconds resolution - stagger via minute offsets
+    app.conf.beat_schedule["update-flight-pattern-geographic-stats-every-2m"]["schedule"] = crontab(minute="*/10")
+    app.conf.beat_schedule["update-tracking-quality-stats-every-2m"]["schedule"] = crontab(minute="3-59/10")
+    app.conf.beat_schedule["update-engagement-stats-every-2m"]["schedule"] = crontab(minute="6-59/10")
     app.conf.beat_schedule["update-time-comparison-stats-every-5m"]["schedule"] = crontab(minute="*/15")
-    app.conf.beat_schedule["update-antenna-analytics-every-5m"]["schedule"] = crontab(minute="*/10", second=30)
+    app.conf.beat_schedule["update-antenna-analytics-every-5m"]["schedule"] = crontab(minute="8-59/10")
 
 
 # Task routing
@@ -529,7 +539,11 @@ app.conf.task_routes = {
     "skyspy.tasks.monitoring.cleanup_stale_task_metrics": {"queue": "low_priority"},
     # Default queue for everything else
     "skyspy.tasks.*": {"queue": "default"},
+    # Built-in result cleanup: must land on a consumed queue or TaskResult
+    # rows grow unbounded (workers do not consume the implicit 'celery' queue)
+    "celery.backend_cleanup": {"queue": "low_priority"},
 }
+app.conf.task_default_queue = "default"
 
 
 # Worker settings

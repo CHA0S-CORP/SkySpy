@@ -14,6 +14,7 @@ from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from skyspy.api.params import parse_int
 from skyspy.auth.authentication import APIKeyAuthentication, OptionalJWTAuthentication
 from skyspy.auth.permissions import FeatureBasedPermission
 from skyspy.services.flight_pattern_stats import (
@@ -77,7 +78,7 @@ class FlightPatternStatsViewSet(viewsets.ViewSet):
     )
     def list(self, request):
         """Get all flight pattern statistics."""
-        hours = int(request.query_params.get("hours", 24))
+        hours = parse_int(request.query_params, "hours", 24, min_value=1, max_value=720)
         refresh = request.query_params.get("refresh", "false").lower() == "true"
 
         if refresh:
@@ -121,8 +122,8 @@ class FlightPatternStatsViewSet(viewsets.ViewSet):
     @action(detail=False, methods=["get"], url_path="routes")
     def frequent_routes(self, request):
         """Get frequent routes and city pairs."""
-        hours = int(request.query_params.get("hours", 24))
-        limit = int(request.query_params.get("limit", 20))
+        hours = parse_int(request.query_params, "hours", 24, min_value=1, max_value=720)
+        limit = parse_int(request.query_params, "limit", 20, min_value=1, max_value=500)
 
         routes = calculate_frequent_routes(hours=hours, limit=limit)
 
@@ -156,7 +157,7 @@ class FlightPatternStatsViewSet(viewsets.ViewSet):
     @action(detail=False, methods=["get"], url_path="busiest-hours")
     def busiest_hours(self, request):
         """Get busiest hours heatmap data."""
-        hours = int(request.query_params.get("hours", 24))
+        hours = parse_int(request.query_params, "hours", 24, min_value=1, max_value=720)
 
         data = calculate_busiest_hours(hours=hours)
 
@@ -203,8 +204,8 @@ class FlightPatternStatsViewSet(viewsets.ViewSet):
     @action(detail=False, methods=["get"], url_path="duration-by-type")
     def duration_by_type(self, request):
         """Get flight duration by aircraft type."""
-        hours = int(request.query_params.get("hours", 24))
-        limit = int(request.query_params.get("limit", 25))
+        hours = parse_int(request.query_params, "hours", 24, min_value=1, max_value=720)
+        limit = parse_int(request.query_params, "limit", 25, min_value=1, max_value=500)
 
         data = calculate_duration_by_type(hours=hours, limit=limit)
 
@@ -245,8 +246,8 @@ class FlightPatternStatsViewSet(viewsets.ViewSet):
     @action(detail=False, methods=["get"], url_path="aircraft-types")
     def aircraft_types(self, request):
         """Get most common aircraft types."""
-        hours = int(request.query_params.get("hours", 24))
-        limit = int(request.query_params.get("limit", 30))
+        hours = parse_int(request.query_params, "hours", 24, min_value=1, max_value=720)
+        limit = parse_int(request.query_params, "limit", 30, min_value=1, max_value=500)
 
         data = calculate_common_aircraft_types(hours=hours, limit=limit)
 
@@ -302,7 +303,7 @@ class GeographicStatsViewSet(viewsets.ViewSet):
     )
     def list(self, request):
         """Get all geographic statistics."""
-        hours = int(request.query_params.get("hours", 24))
+        hours = parse_int(request.query_params, "hours", 24, min_value=1, max_value=720)
         refresh = request.query_params.get("refresh", "false").lower() == "true"
 
         if refresh:
@@ -345,8 +346,8 @@ class GeographicStatsViewSet(viewsets.ViewSet):
     @action(detail=False, methods=["get"], url_path="countries")
     def countries(self, request):
         """Get countries of origin breakdown."""
-        hours = int(request.query_params.get("hours", 24))
-        limit = int(request.query_params.get("limit", 25))
+        hours = parse_int(request.query_params, "hours", 24, min_value=1, max_value=720)
+        limit = parse_int(request.query_params, "limit", 25, min_value=1, max_value=500)
 
         data = calculate_countries_breakdown(hours=hours, limit=limit)
 
@@ -386,8 +387,8 @@ class GeographicStatsViewSet(viewsets.ViewSet):
     @action(detail=False, methods=["get"], url_path="operators")
     def operators(self, request):
         """Get operators/airlines frequency."""
-        hours = int(request.query_params.get("hours", 24))
-        limit = int(request.query_params.get("limit", 25))
+        hours = parse_int(request.query_params, "hours", 24, min_value=1, max_value=720)
+        limit = parse_int(request.query_params, "limit", 25, min_value=1, max_value=500)
 
         data = calculate_operators_frequency(hours=hours, limit=limit)
 
@@ -428,8 +429,8 @@ class GeographicStatsViewSet(viewsets.ViewSet):
     @action(detail=False, methods=["get"], url_path="airports")
     def airports(self, request):
         """Get airport connectivity."""
-        hours = int(request.query_params.get("hours", 24))
-        limit = int(request.query_params.get("limit", 20))
+        hours = parse_int(request.query_params, "hours", 24, min_value=1, max_value=720)
+        limit = parse_int(request.query_params, "limit", 20, min_value=1, max_value=500)
 
         data = calculate_airport_connectivity(hours=hours, limit=limit)
 
@@ -463,7 +464,7 @@ class GeographicStatsViewSet(viewsets.ViewSet):
     @action(detail=False, methods=["get"], url_path="military-breakdown")
     def military_breakdown(self, request):
         """Get military vs civilian breakdown by country."""
-        hours = int(request.query_params.get("hours", 24))
+        hours = parse_int(request.query_params, "hours", 24, min_value=1, max_value=720)
 
         data = calculate_military_breakdown(hours=hours)
 
@@ -502,8 +503,8 @@ class GeographicStatsViewSet(viewsets.ViewSet):
     @action(detail=False, methods=["get"], url_path="locations")
     def locations(self, request):
         """Get connected locations (alias for airports)."""
-        hours = int(request.query_params.get("hours", 24))
-        limit = int(request.query_params.get("limit", 20))
+        hours = parse_int(request.query_params, "hours", 24, min_value=1, max_value=720)
+        limit = parse_int(request.query_params, "limit", 20, min_value=1, max_value=500)
 
         data = calculate_airport_connectivity(hours=hours, limit=limit)
 
@@ -535,7 +536,7 @@ class GeographicStatsViewSet(viewsets.ViewSet):
     @action(detail=False, methods=["get"], url_path="summary")
     def summary(self, request):
         """Get geographic stats summary."""
-        hours = int(request.query_params.get("hours", 24))
+        hours = parse_int(request.query_params, "hours", 24, min_value=1, max_value=720)
 
         stats = get_geographic_stats()
 
@@ -599,7 +600,7 @@ class CombinedStatsViewSet(viewsets.ViewSet):
     )
     def list(self, request):
         """Get all flight pattern and geographic statistics."""
-        hours = int(request.query_params.get("hours", 24))
+        hours = parse_int(request.query_params, "hours", 24, min_value=1, max_value=720)
         refresh = request.query_params.get("refresh", "false").lower() == "true"
 
         if refresh or hours != 24:
@@ -643,7 +644,7 @@ class CombinedStatsViewSet(viewsets.ViewSet):
     @action(detail=False, methods=["get"], url_path="summary")
     def summary(self, request):
         """Get summary of all statistics."""
-        hours = int(request.query_params.get("hours", 24))
+        hours = parse_int(request.query_params, "hours", 24, min_value=1, max_value=720)
 
         flight_patterns = get_flight_pattern_stats()
         geographic = get_geographic_stats()

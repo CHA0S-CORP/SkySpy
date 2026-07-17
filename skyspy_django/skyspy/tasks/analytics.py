@@ -413,8 +413,8 @@ def cleanup_memory_cache():
 
         logger.debug(
             f"Memory cache cleanup complete: "
-            f"memory_cache {stats_before['memory_cache_entries']} -> {stats_after['memory_cache_entries']}, "
-            f"rate_limits {stats_before['rate_limit_entries']} -> {stats_after['rate_limit_entries']}"
+            f"memory_cache {stats_before['memory_cache'].get('size')} -> {stats_after['memory_cache'].get('size')}, "
+            f"rate_limits {stats_before['rate_limiter'].get('size')} -> {stats_after['rate_limiter'].get('size')}"
         )
     except Exception as e:  # broad: periodic cleanup task must keep running on any failure
         logger.error(f"Error cleaning up memory cache: {e}")
@@ -872,7 +872,7 @@ def _compute_acars_stats(cutoff) -> dict:
     }
 
 
-@shared_task
+@shared_task(ignore_result=True)
 def aggregate_all_stats():
     """
     Unified stats aggregation task.
@@ -957,3 +957,116 @@ def aggregate_all_stats():
         except Exception as sentry_err:  # broad: error reporting must never raise
             logger.debug(f"Could not report to Sentry: {sentry_err}")
         return {"status": "error", "error": str(e), "duration_ms": round(duration_ms, 1)}
+
+
+@shared_task(ignore_result=True)
+def emit_stats_tick():
+    """
+    Emit a lightweight periodic KPI tick (``stats:tick``) to topic_stats for the
+    Statistics screen (Traffic / Reception / System cards + sparklines).
+
+    Reads only cheap cache keys written by the aircraft polling tasks — no DB
+    queries. Maintains a rolling sample series in the ``stats_tick_series``
+    cache key (capped, ~20 min at a 10s beat) and sends the full series with
+    every tick so clients need no hydration handshake.
+
+    System metrics use stdlib sources (loadavg + /proc/meminfo) and describe the
+    Celery worker host, which is correct for single-box deployments.
+    """
+    import os
+
+    from skyspy.socketio.utils import sync_emit
+
+    try:
+        aircraft_list = cache.get("current_aircraft", []) or []
+        messages = cache.get("aircraft_messages") or 0
+        adsb_online = bool(cache.get("adsb_online", False))
+        celery_ok = bool(cache.get("celery_heartbeat", False))
+
+        with_position = 0
+        military = 0
+        max_range = 0.0
+        rssi_sum = 0.0
+        rssi_count = 0
+        for ac in aircraft_list:
+            if ac.get("lat") is not None and ac.get("lon") is not None:
+                with_position += 1
+            if ac.get("military"):
+                military += 1
+            dist = ac.get("distance") or ac.get("distance_nm")
+            if isinstance(dist, (int, float)) and dist > max_range:
+                max_range = float(dist)
+            rssi = ac.get("rssi")
+            if isinstance(rssi, (int, float)):
+                rssi_sum += float(rssi)
+                rssi_count += 1
+
+        # System metrics via stdlib (no psutil dependency)
+        try:
+            load = round(os.getloadavg()[0], 2)
+        except OSError:
+            load = None
+        mem_percent = None
+        try:
+            with open("/proc/meminfo") as f:
+                info = dict(line.split(":", 1) for line in f if ":" in line)
+            total = float(info["MemTotal"].strip().split()[0])
+            available = float(info["MemAvailable"].strip().split()[0])
+            if total > 0:
+                mem_percent = round((1 - available / total) * 100, 1)
+        except (OSError, KeyError, ValueError, IndexError):
+            pass
+
+        now = timezone.now()
+        series = cache.get("stats_tick_series") or []
+        prev = series[-1] if series else None
+        msg_rate = None
+        if prev and isinstance(prev.get("messages"), (int, float)) and prev.get("ts_epoch"):
+            dt = now.timestamp() - prev["ts_epoch"]
+            if dt > 0 and messages >= prev["messages"]:
+                msg_rate = round((messages - prev["messages"]) / dt, 1)
+
+        sample = {
+            "ts": now.isoformat(),
+            "ts_epoch": now.timestamp(),
+            "aircraft": len(aircraft_list),
+            "messages": messages,
+            "msg_rate": msg_rate,
+            "max_range_nm": round(max_range, 1),
+            "load": load,
+            "mem": mem_percent,
+        }
+        series = (series + [sample])[-120:]
+        cache.set("stats_tick_series", series, timeout=1800)
+
+        payload = {
+            "ts": sample["ts"],
+            "traffic": {
+                "aircraft": len(aircraft_list),
+                "with_position": with_position,
+                "military": military,
+                "msg_rate": msg_rate,
+            },
+            "reception": {
+                "max_range_nm": round(max_range, 1),
+                "avg_rssi": round(rssi_sum / rssi_count, 1) if rssi_count else None,
+            },
+            "system": {
+                "load": load,
+                "mem": mem_percent,
+                "adsb_online": adsb_online,
+                "celery_ok": celery_ok,
+            },
+            # Strip bookkeeping fields clients don't need
+            "series": [{k: v for k, v in s.items() if k not in ("ts_epoch", "messages")} for s in series],
+        }
+
+        try:
+            sync_emit("stats:tick", payload, room="topic_stats")
+        except (ConnectionError, OSError) as e:
+            logger.debug(f"stats:tick emit skipped: {e}")
+
+        return {"status": "ok", "aircraft": len(aircraft_list), "samples": len(series)}
+    except Exception as e:  # broad: periodic beat task must keep running on any failure
+        logger.error(f"emit_stats_tick failed: {e}")
+        return {"status": "error", "error": str(e)}

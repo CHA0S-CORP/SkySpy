@@ -25,7 +25,7 @@ from skyspy.socketio.utils import sync_emit
 logger = logging.getLogger(__name__)
 
 
-@shared_task
+@shared_task(ignore_result=True)
 def process_transcription_queue():
     """
     Process queued audio transcriptions.

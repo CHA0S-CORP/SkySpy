@@ -65,6 +65,8 @@ export function useSocketIOData(enabled, apiBase, topics = 'all') {
     engagement: null,
     timeComparison: null,
   });
+  // Periodic KPI tick (stats:tick from tasks/analytics.emit_stats_tick)
+  const [statsTick, setStatsTick] = useState(null);
 
   // Refs
   const mountedRef = useRef(true);
@@ -206,8 +208,10 @@ export function useSocketIOData(enabled, apiBase, topics = 'all') {
       // Stats updates (pushed from backend)
       else if (type === 'stats:update') {
         if (data) {
-          const { stats_type, data: statsData } = data;
-          if (stats_type && statsData) {
+          // Backend payload shape is {stat_type, stats} (services/stats_cache.py
+          // broadcast_stats_update) — NOT {stats_type, data}
+          const { stat_type: statType, stats: statsData } = data;
+          if (statType && statsData) {
             setExtendedStats((prev) => {
               const key = {
                 flight_patterns: 'flightPatterns',
@@ -216,17 +220,25 @@ export function useSocketIOData(enabled, apiBase, topics = 'all') {
                 engagement: 'engagement',
                 time_comparison: 'timeComparison',
                 antenna: 'antenna',
-              }[stats_type];
+                antenna_analytics: 'antenna',
+              }[statType];
               if (key) {
                 return { ...prev, [key]: statsData };
               }
               return prev;
             });
             // Also update antenna analytics if it's antenna type
-            if (stats_type === 'antenna') {
+            if (statType === 'antenna' || statType === 'antenna_analytics') {
               setAntennaAnalytics(statsData);
             }
           }
+        }
+      }
+
+      // Periodic KPI tick for the Statistics screen (backend emit_stats_tick)
+      else if (type === 'stats:tick') {
+        if (data) {
+          setStatsTick(data);
         }
       }
 
@@ -274,6 +286,13 @@ export function useSocketIOData(enabled, apiBase, topics = 'all') {
         if (data?.request_type === 'aircraft-snapshot' && data?.data?.aircraft) {
           const wrappedData = { type: 'aircraft:snapshot', data: data.data };
           processAircraftSnapshot(wrappedData, setAircraft, setStats);
+        }
+        // notam:refresh re-requests a snapshot without a pending entry -
+        // apply it here or the refreshed payload is silently dropped
+        if (data?.request_type === 'notam-snapshot' && data?.data) {
+          if (data.data.notams) setNotams(data.data.notams);
+          if (data.data.tfrs) setTfrs(data.data.tfrs);
+          if (data.data.stats) setNotamStats(data.data.stats);
         }
         // Resolve pending request if exists
         if (data?.request_id && pendingRequests.current.has(data.request_id)) {
@@ -423,6 +442,7 @@ export function useSocketIOData(enabled, apiBase, topics = 'all') {
       'notam:refresh',
       // Stats
       'stats:update',
+      'stats:tick',
       // Request/Response
       'response',
       'error',
@@ -714,6 +734,7 @@ export function useSocketIOData(enabled, apiBase, topics = 'all') {
     airspaceData,
     antennaAnalytics,
     extendedStats,
+    statsTick,
     notams,
     tfrs,
     notamStats,

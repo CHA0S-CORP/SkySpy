@@ -33,7 +33,7 @@ make lint             # Run all linters (Python + Go + Frontend)
 
 Services: Dashboard :3000, Django API :8000, Django Admin :8000/admin/ (admin/admin), Mock Ultrafeeder :18080, Mock Dump978 :18081, PgBouncer :5432, Redis :6379, Celery worker + beat also start.
 
-The mock ultrafeeder serves synthetic traffic by default. Set `MOCK_DATA_SOURCE=live` in `.env.test` to feed **real aircraft** from a keyless open ADS-B API (`MOCK_LIVE_SOURCE`: `adsb_lol` (default) / `adsb_fi` / `airplanes_live`), centered on `FEEDER_LAT/LON` — all endpoints and streams (aircraft.json, SSE, TCP JSON) serve the live data. Poll cadence `MOCK_LIVE_POLL_INTERVAL` (min 2s — community APIs ask ≤1 req/s), radius `MOCK_LIVE_RADIUS_NM` (max 250). UAT/978 stays simulated. Check `curl :18080/health` for live-poll status.
+The mock ultrafeeder serves synthetic traffic by default. Set `MOCK_DATA_SOURCE=live` in `.env.test` to feed **real aircraft** from an open ADS-B API (`MOCK_LIVE_SOURCE`: `adsb_lol` (default) / `adsb_fi` / `airplanes_live` / `adsbexchange`), centered on `FEEDER_LAT/LON` — all endpoints and streams (aircraft.json, SSE, TCP JSON) serve the live data. Poll cadence `MOCK_LIVE_POLL_INTERVAL` (min 2s for the keyless community APIs which ask ≤1 req/s; min 1s for `adsbexchange`), radius `MOCK_LIVE_RADIUS_NM` (max 250). `adsbexchange` (RapidAPI, `adsbexchange-com1.p.rapidapi.com`) refreshes faster/denser but requires `MOCK_LIVE_API_KEY` (keep in gitignored `.env.test`). UAT/978 stays simulated. Check `curl :18080/health` for live-poll status.
 
 API docs (dev): Swagger UI at `/api/docs/`, ReDoc at `/api/redoc/`, OpenAPI schema at `/api/schema/`
 
@@ -190,6 +190,10 @@ SAFETY_MONITORING_ENABLED, ACARS_ENABLED
 # dashboard's polling volume)
 API_THROTTLE_ANON=600/minute
 API_THROTTLE_USER=2000/minute
+
+# Statistics screen KPI tick (stats:tick broadcast) interval in seconds
+# (RPi celery profile overrides to 30)
+STATS_TICK_INTERVAL=10
 ```
 
 ### Redis Layout

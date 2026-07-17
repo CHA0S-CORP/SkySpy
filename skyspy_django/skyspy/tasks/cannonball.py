@@ -42,7 +42,7 @@ def get_cannonball_service() -> CannonballService:
     return _cannonball_service
 
 
-@shared_task(bind=True, max_retries=0)
+@shared_task(bind=True, max_retries=0, ignore_result=True)
 def analyze_aircraft_patterns(self):
     """
     Analyze current aircraft for law enforcement patterns.

@@ -64,8 +64,12 @@ class AviationViewSet(viewsets.ViewSet):
             radius_nm = 500
 
         if lat and lon:
-            lat = float(lat)
-            lon = float(lon)
+            try:
+                lat = float(lat)
+                lon = float(lon)
+            except (ValueError, TypeError):
+                lat = None
+                lon = None
         else:
             lat = None
             lon = None

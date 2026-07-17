@@ -486,6 +486,7 @@ WS_RATE_LIMITS = {
     "aircraft:position": 5,  # Max 5 Hz for position-only updates
     "aircraft:delta": 10,  # Max 10 Hz for delta updates
     "stats:update": 0.5,  # Max 0.5 Hz (2 second minimum)
+    "stats:tick": 0.2,  # Max 0.2 Hz (5s minimum — beat emits every 10s)
     "default": 5,  # Default rate limit
 }
 

@@ -2,6 +2,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, waitFor, act } from '@testing-library/react';
 import { useAviationData } from './useAviationData';
 
+// Navaids/airports/airspace are fetched only when their overlay flag is on
+// (their payloads are large — gating avoids choking the socket). Enable them
+// for the tests that assert those requests fire.
+const ALL_ON = { navaids: true, airports: true, airspace: true };
+
 describe('useAviationData', () => {
   let mockWsRequest;
 
@@ -18,7 +23,7 @@ describe('useAviationData', () => {
   describe('initial state', () => {
     it('should return initial state with empty data', () => {
       const { result } = renderHook(() =>
-        useAviationData(mockWsRequest, false, 40.0, -74.0, 100, {})
+        useAviationData(mockWsRequest, false, 40.0, -74.0, 100, ALL_ON)
       );
 
       expect(result.current.aviationData).toEqual({
@@ -36,7 +41,7 @@ describe('useAviationData', () => {
 
     it('should reflect connection state', () => {
       const { result } = renderHook(() =>
-        useAviationData(mockWsRequest, true, 40.0, -74.0, 100, {})
+        useAviationData(mockWsRequest, true, 40.0, -74.0, 100, ALL_ON)
       );
 
       expect(result.current.connected).toBe(true);
@@ -45,7 +50,7 @@ describe('useAviationData', () => {
 
   describe('fetching data', () => {
     it('should not fetch when not connected', async () => {
-      renderHook(() => useAviationData(mockWsRequest, false, 40.0, -74.0, 100, {}));
+      renderHook(() => useAviationData(mockWsRequest, false, 40.0, -74.0, 100, ALL_ON));
 
       await act(async () => {
         vi.advanceTimersByTime(1000);
@@ -55,7 +60,7 @@ describe('useAviationData', () => {
     });
 
     it('should not fetch without coordinates', async () => {
-      renderHook(() => useAviationData(mockWsRequest, true, null, null, 100, {}));
+      renderHook(() => useAviationData(mockWsRequest, true, null, null, 100, ALL_ON));
 
       await act(async () => {
         vi.advanceTimersByTime(1000);
@@ -70,7 +75,7 @@ describe('useAviationData', () => {
       mockWsRequest.mockResolvedValue({ data: [] });
 
       const { result } = renderHook(() =>
-        useAviationData(mockWsRequest, true, 40.0, -74.0, 100, {})
+        useAviationData(mockWsRequest, true, 40.0, -74.0, 100, ALL_ON)
       );
 
       await waitFor(() => {
@@ -137,7 +142,7 @@ describe('useAviationData', () => {
 
       mockWsRequest.mockResolvedValue([]);
 
-      renderHook(() => useAviationData(mockWsRequest, true, 40.0, -74.0, 100, {}));
+      renderHook(() => useAviationData(mockWsRequest, true, 40.0, -74.0, 100, ALL_ON));
 
       await waitFor(() => {
         expect(mockWsRequest).toHaveBeenCalledWith(
@@ -153,7 +158,7 @@ describe('useAviationData', () => {
 
       mockWsRequest.mockResolvedValue([]);
 
-      renderHook(() => useAviationData(mockWsRequest, true, 40.0, -74.0, 100, {}));
+      renderHook(() => useAviationData(mockWsRequest, true, 40.0, -74.0, 100, ALL_ON));
 
       await waitFor(() => {
         expect(mockWsRequest).toHaveBeenCalledWith(
@@ -187,7 +192,7 @@ describe('useAviationData', () => {
       });
 
       const { result } = renderHook(() =>
-        useAviationData(mockWsRequest, true, 40.0, -74.0, 100, {})
+        useAviationData(mockWsRequest, true, 40.0, -74.0, 100, ALL_ON)
       );
 
       await waitFor(() => {
@@ -224,7 +229,7 @@ describe('useAviationData', () => {
       });
 
       const { result } = renderHook(() =>
-        useAviationData(mockWsRequest, true, 40.0, -74.0, 100, {})
+        useAviationData(mockWsRequest, true, 40.0, -74.0, 100, ALL_ON)
       );
 
       await waitFor(() => {
@@ -248,7 +253,7 @@ describe('useAviationData', () => {
       });
 
       const { result } = renderHook(() =>
-        useAviationData(mockWsRequest, true, 40.0, -74.0, 100, {})
+        useAviationData(mockWsRequest, true, 40.0, -74.0, 100, ALL_ON)
       );
 
       await waitFor(() => {
@@ -262,7 +267,7 @@ describe('useAviationData', () => {
       mockWsRequest.mockResolvedValue([]);
 
       const { result } = renderHook(() =>
-        useAviationData(mockWsRequest, true, 40.0, -74.0, 100, {})
+        useAviationData(mockWsRequest, true, 40.0, -74.0, 100, ALL_ON)
       );
 
       // Initial fetch after delay
@@ -294,7 +299,7 @@ describe('useAviationData', () => {
       mockWsRequest.mockResolvedValue(metarData);
 
       const { result } = renderHook(() =>
-        useAviationData(mockWsRequest, true, 40.0, -74.0, 100, {})
+        useAviationData(mockWsRequest, true, 40.0, -74.0, 100, ALL_ON)
       );
 
       let metar;
@@ -310,7 +315,7 @@ describe('useAviationData', () => {
       vi.useRealTimers();
 
       const { result } = renderHook(() =>
-        useAviationData(mockWsRequest, false, 40.0, -74.0, 100, {})
+        useAviationData(mockWsRequest, false, 40.0, -74.0, 100, ALL_ON)
       );
 
       let metar;
@@ -333,7 +338,7 @@ describe('useAviationData', () => {
       mockWsRequest.mockResolvedValue(tafData);
 
       const { result } = renderHook(() =>
-        useAviationData(mockWsRequest, true, 40.0, -74.0, 100, {})
+        useAviationData(mockWsRequest, true, 40.0, -74.0, 100, ALL_ON)
       );
 
       let taf;
@@ -357,7 +362,7 @@ describe('useAviationData', () => {
       mockWsRequest.mockResolvedValue(aircraftInfo);
 
       const { result } = renderHook(() =>
-        useAviationData(mockWsRequest, true, 40.0, -74.0, 100, {})
+        useAviationData(mockWsRequest, true, 40.0, -74.0, 100, ALL_ON)
       );
 
       let info;
@@ -376,7 +381,7 @@ describe('useAviationData', () => {
       mockWsRequest.mockRejectedValue(new Error('Network error'));
 
       const { result } = renderHook(() =>
-        useAviationData(mockWsRequest, true, 40.0, -74.0, 100, {})
+        useAviationData(mockWsRequest, true, 40.0, -74.0, 100, ALL_ON)
       );
 
       let metar;
@@ -393,7 +398,7 @@ describe('useAviationData', () => {
 
   describe('error handling', () => {
     it('should set error when socket not connected', () => {
-      const { result } = renderHook(() => useAviationData(null, false, 40.0, -74.0, 100, {}));
+      const { result } = renderHook(() => useAviationData(null, false, 40.0, -74.0, 100, ALL_ON));
 
       expect(result.current.error).toBeNull();
     });
@@ -410,7 +415,7 @@ describe('useAviationData', () => {
       });
 
       const { result } = renderHook(() =>
-        useAviationData(mockWsRequest, true, 40.0, -74.0, 100, {})
+        useAviationData(mockWsRequest, true, 40.0, -74.0, 100, ALL_ON)
       );
 
       await waitFor(() => {
@@ -427,7 +432,7 @@ describe('useAviationData', () => {
   describe('refresh function', () => {
     it('should provide refresh function', () => {
       const { result } = renderHook(() =>
-        useAviationData(mockWsRequest, true, 40.0, -74.0, 100, {})
+        useAviationData(mockWsRequest, true, 40.0, -74.0, 100, ALL_ON)
       );
 
       expect(typeof result.current.refresh).toBe('function');
@@ -448,7 +453,7 @@ describe('useAviationData', () => {
       });
 
       const { result } = renderHook(() =>
-        useAviationData(mockWsRequest, true, 40.0, -74.0, 100, {})
+        useAviationData(mockWsRequest, true, 40.0, -74.0, 100, ALL_ON)
       );
 
       await waitFor(() => {
