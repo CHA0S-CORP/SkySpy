@@ -967,33 +967,38 @@ def lookup_all(icao_hex: str) -> dict | None:
 
     merged = {}
     sources = []
+    field_sources: dict[str, str] = {}
 
-    # FAA first (authoritative for US)
-    faa_data = lookup_faa(icao_hex)
-    if faa_data:
-        merged.update({k: v for k, v in faa_data.items() if v is not None})
-        sources.append("faa")
+    # Meta keys that live alongside real airframe fields but aren't provenance-worthy.
+    _PROVENANCE_SKIP = {"source", "sources", "field_sources"}
 
-    # ADSBX
-    adsbx_data = lookup_adsbx(icao_hex)
-    if adsbx_data:
-        _merge_source_record(merged, adsbx_data)
-        sources.append("adsbx")
+    def _apply(data: dict | None, source: str, first: bool = False) -> None:
+        """Merge a source and attribute any newly-filled fields to it."""
+        if not data:
+            return
+        before = {k: merged.get(k) for k in data}
+        if first:
+            merged.update({k: v for k, v in data.items() if v is not None})
+        else:
+            _merge_source_record(merged, data)
+        for k in data:
+            # A field's provenance is the first source that gave it a value.
+            # Skip meta keys that aren't real airframe fields.
+            if k in _PROVENANCE_SKIP:
+                continue
+            if not before.get(k) and merged.get(k) and k not in field_sources:
+                field_sources[k] = source
+        sources.append(source)
 
-    # tar1090-db
-    tar1090_data = lookup_tar1090(icao_hex)
-    if tar1090_data:
-        _merge_source_record(merged, tar1090_data)
-        sources.append("tar1090")
-
-    # OpenSky Network
-    opensky_data = lookup_opensky(icao_hex)
-    if opensky_data:
-        _merge_source_record(merged, opensky_data)
-        sources.append("opensky")
+    # Priority order (higher first): FAA is authoritative for US registrations.
+    _apply(lookup_faa(icao_hex), "faa", first=True)
+    _apply(lookup_adsbx(icao_hex), "adsbx")
+    _apply(lookup_tar1090(icao_hex), "tar1090")
+    _apply(lookup_opensky(icao_hex), "opensky")
 
     if merged:
         merged["sources"] = sources
+        merged["field_sources"] = field_sources
         return merged
 
     return None

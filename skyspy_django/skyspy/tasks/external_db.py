@@ -47,6 +47,50 @@ def broadcast_airframe_error(
         logger.warning(f"Failed to broadcast airframe error: {e}")
 
 
+def _aircraft_info_defaults(icao: str, data: dict) -> dict:
+    """
+    Build the AircraftInfo.update_or_create defaults from a merged lookup.
+
+    Includes field-level provenance (``field_sources``) and ownership analysis
+    (owner_type / shell-company signals) derived from the owner/city/state.
+    """
+    from skyspy.services import registration_analysis
+
+    ownership = registration_analysis.analyze_ownership(
+        icao_hex=icao,
+        owner_name=data.get("owner"),
+        registration=data.get("registration"),
+        owner_city=data.get("city"),
+        owner_state=data.get("state"),
+    )
+    return {
+        "registration": data.get("registration"),
+        "type_code": data.get("type_code"),
+        "manufacturer": data.get("manufacturer"),
+        "model": data.get("model"),
+        "operator": data.get("operator"),
+        "operator_icao": data.get("operator_icao"),
+        "owner": data.get("owner"),
+        "year_built": data.get("year_built"),
+        "serial_number": data.get("serial_number"),
+        "country": data.get("country"),
+        "category": data.get("category"),
+        "is_military": data.get("is_military", False),
+        "is_interesting": data.get("is_interesting", False),
+        "is_pia": data.get("is_pia", False),
+        "is_ladd": data.get("is_ladd", False),
+        "city": data.get("city"),
+        "state": data.get("state"),
+        "source": ",".join(data.get("sources", [])),
+        "field_sources": data.get("field_sources"),
+        "owner_type": ownership["owner_type"],
+        "is_shell_suspected": ownership["is_shell_suspected"],
+        "shell_score": ownership["shell_score"],
+        "ownership_flags": ownership["ownership_flags"],
+        "fetch_failed": False,
+    }
+
+
 @shared_task(bind=True, max_retries=3)
 @singleton_task(timeout=3600)
 def sync_external_databases(self):
@@ -169,27 +213,7 @@ def fetch_aircraft_info_batch(self, icao_list: list):
             if data:
                 AircraftInfo.objects.update_or_create(
                     icao_hex=icao,
-                    defaults={
-                        "registration": data.get("registration"),
-                        "type_code": data.get("type_code"),
-                        "manufacturer": data.get("manufacturer"),
-                        "model": data.get("model"),
-                        "operator": data.get("operator"),
-                        "operator_icao": data.get("operator_icao"),
-                        "owner": data.get("owner"),
-                        "year_built": data.get("year_built"),
-                        "serial_number": data.get("serial_number"),
-                        "country": data.get("country"),
-                        "category": data.get("category"),
-                        "is_military": data.get("is_military", False),
-                        "is_interesting": data.get("is_interesting", False),
-                        "is_pia": data.get("is_pia", False),
-                        "is_ladd": data.get("is_ladd", False),
-                        "city": data.get("city"),
-                        "state": data.get("state"),
-                        "source": ",".join(data.get("sources", [])),
-                        "fetch_failed": False,
-                    },
+                    defaults=_aircraft_info_defaults(icao, data),
                 )
                 processed += 1
                 _trigger_photo_fetch_if_enabled(icao)
@@ -246,27 +270,7 @@ def fetch_aircraft_info(icao_hex: str):
         if data:
             AircraftInfo.objects.update_or_create(
                 icao_hex=icao,
-                defaults={
-                    "registration": data.get("registration"),
-                    "type_code": data.get("type_code"),
-                    "manufacturer": data.get("manufacturer"),
-                    "model": data.get("model"),
-                    "operator": data.get("operator"),
-                    "operator_icao": data.get("operator_icao"),
-                    "owner": data.get("owner"),
-                    "year_built": data.get("year_built"),
-                    "serial_number": data.get("serial_number"),
-                    "country": data.get("country"),
-                    "category": data.get("category"),
-                    "is_military": data.get("is_military", False),
-                    "is_interesting": data.get("is_interesting", False),
-                    "is_pia": data.get("is_pia", False),
-                    "is_ladd": data.get("is_ladd", False),
-                    "city": data.get("city"),
-                    "state": data.get("state"),
-                    "source": ",".join(data.get("sources", [])),
-                    "fetch_failed": False,
-                },
+                defaults=_aircraft_info_defaults(icao, data),
             )
             logger.debug(f"Got info for {icao} from in-memory databases: {data.get('sources', [])}")
             _trigger_photo_fetch_if_enabled(icao)

@@ -124,6 +124,17 @@ class AircraftInfo(models.Model):
     # Additional data as JSON
     extra_data = models.JSONField(blank=True, null=True)
 
+    # Field-level provenance: maps a merged field name -> the source that won it
+    # (e.g. {"registration": "faa", "operator": "opensky"}). Lets the UI/RAG
+    # attribute each fact instead of relying on the flat ``source`` string.
+    field_sources = models.JSONField(blank=True, null=True)
+
+    # Ownership analysis (derived from owner/city/state via registration_analysis)
+    owner_type = models.CharField(max_length=20, blank=True, null=True)  # llc/trust/corporation/...
+    is_shell_suspected = models.BooleanField(default=False)
+    shell_score = models.FloatField(blank=True, null=True)  # 0..1 shell-company likelihood
+    ownership_flags = models.JSONField(blank=True, null=True)  # factors/details from the analysis
+
     # Cache management
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -155,6 +166,7 @@ class AirframeSourceData(models.Model):
         ("opensky", "OpenSky Network"),
         ("hexdb", "HexDB API"),
         ("adsblol", "adsb.lol API"),
+        ("adsbdb", "ADSBdb API"),
         ("planespotters", "Planespotters API"),
     ]
 

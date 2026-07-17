@@ -457,3 +457,44 @@ def get_analysis_service() -> RegistrationAnalysisService:
     if _analysis_service is None:
         _analysis_service = RegistrationAnalysisService()
     return _analysis_service
+
+
+# Above this score we flag an owner as a suspected shell/opaque structure.
+SHELL_SUSPECTED_THRESHOLD = 0.5
+
+
+def analyze_ownership(
+    icao_hex: str,
+    owner_name: str | None,
+    registration: str | None = None,
+    owner_city: str | None = None,
+    owner_state: str | None = None,
+) -> dict[str, Any]:
+    """
+    Compact ownership summary for enrichment onto ``AircraftInfo``.
+
+    Wraps the shell-company analysis into the exact fields the model stores, so
+    the enrich write path can spread it directly. Returns empty-ish values when
+    there is no owner to analyze.
+    """
+    if not owner_name:
+        return {"owner_type": None, "is_shell_suspected": False, "shell_score": None, "ownership_flags": None}
+
+    service = get_analysis_service()
+    result = service.analyze_registration(
+        icao_hex=icao_hex,
+        registration=registration,
+        owner_name=owner_name,
+        owner_city=owner_city,
+        owner_state=owner_state,
+    )
+    return {
+        "owner_type": service._infer_owner_type(owner_name),
+        "is_shell_suspected": result.shell_company_score >= SHELL_SUSPECTED_THRESHOLD,
+        "shell_score": round(result.shell_company_score, 3),
+        "ownership_flags": {
+            "risk_level": result.risk_level,
+            "factors": {k: v for k, v in result.factors.items() if v},
+            "details": result.details,
+        },
+    }
