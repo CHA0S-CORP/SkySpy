@@ -27,6 +27,7 @@ from skyspy.models import (
 )
 from skyspy.services.cannonball import CannonballService
 from skyspy.socketio.utils import sync_emit
+from skyspy.tasks.locks import singleton_task
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +44,7 @@ def get_cannonball_service() -> CannonballService:
 
 
 @shared_task(bind=True, max_retries=0, ignore_result=True)
+@singleton_task(timeout=60)
 def analyze_aircraft_patterns(self):
     """
     Analyze current aircraft for law enforcement patterns.
@@ -398,6 +400,7 @@ def _broadcast_alert(alert: CannonballAlert, threat: dict):
 
 
 @shared_task
+@singleton_task(timeout=300)
 def cleanup_cannonball_sessions():
     """
     Clean up stale Cannonball sessions.
@@ -429,6 +432,7 @@ def cleanup_cannonball_sessions():
 
 
 @shared_task
+@singleton_task(timeout=1800)
 def cleanup_old_patterns():
     """
     Clean up old pattern records.
@@ -445,6 +449,7 @@ def cleanup_old_patterns():
 
 
 @shared_task
+@singleton_task(timeout=600)
 def aggregate_cannonball_stats():
     """
     Aggregate Cannonball statistics for the past hour.

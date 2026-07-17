@@ -33,11 +33,13 @@ from skyspy.services.stats_cache import (
     refresh_tracking_quality_cache,
     update_aircraft_stats_cache,
 )
+from skyspy.tasks.locks import singleton_task
 
 logger = logging.getLogger(__name__)
 
 
 @shared_task
+@singleton_task(timeout=300)
 def update_antenna_analytics():
     """
     Update antenna performance analytics.
@@ -251,6 +253,7 @@ def update_antenna_analytics():
 
 
 @shared_task
+@singleton_task(timeout=1800)
 def calculate_daily_stats():
     """
     Calculate daily statistics for reporting.
@@ -380,6 +383,7 @@ def update_realtime_stats():
 
 
 @shared_task
+@singleton_task(timeout=300)
 def cleanup_memory_cache():
     """
     Clean up expired entries from in-memory caches.
@@ -421,6 +425,7 @@ def cleanup_memory_cache():
 
 
 @shared_task
+@singleton_task(timeout=1800)
 def cleanup_antenna_analytics_snapshots(retention_days: int = 7):
     """
     Clean up old antenna analytics snapshots.
@@ -471,6 +476,7 @@ def cleanup_antenna_analytics_snapshots(retention_days: int = 7):
 
 
 @shared_task
+@singleton_task(timeout=1800)
 def aggregate_hourly_antenna_analytics():
     """
     Aggregate scheduled snapshots into hourly summaries.
@@ -553,6 +559,7 @@ def aggregate_hourly_antenna_analytics():
 
 
 @shared_task
+@singleton_task(timeout=300)
 def refresh_tracking_quality_stats():
     """
     Refresh tracking quality statistics cache.
@@ -579,6 +586,7 @@ def refresh_tracking_quality_stats():
 
 
 @shared_task
+@singleton_task(timeout=300)
 def refresh_engagement_stats():
     """
     Refresh engagement statistics cache.
@@ -657,6 +665,7 @@ def refresh_geographic_stats():
 
 
 @shared_task
+@singleton_task(timeout=600)
 def update_favorite_tracking():
     """
     Update tracking statistics for favorited aircraft.
@@ -712,6 +721,7 @@ def update_favorite_tracking():
 
 
 @shared_task
+@singleton_task(timeout=600)
 def refresh_time_comparison_stats():
     """
     Refresh time comparison statistics cache.
@@ -747,6 +757,7 @@ def refresh_time_comparison_stats():
 
 
 @shared_task
+@singleton_task(timeout=300)
 def refresh_flight_pattern_geographic_stats():
     """
     Refresh flight pattern and geographic statistics cache.

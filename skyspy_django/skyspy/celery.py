@@ -472,6 +472,25 @@ if _is_rpi_mode():
     app.conf.beat_schedule["update-antenna-analytics-every-5m"]["schedule"] = crontab(minute="8-59/10")
 
 
+# =============================================================================
+# Beat pile-up guard: every periodic task gets an expiry
+# =============================================================================
+# If the worker is down (deploy, crash, queue backlog), beat keeps publishing
+# ticks into Redis. Without an expiry, every stale tick executes on recovery —
+# potentially hours of redundant runs that starve the queues for real work.
+# Interval tasks expire after one interval (a fresher tick is already queued
+# behind them); cron tasks get a 6-hour window so daily maintenance still runs
+# after a morning outage but can never stack more than a few ticks deep.
+# Runs after the RPi overrides so adjusted intervals are respected.
+_CRON_EXPIRE_SECONDS = 6 * 3600.0
+for _entry in app.conf.beat_schedule.values():
+    _options = _entry.setdefault("options", {})
+    if "expire_seconds" in _options or "expires" in _options:
+        continue
+    _schedule = _entry["schedule"]
+    _options["expire_seconds"] = float(_schedule) if isinstance(_schedule, (int, float)) else _CRON_EXPIRE_SECONDS
+
+
 # Task routing
 app.conf.task_routes = {
     # High-priority aircraft polling (time-sensitive)

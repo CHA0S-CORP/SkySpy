@@ -12,10 +12,13 @@ from datetime import datetime
 
 from celery import shared_task
 
+from skyspy.tasks.locks import singleton_task
+
 logger = logging.getLogger(__name__)
 
 
 @shared_task(bind=True, max_retries=3)
+@singleton_task(timeout=600)
 def consume_swim_notams(self, max_messages: int = 1000, timeout_seconds: int = 300):
     """
     Consume NOTAMs from FAA SWIM FNS service.
@@ -83,6 +86,7 @@ def consume_swim_notams(self, max_messages: int = 1000, timeout_seconds: int = 3
 
 
 @shared_task
+@singleton_task(timeout=300)
 def check_swim_status():
     """Check SWIM FNS connection status and restart if needed."""
     from skyspy.services import swim_fns
@@ -98,6 +102,7 @@ def check_swim_status():
 
 
 @shared_task(bind=True, max_retries=3)
+@singleton_task(timeout=1200)
 def refresh_notams(self):
     """
     Refresh all NOTAMs from FAA Aviation Weather API.
@@ -224,6 +229,7 @@ def broadcast_new_tfr(tfr_data: dict):
 
 
 @shared_task
+@singleton_task(timeout=1200)
 def cleanup_expired_notams(archive_days: int = 7, delete_days: int = 90):
     """
     Archive and clean up expired NOTAMs.

@@ -21,11 +21,13 @@ from skyspy.services.audio import (
     process_transcription,
 )
 from skyspy.socketio.utils import sync_emit
+from skyspy.tasks.locks import singleton_task
 
 logger = logging.getLogger(__name__)
 
 
 @shared_task(ignore_result=True)
+@singleton_task(timeout=300)
 def process_transcription_queue():
     """
     Process queued audio transcriptions.

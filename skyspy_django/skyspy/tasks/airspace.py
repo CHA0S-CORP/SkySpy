@@ -13,11 +13,13 @@ from django.utils import timezone
 
 from skyspy.models import AirspaceAdvisory, AirspaceBoundary
 from skyspy.socketio.utils import sync_emit
+from skyspy.tasks.locks import singleton_task
 
 logger = logging.getLogger(__name__)
 
 
 @shared_task
+@singleton_task(timeout=600)
 def refresh_airspace_advisories():
     """
     Refresh airspace advisories from Aviation Weather Center.
@@ -178,6 +180,7 @@ def refresh_airspace_advisories():
 
 
 @shared_task(bind=True, max_retries=3)
+@singleton_task(timeout=1800)
 def refresh_airspace_boundaries(self):
     """
     Refresh static airspace boundaries from OpenAIP.

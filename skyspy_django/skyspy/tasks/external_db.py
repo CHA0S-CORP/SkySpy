@@ -17,6 +17,7 @@ from django.db import DatabaseError
 from kombu.exceptions import OperationalError as KombuOperationalError
 
 from skyspy.socketio.utils import sync_emit
+from skyspy.tasks.locks import singleton_task
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +47,7 @@ def broadcast_airframe_error(
 
 
 @shared_task(bind=True, max_retries=3)
+@singleton_task(timeout=3600)
 def sync_external_databases(self):
     """
     Sync aircraft databases from external sources.
@@ -81,6 +83,7 @@ def sync_external_databases(self):
 
 
 @shared_task(bind=True, max_retries=3)
+@singleton_task(timeout=3600)
 def update_stale_databases(self):
     """
     Check and update databases if older than 24 hours.
@@ -102,6 +105,7 @@ def update_stale_databases(self):
 
 
 @shared_task
+@singleton_task(timeout=3600)
 def load_opensky_database():
     """
     Load the OpenSky Network aircraft database.
@@ -608,6 +612,7 @@ def batch_fetch_aircraft_photos(icao_list: list):
 
 
 @shared_task
+@singleton_task(timeout=3600)
 def refresh_stale_aircraft_info(max_age_days: int = 7, batch_size: int = 100):
     """
     Refresh aircraft info records that are older than max_age_days.
@@ -667,6 +672,7 @@ def refresh_stale_aircraft_info(max_age_days: int = 7, batch_size: int = 100):
 
 
 @shared_task
+@singleton_task(timeout=3600)
 def batch_upgrade_aircraft_photos(batch_size: int = 50):
     """
     Batch upgrade photos for aircraft that might have better images available.
@@ -714,6 +720,7 @@ def batch_upgrade_aircraft_photos(batch_size: int = 50):
 
 
 @shared_task
+@singleton_task(timeout=3600)
 def cleanup_orphan_aircraft_info(days_without_sighting: int = 30):
     """
     Clean up AircraftInfo records for aircraft not seen in a long time.

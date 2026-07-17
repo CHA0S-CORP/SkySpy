@@ -13,10 +13,13 @@ import logging
 from celery import shared_task
 from django.conf import settings
 
+from skyspy.tasks.locks import singleton_task
+
 logger = logging.getLogger(__name__)
 
 
 @shared_task(bind=True, max_retries=3)
+@singleton_task(timeout=1800)
 def refresh_all_geodata(self):
     """
     Refresh all geographic data (airports, navaids, GeoJSON, airlines, aircraft types).
@@ -65,6 +68,7 @@ def refresh_all_geodata(self):
 
 
 @shared_task(bind=True, max_retries=3)
+@singleton_task(timeout=900)
 def refresh_airports(self):
     """
     Refresh cached airport data.
@@ -87,6 +91,7 @@ def refresh_airports(self):
 
 
 @shared_task(bind=True, max_retries=3)
+@singleton_task(timeout=900)
 def refresh_navaids(self):
     """
     Refresh cached navaid data.
@@ -109,6 +114,7 @@ def refresh_navaids(self):
 
 
 @shared_task(bind=True, max_retries=3)
+@singleton_task(timeout=900)
 def refresh_geojson(self):
     """
     Refresh cached GeoJSON boundaries.
@@ -131,6 +137,7 @@ def refresh_geojson(self):
 
 
 @shared_task
+@singleton_task(timeout=1800)
 def check_and_refresh_geodata():
     """
     Check if geographic data needs refresh and trigger if stale.
@@ -164,6 +171,7 @@ def check_and_refresh_geodata():
 
 
 @shared_task
+@singleton_task(timeout=600)
 def cleanup_old_pireps(retention_hours: int = 24):
     """
     Clean up old PIREPs from the database.
@@ -186,6 +194,7 @@ def cleanup_old_pireps(retention_hours: int = 24):
 
 
 @shared_task(bind=True, max_retries=3)
+@singleton_task(timeout=600)
 def refresh_pireps(self, bbox: str = "24,-130,50,-60", hours: int = 6):
     """
     Fetch PIREPs from Aviation Weather Center and store in database.
@@ -223,6 +232,7 @@ def refresh_pireps(self, bbox: str = "24,-130,50,-60", hours: int = 6):
 
 
 @shared_task(bind=True, max_retries=3)
+@singleton_task(timeout=600)
 def refresh_metars(self, bbox: str = "24,-130,50,-60", hours: int = 2):
     """
     Fetch METARs from Aviation Weather Center and cache them.
@@ -261,6 +271,7 @@ def refresh_metars(self, bbox: str = "24,-130,50,-60", hours: int = 2):
 
 
 @shared_task(bind=True, max_retries=3)
+@singleton_task(timeout=900)
 def refresh_tafs(self, bbox: str = "24,-130,50,-60"):
     """
     Fetch TAFs from Aviation Weather Center and cache them.
@@ -300,6 +311,7 @@ def get_geodata_stats():
 
 
 @shared_task(bind=True, max_retries=3)
+@singleton_task(timeout=3600)
 def refresh_openflights_data(self):
     """
     Refresh OpenFlights airline and aircraft type data.
@@ -325,6 +337,7 @@ def refresh_openflights_data(self):
 
 
 @shared_task
+@singleton_task(timeout=1800)
 def check_and_refresh_openflights():
     """
     Check if OpenFlights data needs refresh and trigger if stale.
@@ -346,6 +359,7 @@ def check_and_refresh_openflights():
 
 
 @shared_task(bind=True, max_retries=2)
+@singleton_task(timeout=300)
 def refresh_nexrad_cache(self, bbox: str = None):
     """Pre-cache NEXRAD radar image for the feeder's coverage area."""
     from skyspy.services import weather_cache
@@ -375,6 +389,7 @@ def refresh_nexrad_cache(self, bbox: str = None):
 
 
 @shared_task(bind=True, max_retries=2)
+@singleton_task(timeout=600)
 def refresh_sigmets_cache(self):
     """Pre-cache SIGMETs/AIRMETs."""
     from skyspy.services import weather_cache
@@ -388,6 +403,7 @@ def refresh_sigmets_cache(self):
 
 
 @shared_task(bind=True, max_retries=2)
+@singleton_task(timeout=900)
 def refresh_winds_aloft_cache(self):
     """Pre-cache winds aloft for the feeder location."""
     from skyspy.services import weather_cache

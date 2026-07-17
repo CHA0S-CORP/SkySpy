@@ -14,6 +14,7 @@ from celery import shared_task
 from skyspy.models import AcarsMessage
 from skyspy.services.acars_decoder import decode_message_text
 from skyspy.services.libacars_binding import is_available as libacars_is_available
+from skyspy.tasks.locks import singleton_task
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +78,7 @@ def decode_acars_message(self, message_id: int):
 
 
 @shared_task(ignore_result=True)
+@singleton_task(timeout=120)
 def process_acars_decode_queue():
     """
     Process batch of ACARS messages that haven't been decoded yet.

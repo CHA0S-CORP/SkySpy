@@ -18,6 +18,8 @@ import apprise
 from celery import shared_task
 from django.utils import timezone
 
+from skyspy.tasks.locks import singleton_task
+
 logger = logging.getLogger(__name__)
 
 
@@ -216,6 +218,7 @@ def process_notification_queue():
 
 
 @shared_task
+@singleton_task(timeout=1200)
 def cleanup_old_notification_logs(days: int = 30):
     """
     Clean up old notification logs.
@@ -305,6 +308,7 @@ def send_bulk_notifications(notifications: list, delay_between_ms: int = 100):
 
 
 @shared_task
+@singleton_task(timeout=300)
 def cleanup_notification_cooldowns():
     """
     Clean up old notification cooldown entries to prevent memory growth.

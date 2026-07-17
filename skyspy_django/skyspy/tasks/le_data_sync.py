@@ -14,11 +14,13 @@ from django.utils import timezone
 
 from skyspy.models import LEDataSource
 from skyspy.services.le_data_import import get_import_service
+from skyspy.tasks.locks import singleton_task
 
 logger = logging.getLogger(__name__)
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=300)
+@singleton_task(timeout=3600)
 def sync_le_external_sources(self, force: bool = False):
     """
     Sync all enabled external LE data sources.
@@ -115,6 +117,7 @@ def import_le_source(self, source_name: str, force: bool = False):
 
 
 @shared_task
+@singleton_task(timeout=1800)
 def deduplicate_le_database(dry_run: bool = True):
     """
     Find and merge duplicate LE aircraft records.
@@ -142,6 +145,7 @@ def deduplicate_le_database(dry_run: bool = True):
 
 
 @shared_task
+@singleton_task(timeout=600)
 def check_source_health():
     """
     Check health of all external data sources.
@@ -197,6 +201,7 @@ def check_source_health():
 
 
 @shared_task
+@singleton_task(timeout=600)
 def refresh_source_metadata():
     """
     Refresh metadata for all data sources.

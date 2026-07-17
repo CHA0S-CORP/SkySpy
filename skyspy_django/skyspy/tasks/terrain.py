@@ -9,6 +9,8 @@ import httpx
 from celery import shared_task
 from django.conf import settings
 
+from skyspy.tasks.locks import singleton_task
+
 logger = logging.getLogger(__name__)
 
 
@@ -66,6 +68,7 @@ def download_srtm_tiles(self, radius_nm: float = 100):
 
 
 @shared_task
+@singleton_task(timeout=3600)
 def check_srtm_coverage():
     """Check SRTM tile coverage and download missing tiles."""
     from skyspy.services.terrain_elevation import get_tile_status

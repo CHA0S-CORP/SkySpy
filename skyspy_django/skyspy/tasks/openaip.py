@@ -9,10 +9,13 @@ from datetime import datetime
 
 from celery import shared_task
 
+from skyspy.tasks.locks import singleton_task
+
 logger = logging.getLogger(__name__)
 
 
 @shared_task(bind=True, max_retries=3)
+@singleton_task(timeout=3600)
 def refresh_openaip_data(self):
     """
     Refresh OpenAIP airspace data by prefetching for common regions.

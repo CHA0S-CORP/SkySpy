@@ -25,6 +25,8 @@ from django.conf import settings
 from django.db import DatabaseError, connection
 from django.utils import timezone
 
+from skyspy.tasks.locks import singleton_task
+
 try:
     from redis.exceptions import RedisError
 
@@ -357,6 +359,7 @@ def cleanup_old_audio_transmissions():
 
 
 @shared_task
+@singleton_task(timeout=3600)
 def run_all_cleanup_tasks():
     """
     Run all data retention cleanup tasks.
@@ -423,6 +426,7 @@ def run_all_cleanup_tasks():
 
 
 @shared_task
+@singleton_task(timeout=600)
 def cleanup_orphan_cooldown_keys():
     """
     Clean up Redis cooldown keys for deleted alert rules.
@@ -492,6 +496,7 @@ def cleanup_orphan_cooldown_keys():
 
 
 @shared_task
+@singleton_task(timeout=600)
 def cleanup_stale_cooldown_keys(max_age_hours: int = 24):
     """
     Clean up cooldown keys that have no TTL set.
@@ -549,6 +554,7 @@ def cleanup_stale_cooldown_keys(max_age_hours: int = 24):
 
 
 @shared_task
+@singleton_task(timeout=3600)
 def vacuum_analyze_tables():
     """
     Run VACUUM ANALYZE on frequently updated tables.
