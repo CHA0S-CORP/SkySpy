@@ -20,7 +20,7 @@ from kombu.exceptions import OperationalError as KombuOperationalError
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from skyspy.models import AircraftInfo
-from skyspy.services import external_db
+from skyspy.services import adsbx_live, external_db
 
 logger = logging.getLogger(__name__)
 
@@ -448,6 +448,22 @@ def _fetch_from_external_apis(icao: str) -> dict | None:
                 sources.append("adsb.lol")
         except (httpx.HTTPError, ConnectionError, OSError, ValueError) as e:
             logger.debug(f"adsb.lol lookup failed for {icao}: {type(e).__name__}: {e}")
+
+    # Try ADS-B Exchange (RapidAPI) if still no info. Keyed premium source,
+    # self-gated by ADSBX_LIVE_ENABLED + API key (returns None when off), so it
+    # costs no quota unless explicitly enabled and the keyless sources missed.
+    if not info:
+        try:
+            adsbx_data = adsbx_live.get_aircraft_by_icao(icao)
+            if adsbx_data:
+                info = {
+                    "icao_hex": icao,
+                    "registration": adsbx_data.get("registration"),
+                    "type_code": adsbx_data.get("aircraft_type"),
+                }
+                sources.append("adsbexchange")
+        except (httpx.HTTPError, ConnectionError, OSError, ValueError) as e:
+            logger.debug(f"ADS-B Exchange lookup failed for {icao}: {type(e).__name__}: {e}")
 
     # Try planespotters for photo if we don't have one
     if info and not info.get("photo_url"):
