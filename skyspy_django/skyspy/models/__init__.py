@@ -12,6 +12,7 @@ from skyspy.models.aircraft import (
     AircraftInfo,
     AircraftSession,
     AircraftSighting,
+    AirframeDocument,
     AirframeSourceData,
 )
 from skyspy.models.airspace import AirspaceAdvisory, AirspaceBoundary
@@ -73,6 +74,7 @@ __all__ = [
     "AircraftSession",
     "AircraftIncident",
     "AircraftInfo",
+    "AirframeDocument",
     "AirframeSourceData",
     # Alerts
     "AlertRule",

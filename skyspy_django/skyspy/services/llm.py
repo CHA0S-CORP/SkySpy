@@ -188,6 +188,65 @@ class LLMClient:
         _stats["failures"] += 1
         return None
 
+    def embed(self, texts: list[str]) -> list[list[float]] | None:
+        """
+        Embed a batch of texts via the OpenAI-compatible /embeddings endpoint.
+
+        Returns a list of vectors aligned with ``texts``, or None on failure.
+        Uses EMBEDDING_MODEL / EMBEDDING_API_URL / EMBEDDING_API_KEY, each
+        falling back to the corresponding LLM_* setting so a single provider
+        config covers both chat and embeddings.
+        """
+        if not texts:
+            return []
+
+        api_url = getattr(settings, "EMBEDDING_API_URL", "") or self.api_url
+        api_key = getattr(settings, "EMBEDDING_API_KEY", "") or self.api_key
+        model = getattr(settings, "EMBEDDING_MODEL", "") or "text-embedding-3-small"
+
+        if not getattr(settings, "LLM_ENABLED", False):
+            logger.debug("LLM/embeddings not enabled")
+            return None
+        if not api_key and "localhost" not in api_url and "127.0.0.1" not in api_url:
+            logger.debug("Embeddings not available (no API key)")
+            return None
+
+        endpoint = f"{api_url.rstrip('/')}/embeddings"
+        headers = {"Content-Type": "application/json"}
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+
+        for attempt in range(self.max_retries):
+            try:
+                with httpx.Client(timeout=self.timeout) as client:
+                    response = client.post(endpoint, headers=headers, json={"model": model, "input": texts})
+                    if response.status_code == 429:
+                        _stats["rate_limits"] += 1
+                        time.sleep(min(int(response.headers.get("Retry-After", 2 ** (attempt + 1))), 60))
+                        continue
+                    response.raise_for_status()
+                    data = response.json()
+                # OpenAI returns {"data": [{"index": i, "embedding": [...]}, ...]}
+                items = sorted(data.get("data", []), key=lambda x: x.get("index", 0))
+                vectors = [it["embedding"] for it in items]
+                if len(vectors) == len(texts):
+                    if "usage" in data:
+                        _stats["total_tokens"] += data["usage"].get("total_tokens", 0)
+                    return vectors
+                logger.warning(f"Embeddings count mismatch: got {len(vectors)} for {len(texts)} inputs")
+                return None
+            except httpx.HTTPStatusError as e:
+                logger.warning(f"Embeddings HTTP error: {e.response.status_code}")
+                if e.response.status_code >= 500:
+                    time.sleep(2**attempt)
+                    continue
+                return None
+            except (httpx.HTTPError, ConnectionError, OSError, ValueError, KeyError, TypeError) as e:
+                logger.warning(f"Embeddings error: {e}")
+                return None
+
+        return None
+
 
 # Singleton client instance
 llm_client = LLMClient()

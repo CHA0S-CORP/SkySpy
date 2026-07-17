@@ -33,6 +33,7 @@ requests>=2.31
 # Database
 psycopg[binary]>=3.1
 asyncpg>=0.29.0
+pgvector>=0.3  # Airframe RAG embedding storage / similarity search
 daphne>=4.0
 # HTTP Client
 httpx>=0.26.0

@@ -29,6 +29,7 @@ from skyspy.tasks import (
     notams,
     notifications,
     openaip,
+    rag,
     registration_analysis,
     terrain,
     transcription,

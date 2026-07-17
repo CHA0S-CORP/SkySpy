@@ -648,6 +648,13 @@ LLM_CACHE_TTL = get_env("LLM_CACHE_TTL", "3600", int)
 LLM_MAX_TOKENS = get_env("LLM_MAX_TOKENS", "500", int)
 LLM_TEMPERATURE = get_env("LLM_TEMPERATURE", "0.1", float)
 
+# Embeddings (airframe RAG). Each falls back to the LLM_* provider config so a
+# single provider covers both chat and embeddings; override to split them.
+EMBEDDING_API_URL = get_env("EMBEDDING_API_URL", "")
+EMBEDDING_API_KEY = get_env("EMBEDDING_API_KEY", "")
+EMBEDDING_MODEL = get_env("EMBEDDING_MODEL", "text-embedding-3-small")
+EMBEDDING_DIM = get_env("EMBEDDING_DIM", "1536", int)  # text-embedding-3-small = 1536
+
 # OpenSky Database
 OPENSKY_DB_PATH = get_env("OPENSKY_DB_PATH", "/data/opensky/aircraft-database.csv")
 OPENSKY_DB_ENABLED = get_env("OPENSKY_DB_ENABLED", "True", bool)

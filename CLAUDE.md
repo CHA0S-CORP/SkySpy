@@ -194,6 +194,15 @@ API_THROTTLE_USER=2000/minute
 # Statistics screen KPI tick (stats:tick broadcast) interval in seconds
 # (RPi celery profile overrides to 30)
 STATS_TICK_INTERVAL=10
+
+# Airframe RAG embeddings (each falls back to the matching LLM_* value).
+# Requires the Postgres image to be pgvector/pgvector:pg16 (already set in the
+# compose files) — the AirframeDocument embedding column + similarity search
+# depend on the pgvector extension. EMBEDDING_DIM must match the model.
+EMBEDDING_API_URL=       # defaults to LLM_API_URL
+EMBEDDING_API_KEY=       # defaults to LLM_API_KEY
+EMBEDDING_MODEL=text-embedding-3-small
+EMBEDDING_DIM=1536
 ```
 
 ### Redis Layout

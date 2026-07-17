@@ -442,6 +442,14 @@ app.conf.beat_schedule = {
         "task": "skyspy.tasks.incidents.refresh_aircraft_incidents",
         "schedule": crontab(hour=6, minute=30),
     },
+    # ==========================================================================
+    # Airframe RAG index
+    # ==========================================================================
+    # Re-embed dossiers for recently-changed airframes - daily at 7 AM UTC
+    "refresh-airframe-documents-daily": {
+        "task": "skyspy.tasks.rag.refresh_airframe_documents",
+        "schedule": crontab(hour=7, minute=0),
+    },
 }
 
 
@@ -555,6 +563,8 @@ app.conf.task_routes = {
     "skyspy.tasks.terrain.*": {"queue": "database"},
     # Incident enrichment (external API + DB writes, not time-sensitive)
     "skyspy.tasks.incidents.*": {"queue": "database"},
+    # Airframe RAG indexing (embedding API + DB writes)
+    "skyspy.tasks.rag.*": {"queue": "database"},
     # Cannonball tasks (pattern analysis is time-sensitive)
     "skyspy.tasks.cannonball.analyze_aircraft_patterns": {"queue": "polling"},
     "skyspy.tasks.cannonball.cleanup_cannonball_sessions": {"queue": "database"},
