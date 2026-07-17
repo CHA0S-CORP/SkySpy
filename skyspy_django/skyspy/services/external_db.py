@@ -876,16 +876,23 @@ def fetch_route(callsign: str) -> dict | None:
         headers={"User-Agent": "SkySpyAPI/2.6"},
         timeout=10.0,
     )
-    if payload is not None:
-        route_data = _parse_route_response(payload, callsign)
-        if route_data:
-            with _route_lock:
-                # Cleanup if cache is too large
-                if len(_route_cache) > MAX_ROUTE_CACHE_SIZE:
-                    _cleanup_route_cache(now)
-                _route_cache[callsign] = route_data
-                _route_cache_ttl[callsign] = now + 3600
-            return route_data
+    route_data = _parse_route_response(payload, callsign) if payload is not None else None
+
+    # Fall back to ADSBdb (free, keyless) when adsb.im has no match. Lazy import
+    # keeps the dependency one-directional (adsbdb imports http_client only).
+    if not route_data:
+        from skyspy.services import adsbdb
+
+        route_data = adsbdb.get_route_by_callsign(callsign)
+
+    if route_data:
+        with _route_lock:
+            # Cleanup if cache is too large
+            if len(_route_cache) > MAX_ROUTE_CACHE_SIZE:
+                _cleanup_route_cache(now)
+            _route_cache[callsign] = route_data
+            _route_cache_ttl[callsign] = now + 3600
+        return route_data
 
     return None
 

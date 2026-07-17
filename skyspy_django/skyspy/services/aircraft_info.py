@@ -17,42 +17,11 @@ from threading import Lock
 import httpx
 from django.db import DatabaseError
 from kombu.exceptions import OperationalError as KombuOperationalError
-from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from skyspy.models import AircraftInfo
-from skyspy.services import adsbx_live, external_db
+from skyspy.services import adsbdb, adsbx_live, external_db, http_client
 
 logger = logging.getLogger(__name__)
-
-
-# =============================================================================
-# Retry Helpers for External API Calls
-# =============================================================================
-
-
-@retry(
-    stop=stop_after_attempt(3),
-    wait=wait_exponential(multiplier=1, min=1, max=10),
-    retry=retry_if_exception_type((httpx.HTTPError, httpx.TimeoutException)),
-)
-def _http_get_with_retry(url: str, timeout: float = 15.0) -> httpx.Response:
-    """HTTP GET with retry logic for external APIs."""
-    with httpx.Client(timeout=timeout) as client:
-        response = client.get(url)
-        response.raise_for_status()
-        return response
-
-
-@retry(
-    stop=stop_after_attempt(3),
-    wait=wait_exponential(multiplier=1, min=1, max=10),
-    retry=retry_if_exception_type((httpx.HTTPError, httpx.TimeoutException)),
-)
-def _http_head_with_retry(url: str, timeout: float = 5.0) -> httpx.Response:
-    """HTTP HEAD with retry logic for external APIs."""
-    with httpx.Client(timeout=timeout) as client:
-        response = client.head(url)
-        return response  # Don't raise_for_status for HEAD - 404 is valid
 
 
 # In-memory cache for fast lookups
@@ -402,38 +371,26 @@ def _fetch_from_external_apis(icao: str) -> dict | None:
     info = {}
     sources = []
 
-    # Try HexDB
-    try:
-        url = f"https://hexdb.io/api/v1/aircraft/{icao}"
-        response = _http_get_with_retry(url, timeout=10.0)
+    # Try HexDB. Shared client returns None on any failure and only retries
+    # transient errors (a 404 for an unknown hex no longer raises RetryError).
+    data = http_client.get_json(f"https://hexdb.io/api/v1/aircraft/{icao}", source="hexdb", timeout=10.0)
+    if isinstance(data, dict):
+        info = {
+            "icao_hex": icao,
+            "registration": data.get("Registration"),
+            "type_code": data.get("ICAOTypeCode"),
+            "manufacturer": data.get("Manufacturer"),
+            "model": data.get("Type"),
+            "operator": data.get("RegisteredOwners"),
+        }
+        sources.append("hexdb")
 
-        if response.status_code == 200:
-            data = response.json()
-            info = {
-                "icao_hex": icao,
-                "registration": data.get("Registration"),
-                "type_code": data.get("ICAOTypeCode"),
-                "manufacturer": data.get("Manufacturer"),
-                "model": data.get("Type"),
-                "operator": data.get("RegisteredOwners"),
-            }
-            sources.append("hexdb")
-
-            # Try to get photo from HexDB
-            photo_url = f"https://hexdb.io/hex-image?hex={icao.lower()}"
-            try:
-                photo_resp = _http_head_with_retry(photo_url, timeout=5.0)
-                if photo_resp.status_code == 200:
-                    content_type = photo_resp.headers.get("content-type", "")
-                    if content_type.startswith("image/"):
-                        info["photo_url"] = photo_url
-                        info["photo_thumbnail_url"] = f"https://hexdb.io/hex-image-thumb?hex={icao.lower()}"
-                        info["photo_source"] = "hexdb.io"
-            except (httpx.HTTPError, ConnectionError, OSError):
-                pass
-
-    except (httpx.HTTPError, ConnectionError, OSError, ValueError) as e:
-        logger.debug(f"HexDB lookup failed for {icao}: {type(e).__name__}: {e}")
+        # HexDB photo via HEAD (image/* only)
+        photo_url = f"https://hexdb.io/hex-image?hex={icao.lower()}"
+        if http_client.head_ok(photo_url, source="hexdb", timeout=5.0, expected_content_type="image/"):
+            info["photo_url"] = photo_url
+            info["photo_thumbnail_url"] = f"https://hexdb.io/hex-image-thumb?hex={icao.lower()}"
+            info["photo_source"] = "hexdb.io"
 
     # Try adsb.lol if no info yet
     if not info:
@@ -465,26 +422,48 @@ def _fetch_from_external_apis(icao: str) -> dict | None:
         except (httpx.HTTPError, ConnectionError, OSError, ValueError) as e:
             logger.debug(f"ADS-B Exchange lookup failed for {icao}: {type(e).__name__}: {e}")
 
-    # Try planespotters for photo if we don't have one
-    if info and not info.get("photo_url"):
+    # Try ADSBdb (free, keyless) if still no info. Adds owner/manufacturer and
+    # frequently a photo the other keyless sources lack.
+    if not info:
         try:
-            ps_url = f"https://api.planespotters.net/pub/photos/hex/{icao}"
-            response = _http_get_with_retry(ps_url, timeout=10.0)
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("photos"):
-                    photo = data["photos"][0]
-                    large_thumb = photo.get("thumbnail_large", {})
-                    if isinstance(large_thumb, dict):
-                        info["photo_url"] = large_thumb.get("src")
-                    small_thumb = photo.get("thumbnail", {})
-                    if isinstance(small_thumb, dict):
-                        info["photo_thumbnail_url"] = small_thumb.get("src")
-                    info["photo_page_link"] = photo.get("link")
-                    info["photo_photographer"] = photo.get("photographer")
-                    info["photo_source"] = "planespotters.net"
-        except (httpx.HTTPError, ConnectionError, OSError, ValueError) as e:
-            logger.debug(f"Planespotters lookup failed for {icao}: {type(e).__name__}: {e}")
+            adsbdb_data = adsbdb.get_aircraft_by_icao(icao)
+            if adsbdb_data:
+                info = {
+                    "icao_hex": icao,
+                    "registration": adsbdb_data.get("registration"),
+                    "type_code": adsbdb_data.get("type_code"),
+                    "model": adsbdb_data.get("model"),
+                    "manufacturer": adsbdb_data.get("manufacturer"),
+                    "operator": adsbdb_data.get("owner"),
+                    "country": adsbdb_data.get("country"),
+                }
+                if adsbdb_data.get("photo_url"):
+                    info["photo_url"] = adsbdb_data["photo_url"]
+                    info["photo_thumbnail_url"] = adsbdb_data.get("photo_thumbnail_url")
+                    info["photo_source"] = "adsbdb"
+                # Strip empty keys so downstream fill-if-empty merges cleanly.
+                info = {k: v for k, v in info.items() if v not in (None, "")}
+                sources.append("adsbdb")
+        except (ConnectionError, OSError, ValueError) as e:
+            logger.debug(f"ADSBdb lookup failed for {icao}: {type(e).__name__}: {e}")
+
+    # Try planespotters for photo if we don't have one. Shared client returns
+    # None on any failure (incl. 403/exhausted retries) instead of raising, and
+    # only retries transient errors — a 4xx no longer burns the retry budget.
+    if info and not info.get("photo_url"):
+        ps_url = f"https://api.planespotters.net/pub/photos/hex/{icao}"
+        data = http_client.get_json(ps_url, source="planespotters", timeout=10.0)
+        if isinstance(data, dict) and data.get("photos"):
+            photo = data["photos"][0]
+            large_thumb = photo.get("thumbnail_large", {})
+            if isinstance(large_thumb, dict):
+                info["photo_url"] = large_thumb.get("src")
+            small_thumb = photo.get("thumbnail", {})
+            if isinstance(small_thumb, dict):
+                info["photo_thumbnail_url"] = small_thumb.get("src")
+            info["photo_page_link"] = photo.get("link")
+            info["photo_photographer"] = photo.get("photographer")
+            info["photo_source"] = "planespotters.net"
 
     if info:
         info["sources"] = sources
