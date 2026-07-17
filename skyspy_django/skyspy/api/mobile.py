@@ -8,6 +8,7 @@ Provides endpoints for:
 """
 
 import logging
+import time
 import uuid
 from datetime import datetime
 from typing import Any
@@ -96,21 +97,30 @@ class MobileViewSet(ViewSet):
         if not session_id:
             session_id = str(uuid.uuid4())
 
-        # Get previous position for trend calculation
+        # Get previous per-aircraft distances for trend/closing-speed calculation.
+        # Trend must be measured against each aircraft's OWN previous distance to the
+        # user — not the user's previous position — otherwise a stationary user always
+        # sees "holding" even for aircraft closing at hundreds of knots.
         cache_key = f"{MOBILE_POSITION_PREFIX}{session_id}"
-        previous_data = cache.get(cache_key)
+        previous_data = cache.get(cache_key) or {}
+        prev_distances = previous_data.get("threat_distances") or {}
+        prev_ts = previous_data.get("ts")
+        now = time.time()
+        time_delta = (now - prev_ts) if prev_ts else None
 
-        # Store current position in cache
+        # Calculate threats
+        threats = self._get_nearby_threats(lat, lon, radius_nm, heading, prev_distances, time_delta)
+
+        # Store current position + per-aircraft distances for the next update's trend calc
         position_data = {
             "lat": lat,
             "lon": lon,
             "heading": heading,
             "timestamp": datetime.utcnow().isoformat() + "Z",
+            "ts": now,
+            "threat_distances": {t["hex"]: t["distance_nm"] for t in threats if t.get("hex")},
         }
         cache.set(cache_key, position_data, POSITION_TTL_SECONDS)
-
-        # Calculate threats
-        threats = self._get_nearby_threats(lat, lon, radius_nm, heading, previous_data)
 
         return Response(
             {
@@ -158,7 +168,13 @@ class MobileViewSet(ViewSet):
         lon = position_data["lon"]
         heading = position_data.get("heading")
 
-        threats = self._get_nearby_threats(lat, lon, radius_nm, heading)
+        # Read-only endpoint: derive trend from the distances stored on the last
+        # position update, but don't rewrite the cache here.
+        prev_distances = position_data.get("threat_distances") or {}
+        prev_ts = position_data.get("ts")
+        time_delta = (time.time() - prev_ts) if prev_ts else None
+
+        threats = self._get_nearby_threats(lat, lon, radius_nm, heading, prev_distances, time_delta)
 
         return Response(
             {
@@ -307,7 +323,8 @@ class MobileViewSet(ViewSet):
         user_lon: float,
         radius_nm: float,
         user_heading: float = None,
-        previous_data: dict = None,
+        previous_distances: dict = None,
+        time_delta_seconds: float = None,
     ) -> list[dict[str, Any]]:
         """
         Get nearby threats based on user position.
@@ -317,11 +334,14 @@ class MobileViewSet(ViewSet):
             user_lon: User longitude
             radius_nm: Search radius in nautical miles
             user_heading: Optional user heading for relative bearing
-            previous_data: Previous position data for trend calculation
+            previous_distances: Map of {hex: previous distance_nm to user} from the last
+                update, used to compute per-aircraft trend and closing speed
+            time_delta_seconds: Seconds since the previous update (for closing speed)
 
         Returns:
             List of threat dictionaries sorted by distance
         """
+        previous_distances = previous_distances or {}
         # Get current aircraft from cache
         aircraft_list = cache.get("current_aircraft", [])
         threats = []
@@ -361,19 +381,27 @@ class MobileViewSet(ViewSet):
             if user_heading is not None:
                 relative_bearing = (bearing - user_heading + 360) % 360
 
-            # Calculate trend (approaching/departing)
+            # Calculate trend + closing speed from THIS aircraft's own previous distance
+            # to the user (captures both user and aircraft movement — a range rate).
             trend = "unknown"
-            if previous_data:
-                prev_lat = previous_data.get("lat")
-                prev_lon = previous_data.get("lon")
-                if prev_lat and prev_lon:
-                    prev_distance = haversine_distance(prev_lat, prev_lon, ac_lat, ac_lon)
-                    if distance_nm < prev_distance - 0.05:
-                        trend = "approaching"
-                    elif distance_nm > prev_distance + 0.05:
-                        trend = "departing"
-                    else:
-                        trend = "holding"
+            closing_speed = None
+            eta_seconds = None
+            prev_distance = previous_distances.get(aircraft.get("hex"))
+            if prev_distance is not None:
+                delta = prev_distance - distance_nm  # positive = closing
+                # 0.05 nm (~90 m) hysteresis to avoid chatter from position noise
+                if delta > 0.05:
+                    trend = "approaching"
+                elif delta < -0.05:
+                    trend = "departing"
+                else:
+                    trend = "holding"
+
+                if time_delta_seconds and time_delta_seconds > 0:
+                    closing_speed = round((delta / time_delta_seconds) * 3600, 1)  # knots
+                    if closing_speed > 0:
+                        # Cap ETA at 30 min to match cannonball/threatPrediction behaviour
+                        eta_seconds = int(min(distance_nm / closing_speed * 3600, 1800))
 
             # Get threat level
             threat_level = get_threat_level(aircraft, distance_nm, le_info)
@@ -392,6 +420,8 @@ class MobileViewSet(ViewSet):
                 "ground_speed": aircraft.get("gs"),
                 "vertical_rate": aircraft.get("baro_rate") or aircraft.get("geom_rate"),
                 "trend": trend,
+                "closing_speed": closing_speed,
+                "eta_seconds": eta_seconds,
                 "threat_level": threat_level,
                 "is_law_enforcement": le_info["is_law_enforcement"],
                 "is_helicopter": le_info["is_helicopter"],

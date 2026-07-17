@@ -321,6 +321,12 @@ LLM_CACHE_TTL = 300
 LLM_MAX_TOKENS = 1000
 LLM_TEMPERATURE = 0.7
 
+# Embeddings / airframe RAG - disabled for tests
+EMBEDDING_API_URL = ""
+EMBEDDING_API_KEY = ""
+EMBEDDING_MODEL = "test-embedding-model"
+EMBEDDING_DIM = 1536
+
 # Sentry - disabled for tests
 SENTRY_DSN = None
 SENTRY_ENVIRONMENT = "test"
@@ -334,6 +340,11 @@ REDIS_URL = ""
 
 # Version
 VERSION = "1.0.0-test"
+
+# Embedding dimension for the pgvector VectorField on AirframeDocument. Mirrors the
+# main settings default (text-embedding-3-small = 1536); required or model import
+# fails at django.setup().
+EMBEDDING_DIM = int(os.environ.get("EMBEDDING_DIM", "1536"))
 
 # Celery heartbeat
 CELERY_HEARTBEAT_KEY = "celery_heartbeat"

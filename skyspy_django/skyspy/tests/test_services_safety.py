@@ -437,6 +437,48 @@ class SafetyMonitorUnitTests(TestCase):
         prox_events = [e for e in events if e["event_type"] == "proximity_conflict"]
         self.assertEqual(len(prox_events), 0)
 
+    @patch("skyspy.services.safety.calculate_distance_nm")
+    @patch("skyspy.socketio.utils.sync_emit")
+    def test_proximity_mixed_alt_source_widens_separation_gate(self, mock_sync_emit, mock_distance):
+        """A baro/geom altitude mismatch must not silence a near-threshold conflict.
+
+        1150ft apart exceeds the 1000ft gate, but the pair mixes barometric and
+        geometric references (which legitimately disagree by hundreds of feet), so
+        the gate is widened by MIXED_ALT_SOURCE_MARGIN_FT and the conflict alerts.
+        """
+        mock_sync_emit.return_value = True
+        mock_distance.return_value = 0.3
+        self.monitor.altitude_diff_ft = 1000  # gate 1000ft; margin widens to 1250ft
+
+        aircraft_list = [
+            {"hex": "SRC01", "flight": "UAL111", "lat": 47.0, "lon": -122.0, "alt_baro": 10000},
+            # geometric only → different altitude reference
+            {"hex": "SRC02", "flight": "DAL222", "lat": 47.001, "lon": -122.001, "alt_geom": 11150},
+        ]
+
+        events = self.monitor.update_aircraft(aircraft_list)
+
+        prox_events = [e for e in events if e["event_type"] == "proximity_conflict"]
+        self.assertEqual(len(prox_events), 1)
+
+    @patch("skyspy.services.safety.calculate_distance_nm")
+    @patch("skyspy.socketio.utils.sync_emit")
+    def test_proximity_same_alt_source_keeps_narrow_gate(self, mock_sync_emit, mock_distance):
+        """Control: the same 1150ft gap with a shared reference stays filtered out."""
+        mock_sync_emit.return_value = True
+        mock_distance.return_value = 0.3
+        self.monitor.altitude_diff_ft = 1000  # gate 1000ft, no margin (same source)
+
+        aircraft_list = [
+            {"hex": "SRC03", "flight": "AAL333", "lat": 47.0, "lon": -122.0, "alt_baro": 10000},
+            {"hex": "SRC04", "flight": "JBU444", "lat": 47.001, "lon": -122.001, "alt_baro": 11150},
+        ]
+
+        events = self.monitor.update_aircraft(aircraft_list)
+
+        prox_events = [e for e in events if e["event_type"] == "proximity_conflict"]
+        self.assertEqual(len(prox_events), 0)
+
     @patch("skyspy.socketio.utils.sync_emit")
     def test_proximity_conflict_across_antimeridian(self, mock_sync_emit):
         """Aircraft <1nm apart straddling 180° longitude must not be skipped by the bounding-box pre-filter."""

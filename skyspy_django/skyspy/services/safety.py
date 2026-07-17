@@ -150,6 +150,15 @@ class SafetyMonitor:
     EVENT_EXPIRY = 300  # 5 minutes - events expire if not refreshed
     POSITION_STALE_SEC = 15  # ignore positions not updated within this window
     CONFIG_REFRESH_SEC = 30  # how often to re-read runtime (SystemConfig) settings
+    # Absolute proximity floor (nm) below which a conflict always alerts, regardless
+    # of divergence — too close to ever suppress on a closure/track heuristic. Kept
+    # independent of the configurable SAFETY_PROXIMITY_NM by design.
+    ALWAYS_ALERT_RADIUS_NM = 0.5
+    # Extra altitude tolerance (ft) applied to the separation skip gate when the two
+    # aircraft report altitudes from different references (baro vs geom), which can
+    # legitimately disagree by hundreds of feet. Widening errs toward NOT missing a
+    # real conflict rather than silencing one on a reference mismatch.
+    MIXED_ALT_SOURCE_MARGIN_FT = 250
 
     def __init__(self):
         # Thresholds from settings
@@ -767,8 +776,13 @@ class SafetyMonitor:
             # airports into the airborne proximity checks.
             on_ground = isinstance(raw_alt, str) and raw_alt.lower() == "ground"
             alt = safe_int_altitude(raw_alt)
+            # Track which altitude reference this value came from. Barometric and
+            # geometric altitudes can differ by hundreds of feet, so a pair mixing
+            # the two needs a wider separation tolerance (see _check_proximity_conflicts).
+            alt_source = "baro"
             if alt is None:
                 alt = safe_int_altitude(ac.get("alt_geom"))
+                alt_source = "geom"
             # first_present: baro_rate=0 (level flight) is a valid reading and must
             # not fall through to the noisier geom_rate
             vr = first_present(ac.get("baro_rate"), ac.get("geom_rate"), ac.get("vr"))
@@ -789,6 +803,7 @@ class SafetyMonitor:
                     "lat": lat,
                     "lon": lon,
                     "alt": alt,
+                    "alt_source": alt_source,
                     "vr": vr,
                     "gs": gs,
                     "track": track,
@@ -1104,7 +1119,12 @@ class SafetyMonitor:
                     continue
 
                 alt_diff = abs(pos1["alt"] - pos2["alt"])
-                if alt_diff > self.altitude_diff_ft:
+                # Widen the skip gate when the pair mixes baro/geom altitude sources —
+                # a reference mismatch shouldn't silence a genuine loss of separation.
+                alt_gate = self.altitude_diff_ft
+                if pos1.get("alt_source") != pos2.get("alt_source"):
+                    alt_gate += self.MIXED_ALT_SOURCE_MARGIN_FT
+                if alt_diff > alt_gate:
                     continue
 
                 # Severity levels (computed early: critical geometry bypasses
@@ -1135,7 +1155,13 @@ class SafetyMonitor:
                 # computed (missing gs) fall back to the track-difference
                 # heuristic so already-passed opposite-direction pairs don't
                 # raise false conflicts every cooldown window.
-                if dist_nm > 0.5:
+                #
+                # The gate is an ABSOLUTE danger floor, intentionally decoupled
+                # from the configurable proximity_nm: inside ALWAYS_ALERT_RADIUS_NM
+                # the pair is too close to ever suppress on a divergence heuristic,
+                # even for a tiny configured radius. Only beyond it do we filter
+                # separating traffic.
+                if dist_nm > self.ALWAYS_ALERT_RADIUS_NM:
                     if closure_rate is not None:
                         if closure_rate <= 0:
                             continue
