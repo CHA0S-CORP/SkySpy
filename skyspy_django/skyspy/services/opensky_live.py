@@ -12,9 +12,10 @@ import logging
 from datetime import datetime
 from typing import Any
 
-import httpx
 from django.conf import settings
 from django.core.cache import cache
+
+from skyspy.services import http_client
 
 logger = logging.getLogger(__name__)
 
@@ -56,47 +57,21 @@ def _make_request(endpoint: str, params: dict | None = None, timeout: int = 30) 
     if not _is_enabled():
         return None
 
-    # Check rate limit (rejected requests must not touch the key, so the
-    # window can expire and unblock further requests)
-    rate_key = "opensky_rate_limit"
-    rate_count = cache.get(rate_key, 0)
-    if rate_count >= MAX_REQUESTS_PER_MINUTE:
-        logger.warning("OpenSky rate limit exceeded")
-        return None
-
     username, password = _get_credentials()
     auth = (username, password) if username and password else None
 
-    try:
-        with httpx.Client(timeout=timeout) as client:
-            response = client.get(
-                f"{OPENSKY_API_BASE}/{endpoint}", params=params, auth=auth, headers={"Accept": "application/json"}
-            )
-            response.raise_for_status()
-
-            # Update rate limit counter without refreshing the TTL of an
-            # existing window (cache.set would restart the 60s window on
-            # every request, so a steady trickle could never expire it)
-            if not cache.add(rate_key, 1, 60):
-                try:
-                    cache.incr(rate_key)
-                except ValueError:
-                    # Key expired between add() and incr(); start a new window
-                    cache.add(rate_key, 1, 60)
-
-            return response.json()
-
-    except httpx.HTTPStatusError as e:
-        if e.response.status_code == 429:
-            logger.warning("OpenSky rate limit exceeded (HTTP 429)")
-        elif e.response.status_code == 401:
-            logger.warning("OpenSky authentication failed")
-        else:
-            logger.error(f"OpenSky API error: {e.response.status_code}")
-        return None
-    except (httpx.HTTPError, ConnectionError, OSError, ValueError) as e:
-        logger.error(f"OpenSky API request failed: {e}")
-        return None
+    # The shared client enforces the rate window in Redis (shared across all
+    # Celery workers, unlike the old per-process counter), retries transient
+    # 5xx/timeouts, and trips a breaker when OpenSky is hard-down.
+    return http_client.get_json(
+        f"{OPENSKY_API_BASE}/{endpoint}",
+        params=params,
+        headers={"Accept": "application/json"},
+        source="opensky_live",
+        rate=(MAX_REQUESTS_PER_MINUTE, 60),
+        timeout=timeout,
+        auth=auth,
+    )
 
 
 def get_all_states(

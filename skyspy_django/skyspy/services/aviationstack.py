@@ -11,9 +11,10 @@ import logging
 from datetime import date
 from typing import Any
 
-import httpx
 from django.conf import settings
 from django.core.cache import cache
+
+from skyspy.services import http_client
 
 logger = logging.getLogger(__name__)
 
@@ -56,30 +57,24 @@ def _make_request(endpoint: str, params: dict | None = None, timeout: int = 30) 
     params = params or {}
     params["access_key"] = api_key
 
-    try:
-        with httpx.Client(timeout=timeout) as client:
-            response = client.get(
-                f"{AVIATIONSTACK_API_BASE}/{endpoint}",
-                params=params,
-            )
-            response.raise_for_status()
-
-            data = response.json()
-
-            # Check for API errors
-            if "error" in data:
-                error = data["error"]
-                logger.error(f"Aviationstack API error: {error.get('message', error)}")
-                return None
-
-            return data
-
-    except httpx.HTTPStatusError as e:
-        logger.error(f"Aviationstack API error: {e.response.status_code}")
+    # Shared client adds retry-on-transient + a circuit breaker so a hard-down
+    # Aviationstack fails fast instead of wasting the 100-req/month quota.
+    data = http_client.get_json(
+        f"{AVIATIONSTACK_API_BASE}/{endpoint}",
+        params=params,
+        source="aviationstack",
+        timeout=timeout,
+    )
+    if data is None:
         return None
-    except (httpx.HTTPError, ConnectionError, OSError, TimeoutError, ValueError) as e:
-        logger.error(f"Aviationstack API request failed: {e}")
+
+    # Check for API errors
+    if "error" in data:
+        error = data["error"]
+        logger.error(f"Aviationstack API error: {error.get('message', error)}")
         return None
+
+    return data
 
 
 def get_flight_by_callsign(

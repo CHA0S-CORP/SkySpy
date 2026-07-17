@@ -30,6 +30,7 @@ from django.db import DatabaseError, transaction
 from tenacity import RetryError, retry, stop_after_attempt, wait_exponential
 
 from skyspy.models import AircraftInfo, AirframeSourceData
+from skyspy.services import http_client
 
 logger = logging.getLogger(__name__)
 
@@ -806,8 +807,55 @@ def lookup_opensky(icao_hex: str) -> dict | None:
 # =============================================================================
 
 
+def _airport_brief(ap: dict) -> dict:
+    """Condense an adsb.im airport entry to the fields the UI consumes."""
+    return {
+        "iata": ap.get("iata"),
+        "icao": ap.get("icao"),
+        "name": ap.get("name"),
+        "city": ap.get("location"),
+        "country": ap.get("countryiso2"),
+        "lat": ap.get("lat"),
+        "lon": ap.get("lon"),
+    }
+
+
+def _parse_route_response(payload, callsign: str) -> dict | None:
+    """Normalize the adsb.im routeset response into an origin/destination dict.
+
+    adsb.im returns a *list* of matches; each entry carries ``_airports``
+    (origin first, destination last) plus ``airport_codes``/``airline_code``.
+    We collapse it to a stable shape so callers never depend on the upstream
+    payload structure.
+    """
+    if not isinstance(payload, list):
+        return None
+
+    # Prefer the entry whose callsign matches; fall back to the first dict.
+    entry = next(
+        (r for r in payload if isinstance(r, dict) and (r.get("callsign") or "").upper() == callsign),
+        None,
+    ) or next((r for r in payload if isinstance(r, dict)), None)
+    if not entry:
+        return None
+
+    airports = [a for a in (entry.get("_airports") or []) if isinstance(a, dict)]
+    if len(airports) < 2:
+        return None
+
+    return {
+        "callsign": entry.get("callsign") or callsign,
+        "airline_code": entry.get("airline_code"),
+        "flight_number": entry.get("number"),
+        "airport_codes": entry.get("airport_codes"),
+        "plausible": entry.get("plausible"),
+        "origin": _airport_brief(airports[0]),
+        "destination": _airport_brief(airports[-1]),
+    }
+
+
 def fetch_route(callsign: str) -> dict | None:
-    """Fetch route info from adsb.im API. Cached for 1 hour."""
+    """Fetch route info from the adsb.im routeset API. Cached for 1 hour."""
     callsign = callsign.upper().strip()
     if not callsign:
         return None
@@ -818,27 +866,26 @@ def fetch_route(callsign: str) -> dict | None:
         if callsign in _route_cache and _route_cache_ttl.get(callsign, 0) > now:
             return _route_cache[callsign]
 
-    try:
-        with httpx.Client(timeout=10.0) as client:
-            response = client.post(
-                ADSB_IM_ROUTE_API, json={"callsigns": [callsign]}, headers={"User-Agent": "SkySpyAPI/2.6"}
-            )
-
-            if response.status_code == 200:
-                data = response.json()
-                route_data = data.get(callsign)
-
-                if route_data:
-                    with _route_lock:
-                        # Cleanup if cache is too large
-                        if len(_route_cache) > MAX_ROUTE_CACHE_SIZE:
-                            _cleanup_route_cache(now)
-                        _route_cache[callsign] = route_data
-                        _route_cache_ttl[callsign] = now + 3600
-                    return route_data
-
-    except (httpx.HTTPError, ConnectionError, OSError, ValueError) as e:
-        logger.debug(f"Route lookup failed for {callsign}: {type(e).__name__}: {e}")
+    # adsb.im expects a ``planes`` array (position is optional and only affects
+    # the plausibility score) and replies with a JSON list. The shared client
+    # adds retry + a circuit breaker that the old single-shot POST lacked.
+    payload = http_client.post_json(
+        ADSB_IM_ROUTE_API,
+        {"planes": [{"callsign": callsign}]},
+        source="adsb.im",
+        headers={"User-Agent": "SkySpyAPI/2.6"},
+        timeout=10.0,
+    )
+    if payload is not None:
+        route_data = _parse_route_response(payload, callsign)
+        if route_data:
+            with _route_lock:
+                # Cleanup if cache is too large
+                if len(_route_cache) > MAX_ROUTE_CACHE_SIZE:
+                    _cleanup_route_cache(now)
+                _route_cache[callsign] = route_data
+                _route_cache_ttl[callsign] = now + 3600
+            return route_data
 
     return None
 

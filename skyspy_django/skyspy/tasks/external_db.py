@@ -16,6 +16,7 @@ from django.conf import settings
 from django.db import DatabaseError
 from kombu.exceptions import OperationalError as KombuOperationalError
 
+from skyspy.services import http_client
 from skyspy.socketio.utils import sync_emit
 from skyspy.tasks.locks import singleton_task
 
@@ -442,17 +443,15 @@ def fetch_aircraft_photos(
                 hex_photo_url = f"https://hexdb.io/hex-image?hex={icao.lower()}"
                 hex_thumb_url = f"https://hexdb.io/hex-image-thumb?hex={icao.lower()}"
 
-                response = httpx.head(hex_photo_url, timeout=10.0, follow_redirects=True)
-                if response.status_code == 200:
-                    content_type = response.headers.get("content-type", "")
-                    if content_type.startswith("image/"):
-                        photo_url = hex_photo_url
-                        thumbnail_url = hex_thumb_url
+                # Shared HEAD adds retry + breaker; only accepts image/* responses.
+                if http_client.head_ok(hex_photo_url, source="hexdb", timeout=10.0, expected_content_type="image/"):
+                    photo_url = hex_photo_url
+                    thumbnail_url = hex_thumb_url
 
-                        AircraftInfo.objects.filter(icao_hex=icao).update(
-                            photo_url=photo_url, photo_thumbnail_url=thumbnail_url, photo_source="hexdb.io"
-                        )
-            except (DatabaseError, httpx.HTTPError, ValueError, KeyError, TypeError, OSError) as e:
+                    AircraftInfo.objects.filter(icao_hex=icao).update(
+                        photo_url=photo_url, photo_thumbnail_url=thumbnail_url, photo_source="hexdb.io"
+                    )
+            except (DatabaseError, ValueError, KeyError, TypeError, OSError) as e:
                 logger.debug(f"HexDB photo check failed for {icao}: {e}")
 
         # Download photos if we have URLs
@@ -509,15 +508,12 @@ def upgrade_aircraft_photo(icao_hex: str):
             hex_photo_url = f"https://hexdb.io/hex-image?hex={icao.lower()}"
             hex_thumb_url = f"https://hexdb.io/hex-image-thumb?hex={icao.lower()}"
 
-            response = httpx.head(hex_photo_url, timeout=10.0)
-            if response.status_code == 200:
-                content_type = response.headers.get("content-type", "")
-                if content_type.startswith("image/"):
-                    new_photo_url = hex_photo_url
-                    new_thumb_url = hex_thumb_url
-                    photo_page_link = None  # hexdb provides direct URLs
-                    logger.info(f"Found hexdb.io photo for {icao}, upgrading")
-        except (httpx.HTTPError, ValueError, KeyError, TypeError, OSError) as e:
+            if http_client.head_ok(hex_photo_url, source="hexdb", timeout=10.0, expected_content_type="image/"):
+                new_photo_url = hex_photo_url
+                new_thumb_url = hex_thumb_url
+                photo_page_link = None  # hexdb provides direct URLs
+                logger.info(f"Found hexdb.io photo for {icao}, upgrading")
+        except (ValueError, KeyError, TypeError, OSError) as e:
             logger.debug(f"HexDB photo check failed for {icao}: {e}")
 
         # If no hexdb photo and we have a planespotters URL without page link, get page link
