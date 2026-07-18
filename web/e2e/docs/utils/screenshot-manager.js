@@ -30,6 +30,10 @@ export class ScreenshotManager {
     this.page = page;
     this.outputDir = path.join(process.cwd(), 'e2e/docs/output');
     this.metadata = [];
+    // Default viewport bucket; the screenshotHelper fixture overrides this with
+    // the running Playwright project name (desktop / tablet / mobile) so each
+    // viewport lands in its own output directory instead of overwriting desktop.
+    this.viewport = 'desktop';
   }
 
   /**
@@ -39,7 +43,7 @@ export class ScreenshotManager {
    */
   async capture(name, options = {}) {
     const {
-      viewport = 'desktop',
+      viewport = this.viewport,
       fullPage = false,
       mask = [],
       hide = [],
@@ -201,7 +205,7 @@ export class ScreenshotManager {
     const element = this.page.locator(selector);
     await element.waitFor({ state: 'visible' });
 
-    const viewport = options.viewport || 'desktop';
+    const viewport = options.viewport || this.viewport;
     const viewportDir = path.join(this.outputDir, viewport);
 
     if (!fs.existsSync(viewportDir)) {

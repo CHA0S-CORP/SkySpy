@@ -19,7 +19,10 @@ npm run docs:animations
 # Convert recorded videos to GIFs
 npm run docs:animations:convert
 
-# Full pipeline: screenshots + animations + conversion + index
+# Embed the generated images into README.md + docs/*.md (marker comments)
+npm run docs:embed
+
+# Full pipeline: screenshots + animations + conversion + index + embed
 npm run docs:generate
 ```
 
@@ -43,9 +46,14 @@ e2e/docs/
 │   ├── map-view.doc.js
 │   ├── aircraft-list.doc.js
 │   ├── stats-view.doc.js
+│   ├── analytics-view.doc.js
 │   ├── history-view.doc.js
 │   ├── alerts-view.doc.js
 │   ├── audio-view.doc.js
+│   ├── system-view.doc.js
+│   ├── assistant-view.doc.js
+│   ├── admin-view.doc.js
+│   ├── login-view.doc.js
 │   ├── cannonball-mode.doc.js
 │   ├── airframe-detail.doc.js
 │   └── safety-event.doc.js
@@ -58,7 +66,8 @@ e2e/docs/
 ├── utils/
 │   ├── screenshot-manager.js   # Screenshot capture utilities
 │   ├── gif-converter.js        # ffmpeg wrapper for webm → GIF
-│   └── generate-index.js       # Creates index.json manifest
+│   ├── generate-index.js       # Creates index.json manifest
+│   └── embed-screenshots.js    # Injects images into README.md + docs/*.md
 └── output/                     # Generated assets (gitignored)
 ```
 
@@ -66,7 +75,7 @@ e2e/docs/
 
 Screenshots and GIFs are saved to:
 - `e2e/docs/output/` - Raw Playwright output (gitignored)
-- `docs/screenshots/` - Final organized output
+- `docs/screenshots/` - Final organized output (committed — referenced by the docs)
 
 Final structure:
 ```
@@ -85,9 +94,14 @@ docs/screenshots/
 | Map | overview, popup, overlays, filters, controls | pan-zoom, aircraft-movement |
 | Aircraft List | table, filters, sorted, expanded | - |
 | Stats | dashboard, cards, charts | - |
+| Analytics | overview, geographic | - |
 | History | sessions, sightings, safety, replay | replay-controls, timeline-scrub |
 | Alerts | rules, builder, conditions, history | - |
 | Audio | list, filters, playback, transcript | waveform, transmission-stream |
+| System | overview, services | - |
+| Assistant | overview | - |
+| Admin | overview | - |
+| Login | form | - |
 | Cannonball | HUD, radar, threats, settings | threat-detection, radar-sweep |
 | Airframe Detail | overview, tabs, telemetry | - |
 | Safety Event | map, timeline, analysis | conflict-escalation |
@@ -96,6 +110,31 @@ docs/screenshots/
 
 - Static: `{view}-{feature}.png` (e.g., `map-aircraft-popup.png`)
 - Animated: `{view}-{action}.gif` (e.g., `cannonball-threat-detection.gif`)
+
+The leading `{view}` token (everything before the first `-`) is how assets are
+grouped in `index.json` (`byView`) and matched to markdown markers — so keep it
+stable (`map`, `aircraft`, `stats`, `analytics`, `history`, `audio`, `alerts`,
+`system`, `assistant`, `admin`, `login`, `cannonball`, `airframe`, `safety`).
+
+## Embedding into Markdown
+
+`npm run docs:embed` (part of `docs:generate`) rewrites the region between
+marker comments in `README.md` and the `docs/*.md` guides:
+
+```markdown
+<!-- SCREENSHOTS:map:START -->
+...auto-generated ![](…) blocks — do not edit…
+<!-- SCREENSHOTS:map:END -->
+```
+
+- It reads `docs/screenshots/index.json`, so run `docs:index` (or the full
+  `docs:generate`) first.
+- Only the `desktop` captures are embedded inline; tablet/mobile are committed
+  and noted beneath each block.
+- The step is **idempotent** — only the marker regions change. To add a page to
+  a doc, drop a `START/END` marker pair for its view anywhere in that file.
+- The committed PNGs under `docs/screenshots/{desktop,tablet,mobile}/` are what
+  render on GitHub — regenerate and commit them whenever the UI changes.
 
 ## Customization
 
@@ -115,8 +154,10 @@ test.describe('My View Screenshots', () => {
     await page.goto('/#myview');
   });
 
-  test('my-feature', async ({ screenshot }) => {
-    await screenshot.capture('myview-feature', {
+  test('my-feature', async ({ screenshotHelper }) => {
+    await screenshotHelper.waitForContentReady();
+    await screenshotHelper.prepare();
+    await screenshotHelper.capture('myview-feature', {
       description: 'Description for index.json',
     });
   });

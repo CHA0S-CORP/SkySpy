@@ -13,7 +13,9 @@
 import fs from 'fs';
 import path from 'path';
 
-const DOCS_OUTPUT_DIR = path.join(process.cwd(), 'docs/screenshots');
+// Scripts run from web/; the committed screenshots + README references live at
+// the repo root (../docs/screenshots), so target that, not web/docs/screenshots.
+const DOCS_OUTPUT_DIR = path.join(process.cwd(), '..', 'docs/screenshots');
 const E2E_OUTPUT_DIR = path.join(process.cwd(), 'e2e/docs/output');
 
 /**
