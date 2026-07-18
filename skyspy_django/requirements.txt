@@ -33,10 +33,18 @@ requests>=2.31
 # Database
 psycopg[binary]>=3.1
 asyncpg>=0.29.0
+pgvector>=0.3  # Airframe RAG embedding storage / similarity search
 daphne>=4.0
 # HTTP Client
 httpx>=0.26.0
 tenacity>=8.2  # Retry logic for external API calls
+
+# LLM assistant (agent + tools). Isolated to skyspy/services/assistant/;
+# ChatOpenAI targets any OpenAI-compatible endpoint (vLLM in prod, OpenAI/Ollama
+# in dev), so no vendor SDK is needed.
+langchain>=0.3
+langchain-core>=0.3
+langchain-openai>=0.2
 
 # FAA SWIM (Solace messaging for NOTAMs)
 solace-pubsubplus>=1.8.0

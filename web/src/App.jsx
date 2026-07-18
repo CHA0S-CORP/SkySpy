@@ -1,29 +1,32 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { X, Menu } from 'lucide-react';
 import './styles/index.css';
 
 // Layout components
-import { Sidebar, Header, SettingsModal } from './components/layout';
+import { SettingsModal } from './components/layout';
+import { AppShell } from './components/v2/shell';
+import { AircraftListScreen } from './components/v2/screens/list/AircraftListScreen';
+import { SystemScreen } from './components/v2/screens/system/SystemScreen';
+import { AssistantScreen } from './components/v2/screens/assistant/AssistantScreen';
+import { SupportChatDock } from './components/v2/screens/assistant/SupportChatDock';
+import { PageContextProvider } from './components/v2/screens/assistant/pageContext';
+import { AlertsScreen } from './components/v2/screens/alerts/AlertsScreen';
+import { RadioScreen } from './components/v2/screens/radio/RadioScreen';
+import { HistoryScreen } from './components/v2/screens/history/HistoryScreen';
+import { StatsScreen } from './components/v2/screens/stats/StatsScreen';
+import { AdvancedAnalyticsScreen } from './components/v2/screens/analytics/AdvancedAnalyticsScreen';
+import { AirframesScreen } from './components/v2/screens/airframes/AirframesScreen';
 
 // View components
 // Note: NotamsView and ArchiveView are now integrated into HistoryView
-import {
-  AircraftList,
-  StatsView,
-  HistoryView,
-  AudioView,
-  AlertsView,
-  SystemView,
-  SafetyEventPage,
-  CannonballMode,
-  AdminConfigView,
-} from './components/views';
+import { SafetyEventPage, AdminConfigView } from './components/views';
+import { CannonballScreen } from './components/v2/screens/cannonball/CannonballScreen';
 
 // Map components
 import { MapView } from './components/map';
 
-// Aircraft components
-import { AircraftDetailPage, AircraftDetailV2 } from './components/aircraft';
+import { DetailScreen } from './components/v2/screens/detail/DetailScreen';
+import { NotamDetailScreen } from './components/v2/screens/notam/NotamDetailScreen';
+import { LiveMapView } from './components/livemap/LiveMapView';
 
 // Auth components
 import { LoginPage, ProtectedRoute } from './components/auth';
@@ -58,6 +61,8 @@ const VALID_TABS = [
   'map',
   'aircraft',
   'stats',
+  'analytics',
+  'airframes',
   'history',
   'audio',
   'notams',
@@ -65,19 +70,24 @@ const VALID_TABS = [
   'archive',
   'alerts',
   'system',
+  'assistant',
   'admin',
   'airframe',
   'event',
+  'notam',
   'login',
   'cannonball',
 ];
+
+// Legacy standalone routes folded into History tabs (kept for bookmarks)
+const HISTORY_TAB_ALIASES = ['notams', 'pireps', 'archive'];
 
 function parseHash() {
   const hash = window.location.hash.slice(1); // Remove #
   if (!hash) return { tab: 'map', params: {} };
 
   const [path, queryString] = hash.split('?');
-  const tab = VALID_TABS.includes(path) ? path : 'map';
+  let tab = VALID_TABS.includes(path) ? path : 'map';
   const params = {};
 
   if (queryString) {
@@ -85,6 +95,11 @@ function parseHash() {
     for (const [key, value] of searchParams) {
       params[key] = value;
     }
+  }
+
+  if (HISTORY_TAB_ALIASES.includes(tab)) {
+    params.data = tab;
+    tab = 'history';
   }
 
   return { tab, params };
@@ -107,32 +122,17 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
 
   // Phase 5.1: Initialize pro mode theme CSS variables on app startup
+  // (legacy [data-pro-theme]; coexists with the v2 [data-theme] until legacy UI retires)
   useEffect(() => {
     const savedTheme = localStorage.getItem('adsb-pro-theme') || 'cyan';
     document.documentElement.setAttribute('data-pro-theme', savedTheme);
   }, []);
-  // Sidebar collapse state - auto-collapse below 1200px, respect user preference above
-  const SIDEBAR_COLLAPSE_BREAKPOINT = 1200;
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return window.innerWidth <= SIDEBAR_COLLAPSE_BREAKPOINT;
-    }
-    return false;
-  });
-  // Track user's manual preference for when viewport is above threshold
-  const userSidebarPreferenceRef = React.useRef(null); // null = no preference, true = collapsed, false = expanded
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [status, setStatus] = useState(null);
   const [onlineUsers, setOnlineUsers] = useState(0);
-  const [selectedAircraftHex, setSelectedAircraftHex] = useState(null);
-  const [targetSafetyEventId, setTargetSafetyEventId] = useState(null);
   const [tailHexLookup, setTailHexLookup] = useState({}); // Registration → ICAO hex lookup cache
   const tailLookupInProgressRef = React.useRef(new Set()); // Track lookups in progress to avoid duplicates
-  const [showCannonball, setShowCannonball] = useState(false);
 
   // Refs for tail lookup to avoid stale closures
-  const wsRequestRef = React.useRef(null);
-  const connectedRef = React.useRef(false);
   const apiBaseUrlRef = React.useRef(config.apiBaseUrl);
 
   // Auth context
@@ -184,37 +184,6 @@ export default function App() {
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
-  // Auto-collapse sidebar when viewport width drops below threshold
-  // Respects user's manual preference when above the threshold
-  useEffect(() => {
-    const handleResize = () => {
-      const isBelowThreshold = window.innerWidth <= SIDEBAR_COLLAPSE_BREAKPOINT;
-
-      if (isBelowThreshold) {
-        // Force collapse when below threshold
-        setSidebarCollapsed(true);
-      } else if (userSidebarPreferenceRef.current !== null) {
-        // Above threshold: restore user's manual preference if they set one
-        setSidebarCollapsed(userSidebarPreferenceRef.current);
-      } else {
-        // Above threshold with no user preference: expand by default
-        setSidebarCollapsed(false);
-      }
-    };
-
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
-  // Wrapper to track user's manual collapse preference
-  const handleSidebarCollapse = useCallback((collapsed) => {
-    // Only save preference if above the threshold (user can actually interact)
-    if (window.innerWidth > SIDEBAR_COLLAPSE_BREAKPOINT) {
-      userSidebarPreferenceRef.current = collapsed;
-    }
-    setSidebarCollapsed(collapsed);
-  }, []);
-
   const {
     aircraft,
     connected,
@@ -223,7 +192,7 @@ export default function App() {
     safetyEvents,
     acarsMessages,
     antennaAnalytics,
-    extendedStats,
+    statsTick,
     request: wsRequest,
     getAirframeError,
     clearAirframeError,
@@ -311,15 +280,7 @@ export default function App() {
     return () => clearInterval(interval);
   }, [config.apiBaseUrl, wsRequest, connected]);
 
-  // Keep refs in sync for tail lookup to avoid stale closures
-  useEffect(() => {
-    wsRequestRef.current = wsRequest;
-  }, [wsRequest]);
-
-  useEffect(() => {
-    connectedRef.current = connected;
-  }, [connected]);
-
+  // Keep ref in sync for tail lookup to avoid stale closures
   useEffect(() => {
     apiBaseUrlRef.current = config.apiBaseUrl;
   }, [config.apiBaseUrl]);
@@ -331,6 +292,9 @@ export default function App() {
     if (activeTab !== 'airframe' || !hashParams.tail) return;
 
     const tail = hashParams.tail.trim().toUpperCase();
+    // Whitespace-only tail passes the truthy guard above but trims to '' -
+    // don't issue a spurious /airframes/registration// lookup for it
+    if (!tail) return;
 
     // Already cached or lookup in progress - nothing to do
     if (tail in tailHexLookup) return;
@@ -346,38 +310,19 @@ export default function App() {
     // Mark lookup in progress and trigger async lookup
     tailLookupInProgressRef.current.add(tail);
 
-    // Look up from sightings API (prefer WebSocket)
-    // Uses refs to read current values at execution time, avoiding stale closures
+    // Look up via the airframe registration endpoint, which resolves
+    // registration → icao_hex. (The sightings API has no registration filter —
+    // it would silently ignore the param and return an arbitrary aircraft.)
+    // Uses a ref to read the current API base at execution time, avoiding stale closures
     const lookupTail = async () => {
       try {
-        let data;
-        // Read current values from refs at execution time
-        const currentWsRequest = wsRequestRef.current;
-        const currentConnected = connectedRef.current;
         const currentApiBaseUrl = apiBaseUrlRef.current;
-
-        if (currentWsRequest && currentConnected) {
-          const result = await currentWsRequest('sightings', {
-            registration: tail,
-            hours: 168,
-            limit: 1,
-          });
-          if (result && (result.sightings || result.results)) {
-            data = result;
-          } else {
-            throw new Error('Invalid sightings response');
-          }
-        } else {
-          // Django API uses /api/v1/sightings (was /api/v1/history/sightings)
-          const res = await fetch(
-            `${currentApiBaseUrl}/api/v1/sightings?registration=${encodeURIComponent(tail)}&hours=168&limit=1`
-          );
-          data = await safeJson(res);
-          if (!data) throw new Error('HTTP request failed');
-        }
-        const sightings = data?.sightings || data?.results || [];
-        if (sightings.length > 0 && sightings[0].icao_hex) {
-          setTailHexLookup((p) => ({ ...p, [tail]: sightings[0].icao_hex }));
+        const res = await fetch(
+          `${currentApiBaseUrl}/api/v1/airframes/registration/${encodeURIComponent(tail)}/`
+        );
+        const data = await safeJson(res);
+        if (data?.icao_hex) {
+          setTailHexLookup((p) => ({ ...p, [tail]: data.icao_hex }));
         } else {
           setTailHexLookup((p) => ({ ...p, [tail]: null }));
         }
@@ -414,143 +359,107 @@ export default function App() {
 
   // Wrap main content with ProtectedRoute for auth-required modes
   const mainContent = (
-    <div
-      className={`app ${sidebarCollapsed ? 'sidebar-collapsed' : ''} ${mobileMenuOpen ? 'mobile-menu-open' : ''} view-${activeTab}`}
-    >
-      <Sidebar
+    <PageContextProvider tab={activeTab} params={hashParams}>
+      <AppShell
         activeTab={activeTab}
-        setActiveTab={(tab) => {
-          setActiveTab(tab);
-          setMobileMenuOpen(false);
-        }}
+        onNavigate={setActiveTab}
         connected={connected}
-        collapsed={sidebarCollapsed}
-        setCollapsed={handleSidebarCollapse}
-        stats={stats}
+        aircraftCount={stats?.count ?? aircraft.length}
+        location={status?.location}
+        onlineUsers={onlineUsers}
         onOpenSettings={() => setShowSettings(true)}
-        onLaunchCannonball={() => setShowCannonball(true)}
-      />
-
-      {/* Mobile menu overlay */}
-      {mobileMenuOpen && (
-        <div
-          className="mobile-menu-overlay"
-          role="button"
-          tabIndex={0}
-          onClick={() => setMobileMenuOpen(false)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              setMobileMenuOpen(false);
-            }
-          }}
-        />
-      )}
-
-      {/* Mobile menu toggle */}
-      <button
-        className="mobile-menu-toggle"
-        onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-        aria-label="Toggle menu"
       >
-        {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
-      </button>
-
-      <div className="main-content">
-        <Header
-          stats={stats}
-          location={status?.location}
-          onlineUsers={onlineUsers}
-          config={config}
-          setConfig={setConfig}
-          setShowSettings={setShowSettings}
-        />
-        <div className="content-area">
-          {activeTab === 'map' && (
-            <MapView
-              aircraft={aircraft}
-              config={config}
-              setConfig={setConfig}
-              feederLocation={status?.location}
-              safetyEvents={safetyEvents}
-              acarsMessages={acarsMessages}
-              wsRequest={wsRequest}
-              wsConnected={isReady}
-              getAirframeError={getAirframeError}
-              clearAirframeError={clearAirframeError}
-              onViewHistoryEvent={(eventId) => {
-                setTargetSafetyEventId(eventId);
-                setActiveTab('history');
-              }}
-              hashParams={hashParams}
-              setHashParams={setHashParams}
-              positionsRef={positionsRef}
-              positionSocketConnected={positionSocketConnected}
-            />
-          )}
+        <>
+          {activeTab === 'map' &&
+            (hashParams.legacy === '1' ? (
+              <MapView
+                aircraft={aircraft}
+                config={config}
+                setConfig={setConfig}
+                feederLocation={status?.location}
+                safetyEvents={safetyEvents}
+                acarsMessages={acarsMessages}
+                wsRequest={wsRequest}
+                wsConnected={isReady}
+                getAirframeError={getAirframeError}
+                clearAirframeError={clearAirframeError}
+                onViewHistoryEvent={() => setActiveTab('history', { data: 'safety' })}
+                hashParams={hashParams}
+                setHashParams={setHashParams}
+                positionsRef={positionsRef}
+                positionSocketConnected={positionSocketConnected}
+              />
+            ) : (
+              <LiveMapView
+                apiBase={config.apiBaseUrl}
+                aircraft={aircraft}
+                safetyEvents={safetyEvents}
+                feederLocation={status?.location}
+                positionsRef={positionsRef}
+                wsRequest={wsRequest}
+                wsConnected={isReady}
+                onOpenFull={(hex) => setActiveTab('airframe', { icao: hex })}
+              />
+            ))}
           {activeTab === 'aircraft' && (
-            <AircraftList
+            <AircraftListScreen
               aircraft={aircraft}
               onSelectAircraft={(hex) => setActiveTab('airframe', { icao: hex })}
             />
           )}
           {activeTab === 'stats' && (
-            <StatsView
+            <StatsScreen
               apiBase={config.apiBaseUrl}
-              onSelectAircraft={(hex) => setActiveTab('airframe', { icao: hex })}
-              wsRequest={wsRequest}
-              wsConnected={isReady}
               aircraft={aircraft}
-              stats={stats}
+              statsTick={statsTick}
               antennaAnalytics={antennaAnalytics}
-              extendedStats={extendedStats}
+              connected={isReady}
+              onSelectAircraft={(hex) => setActiveTab('airframe', { icao: hex })}
             />
           )}
-          {/* History view now includes NOTAMs, PIREPs, and Archive tabs */}
-          {['history', 'notams', 'pireps', 'archive'].includes(activeTab) && (
-            <HistoryView
+          {activeTab === 'analytics' && (
+            <AdvancedAnalyticsScreen
               apiBase={config.apiBaseUrl}
               onSelectAircraft={(hex) => setActiveTab('airframe', { icao: hex })}
-              onSelectByTail={(tail) => setActiveTab('airframe', { tail })}
+            />
+          )}
+          {activeTab === 'airframes' && <AirframesScreen />}
+          {/* History view includes Sessions/Sightings/ACARS/Safety/NOTAMs/PIREPs/Archive tabs */}
+          {activeTab === 'history' && (
+            <HistoryScreen
+              apiBase={config.apiBaseUrl}
+              onSelectAircraft={(hex) => setActiveTab('airframe', { icao: hex })}
               onViewEvent={(eventId) => setActiveTab('event', { id: eventId })}
-              targetEventId={targetSafetyEventId}
-              onEventViewed={() => setTargetSafetyEventId(null)}
+              onViewNotam={(notamId) => setActiveTab('notam', { id: notamId })}
               hashParams={hashParams}
-              setHashParams={setHashParams}
-              wsRequest={wsRequest}
-              wsConnected={isReady}
-              initialTab={activeTab === 'history' ? null : activeTab}
             />
           )}
           {activeTab === 'audio' && (
-            <AudioView
+            <RadioScreen
               apiBase={config.apiBaseUrl}
+              aircraft={aircraft}
               onSelectAircraft={(hex, callsign) =>
                 setActiveTab('airframe', { icao: hex, call: callsign })
               }
             />
           )}
           {activeTab === 'alerts' && (
-            <AlertsView
+            <AlertsScreen
               apiBase={config.apiBaseUrl}
               wsRequest={wsRequest}
               wsConnected={isReady}
               aircraft={aircraft}
-              feederLocation={status?.location}
-              onLaunchCannonball={() => setShowCannonball(true)}
             />
           )}
           {activeTab === 'system' && (
-            <SystemView apiBase={config.apiBaseUrl} wsRequest={wsRequest} wsConnected={isReady} />
-          )}
-          {activeTab === 'admin' && <AdminConfigView apiBase={config.apiBaseUrl} />}
-          {activeTab === 'cannonball' && (
-            <CannonballMode
+            <SystemScreen
               apiBase={config.apiBaseUrl}
-              onExit={() => setActiveTab('map')}
-              aircraft={aircraft}
+              wsConnected={isReady}
+              feederLocation={status?.location}
             />
           )}
+          {activeTab === 'assistant' && <AssistantScreen />}
+          {activeTab === 'admin' && <AdminConfigView apiBase={config.apiBaseUrl} />}
           {activeTab === 'airframe' &&
             (hashParams.icao || hashParams.call || hashParams.tail) &&
             (() => {
@@ -595,28 +504,15 @@ export default function App() {
                 );
               }
 
-              // Choose V1 or V2 based on feature flag
-              const DetailComponent = config.useAircraftDetailV2
-                ? AircraftDetailV2
-                : AircraftDetailPage;
-
               return hex ? (
-                <DetailComponent
+                <DetailScreen
                   hex={hex}
-                  apiUrl={config.apiBaseUrl}
+                  apiBase={config.apiBaseUrl}
+                  live={foundAircraft}
+                  call={hashParams.call}
+                  connected={isReady}
                   onClose={() => window.history.back()}
-                  onSelectAircraft={(h) => setActiveTab('airframe', { icao: h })}
-                  onViewHistoryEvent={(eventId) => {
-                    setTargetSafetyEventId(eventId);
-                    setActiveTab('history', { data: 'safety' });
-                  }}
                   onViewEvent={(eventId) => setActiveTab('event', { id: eventId })}
-                  aircraft={foundAircraft}
-                  feederLocation={status?.location}
-                  wsRequest={wsRequest}
-                  wsConnected={isReady}
-                  initialTab={hashParams.tab}
-                  onTabChange={(tab) => setHashParams({ tab })}
                 />
               ) : (
                 <div className="not-found-message" style={{ padding: '2rem', textAlign: 'center' }}>
@@ -640,8 +536,15 @@ export default function App() {
               wsConnected={isReady}
             />
           )}
-        </div>
-      </div>
+          {activeTab === 'notam' && hashParams.id && (
+            <NotamDetailScreen
+              notamId={hashParams.id}
+              apiBase={config.apiBaseUrl}
+              onClose={() => window.history.back()}
+            />
+          )}
+        </>
+      </AppShell>
 
       {showSettings && (
         <SettingsModal
@@ -651,92 +554,35 @@ export default function App() {
         />
       )}
 
-      {selectedAircraftHex && (
-        <div
-          className="aircraft-detail-overlay"
-          role="button"
-          tabIndex={0}
-          onClick={() => setSelectedAircraftHex(null)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              setSelectedAircraftHex(null);
-            }
-          }}
-        >
-          <div
-            className="aircraft-detail-modal"
-            role="button"
-            tabIndex={0}
-            onClick={(e) => e.stopPropagation()}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                e.stopPropagation();
-              }
-            }}
-          >
-            {/* Choose V1 or V2 based on feature flag */}
-            {config.useAircraftDetailV2 ? (
-              <AircraftDetailV2
-                hex={selectedAircraftHex}
-                apiUrl={config.apiBaseUrl}
-                onClose={() => setSelectedAircraftHex(null)}
-                onSelectAircraft={(hex) => {
-                  setSelectedAircraftHex(null);
-                  setActiveTab('airframe', { icao: hex });
-                }}
-                onViewHistoryEvent={(eventId) => {
-                  setSelectedAircraftHex(null);
-                  setTargetSafetyEventId(eventId);
-                  setActiveTab('history', { data: 'safety' });
-                }}
-                onViewEvent={(eventId) => {
-                  setSelectedAircraftHex(null);
-                  setActiveTab('event', { id: eventId });
-                }}
-                aircraft={aircraft.find((a) => a.hex === selectedAircraftHex)}
-                feederLocation={status?.location}
-                wsRequest={wsRequest}
-                wsConnected={isReady}
-              />
-            ) : (
-              <AircraftDetailPage
-                hex={selectedAircraftHex}
-                apiUrl={config.apiBaseUrl}
-                onClose={() => setSelectedAircraftHex(null)}
-                onSelectAircraft={(hex) => {
-                  setSelectedAircraftHex(null);
-                  setActiveTab('airframe', { icao: hex });
-                }}
-                onViewHistoryEvent={(eventId) => {
-                  setSelectedAircraftHex(null);
-                  setTargetSafetyEventId(eventId);
-                  setActiveTab('history', { data: 'safety' });
-                }}
-                onViewEvent={(eventId) => {
-                  setSelectedAircraftHex(null);
-                  setActiveTab('event', { id: eventId });
-                }}
-                aircraft={aircraft.find((a) => a.hex === selectedAircraftHex)}
-                feederLocation={status?.location}
-                wsRequest={wsRequest}
-                wsConnected={isReady}
-              />
-            )}
-          </div>
-        </div>
+      {/* App-wide support chat — available on every shell page except the full
+          assistant screen itself. Sees the current page as context. */}
+      {activeTab !== 'assistant' && (
+        <SupportChatDock onExpand={() => setActiveTab('assistant')} />
       )}
-
-      {showCannonball && (
-        <CannonballMode
-          apiBase={config.apiBaseUrl}
-          onExit={() => setShowCannonball(false)}
-          aircraft={aircraft}
-        />
-      )}
-    </div>
+    </PageContextProvider>
   );
+
+  // Cannonball is a full-screen standalone mode (no shared chrome) — render it
+  // outside the shell, like the login page. It still sits behind
+  // ProtectedRoute: standalone means no chrome, not no auth.
+  if (activeTab === 'cannonball') {
+    const cannonball = (
+      <CannonballScreen
+        aircraft={aircraft}
+        feederLocation={status?.location}
+        onExit={() => setActiveTab('map')}
+      />
+    );
+    return (
+      <ErrorBoundary>
+        {authConfig.authEnabled && !authConfig.publicMode ? (
+          <ProtectedRoute>{cannonball}</ProtectedRoute>
+        ) : (
+          cannonball
+        )}
+      </ErrorBoundary>
+    );
+  }
 
   // Wrap with ProtectedRoute if auth is enabled
   if (authConfig.authEnabled && !authConfig.publicMode) {

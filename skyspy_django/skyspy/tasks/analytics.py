@@ -15,6 +15,7 @@ from datetime import timedelta
 
 from celery import shared_task
 from django.core.cache import cache
+from django.db import DatabaseError
 from django.db.models import Avg, Count, F, Max, Min
 from django.utils import timezone
 
@@ -32,11 +33,13 @@ from skyspy.services.stats_cache import (
     refresh_tracking_quality_cache,
     update_aircraft_stats_cache,
 )
+from skyspy.tasks.locks import singleton_task
 
 logger = logging.getLogger(__name__)
 
 
 @shared_task
+@singleton_task(timeout=300)
 def update_antenna_analytics():
     """
     Update antenna performance analytics.
@@ -225,20 +228,20 @@ def update_antenna_analytics():
             coverage_percentage=coverage_percentage,
         )
         logger.debug(f"Stored antenna analytics snapshot {snapshot.id}")
-    except Exception as e:
+    except DatabaseError as e:
         logger.error(f"Failed to store antenna analytics snapshot: {e}")
         try:
             from skyspy.utils.sentry import capture_task_error
 
             capture_task_error(e, "update_antenna_analytics", extra={"step": "store_snapshot"})
-        except Exception as sentry_err:
+        except Exception as sentry_err:  # broad: error reporting must never raise
             logger.debug(f"Could not report to Sentry: {sentry_err}")
 
     # Broadcast via Socket.IO
     try:
         sync_emit("antenna:analytics_update", analytics, room="topic_aircraft")
         logger.debug("Broadcast antenna analytics update")
-    except Exception as e:
+    except Exception as e:  # broad: Socket.IO emit failure must not fail the task
         logger.warning(f"Failed to broadcast antenna analytics: {e}")
 
     if stats["max_distance"]:
@@ -250,6 +253,7 @@ def update_antenna_analytics():
 
 
 @shared_task
+@singleton_task(timeout=1800)
 def calculate_daily_stats():
     """
     Calculate daily statistics for reporting.
@@ -289,13 +293,13 @@ def refresh_history_stats():
     try:
         refresh_history_cache()
         logger.debug("History stats cache refreshed")
-    except Exception as e:
+    except Exception as e:  # broad: periodic beat task must keep running on any failure
         logger.error(f"Error refreshing history stats: {e}")
         try:
             from skyspy.utils.sentry import capture_task_error
 
             capture_task_error(e, "refresh_history_stats")
-        except Exception as sentry_err:
+        except Exception as sentry_err:  # broad: error reporting must never raise
             logger.debug(f"Could not report to Sentry: {sentry_err}")
 
 
@@ -318,13 +322,13 @@ def refresh_safety_stats():
     try:
         refresh_safety_cache()
         logger.debug("Safety stats cache refreshed")
-    except Exception as e:
+    except Exception as e:  # broad: periodic beat task must keep running on any failure
         logger.error(f"Error refreshing safety stats: {e}")
         try:
             from skyspy.utils.sentry import capture_task_error
 
             capture_task_error(e, "refresh_safety_stats")
-        except Exception as sentry_err:
+        except Exception as sentry_err:  # broad: error reporting must never raise
             logger.debug(f"Could not report to Sentry: {sentry_err}")
 
 
@@ -346,13 +350,13 @@ def refresh_acars_stats():
     try:
         refresh_acars_stats_cache()
         logger.debug("ACARS stats cache refreshed")
-    except Exception as e:
+    except Exception as e:  # broad: periodic beat task must keep running on any failure
         logger.error(f"Error refreshing ACARS stats: {e}")
         try:
             from skyspy.utils.sentry import capture_task_error
 
             capture_task_error(e, "refresh_acars_stats")
-        except Exception as sentry_err:
+        except Exception as sentry_err:  # broad: error reporting must never raise
             logger.debug(f"Could not report to Sentry: {sentry_err}")
 
 
@@ -374,11 +378,12 @@ def update_realtime_stats():
         try:
             update_aircraft_stats_cache(aircraft_list)
             logger.debug(f"Updated realtime stats for {len(aircraft_list)} aircraft")
-        except Exception as e:
+        except Exception as e:  # broad: high-frequency poll task must never crash the worker
             logger.error(f"Error updating realtime stats: {e}")
 
 
 @shared_task
+@singleton_task(timeout=300)
 def cleanup_memory_cache():
     """
     Clean up expired entries from in-memory caches.
@@ -412,14 +417,15 @@ def cleanup_memory_cache():
 
         logger.debug(
             f"Memory cache cleanup complete: "
-            f"memory_cache {stats_before['memory_cache_entries']} -> {stats_after['memory_cache_entries']}, "
-            f"rate_limits {stats_before['rate_limit_entries']} -> {stats_after['rate_limit_entries']}"
+            f"memory_cache {stats_before['memory_cache'].get('size')} -> {stats_after['memory_cache'].get('size')}, "
+            f"rate_limits {stats_before['rate_limiter'].get('size')} -> {stats_after['rate_limiter'].get('size')}"
         )
-    except Exception as e:
+    except Exception as e:  # broad: periodic cleanup task must keep running on any failure
         logger.error(f"Error cleaning up memory cache: {e}")
 
 
 @shared_task
+@singleton_task(timeout=1800)
 def cleanup_antenna_analytics_snapshots(retention_days: int = 7):
     """
     Clean up old antenna analytics snapshots.
@@ -464,12 +470,13 @@ def cleanup_antenna_analytics_snapshots(retention_days: int = 7):
             "total_deleted": total_deleted,
         }
 
-    except Exception as e:
+    except DatabaseError as e:
         logger.error(f"Error cleaning up antenna analytics snapshots: {e}")
         return {"error": str(e)}
 
 
 @shared_task
+@singleton_task(timeout=1800)
 def aggregate_hourly_antenna_analytics():
     """
     Aggregate scheduled snapshots into hourly summaries.
@@ -477,7 +484,7 @@ def aggregate_hourly_antenna_analytics():
     Runs every hour to create consolidated hourly snapshots
     from the 5-minute scheduled snapshots.
     """
-    from django.db.models import Avg, Max, Sum
+    from django.db.models import Avg, Max
 
     from skyspy.models import AntennaAnalyticsSnapshot
 
@@ -510,7 +517,6 @@ def aggregate_hourly_antenna_analytics():
             avg_avg_range=Avg("avg_range_nm"),
             avg_coverage=Avg("coverage_percentage"),
             max_coverage=Max("coverage_percentage"),
-            total_positions=Sum("total_positions"),
             max_unique_aircraft=Max("unique_aircraft"),
             avg_best_rssi=Avg("best_rssi"),
             avg_avg_rssi=Avg("avg_rssi"),
@@ -520,6 +526,12 @@ def aggregate_hourly_antenna_analytics():
         # Get the latest direction data (most representative)
         latest = snapshots.order_by("-timestamp").first()
         range_by_direction = latest.range_by_direction if latest else {}
+
+        # Each scheduled snapshot's total_positions covers a trailing 1-hour
+        # window, so consecutive 5-minute snapshots overlap by ~55 minutes —
+        # summing them would count the same sightings ~12x. Use the latest
+        # snapshot, whose window best approximates [hour_start, hour_end).
+        total_positions = latest.total_positions if latest else 0
 
         # Create hourly aggregate
         hourly_snapshot = AntennaAnalyticsSnapshot.objects.create(
@@ -531,9 +543,9 @@ def aggregate_hourly_antenna_analytics():
             best_rssi=round(agg["avg_best_rssi"], 1) if agg["avg_best_rssi"] else None,
             avg_rssi=round(agg["avg_avg_rssi"], 1) if agg["avg_avg_rssi"] else None,
             worst_rssi=round(agg["avg_worst_rssi"], 1) if agg["avg_worst_rssi"] else None,
-            total_positions=agg["total_positions"] or 0,
+            total_positions=total_positions,
             unique_aircraft=agg["max_unique_aircraft"] or 0,
-            positions_per_hour=float(agg["total_positions"] or 0),
+            positions_per_hour=float(total_positions),
             coverage_percentage=round(agg["avg_coverage"] or 0, 1),
             range_by_direction=range_by_direction,
         )
@@ -541,12 +553,13 @@ def aggregate_hourly_antenna_analytics():
         logger.info(f"Created hourly antenna analytics aggregate for {hour_end}")
         return hourly_snapshot.id
 
-    except Exception as e:
+    except DatabaseError as e:
         logger.error(f"Error aggregating hourly antenna analytics: {e}")
         return None
 
 
 @shared_task
+@singleton_task(timeout=300)
 def refresh_tracking_quality_stats():
     """
     Refresh tracking quality statistics cache.
@@ -562,17 +575,18 @@ def refresh_tracking_quality_stats():
     try:
         refresh_tracking_quality_cache()
         logger.debug("Tracking quality stats cache refreshed")
-    except Exception as e:
+    except Exception as e:  # broad: periodic beat task must keep running on any failure
         logger.error(f"Error refreshing tracking quality stats: {e}")
         try:
             from skyspy.utils.sentry import capture_task_error
 
             capture_task_error(e, "refresh_tracking_quality_stats")
-        except Exception as sentry_err:
+        except Exception as sentry_err:  # broad: error reporting must never raise
             logger.debug(f"Could not report to Sentry: {sentry_err}")
 
 
 @shared_task
+@singleton_task(timeout=300)
 def refresh_engagement_stats():
     """
     Refresh engagement statistics cache.
@@ -588,13 +602,13 @@ def refresh_engagement_stats():
     try:
         refresh_engagement_cache()
         logger.debug("Engagement stats cache refreshed")
-    except Exception as e:
+    except Exception as e:  # broad: periodic beat task must keep running on any failure
         logger.error(f"Error refreshing engagement stats: {e}")
         try:
             from skyspy.utils.sentry import capture_task_error
 
             capture_task_error(e, "refresh_engagement_stats")
-        except Exception as sentry_err:
+        except Exception as sentry_err:  # broad: error reporting must never raise
             logger.debug(f"Could not report to Sentry: {sentry_err}")
 
 
@@ -614,13 +628,13 @@ def refresh_flight_patterns_stats():
     try:
         refresh_flight_patterns_cache()
         logger.debug("Flight patterns stats cache refreshed")
-    except Exception as e:
+    except Exception as e:  # broad: periodic beat task must keep running on any failure
         logger.error(f"Error refreshing flight patterns stats: {e}")
         try:
             from skyspy.utils.sentry import capture_task_error
 
             capture_task_error(e, "refresh_flight_patterns_stats")
-        except Exception as sentry_err:
+        except Exception as sentry_err:  # broad: error reporting must never raise
             logger.debug(f"Could not report to Sentry: {sentry_err}")
 
 
@@ -640,17 +654,18 @@ def refresh_geographic_stats():
     try:
         refresh_geographic_cache()
         logger.debug("Geographic stats cache refreshed")
-    except Exception as e:
+    except Exception as e:  # broad: periodic beat task must keep running on any failure
         logger.error(f"Error refreshing geographic stats: {e}")
         try:
             from skyspy.utils.sentry import capture_task_error
 
             capture_task_error(e, "refresh_geographic_stats")
-        except Exception as sentry_err:
+        except Exception as sentry_err:  # broad: error reporting must never raise
             logger.debug(f"Could not report to Sentry: {sentry_err}")
 
 
 @shared_task
+@singleton_task(timeout=600)
 def update_favorite_tracking():
     """
     Update tracking statistics for favorited aircraft.
@@ -701,11 +716,12 @@ def update_favorite_tracking():
         if updated_count > 0:
             logger.debug(f"Updated tracking stats for {updated_count} favorited aircraft")
 
-    except Exception as e:
+    except DatabaseError as e:
         logger.error(f"Error updating favorite tracking: {e}")
 
 
 @shared_task
+@singleton_task(timeout=600)
 def refresh_time_comparison_stats():
     """
     Refresh time comparison statistics cache.
@@ -729,18 +745,19 @@ def refresh_time_comparison_stats():
         if result:
             logger.debug("Time comparison stats cache refreshed")
         return result
-    except Exception as e:
+    except Exception as e:  # broad: periodic beat task must keep running on any failure
         logger.error(f"Error refreshing time comparison stats: {e}")
         try:
             from skyspy.utils.sentry import capture_task_error
 
             capture_task_error(e, "refresh_time_comparison_stats")
-        except Exception as sentry_err:
+        except Exception as sentry_err:  # broad: error reporting must never raise
             logger.debug(f"Could not report to Sentry: {sentry_err}")
         return None
 
 
 @shared_task
+@singleton_task(timeout=300)
 def refresh_flight_pattern_geographic_stats():
     """
     Refresh flight pattern and geographic statistics cache.
@@ -766,13 +783,13 @@ def refresh_flight_pattern_geographic_stats():
         if result:
             logger.debug("Flight pattern and geographic stats cache refreshed (v2)")
         return result
-    except Exception as e:
+    except Exception as e:  # broad: periodic beat task must keep running on any failure
         logger.error(f"Error refreshing flight pattern geographic stats: {e}")
         try:
             from skyspy.utils.sentry import capture_task_error
 
             capture_task_error(e, "refresh_flight_pattern_geographic_stats")
-        except Exception as sentry_err:
+        except Exception as sentry_err:  # broad: error reporting must never raise
             logger.debug(f"Could not report to Sentry: {sentry_err}")
         return None
 
@@ -866,7 +883,7 @@ def _compute_acars_stats(cutoff) -> dict:
     }
 
 
-@shared_task
+@shared_task(ignore_result=True)
 def aggregate_all_stats():
     """
     Unified stats aggregation task.
@@ -906,7 +923,7 @@ def aggregate_all_stats():
                 cache.set("celery_heartbeat", True, timeout=120)
                 results["aircraft_stats"] = "ok"
                 logger.debug(f"Updated aircraft stats: {aircraft_stats['total']} aircraft")
-            except Exception as e:
+            except Exception as e:  # broad: isolate this section so other stats still update
                 logger.error(f"Error computing aircraft stats: {e}")
                 results["aircraft_stats"] = f"error: {e}"
 
@@ -917,7 +934,7 @@ def aggregate_all_stats():
                 cache.set("safety_stats", safety_stats, timeout=60)
                 results["safety_stats"] = "ok"
                 logger.debug(f"Updated safety stats: {safety_stats['total_24h']} events in 24h")
-            except Exception as e:
+            except Exception as e:  # broad: isolate this section so other stats still update
                 logger.error(f"Error computing safety stats: {e}")
                 results["safety_stats"] = f"error: {e}"
 
@@ -928,7 +945,7 @@ def aggregate_all_stats():
                 refresh_acars_stats_cache(broadcast=True)
                 results["acars_stats"] = "ok"
                 logger.debug("Refreshed ACARS stats cache")
-            except Exception as e:
+            except Exception as e:  # broad: isolate this section so other stats still update
                 logger.error(f"Error refreshing ACARS stats: {e}")
                 results["acars_stats"] = f"error: {e}"
 
@@ -941,13 +958,126 @@ def aggregate_all_stats():
             "results": results,
         }
 
-    except Exception as e:
+    except Exception as e:  # broad: periodic beat task must keep running on any failure
         duration_ms = (time.perf_counter() - start_time) * 1000
         logger.error(f"Stats aggregation failed after {duration_ms:.1f}ms: {e}")
         try:
             from skyspy.utils.sentry import capture_task_error
 
             capture_task_error(e, "aggregate_all_stats")
-        except Exception as sentry_err:
+        except Exception as sentry_err:  # broad: error reporting must never raise
             logger.debug(f"Could not report to Sentry: {sentry_err}")
         return {"status": "error", "error": str(e), "duration_ms": round(duration_ms, 1)}
+
+
+@shared_task(ignore_result=True)
+def emit_stats_tick():
+    """
+    Emit a lightweight periodic KPI tick (``stats:tick``) to topic_stats for the
+    Statistics screen (Traffic / Reception / System cards + sparklines).
+
+    Reads only cheap cache keys written by the aircraft polling tasks — no DB
+    queries. Maintains a rolling sample series in the ``stats_tick_series``
+    cache key (capped, ~20 min at a 10s beat) and sends the full series with
+    every tick so clients need no hydration handshake.
+
+    System metrics use stdlib sources (loadavg + /proc/meminfo) and describe the
+    Celery worker host, which is correct for single-box deployments.
+    """
+    import os
+
+    from skyspy.socketio.utils import sync_emit
+
+    try:
+        aircraft_list = cache.get("current_aircraft", []) or []
+        messages = cache.get("aircraft_messages") or 0
+        adsb_online = bool(cache.get("adsb_online", False))
+        celery_ok = bool(cache.get("celery_heartbeat", False))
+
+        with_position = 0
+        military = 0
+        max_range = 0.0
+        rssi_sum = 0.0
+        rssi_count = 0
+        for ac in aircraft_list:
+            if ac.get("lat") is not None and ac.get("lon") is not None:
+                with_position += 1
+            if ac.get("military"):
+                military += 1
+            dist = ac.get("distance") or ac.get("distance_nm")
+            if isinstance(dist, (int, float)) and dist > max_range:
+                max_range = float(dist)
+            rssi = ac.get("rssi")
+            if isinstance(rssi, (int, float)):
+                rssi_sum += float(rssi)
+                rssi_count += 1
+
+        # System metrics via stdlib (no psutil dependency)
+        try:
+            load = round(os.getloadavg()[0], 2)
+        except OSError:
+            load = None
+        mem_percent = None
+        try:
+            with open("/proc/meminfo") as f:
+                info = dict(line.split(":", 1) for line in f if ":" in line)
+            total = float(info["MemTotal"].strip().split()[0])
+            available = float(info["MemAvailable"].strip().split()[0])
+            if total > 0:
+                mem_percent = round((1 - available / total) * 100, 1)
+        except (OSError, KeyError, ValueError, IndexError):
+            pass
+
+        now = timezone.now()
+        series = cache.get("stats_tick_series") or []
+        prev = series[-1] if series else None
+        msg_rate = None
+        if prev and isinstance(prev.get("messages"), (int, float)) and prev.get("ts_epoch"):
+            dt = now.timestamp() - prev["ts_epoch"]
+            if dt > 0 and messages >= prev["messages"]:
+                msg_rate = round((messages - prev["messages"]) / dt, 1)
+
+        sample = {
+            "ts": now.isoformat(),
+            "ts_epoch": now.timestamp(),
+            "aircraft": len(aircraft_list),
+            "messages": messages,
+            "msg_rate": msg_rate,
+            "max_range_nm": round(max_range, 1),
+            "load": load,
+            "mem": mem_percent,
+        }
+        series = (series + [sample])[-120:]
+        cache.set("stats_tick_series", series, timeout=1800)
+
+        payload = {
+            "ts": sample["ts"],
+            "traffic": {
+                "aircraft": len(aircraft_list),
+                "with_position": with_position,
+                "military": military,
+                "msg_rate": msg_rate,
+            },
+            "reception": {
+                "max_range_nm": round(max_range, 1),
+                "avg_rssi": round(rssi_sum / rssi_count, 1) if rssi_count else None,
+            },
+            "system": {
+                "load": load,
+                "mem": mem_percent,
+                "adsb_online": adsb_online,
+                "celery_ok": celery_ok,
+            },
+            # Strip bookkeeping fields clients don't need
+            "series": [{k: v for k, v in s.items() if k not in ("ts_epoch", "messages")} for s in series],
+        }
+
+        try:
+            sync_emit("stats:tick", payload, room="topic_stats")
+        except (ConnectionError, OSError) as e:
+            logger.debug(f"stats:tick emit skipped: {e}")
+
+        return {"status": "ok", "aircraft": len(aircraft_list), "samples": len(series)}
+    except Exception as e:  # broad: periodic beat task must keep running on any failure
+        logger.error(f"emit_stats_tick failed: {e}")
+        return {"status": "error", "error": str(e)}

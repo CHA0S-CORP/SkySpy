@@ -217,6 +217,47 @@ func TestModel_HandleAircraftSnapshot(t *testing.T) {
 	}
 }
 
+func TestModel_HandleAircraftSnapshot_RemovesStaleAircraft(t *testing.T) {
+	cfg := newTestConfig()
+	m := NewModel(cfg)
+
+	// Aircraft tracked before a reconnect; its aircraft:remove event was
+	// missed while the socket was down.
+	m.aircraft["STALE1"] = &radar.Target{Hex: "STALE1", Callsign: "GHOST01"}
+	m.alertedAircraft["STALE1"] = true
+
+	snapshotData := map[string]ws.Aircraft{
+		"ABC123": {
+			Hex:    "ABC123",
+			Flight: "TEST001",
+			Lat:    floatPtr(52.0),
+			Lon:    floatPtr(4.0),
+		},
+	}
+	data, _ := json.Marshal(struct {
+		Aircraft map[string]ws.Aircraft `json:"aircraft"`
+	}{Aircraft: snapshotData})
+
+	m.handleAircraftMsg(ws.Message{
+		Type: string(ws.AircraftSnapshot),
+		Data: data,
+	})
+
+	// Snapshot is authoritative: stale entries must be reconciled away
+	if _, exists := m.aircraft["STALE1"]; exists {
+		t.Error("aircraft STALE1 should be removed by authoritative snapshot")
+	}
+	if m.alertedAircraft["STALE1"] {
+		t.Error("alertedAircraft entry for STALE1 should be pruned with the target")
+	}
+	if _, exists := m.aircraft["ABC123"]; !exists {
+		t.Error("aircraft ABC123 from snapshot should exist")
+	}
+	if len(m.aircraft) != 1 {
+		t.Errorf("expected 1 aircraft after snapshot, got %d", len(m.aircraft))
+	}
+}
+
 func TestModel_HandleAircraftUpdate(t *testing.T) {
 	cfg := newTestConfig()
 	m := NewModel(cfg)
@@ -565,13 +606,14 @@ func TestModel_ZoomIn(t *testing.T) {
 	if initialIdx == 0 {
 		m.rangeIdx = 2
 		m.maxRange = float64(m.rangeOptions[2])
+		m.targetRange = m.maxRange
 	}
 
-	prevRange := m.maxRange
+	prevRange := m.targetRange
 	m.zoomIn()
 
-	if m.maxRange >= prevRange {
-		t.Errorf("expected range to decrease, was %f, now %f", prevRange, m.maxRange)
+	if m.targetRange >= prevRange {
+		t.Errorf("expected range to decrease, was %f, now %f", prevRange, m.targetRange)
 	}
 
 	if m.rangeIdx >= len(m.rangeOptions) {
@@ -593,12 +635,13 @@ func TestModel_ZoomOut(t *testing.T) {
 	// Start at a lower zoom level
 	m.rangeIdx = 1
 	m.maxRange = float64(m.rangeOptions[1])
+	m.targetRange = m.maxRange
 
-	prevRange := m.maxRange
+	prevRange := m.targetRange
 	m.zoomOut()
 
-	if m.maxRange <= prevRange {
-		t.Errorf("expected range to increase, was %f, now %f", prevRange, m.maxRange)
+	if m.targetRange <= prevRange {
+		t.Errorf("expected range to increase, was %f, now %f", prevRange, m.targetRange)
 	}
 
 	// Notification should be set
@@ -1492,6 +1535,38 @@ func TestModel_SpectrumUpdate(t *testing.T) {
 	labels := m.GetSpectrumLabels()
 	if len(labels) == 0 {
 		t.Error("spectrum labels should be available")
+	}
+}
+
+func TestModel_UpdateSpectrum_SmoothingConverges(t *testing.T) {
+	cfg := newTestConfig()
+	m := NewModel(cfg)
+
+	// Distance 5nm maps exactly to the first band, which maps to bin 0
+	m.aircraft["SPEC01"] = &radar.Target{
+		Hex:      "SPEC01",
+		Distance: 5,
+		RSSI:     -5,
+		HasRSSI:  true,
+	}
+
+	m.updateSpectrum()
+	firstTick := m.spectrum[0]
+	if firstTick <= 0 {
+		t.Fatalf("expected non-zero spectrum after first tick, got %f", firstTick)
+	}
+
+	for i := 0; i < 50; i++ {
+		m.updateSpectrum()
+	}
+
+	// With the analyzer's smoothing state preserved between ticks
+	// (ResetSamples instead of Reset), the analyzer output converges to
+	// the raw band value and the display EMA follows: steady state is
+	// ~8.3x the first-tick value. If Reset() wiped prevSpectrum every
+	// tick, steady state would only reach ~2.5x (stuck at raw*smoothing).
+	if m.spectrum[0] < firstTick*4 {
+		t.Errorf("spectrum smoothing did not converge: first=%f steady=%f", firstTick, m.spectrum[0])
 	}
 }
 
@@ -3973,6 +4048,9 @@ func TestModel_SaveOverlays_WithOverlays(t *testing.T) {
 
 func TestModel_HandleRadarKey_Remaining(t *testing.T) {
 	cfg := newTestConfig()
+	// The P/E keys trigger real file exports; without an explicit directory
+	// they would default to the process cwd (this package dir).
+	cfg.Export.Directory = t.TempDir()
 	m := NewModel(cfg)
 	m.width = 100
 	m.height = 40
@@ -4022,6 +4100,28 @@ func TestModel_HandleRadarKey_Remaining(t *testing.T) {
 	// Test E key (uppercase)
 	keyMsg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'E'}}
 	m.Update(keyMsg)
+
+	// Regression: the P/E exports must land in the configured directory,
+	// not in the process cwd (the package source dir).
+	entries, err := os.ReadDir(cfg.Export.Directory)
+	if err != nil {
+		t.Fatalf("failed to read export directory: %v", err)
+	}
+	var haveScreenshot, haveCSV bool
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), "skyspy_screenshot_") && strings.HasSuffix(e.Name(), ".html") {
+			haveScreenshot = true
+		}
+		if strings.HasPrefix(e.Name(), "skyspy_aircraft_") && strings.HasSuffix(e.Name(), ".csv") {
+			haveCSV = true
+		}
+	}
+	if !haveScreenshot {
+		t.Error("P key should write skyspy_screenshot_*.html into the export directory")
+	}
+	if !haveCSV {
+		t.Error("E key should write skyspy_aircraft_*.csv into the export directory")
+	}
 }
 
 func TestView_RenderRadar_AllBranches(t *testing.T) {

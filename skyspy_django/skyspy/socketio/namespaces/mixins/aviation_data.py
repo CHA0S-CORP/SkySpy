@@ -13,6 +13,37 @@ from skyspy.socketio.namespaces.mixins import parse_int_param
 
 logger = logging.getLogger(__name__)
 
+# Cap points per airspace ring. Raw boundaries can carry 400+ vertices each;
+# at display scale that detail is invisible but the full payload (100+ polygons)
+# exceeds Socket.IO's 1 MB frame limit and drops the connection.
+_MAX_RING_POINTS = 48
+
+
+def _decimate_ring(ring):
+    """Evenly subsample a coordinate ring to at most _MAX_RING_POINTS, keeping
+    the first and last vertex so the polygon stays closed."""
+    if not isinstance(ring, list) or len(ring) <= _MAX_RING_POINTS:
+        return ring
+    step = len(ring) / (_MAX_RING_POINTS - 1)
+    out = [ring[min(int(i * step), len(ring) - 1)] for i in range(_MAX_RING_POINTS - 1)]
+    out.append(ring[-1])
+    return out
+
+
+def _decimate_polygon(polygon):
+    """Reduce a GeoJSON Polygon/MultiPolygon's vertex count for wire transfer."""
+    if not isinstance(polygon, dict):
+        return polygon
+    coords = polygon.get("coordinates")
+    if not isinstance(coords, list):
+        return polygon
+    gtype = polygon.get("type")
+    if gtype == "MultiPolygon":
+        new_coords = [[_decimate_ring(ring) for ring in poly] for poly in coords]
+    else:  # Polygon
+        new_coords = [_decimate_ring(ring) for ring in coords]
+    return {**polygon, "coordinates": new_coords}
+
 
 class AviationDataMixin:
     """Airports, navaids, airspace boundaries, PIREPs, METARs, TAFs, and NOTAMs."""
@@ -193,7 +224,7 @@ class AviationDataMixin:
         )
 
         boundaries = []
-        for b in queryset[:200]:
+        for b in queryset[:120]:
             boundaries.append(
                 {
                     "id": b.id,
@@ -205,7 +236,9 @@ class AviationDataMixin:
                     "lat": b.center_lat,
                     "lon": b.center_lon,
                     "radius": b.radius_nm,
-                    "polygon": b.polygon,
+                    "controlling_agency": b.controlling_agency,
+                    "schedule": b.schedule,
+                    "polygon": _decimate_polygon(b.polygon),
                 }
             )
         return boundaries
@@ -439,6 +472,10 @@ class AviationDataMixin:
                 "fetched_at": n.fetched_at.isoformat() if n.fetched_at else None,
                 "classification": n.classification,
                 "reason": n.reason,
+                # Geometry - the Live Map overlay draws from these
+                "latitude": n.latitude,
+                "longitude": n.longitude,
+                "radius_nm": n.radius_nm,
             }
             notams.append(notam_data)
             if n.notam_type == "TFR":
@@ -487,6 +524,9 @@ class AviationDataMixin:
                     "fetched_at": n.fetched_at.isoformat() if n.fetched_at else None,
                     "classification": n.classification,
                     "reason": n.reason,
+                    "latitude": n.latitude,
+                    "longitude": n.longitude,
+                    "radius_nm": n.radius_nm,
                 }
             )
 
@@ -500,6 +540,6 @@ class AviationDataMixin:
         try:
             refresh_notams.delay()
             return {"success": True, "message": "NOTAM refresh queued"}
-        except Exception as e:
+        except Exception as e:  # broad: Celery broker enqueue can fail many ways; return graceful error to client
             logger.error(f"Failed to queue NOTAM refresh: {e}")
             return {"success": False, "message": str(e)}

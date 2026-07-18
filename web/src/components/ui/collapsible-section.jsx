@@ -67,8 +67,8 @@ const CollapsibleSection = forwardRef(function CollapsibleSection(
           'collapsible-trigger',
           'group flex w-full items-center justify-between',
           'py-2.5 px-3',
-          'text-sm font-medium text-text-secondary',
-          'hover:text-text-primary hover:bg-white/[0.03]',
+          'text-sm font-medium text-text-primary',
+          'hover:text-accent-cyan hover:bg-white/[0.03]',
           'rounded-lg transition-colors duration-200',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan/50',
           'min-h-[44px]', // Accessibility: 44px touch target

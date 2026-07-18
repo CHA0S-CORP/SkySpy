@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { Header } from './Header';
 
 // Mock the AudioPlaybackControl component
@@ -158,7 +158,6 @@ describe('Header', () => {
     it('should toggle notifications when permission is granted', async () => {
       global.Notification.permission = 'granted';
       const { saveConfig } = await import('../../utils/config');
-
       render(
         <Header
           {...defaultProps}
@@ -180,7 +179,6 @@ describe('Header', () => {
       vi.useRealTimers();
       global.Notification.permission = 'default';
       global.Notification.requestPermission = vi.fn().mockResolvedValue('granted');
-      const { saveConfig } = await import('../../utils/config');
 
       render(
         <Header
@@ -207,9 +205,6 @@ describe('Header', () => {
 
       // Find the settings button by its icon or by being the last button
       const buttons = screen.getAllByRole('button');
-      const settingsButton = buttons.find((btn) =>
-        btn.closest('.header-btn:not(.notifications-granted)')
-      );
 
       // Click any settings-like button
       fireEvent.click(buttons[buttons.length - 1]);

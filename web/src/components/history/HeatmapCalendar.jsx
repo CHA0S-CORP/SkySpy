@@ -19,8 +19,10 @@ export function HeatmapCalendar({
 }) {
   // Process data into hour x day matrix
   const { matrix, maxCount, dayLabels, hourLabels } = useMemo(() => {
-    const now = new Date();
-    const cutoff = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+    // Anchor rows to local calendar days (midnight) so events are attributed to
+    // the day they occurred, not to rolling 24h windows ending at render time
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
 
     // Initialize matrix (days x hours)
     const mat = Array.from({ length: days }, () => Array(24).fill(0));
@@ -29,7 +31,8 @@ export function HeatmapCalendar({
     const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const dLabels = [];
     for (let d = 0; d < days; d++) {
-      const date = new Date(now.getTime() - (days - 1 - d) * 24 * 60 * 60 * 1000);
+      const date = new Date(startOfToday);
+      date.setDate(startOfToday.getDate() - (days - 1 - d));
       dLabels.push(dayNames[date.getDay()]);
     }
 
@@ -44,10 +47,15 @@ export function HeatmapCalendar({
       if (!timestamp) return;
 
       const date = new Date(timestamp);
-      if (date < cutoff) return;
+      if (Number.isNaN(date.getTime())) return;
 
-      // Calculate day index (0 = oldest, days-1 = today)
-      const daysDiff = Math.floor((now.getTime() - date.getTime()) / (24 * 60 * 60 * 1000));
+      // Calculate day index by calendar-day difference (0 = oldest, days-1 = today)
+      const startOfEventDay = new Date(date);
+      startOfEventDay.setHours(0, 0, 0, 0);
+      // Math.round tolerates DST-shortened/lengthened days
+      const daysDiff = Math.round(
+        (startOfToday.getTime() - startOfEventDay.getTime()) / (24 * 60 * 60 * 1000)
+      );
       const dayIndex = days - 1 - daysDiff;
 
       if (dayIndex < 0 || dayIndex >= days) return;

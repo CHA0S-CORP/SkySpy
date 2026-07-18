@@ -101,7 +101,7 @@ class MessageBatcher:
         if should_flush:
             try:
                 await self._flush()
-            except Exception as e:
+            except Exception as e:  # broad: send_callback is caller-supplied, failure modes unknowable
                 # Log error but don't lose already-cleared messages
                 # (messages were already removed from batch in _flush)
                 logger.error(f"Error flushing message batch: {e}", exc_info=True)
@@ -126,7 +126,7 @@ class MessageBatcher:
             # Task was cancelled externally; any pending messages will be
             # picked up by the next add()/flush_now() call
             pass
-        except Exception as e:
+        except Exception as e:  # broad: background flush loop must keep running
             # Log error to prevent silent message loss
             logger.error(f"Error in delayed batch flush: {e}", exc_info=True)
 
@@ -177,7 +177,7 @@ class MessageBatcher:
                 await task
         try:
             await self._flush()
-        except Exception as e:
+        except Exception as e:  # broad: send_callback is caller-supplied, failure modes unknowable
             logger.error(f"Error in flush_now: {e}", exc_info=True)
 
     @property

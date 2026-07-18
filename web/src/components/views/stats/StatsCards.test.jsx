@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
-import { Plane, Target, Zap } from 'lucide-react';
+import { Plane, Target } from 'lucide-react';
 import { KPICard, LeaderboardCard, SquawkWatchlist } from './StatsCards';
 
 describe('KPICard', () => {

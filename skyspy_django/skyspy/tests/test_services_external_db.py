@@ -172,9 +172,13 @@ class FetchWithRetryTests(TestCase):
 
     @patch("skyspy.services.external_db.httpx.Client")
     def test_fetch_retries_on_failure(self, mock_client_class):
-        """Test that fetch retries on failure."""
+        """Test that fetch retries on failure and reraises the real error.
+
+        reraise=True: callers catch httpx errors, not tenacity.RetryError -
+        a wrapped RetryError previously escaped every download error handler
+        and aborted loading all remaining databases.
+        """
         import httpx
-        from tenacity import RetryError
 
         mock_client = Mock()
         mock_client.get.side_effect = httpx.RequestError("Connection failed")
@@ -182,7 +186,7 @@ class FetchWithRetryTests(TestCase):
         mock_client.__exit__ = Mock(return_value=False)
         mock_client_class.return_value = mock_client
 
-        with self.assertRaises(RetryError):
+        with self.assertRaises(httpx.RequestError):
             fetch_with_retry("https://example.com/test")
 
         # Should have retried multiple times (3 attempts)
@@ -442,6 +446,41 @@ class FAADatabaseTests(TestCase):
         self.assertEqual(result["city"], "Seattle")
         self.assertEqual(result["country"], "United States")
 
+    def test_load_faa_master_joins_acftref_manufacturer_model(self):
+        """MASTER rows join ACFTREF by MFR MDL CODE to gain manufacturer/model."""
+        master = external_db._get_faa_path()
+        acftref = external_db._get_faa_acftref_path()
+        master.write_text(
+            "MODE S CODE HEX,N-NUMBER,SERIAL NUMBER,YEAR MFR,NAME,MFR MDL CODE,TYPE AIRCRAFT\n"
+            "AC26D7,882SD,9553,2024,CITY OF SAN DIEGO,3070033,6\n"
+        )
+        acftref.write_text("CODE,MFR,MODEL,TYPE-ACFT\n3070033,AIRBUS HELICOPTERS INC,AS350B3,6\n")
+
+        self.assertEqual(external_db._load_faa_acftref(acftref), 1)
+        self.assertEqual(external_db._load_faa_master(master), 1)
+
+        rec = external_db._faa_db["AC26D7"]
+        self.assertEqual(rec["manufacturer"], "AIRBUS HELICOPTERS INC")
+        self.assertEqual(rec["model"], "AS350B3")
+        self.assertEqual(rec["owner"], "CITY OF SAN DIEGO")  # FAA owner untouched
+        self.assertEqual(rec["registration"], "N882SD")
+
+    def test_load_faa_master_without_acftref_leaves_manufacturer_blank(self):
+        """Missing ACFTREF -> manufacturer/model None, rest of the row still loads."""
+        external_db._faa_acftref.clear()
+        master = external_db._get_faa_path()
+        master.write_text(
+            "MODE S CODE HEX,N-NUMBER,SERIAL NUMBER,YEAR MFR,NAME,MFR MDL CODE\n"
+            "AC26D7,882SD,9553,2024,CITY OF SAN DIEGO,3070033\n"
+        )
+
+        self.assertEqual(external_db._load_faa_master(master), 1)
+
+        rec = external_db._faa_db["AC26D7"]
+        self.assertIsNone(rec["manufacturer"])
+        self.assertIsNone(rec["model"])
+        self.assertEqual(rec["registration"], "N882SD")
+
 
 class OpenSkyDatabaseTests(TestCase):
     """Tests for OpenSky Network database operations."""
@@ -518,23 +557,43 @@ class RouteCacheTests(TestCase):
         external_db._route_cache.clear()
         external_db._route_cache_ttl.clear()
 
-    @patch("skyspy.services.external_db.httpx.Client")
-    def test_fetch_route_success(self, mock_client_class):
-        """Test successful route fetch."""
-        mock_response = Mock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {"UAL456": {"origin": "KSFO", "destination": "KJFK", "aircraft_type": "B738"}}
-        mock_client = Mock()
-        mock_client.post.return_value = mock_response
-        mock_client.__enter__ = Mock(return_value=mock_client)
-        mock_client.__exit__ = Mock(return_value=False)
-        mock_client_class.return_value = mock_client
+    @patch("skyspy.services.external_db.http_client.post_json")
+    def test_fetch_route_success(self, mock_post_json):
+        """Test successful route fetch normalizes the adsb.im list payload."""
+        # fetch_route now goes through http_client.post_json (adsb.im), not a raw
+        # httpx.Client. adsb.im replies with a list of matches (airports origin-first).
+        mock_post_json.return_value = [
+            {
+                "callsign": "UAL456",
+                "airline_code": "UAL",
+                "number": "456",
+                "airport_codes": "KSFO-KJFK",
+                "plausible": True,
+                "_airports": [
+                    {"iata": "SFO", "icao": "KSFO", "name": "San Francisco Intl", "location": "San Francisco"},
+                    {"iata": "JFK", "icao": "KJFK", "name": "John F Kennedy Intl", "location": "New York"},
+                ],
+            }
+        ]
 
         result = fetch_route("UAL456")
 
         self.assertIsNotNone(result)
-        self.assertEqual(result["origin"], "KSFO")
-        self.assertEqual(result["destination"], "KJFK")
+        self.assertEqual(result["origin"]["icao"], "KSFO")
+        self.assertEqual(result["origin"]["city"], "San Francisco")
+        self.assertEqual(result["destination"]["icao"], "KJFK")
+        self.assertEqual(result["airport_codes"], "KSFO-KJFK")
+
+    @patch("skyspy.services.external_db._fetch_route_hexdb", return_value=None)
+    @patch("skyspy.services.adsbdb.get_route_by_callsign", return_value=None)
+    @patch("skyspy.services.external_db.http_client.post_json")
+    def test_fetch_route_empty_list(self, mock_post_json, _mock_adsbdb, _mock_hexdb):
+        """No match from any source (adsb.im empty, adsbdb + hexdb None) yields None."""
+        mock_post_json.return_value = []
+
+        result = fetch_route("UAL456")
+
+        self.assertIsNone(result)
 
     @patch("skyspy.services.external_db.httpx.Client")
     def test_fetch_route_cached(self, mock_client_class):
@@ -558,15 +617,12 @@ class RouteCacheTests(TestCase):
         result = fetch_route("   ")
         self.assertIsNone(result)
 
-    @patch("skyspy.services.external_db.httpx.Client")
-    def test_fetch_route_api_error(self, mock_client_class):
-        """Test route fetch handles API errors gracefully."""
-        mock_client = Mock()
-        mock_client.post.side_effect = httpx.ConnectError("API error")
-        mock_client.__enter__ = Mock(return_value=mock_client)
-        mock_client.__exit__ = Mock(return_value=False)
-        mock_client_class.return_value = mock_client
-
+    @patch("skyspy.services.external_db._fetch_route_hexdb", return_value=None)
+    @patch("skyspy.services.adsbdb.get_route_by_callsign", return_value=None)
+    @patch("skyspy.services.external_db.http_client.post_json", return_value=None)
+    def test_fetch_route_api_error(self, _mock_post_json, _mock_adsbdb, _mock_hexdb):
+        """Test route fetch handles API errors gracefully (all sources return None)."""
+        # http_client.post_json swallows transport errors and returns None itself.
         result = fetch_route("UAL456")
 
         self.assertIsNone(result)
@@ -718,6 +774,43 @@ class LookupAllTests(TestCase):
 
         # FAA should take priority
         self.assertEqual(result["registration"], "N12345-FAA")
+
+    def test_lookup_all_is_military_or_merged_across_sources(self):
+        """tar1090's is_military=True must not be masked by adsbx's explicit False.
+
+        Boolean identity flags merge with OR semantics: any source True wins.
+        """
+        external_db._adsbx_db["ABC123"] = {
+            "registration": "N12345",
+            "is_military": False,  # adsbx manufactures False when 'mil' is absent
+            "source": "adsbx",
+        }
+        external_db._db_metadata["adsbx"]["loaded"] = True
+
+        external_db._tar1090_db["ABC123"] = {
+            "registration": "N12345",
+            "is_military": True,  # canonical Mictronics military dbFlag
+            "source": "tar1090",
+        }
+        external_db._db_metadata["tar1090"]["loaded"] = True
+
+        result = lookup_all("ABC123")
+
+        self.assertIsNotNone(result)
+        self.assertTrue(result["is_military"])
+
+    def test_lookup_all_is_military_false_when_all_sources_false(self):
+        """OR-merge must not invent True when every source reports False."""
+        external_db._adsbx_db["ABC123"] = {"is_military": False, "source": "adsbx"}
+        external_db._db_metadata["adsbx"]["loaded"] = True
+
+        external_db._tar1090_db["ABC123"] = {"is_military": False, "source": "tar1090"}
+        external_db._db_metadata["tar1090"]["loaded"] = True
+
+        result = lookup_all("ABC123")
+
+        self.assertIsNotNone(result)
+        self.assertFalse(result["is_military"])
 
     def test_lookup_all_strips_tilde(self):
         """Test lookup_all strips tilde prefix."""

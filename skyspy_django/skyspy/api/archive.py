@@ -15,6 +15,7 @@ from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from skyspy.api.params import parse_int
 from skyspy.auth.authentication import APIKeyAuthentication, OptionalJWTAuthentication
 from skyspy.auth.permissions import FeatureBasedPermission
 from skyspy.models.aviation import CachedPirep
@@ -46,12 +47,12 @@ class ArchiveViewSet(viewsets.ViewSet):
         """List archived NOTAMs with filters."""
         from skyspy.services import notams
 
-        days = int(request.query_params.get("days", 30))
+        days = parse_int(request.query_params, "days", 30, min_value=1, max_value=3650)
         icao = request.query_params.get("icao")
         notam_type = request.query_params.get("type")
         search = request.query_params.get("search")
-        limit = int(request.query_params.get("limit", 50))
-        offset = int(request.query_params.get("offset", 0))
+        limit = parse_int(request.query_params, "limit", 50, min_value=1, max_value=1000)
+        offset = parse_int(request.query_params, "offset", 0, min_value=0)
 
         result = notams.get_archived_notams(
             icao=icao,
@@ -87,14 +88,14 @@ class ArchiveViewSet(viewsets.ViewSet):
     @action(detail=False, methods=["get"])
     def pireps(self, request):
         """List archived/historical PIREPs."""
-        days = int(request.query_params.get("days", 30))
+        days = parse_int(request.query_params, "days", 30, min_value=1, max_value=3650)
         icao = request.query_params.get("icao")
         report_type = request.query_params.get("report_type")
         turbulence = request.query_params.get("turbulence")
         icing = request.query_params.get("icing")
         search = request.query_params.get("search")
-        limit = int(request.query_params.get("limit", 50))
-        offset = int(request.query_params.get("offset", 0))
+        limit = parse_int(request.query_params, "limit", 50, min_value=1, max_value=1000)
+        offset = parse_int(request.query_params, "offset", 0, min_value=0)
 
         now = timezone.now()
         cutoff = now - timedelta(days=days)

@@ -37,7 +37,7 @@ export function useTrackHistory(aircraft, feederLat, feederLon, maxAge = 5 * 60 
 
       // Add new positions for each aircraft
       aircraft.forEach((ac) => {
-        if (ac.lat && ac.lon && ac.hex) {
+        if (Number.isFinite(ac.lat) && Number.isFinite(ac.lon) && ac.hex) {
           if (!updated[ac.hex]) {
             updated[ac.hex] = [];
             changed = true;
@@ -57,10 +57,10 @@ export function useTrackHistory(aircraft, feederLat, feederLon, maxAge = 5 * 60 
             updated[ac.hex].push({
               lat: ac.lat,
               lon: ac.lon,
-              alt: ac.alt_baro || ac.alt_geom || ac.alt,
-              spd: ac.gs || ac.tas || ac.ias,
-              vs: ac.baro_rate || ac.geom_rate || 0,
-              trk: ac.track || ac.true_heading || ac.mag_heading,
+              alt: ac.alt_baro ?? ac.alt_geom ?? ac.alt,
+              spd: ac.gs ?? ac.tas ?? ac.ias,
+              vs: ac.baro_rate ?? ac.geom_rate ?? 0,
+              trk: ac.track ?? ac.true_heading ?? ac.mag_heading,
               dist: dist,
               time: now,
             });

@@ -13,7 +13,9 @@
   --border: #252d3a;
   --text-primary: #e6edf3;
   --text-secondary: #8b949e;
-  --text-dim: #484f58;
+  /* Was #484f58 (2.08:1 contrast — effectively invisible, made labels/rows
+     look empty). Bumped to ~4.8:1 so dim labels are actually readable. */
+  --text-dim: #7a828c;
   --accent-cyan: #00d4ff;
   --accent-green: #4ade80;
   --accent-blue: #5a7a9a;
@@ -4159,6 +4161,141 @@ body {
   color: rgba(255, 220, 100, 1);
   font-weight: 700;
   font-size: 15px;
+}
+
+/* Persistent Safety Events list panel (bottom-left, independent of top banner) */
+.safety-events-panel {
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  z-index: 1090;
+  width: 320px;
+  max-width: calc(100vw - 32px);
+  max-height: 40vh;
+  display: flex;
+  flex-direction: column;
+  background: rgba(15, 18, 24, 0.92);
+  border: 1px solid rgba(255, 200, 0, 0.5);
+  border-radius: 10px;
+  font-family: 'JetBrains Mono', monospace;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(10px);
+  overflow: hidden;
+  pointer-events: auto;
+}
+
+.safety-events-panel .safety-events-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  color: #ffcc00;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  border-bottom: 1px solid rgba(255, 200, 0, 0.25);
+}
+
+.safety-events-panel .safety-events-header .event-count {
+  margin-left: auto;
+  background: rgba(255, 200, 0, 0.2);
+  border-radius: 10px;
+  padding: 1px 8px;
+  font-size: 12px;
+}
+
+.safety-events-panel .safety-close {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+}
+
+.safety-events-panel .safety-events-list {
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.safety-events-panel .safety-event {
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-left: 3px solid rgba(255, 255, 255, 0.2);
+}
+
+.safety-events-panel .safety-event.severity-critical {
+  border-left-color: #ff3b30;
+}
+
+.safety-events-panel .safety-event.severity-warning {
+  border-left-color: #ffcc00;
+}
+
+.safety-events-panel .safety-event.severity-info {
+  border-left-color: #34c759;
+}
+
+.safety-events-panel .safety-event.acknowledged {
+  opacity: 0.5;
+}
+
+.safety-events-panel .event-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.safety-events-panel .event-callsign {
+  color: #fff;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.safety-events-panel .event-callsign.clickable {
+  cursor: pointer;
+  text-decoration: underline dotted;
+}
+
+.safety-events-panel .event-type-badge {
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  color: rgba(255, 220, 100, 0.95);
+  text-transform: uppercase;
+}
+
+.safety-events-panel .event-details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 11px;
+  margin-top: 4px;
+}
+
+.safety-events-panel .event-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 4px;
+}
+
+.safety-events-panel .event-time {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 11px;
+}
+
+.safety-events-panel .event-ack-btn {
+  background: rgba(52, 199, 89, 0.2);
+  border: 1px solid rgba(52, 199, 89, 0.5);
+  border-radius: 6px;
+  color: #34c759;
+  cursor: pointer;
+  padding: 2px 6px;
+  display: flex;
 }
 
 /* Event-specific banner content styles */

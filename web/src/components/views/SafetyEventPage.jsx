@@ -10,6 +10,7 @@ import { AircraftCards } from '../safety/AircraftCards';
 import { EventMapVisualization } from '../safety/EventMapVisualization';
 import { TelemetrySnapshotsContent } from '../safety/TelemetrySnapshot';
 import { FlightDataGraphs } from '../safety/FlightDataGraphs';
+import { EventAiSummary } from '../safety/EventAiSummary';
 
 // Extracted hook
 import { useSafetyEventData } from '../../hooks/useSafetyEventData';
@@ -74,6 +75,12 @@ export function SafetyEventPage({
 }) {
   const [replayState, setReplayState] = useState({ position: 100, isPlaying: false, speed: 1 });
   const animationFrameRef = useRef(null);
+  // Keep current speed in a ref so a running animate() loop sees speed changes
+  // (the loop closure would otherwise capture the speed from when Play was pressed)
+  const speedRef = useRef(replayState.speed);
+  useEffect(() => {
+    speedRef.current = replayState.speed;
+  }, [replayState.speed]);
   const replayControlsRef = useRef(null);
   const flightGraphsRef = useRef(null);
 
@@ -114,7 +121,7 @@ export function SafetyEventPage({
       const animate = (currentTime) => {
         const deltaTime = currentTime - lastTime;
         lastTime = currentTime;
-        const increment = (deltaTime / 200) * replayState.speed;
+        const increment = (deltaTime / 200) * speedRef.current;
         pos += increment;
 
         if (pos >= 100) {
@@ -317,6 +324,9 @@ export function SafetyEventPage({
             </div>
             <p className="sep-message-text">{event.message}</p>
           </div>
+
+          {/* AI analysis (LLM plain-English explanation) */}
+          <EventAiSummary eventId={eventId} apiBase={apiBase} accent={severityColor} />
 
           {/* Aircraft cards */}
           <AircraftCards

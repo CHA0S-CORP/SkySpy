@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing:border-box; margin:0; padding:0; }
+  :root {
+    --bg0:#080b11; --bg1:#0d131b; --bg2:#141d28; --bg3:#1a2531;
+    --bord:#1b2531; --bord2:#28343f;
+    --txt:#e8eff6; --dim:#8b98a7; --dim2:#586472;
+    --accent:#3ddc84; --accent2:#4cc9f0; --warn:#f5b544; --danger:#f2585d; --mil:#b39dff;
+  }
+  [data-theme="slate"] { --bg0:#0a111e; --bg1:#101a2b; --bg2:#182437; --bg3:#1f2d43; --bord:#1e2c40; --bord2:#2b3c54; --txt:#eaf1f9; --dim:#93a1b5; --dim2:#5a6a80; --accent:#4cc9f0; --accent2:#5eead4; }
+  [data-theme="amber"] { --bg0:#0c0a06; --bg1:#15110a; --bg2:#1f1810; --bg3:#291f13; --bord:#2a2113; --bord2:#3a2e1c; --txt:#f4ead6; --dim:#b39c78; --dim2:#7a6a4d; --accent:#f5b544; --accent2:#ffd479; }
+  html,body { height:100%; background:var(--bg0); }
+  body { font-family:'IBM Plex Sans',system-ui,sans-serif; -webkit-font-smoothing:antialiased; }
+  a { text-decoration:none; color:inherit; }
+  ::-webkit-scrollbar { width:10px; height:10px; }
+  ::-webkit-scrollbar-track { background:transparent; }
+  ::-webkit-scrollbar-thumb { background:var(--bord2); border-radius:6px; border:2px solid var(--bg1); }
+  @keyframes blink { 0%,100%{opacity:1;} 50%{opacity:.25;} }
+</style>
+</helmet>
+<div style="display:flex;flex-direction:column;height:100vh;width:100vw;overflow:hidden;background:var(--bg0);color:var(--txt);font-size:13px;">
+
+  <!-- HEADER -->
+  <header style="display:flex;align-items:center;height:60px;flex:0 0 60px;background:var(--bg1);border-bottom:1px solid var(--bord);padding:0 18px;">
+    <div style="display:flex;align-items:center;gap:11px;width:214px;flex:0 0 214px;">
+      <div style="width:30px;height:30px;border-radius:8px;background:radial-gradient(circle at 30% 30%,var(--accent),transparent 70%),var(--bg3);display:flex;align-items:center;justify-content:center;border:1px solid var(--bord2);"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.9"><circle cx="12" cy="12" r="9"></circle><path d="M12 3v18M3 12h18" opacity=".5"></path><circle cx="12" cy="12" r="3.4" fill="var(--accent)" stroke="none"></circle></svg></div>
+      <div style="font-size:20px;font-weight:700;letter-spacing:-.4px;">Sky<span style="color:var(--accent);">Spy</span></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:22px;padding-left:8px;">
+      <div style="display:flex;align-items:center;gap:8px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.7"><path d="M22 2 15 22 11 13 2 9z"></path></svg><span style="font-family:'IBM Plex Mono';font-size:17px;font-weight:600;color:var(--accent);">201</span><span style="font-size:10px;letter-spacing:1.2px;color:var(--dim);font-weight:600;">AIRCRAFT</span></div>
+      <div style="width:1px;height:22px;background:var(--bord2);"></div>
+      <div style="display:flex;align-items:center;gap:8px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent2)" stroke-width="1.7"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0116 0z"></path><circle cx="12" cy="10" r="2.6"></circle></svg><span style="font-family:'IBM Plex Mono';font-size:15px;font-weight:600;color:var(--accent2);">32.8</span><span style="font-size:10px;letter-spacing:1.2px;color:var(--dim);font-weight:600;">LAT</span></div>
+      <div style="display:flex;align-items:center;gap:8px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent2)" stroke-width="1.7"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0116 0z"></path><circle cx="12" cy="10" r="2.6"></circle></svg><span style="font-family:'IBM Plex Mono';font-size:15px;font-weight:600;color:var(--accent2);">-117.2</span><span style="font-size:10px;letter-spacing:1.2px;color:var(--dim);font-weight:600;">LON</span></div>
+    </div>
+    <div style="flex:1;"></div>
+    <div style="display:flex;align-items:center;gap:4px;">
+      <button title="Notifications" style="display:flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:8px;background:transparent;border:1px solid transparent;color:var(--dim);cursor:pointer;" style-hover="background:var(--bg2);color:var(--txt);"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M18 8a6 6 0 00-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 01-3.4 0"></path><path d="M2 2l20 20" stroke="var(--dim2)"></path></svg></button>
+      <button title="Settings" style="display:flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:8px;background:transparent;border:1px solid transparent;color:var(--dim);cursor:pointer;" style-hover="background:var(--bg2);color:var(--txt);"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="3.2"></circle><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"></path></svg></button>
+      <div style="display:flex;align-items:center;gap:7px;padding:0 6px 0 12px;border-left:1px solid var(--bord2);margin-left:6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--dim)" stroke-width="1.6"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg><span style="font-family:'IBM Plex Mono';font-size:13px;font-weight:500;color:var(--dim);">05:20:16</span><span style="font-size:10px;color:var(--dim2);font-weight:600;">UTC</span></div>
+    </div>
+  </header>
+
+  <div style="display:flex;flex:1;min-height:0;">
+    <!-- NAV -->
+    <nav style="width:214px;flex:0 0 214px;background:var(--bg1);border-right:1px solid var(--bord);display:flex;flex-direction:column;padding:14px 12px;">
+      <div style="font-size:10px;letter-spacing:1.4px;color:var(--dim2);font-weight:600;padding:2px 10px 10px;">NAVIGATION</div>
+      <a href="#" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:9px;color:var(--dim);" style-hover="background:var(--bg2);color:var(--txt);"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3zM9 3v15M15 6v15"></path></svg>Live Map</a>
+      <a href="#" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:9px;margin-top:2px;background:linear-gradient(90deg,color-mix(in srgb,var(--accent) 16%,transparent),transparent);color:var(--accent);font-weight:600;border-left:2px solid var(--accent);"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 12 15 12 13 21 11 3 9 12 2 12"></path></svg>Aircraft List</a>
+      <a href="#" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:9px;color:var(--dim);margin-top:2px;" style-hover="background:var(--bg2);color:var(--txt);"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"></path></svg>Statistics</a>
+      <a href="#" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:9px;color:var(--dim);margin-top:2px;" style-hover="background:var(--bg2);color:var(--txt);"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12a9 9 0 109-9 9 9 0 00-8 5M3 3v5h5M12 7v5l3 2"></path></svg>History</a>
+      <a href="#" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:9px;color:var(--dim);margin-top:2px;" style-hover="background:var(--bg2);color:var(--txt);"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="2.4"></circle><path d="M7 8a7 7 0 000 8M17 8a7 7 0 010 8M4.5 5a11 11 0 000 14M19.5 5a11 11 0 010 14"></path></svg>Radio</a>
+      <a href="#" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:9px;color:var(--dim);margin-top:2px;" style-hover="background:var(--bg2);color:var(--txt);"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 8a6 6 0 00-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 01-3.4 0"></path></svg>Alerts<span style="margin-left:auto;font-family:'IBM Plex Mono';font-size:10px;font-weight:600;background:color-mix(in srgb,var(--warn) 20%,transparent);color:var(--warn);padding:2px 6px;border-radius:20px;">3</span></a>
+      <a href="#" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:9px;color:var(--dim);margin-top:2px;" style-hover="background:var(--bg2);color:var(--txt);"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12h4l2 6 4-14 2 8h6"></path></svg>System</a>
+      <a href="#" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:9px;margin-top:8px;color:var(--danger);background:color-mix(in srgb,var(--danger) 12%,transparent);border:1px solid color-mix(in srgb,var(--danger) 30%,transparent);font-weight:600;" style-hover="background:color-mix(in srgb,var(--danger) 20%,transparent);"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"></circle><circle cx="12" cy="12" r="4"></circle><path d="M12 1v4M12 19v4M1 12h4M19 12h4"></path></svg>Cannonball</a>
+      <div style="flex:1;"></div>
+      <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;"><span style="width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 8px var(--accent);animation:blink 2s infinite;"></span><span style="font-size:11px;font-weight:600;letter-spacing:.6px;color:var(--accent);">LIVE</span><span style="margin-left:auto;font-family:'IBM Plex Mono';font-size:10px;color:var(--dim2);">v2.5.0</span></div>
+    </nav>
+
+    <!-- MAIN -->
+    <main style="flex:1;min-width:0;display:flex;flex-direction:column;padding:16px 20px 0;min-height:0;">
+
+      <!-- search + view controls -->
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
+        <div style="display:flex;align-items:center;gap:9px;flex:1;height:42px;padding:0 14px;background:var(--bg1);border:1px solid var(--bord);border-radius:11px;" style-focus-within="border-color:var(--accent);">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--dim)" stroke-width="1.8"><circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4.3-4.3"></path></svg>
+          <input value="{{ query }}" onInput="{{ onSearch }}" placeholder="Search ICAO, callsign, type, squawk…" style="flex:1;background:transparent;border:none;outline:none;color:var(--txt);font-family:'IBM Plex Sans';font-size:13px;">
+        </div>
+        <div style="display:flex;gap:3px;padding:3px;border-radius:10px;background:var(--bg1);border:1px solid var(--bord);">
+          <button title="Table" style="display:flex;align-items:center;justify-content:center;width:34px;height:32px;border-radius:7px;background:var(--accent);border:none;color:var(--bg0);cursor:pointer;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h18M3 12h18M3 18h18"></path></svg></button>
+          <button title="Cards" style="display:flex;align-items:center;justify-content:center;width:34px;height:32px;border-radius:7px;background:transparent;border:none;color:var(--dim);cursor:pointer;" style-hover="background:var(--bg2);color:var(--txt);"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="3" width="7" height="7" rx="1"></rect><rect x="3" y="14" width="7" height="7" rx="1"></rect><rect x="14" y="14" width="7" height="7" rx="1"></rect></svg></button>
+        </div>
+        <button style="display:flex;align-items:center;gap:8px;height:42px;padding:0 16px;border-radius:11px;background:var(--bg1);border:1px solid var(--bord);color:var(--txt);cursor:pointer;font-family:inherit;font-size:13px;font-weight:500;" style-hover="border-color:var(--accent);"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="3" width="18" height="18" rx="2"></rect><path d="M9 3v18"></path></svg>Columns</button>
+        <button style="display:flex;align-items:center;gap:8px;height:42px;padding:0 16px;border-radius:11px;background:var(--bg1);border:1px solid var(--bord);color:var(--txt);cursor:pointer;font-family:inherit;font-size:13px;font-weight:500;" style-hover="border-color:var(--accent);"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M22 3H2l8 9.5V19l4 2v-8.5z"></path></svg>Filters</button>
+      </div>
+
+      <!-- filter chips -->
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;">
+        <sc-for list="{{ chips }}" as="c" hint-placeholder-count="10">
+          <button onClick="{{ c.onClick }}" style="display:flex;align-items:center;gap:8px;height:34px;padding:0 13px;border-radius:9px;cursor:pointer;font-family:inherit;font-size:12px;font-weight:500;background:{{ c.bg }};border:1px solid {{ c.bord }};color:{{ c.fg }};">
+            <span style="width:8px;height:8px;border-radius:50%;background:{{ c.dot }};"></span>{{ c.label }}
+            <sc-if value="{{ c.hasCount }}" hint-placeholder-val="{{ true }}"><span style="font-family:'IBM Plex Mono';font-size:11px;font-weight:600;background:var(--bg3);color:var(--dim);padding:1px 7px;border-radius:12px;">{{ c.count }}</span></sc-if>
+          </button>
+        </sc-for>
+      </div>
+
+      <!-- TABLE -->
+      <div style="flex:1;min-height:0;display:flex;flex-direction:column;background:var(--bg1);border:1px solid var(--bord);border-radius:14px;overflow:hidden;">
+        <!-- header row -->
+        <div style="display:grid;grid-template-columns:132px minmax(140px,1fr) 78px 118px 92px 116px 138px 100px 122px 88px;align-items:center;gap:0;padding:0 18px;height:46px;border-bottom:1px solid var(--bord2);background:var(--bg2);flex:0 0 auto;">
+          <sc-for list="{{ cols }}" as="h" hint-placeholder-count="10">
+            <button onClick="{{ h.onClick }}" style="display:flex;align-items:center;gap:5px;justify-content:{{ h.justify }};background:transparent;border:none;cursor:pointer;font-family:inherit;font-size:10px;letter-spacing:1px;font-weight:600;color:{{ h.color }};text-transform:uppercase;padding:0;">
+              {{ h.label }}<span style="font-family:'IBM Plex Mono';font-size:10px;color:var(--accent);">{{ h.arrow }}</span>
+            </button>
+          </sc-for>
+        </div>
+        <!-- rows -->
+        <div style="flex:1;overflow-y:auto;">
+          <sc-for list="{{ rows }}" as="r" hint-placeholder-count="18">
+            <a href="Aircraft Detail.dc.html" style="display:grid;grid-template-columns:132px minmax(140px,1fr) 78px 118px 92px 116px 138px 100px 122px 88px;align-items:center;padding:0 18px;height:48px;border-bottom:1px solid var(--bord);border-left:2px solid {{ r.accent }};cursor:pointer;" style-hover="background:var(--bg2);">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <sc-if value="{{ r.isMil }}" hint-placeholder-val="{{ false }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--mil)" stroke-width="1.8"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"></path></svg></sc-if>
+                <span style="font-family:'IBM Plex Mono';font-size:13px;font-weight:500;color:{{ r.icaoColor }};">{{ r.icao }}</span>
+              </div>
+              <span style="font-family:'IBM Plex Mono';font-size:13px;font-weight:600;color:{{ r.csColor }};">{{ r.cs }}</span>
+              <span style="font-family:'IBM Plex Mono';font-size:12px;color:var(--dim);">{{ r.type }}</span>
+              <div style="display:flex;align-items:baseline;gap:4px;"><span style="font-family:'IBM Plex Mono';font-size:13px;font-weight:500;color:{{ r.altColor }};">{{ r.altDisp }}</span><span style="font-size:10px;color:var(--dim2);">{{ r.altUnit }}</span></div>
+              <span style="font-family:'IBM Plex Mono';font-size:13px;color:{{ r.spdColor }};">{{ r.spd }}</span>
+              <span style="font-family:'IBM Plex Mono';font-size:12px;font-weight:500;color:{{ r.vsColor }};">{{ r.vsDisp }}</span>
+              <div style="display:flex;align-items:center;gap:7px;"><span style="font-family:'IBM Plex Mono';font-size:12px;color:var(--txt);">{{ r.hdgDisp }}</span><span style="font-family:'IBM Plex Mono';font-size:9px;font-weight:600;color:var(--dim);background:var(--bg3);padding:1px 5px;border-radius:4px;">{{ r.hdgDir }}</span></div>
+              <span style="font-family:'IBM Plex Mono';font-size:13px;color:var(--txt);">{{ r.dist }}</span>
+              <div style="display:flex;align-items:flex-end;gap:2px;height:16px;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="{{ r.sigColor }}" stroke-width="2" style="margin-right:3px;align-self:center;"><path d="M5 12a10 10 0 0114 0M8.5 15.5a5 5 0 017 0M12 19h.01"></path></svg>
+                <sc-for list="{{ r.bars }}" as="b" hint-placeholder-count="4"><span style="width:3px;height:{{ b.h }}px;border-radius:1px;background:{{ b.color }};"></span></sc-for>
+              </div>
+              <span style="font-family:'IBM Plex Mono';font-size:13px;color:{{ r.sqkColor }};">{{ r.sqk }}</span>
+            </a>
+          </sc-for>
+        </div>
+        <!-- footer -->
+        <div style="display:flex;align-items:center;gap:16px;padding:0 18px;height:44px;border-top:1px solid var(--bord2);background:var(--bg2);flex:0 0 auto;">
+          <div style="display:flex;align-items:center;gap:7px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent2)" stroke-width="1.7"><path d="M22 2 15 22 11 13 2 9z"></path></svg><span style="font-family:'IBM Plex Mono';font-size:12px;color:var(--dim);">{{ shownCount }} of 199</span></div>
+          <div style="display:flex;align-items:center;gap:7px;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--mil)" stroke-width="1.7"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"></path></svg><span style="font-family:'IBM Plex Mono';font-size:12px;color:var(--dim);">7 military</span></div>
+          <div style="flex:1;"></div>
+          <div style="display:flex;align-items:center;gap:6px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.4"><path d="M6 15l6-6 6 6"></path></svg><span style="font-size:11px;color:var(--dim);">Climbing</span></div>
+          <div style="display:flex;align-items:center;gap:6px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--warn)" stroke-width="2.4"><path d="M6 9l6 6 6-6"></path></svg><span style="font-size:11px;color:var(--dim);">Descending</span></div>
+          <div style="display:flex;align-items:center;gap:6px;"><span style="width:8px;height:8px;border-radius:50%;background:var(--mil);"></span><span style="font-size:11px;color:var(--dim);">Military</span></div>
+        </div>
+      </div>
+      <div style="height:16px;flex:0 0 16px;"></div>
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{
+  &quot;accentTheme&quot;: { &quot;editor&quot;: &quot;enum&quot;, &quot;options&quot;: [&quot;radar&quot;, &quot;slate&quot;, &quot;amber&quot;], &quot;default&quot;: &quot;radar&quot;, &quot;tsType&quot;: &quot;'radar' | 'slate' | 'amber'&quot;, &quot;section&quot;: &quot;Appearance&quot; }
+}">
+class Component extends DCLogic {
+  state = { theme:'radar', query:'', filter:null, sortBy:'dist', sortDir:'asc' };
+
+  componentDidMount(){ document.documentElement.setAttribute('data-theme', this.props.accentTheme || this.state.theme); }
+
+  dir(t){ const d=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW']; return d[Math.round(t/22.5)%16]; }
+
+  data(){
+    return [
+      {icao:'AD10E9',cs:'ASA1548',type:'B39M',alt:0,spd:0,vs:null,hdg:0,dist:4.2,bars:3,sqk:'4121',cat:'commercial'},
+      {icao:'A7888C',cs:'ASA1466',type:'B738',alt:0,spd:0,vs:null,hdg:0,dist:4.3,bars:2,sqk:'2015',cat:'commercial'},
+      {icao:'A46D4E',cs:'UAL2129',type:'B739',alt:0,spd:4,vs:null,hdg:0,dist:4.3,bars:3,sqk:'7301',cat:'commercial'},
+      {icao:'AC0941',cs:'DAL2672',type:'B739',alt:0,spd:7,vs:-64,hdg:286,dist:4.3,bars:3,sqk:'3510',cat:'commercial'},
+      {icao:'A6E720',cs:'DAL571',type:'A21N',alt:0,spd:1,vs:null,hdg:0,dist:4.4,bars:3,sqk:'1027',cat:'commercial'},
+      {icao:'AD45A4',cs:'AAL1543',type:'A21N',alt:0,spd:0,vs:null,hdg:0,dist:4.4,bars:3,sqk:'5747',cat:'commercial'},
+      {icao:'A75B65',cs:'AAL2468',type:'A321',alt:0,spd:0,vs:null,hdg:0,dist:4.5,bars:2,sqk:'7377',cat:'commercial'},
+      {icao:'A791C0',cs:'.N587UW',type:'A321',alt:0,spd:0,vs:null,hdg:0,dist:4.5,bars:4,sqk:'6270',cat:'commercial'},
+      {icao:'A324CE',cs:'AAL1480',type:'B38M',alt:0,spd:0,vs:null,hdg:0,dist:4.5,bars:1,sqk:'6736',cat:'commercial'},
+      {icao:'A720EB',cs:'ASA1624',type:'B738',alt:0,spd:0,vs:null,hdg:0,dist:4.5,bars:3,sqk:'6707',cat:'commercial'},
+      {icao:'AC2E45',cs:'N884SD',type:'AS50',alt:1025,spd:78,vs:null,hdg:328,dist:4.6,bars:2,sqk:'4212',cat:'ga'},
+      {icao:'A3965C',cs:'FFT3383',type:'A20N',alt:0,spd:0,vs:null,hdg:0,dist:4.7,bars:2,sqk:'2047',cat:'commercial'},
+      {icao:'A1442F',cs:'SWA983',type:'B38M',alt:0,spd:0,vs:null,hdg:0,dist:4.8,bars:2,sqk:'4727',cat:'commercial'},
+      {icao:'AD406E',cs:'N953GM',type:'B407',alt:925,spd:84,vs:128,hdg:91,dist:4.8,bars:2,sqk:'1200',cat:'ga'},
+      {icao:'AC2439',cs:'SWA2601',type:'B38M',alt:0,spd:6,vs:null,hdg:0,dist:4.9,bars:2,sqk:'3627',cat:'commercial'},
+      {icao:'A7E198',cs:'DAL709',type:'A21N',alt:6525,spd:285,vs:1920,hdg:74,dist:5.1,bars:4,sqk:'6745',cat:'commercial'},
+      {icao:'0C20DF',cs:'CMP850',type:'B39M',alt:0,spd:10,vs:null,hdg:0,dist:5.1,bars:3,sqk:'6711',cat:'commercial'},
+      {icao:'AB6339',cs:'SWA4874',type:'B738',alt:0,spd:4,vs:null,hdg:0,dist:5.3,bars:2,sqk:'6724',cat:'commercial'},
+      {icao:'A21BA0',cs:'FFT4578',type:'A320',alt:0,spd:0,vs:null,hdg:0,dist:5.3,bars:2,sqk:'2077',cat:'commercial'},
+      {icao:'AE6AA6',cs:'LDACE21',type:'V22',alt:875,spd:66,vs:-64,hdg:200,dist:6.0,bars:2,sqk:'1200',cat:'military'},
+      {icao:'AE6AA7',cs:'LDACE12',type:'V22',alt:0,spd:0,vs:null,hdg:0,dist:6.4,bars:2,sqk:null,cat:'military'},
+      {icao:'A6EDE5',cs:'UAL1531',type:'A21N',alt:750,spd:142,vs:-896,hdg:286,dist:6.5,bars:3,sqk:'3163',cat:'commercial'},
+      {icao:'~29804A',cs:'--',type:'--',alt:1600,spd:184,vs:null,hdg:48,dist:8.5,bars:3,sqk:null,cat:'ga'},
+      {icao:'AE27A2',cs:'LSO9',type:'H60',alt:550,spd:111,vs:null,hdg:295,dist:9.7,bars:3,sqk:'1200',cat:'military'},
+      {icao:'A9C4E1',cs:'SKW5410',type:'E75L',alt:8200,spd:301,vs:-1280,hdg:118,dist:11.2,bars:4,sqk:'4503',cat:'commercial'},
+      {icao:'ADF2B7',cs:'RCH471',type:'C17',alt:12250,spd:388,vs:1440,hdg:250,dist:14.8,bars:3,sqk:'7700',cat:'military'},
+    ];
+  }
+
+  renderVals(){
+    const S=this.state;
+    const catColor=c=> c==='military'?'var(--mil)':(c==='ga'?'var(--accent2)':'var(--accent)');
+    const raw=this.data();
+
+    const tests={
+      emergency:a=>['7500','7600','7700'].includes(a.sqk),
+      military:a=>a.cat==='military',
+      climbing:a=>a.vs>0,
+      descending:a=>a.vs<0,
+      ground:a=>a.alt===0,
+      interesting:a=>a.cat==='military'||['7500','7600','7700'].includes(a.sqk),
+      highalt:a=>a.alt>=10000,
+      lowalt:a=>a.alt>0&&a.alt<2000,
+      strong:a=>a.bars>=3,
+      weak:a=>a.bars<=2,
+    };
+    const count=k=>raw.filter(tests[k]).length;
+
+    let list=raw.slice();
+    const q=S.query.trim().toLowerCase();
+    if(q) list=list.filter(a=>(a.icao+a.cs+a.type+(a.sqk||'')).toLowerCase().includes(q));
+    if(S.filter&&tests[S.filter]) list=list.filter(tests[S.filter]);
+
+    const keyFn={ icao:a=>a.icao, cs:a=>a.cs, type:a=>a.type, alt:a=>a.alt, spd:a=>a.spd, vs:a=>(a.vs??0), hdg:a=>a.hdg, dist:a=>a.dist, sig:a=>a.bars, sqk:a=>(a.sqk||'') };
+    const kf=keyFn[S.sortBy]||keyFn.dist;
+    list.sort((x,y)=>{ const a=kf(x),b=kf(y); const r=(typeof a==='number')?a-b:String(a).localeCompare(String(b)); return S.sortDir==='asc'?r:-r; });
+
+    const rows=list.map(a=>{
+      const air=a.alt>0;
+      const cc=catColor(a.cat);
+      const barColor=a.bars>=3?'var(--accent)':(a.bars===2?'var(--warn)':'var(--danger)');
+      const bars=[7,10,13,16].map((h,i)=>({h, color:i<a.bars?barColor:'var(--bord2)'}));
+      let vsDisp='—', vsColor='var(--dim2)';
+      if(a.vs>0){ vsDisp='↑ +'+a.vs; vsColor='var(--accent)'; }
+      else if(a.vs<0){ vsDisp='↓ '+a.vs; vsColor='var(--warn)'; }
+      const emerg=['7500','7600','7700'].includes(a.sqk);
+      return {
+        icao:a.icao, cs:a.cs, type:a.type, spd:a.spd, dist:a.dist.toFixed(1),
+        isMil:a.cat==='military',
+        accent:air?cc:'transparent',
+        icaoColor:air?'var(--txt)':'var(--dim)',
+        csColor:air?cc:'var(--dim)',
+        altDisp:air?a.alt.toLocaleString('en-US'):'ground', altUnit:air?'ft':'', altColor:air?'var(--txt)':'var(--dim2)',
+        spdColor:air?'var(--txt)':'var(--dim2)',
+        vsDisp, vsColor,
+        hdgDisp:a.hdg+'°', hdgDir:this.dir(a.hdg),
+        bars, sigColor:barColor,
+        sqk:a.sqk||'--', sqkColor:emerg?'var(--danger)':(a.sqk?'var(--txt)':'var(--dim2)'),
+      };
+    });
+
+    const colDefs=[['icao','ICAO','flex-start'],['cs','Callsign','flex-start'],['type','Type','flex-start'],['alt','Altitude','flex-start'],['spd','Speed','flex-start'],['vs','V/S','flex-start'],['hdg','Heading','flex-start'],['dist','Distance','flex-start'],['sig','Signal','flex-start'],['sqk','Squawk','flex-start']];
+    const cols=colDefs.map(([key,label,justify])=>{
+      const active=S.sortBy===key;
+      return { label, justify, color:active?'var(--txt)':'var(--dim)', arrow:active?(S.sortDir==='asc'?'▲':'▼'):'',
+        onClick:()=>this.setState(s=>({sortBy:key, sortDir: s.sortBy===key ? (s.sortDir==='asc'?'desc':'asc') : 'asc'})) };
+    });
+
+    const chipDefs=[
+      ['emergency','Emergency','var(--danger)',false],['military','Military','var(--mil)',true],
+      ['climbing','Climbing','var(--accent)',true],['descending','Descending','var(--warn)',true],
+      ['ground','On Ground','var(--dim)',true],['interesting','Interesting','var(--accent2)',true],
+      ['highalt','High Alt','var(--accent2)',true],['lowalt','Low Alt','var(--warn)',true],
+      ['strong','Strong Signal','var(--accent)',true],['weak','Weak Signal','var(--dim)',true],
+    ];
+    const chips=chipDefs.map(([key,label,dot,hasCount])=>{
+      const on=S.filter===key;
+      return { label, dot, hasCount, count:count(key),
+        bg:on?'color-mix(in srgb,'+dot+' 18%,transparent)':'var(--bg1)',
+        bord:on?dot:'var(--bord)', fg:on?'var(--txt)':'var(--dim)',
+        onClick:()=>this.setState(s=>({filter:s.filter===key?null:key})) };
+    });
+
+    return {
+      query:S.query, onSearch:e=>this.setState({query:e.target.value}),
+      chips, cols, rows, shownCount:rows.length,
+    };
+  }
+}
+</script>
+</body>
+</html>

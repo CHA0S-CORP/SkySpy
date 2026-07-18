@@ -270,6 +270,41 @@ class CannonballServiceBasicTests(TestCase):
         self.assertTrue(threat.is_law_enforcement)
         self.assertEqual(threat.category, "State Police")
 
+    @patch("skyspy.services.cannonball.identify_law_enforcement")
+    def test_analyze_aircraft_accepts_zero_coordinates(self, mock_identify):
+        """Aircraft at lat=0.0 (equator) or lon=0.0 (prime meridian) must not be skipped."""
+        mock_identify.return_value = {
+            "is_interest": True,
+            "is_law_enforcement": True,
+            "is_helicopter": False,
+            "is_surveillance_type": False,
+            "category": "State Police",
+            "description": "Test LE",
+            "confidence": "high",
+            "identifiers": ["callsign"],
+        }
+
+        aircraft_list = [
+            {
+                "hex": "ABC123",
+                "flight": "CHP12",
+                "lat": 0.0,  # Equator — falsy but valid
+                "lon": 0.0,  # Prime meridian — falsy but valid
+                "alt_baro": 3000,
+                "gs": 100,
+                "track": 270,
+            }
+        ]
+
+        result = self.service.analyze_aircraft(
+            aircraft_list=aircraft_list,
+            user_lat=0.05,
+            user_lon=0.0,
+        )
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0].hex, "ABC123")
+
 
 class CannonballServiceEnhancedIdentifyTests(TestCase):
     """Tests for enhanced law enforcement identification."""

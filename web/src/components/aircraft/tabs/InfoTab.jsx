@@ -5,6 +5,8 @@ import {
   AirframeCard,
   OperatorCard,
   RegistrationCard,
+  RouteCard,
+  OwnershipCard,
   PhotoCard,
   DataSourcesAccordion,
 } from './info';
@@ -72,6 +74,15 @@ function normalizeAircraftInfo(info) {
     registration: info.registration || info.tail_number || info.reg || info.r,
     is_military: info.is_military ?? info.military ?? info.isMilitary ?? false,
     category: info.category || info.aircraftCategory,
+
+    // Route (server-resolved from callsign)
+    route: info.route || info.route_data || null,
+
+    // Ownership analysis (shell/trust/sanctions risk, computed server-side)
+    owner_type: info.owner_type || null,
+    is_shell_suspected: info.is_shell_suspected ?? false,
+    shell_score: info.shell_score ?? null,
+    ownership_flags: info.ownership_flags || null,
   };
 }
 
@@ -114,6 +125,11 @@ export function InfoTab({ info, hex, photoInfo }) {
         <AirframeCard data={normalized} />
       </motion.div>
 
+      {/* Route Card (spans 2 columns; self-hides without route data) */}
+      <motion.div variants={itemVariants} className="md:col-span-2">
+        <RouteCard data={normalized} />
+      </motion.div>
+
       {/* Operator Card */}
       <motion.div variants={itemVariants}>
         <OperatorCard data={normalized} />
@@ -122,6 +138,11 @@ export function InfoTab({ info, hex, photoInfo }) {
       {/* Registration Card */}
       <motion.div variants={itemVariants}>
         <RegistrationCard data={normalized} hex={hex} />
+      </motion.div>
+
+      {/* Ownership Analysis Card (spans 2 columns; self-hides without data) */}
+      <motion.div variants={itemVariants} className="md:col-span-2">
+        <OwnershipCard data={normalized} />
       </motion.div>
 
       {/* Photo Card (spans 2 columns, optional) */}

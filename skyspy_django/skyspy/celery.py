@@ -70,6 +70,28 @@ def debug_task(self):
     print(f"Request: {self.request!r}")
 
 
+from celery.signals import worker_ready  # noqa: E402
+
+
+@worker_ready.connect
+def _load_cached_databases_on_ready(sender=None, **kwargs):
+    """Bootstrap external aircraft DBs from cached files when the worker starts.
+
+    Without this a freshly-restarted worker has empty in-memory FAA/OpenSky/etc.
+    until the daily 4 AM sync — so on-demand lookups return no owner/manufacturer/
+    LE data (the stale-check task skips DBs it has never loaded). Enqueued rather
+    than run inline so it never delays worker readiness.
+    """
+    try:
+        from skyspy.tasks.external_db import load_cached_databases
+
+        load_cached_databases.delay()
+    except Exception as e:  # broad: startup hook must never crash the worker
+        import logging
+
+        logging.getLogger(__name__).warning(f"Failed to queue cached-DB load on startup: {e}")
+
+
 # =============================================================================
 # Celery Beat Schedule
 # =============================================================================
@@ -192,6 +214,13 @@ app.conf.beat_schedule = {
         "task": "skyspy.tasks.analytics.aggregate_all_stats",
         "schedule": 60.0,
         "options": {"expire_seconds": 60.0},
+    },
+    # Lightweight KPI tick for the Statistics screen (cache reads only, no DB).
+    # Interval via env STATS_TICK_INTERVAL (seconds); RPi override below.
+    "emit-stats-tick": {
+        "task": "skyspy.tasks.analytics.emit_stats_tick",
+        "schedule": float(os.environ.get("STATS_TICK_INTERVAL", "10")),
+        "options": {"expire_seconds": float(os.environ.get("STATS_TICK_INTERVAL", "10"))},
     },
     # --------------------------------------------------------------------------
     # Legacy individual stats tasks (commented out - replaced by aggregate_all_stats)
@@ -427,6 +456,27 @@ app.conf.beat_schedule = {
         "task": "skyspy.tasks.monitoring.cleanup_stale_task_metrics",
         "schedule": crontab(hour=2, minute=0),
     },
+    # ==========================================================================
+    # Aircraft Incident Records (NTSB)
+    # ==========================================================================
+    # Enrich NTSB incident/accident records for tracked airframes - daily at 6:30 AM UTC
+    "refresh-aircraft-incidents-daily": {
+        "task": "skyspy.tasks.incidents.refresh_aircraft_incidents",
+        "schedule": crontab(hour=6, minute=30),
+    },
+    # ==========================================================================
+    # Airframe RAG index
+    # ==========================================================================
+    # Re-embed dossiers for recently-changed airframes - daily at 7 AM UTC
+    "refresh-airframe-documents-daily": {
+        "task": "skyspy.tasks.rag.refresh_airframe_documents",
+        "schedule": crontab(hour=7, minute=0),
+    },
+    # Embed recent ACARS/NOTAM/PIREP text for semantic search - every 30 min
+    "refresh-rag-documents": {
+        "task": "skyspy.tasks.rag.refresh_rag_documents",
+        "schedule": crontab(minute="*/30"),
+    },
 }
 
 
@@ -452,14 +502,36 @@ if _is_rpi_mode():
         "stats_cache", 90.0
     )
 
+    # Slower KPI tick on RPi (30s instead of 10s)
+    app.conf.beat_schedule["emit-stats-tick"]["schedule"] = rpi_intervals.get("stats_tick", 30.0)
+    app.conf.beat_schedule["emit-stats-tick"]["options"]["expire_seconds"] = rpi_intervals.get("stats_tick", 30.0)
+
     # Override expensive analytics tasks with staggered schedules
-    app.conf.beat_schedule["update-flight-pattern-geographic-stats-every-2m"]["schedule"] = crontab(
-        minute="*/10", second=0
-    )
-    app.conf.beat_schedule["update-tracking-quality-stats-every-2m"]["schedule"] = crontab(minute="*/10", second=20)
-    app.conf.beat_schedule["update-engagement-stats-every-2m"]["schedule"] = crontab(minute="*/10", second=40)
+    # celery crontab has no seconds resolution - stagger via minute offsets
+    app.conf.beat_schedule["update-flight-pattern-geographic-stats-every-2m"]["schedule"] = crontab(minute="*/10")
+    app.conf.beat_schedule["update-tracking-quality-stats-every-2m"]["schedule"] = crontab(minute="3-59/10")
+    app.conf.beat_schedule["update-engagement-stats-every-2m"]["schedule"] = crontab(minute="6-59/10")
     app.conf.beat_schedule["update-time-comparison-stats-every-5m"]["schedule"] = crontab(minute="*/15")
-    app.conf.beat_schedule["update-antenna-analytics-every-5m"]["schedule"] = crontab(minute="*/10", second=30)
+    app.conf.beat_schedule["update-antenna-analytics-every-5m"]["schedule"] = crontab(minute="8-59/10")
+
+
+# =============================================================================
+# Beat pile-up guard: every periodic task gets an expiry
+# =============================================================================
+# If the worker is down (deploy, crash, queue backlog), beat keeps publishing
+# ticks into Redis. Without an expiry, every stale tick executes on recovery —
+# potentially hours of redundant runs that starve the queues for real work.
+# Interval tasks expire after one interval (a fresher tick is already queued
+# behind them); cron tasks get a 6-hour window so daily maintenance still runs
+# after a morning outage but can never stack more than a few ticks deep.
+# Runs after the RPi overrides so adjusted intervals are respected.
+_CRON_EXPIRE_SECONDS = 6 * 3600.0
+for _entry in app.conf.beat_schedule.values():
+    _options = _entry.setdefault("options", {})
+    if "expire_seconds" in _options or "expires" in _options:
+        continue
+    _schedule = _entry["schedule"]
+    _options["expire_seconds"] = float(_schedule) if isinstance(_schedule, (int, float)) else _CRON_EXPIRE_SECONDS
 
 
 # Task routing
@@ -516,6 +588,10 @@ app.conf.task_routes = {
     "skyspy.tasks.notifications.*": {"queue": "notifications"},
     # Terrain tasks (tile downloads, not time-sensitive)
     "skyspy.tasks.terrain.*": {"queue": "database"},
+    # Incident enrichment (external API + DB writes, not time-sensitive)
+    "skyspy.tasks.incidents.*": {"queue": "database"},
+    # Airframe RAG indexing (embedding API + DB writes)
+    "skyspy.tasks.rag.*": {"queue": "database"},
     # Cannonball tasks (pattern analysis is time-sensitive)
     "skyspy.tasks.cannonball.analyze_aircraft_patterns": {"queue": "polling"},
     "skyspy.tasks.cannonball.cleanup_cannonball_sessions": {"queue": "database"},
@@ -529,7 +605,11 @@ app.conf.task_routes = {
     "skyspy.tasks.monitoring.cleanup_stale_task_metrics": {"queue": "low_priority"},
     # Default queue for everything else
     "skyspy.tasks.*": {"queue": "default"},
+    # Built-in result cleanup: must land on a consumed queue or TaskResult
+    # rows grow unbounded (workers do not consume the implicit 'celery' queue)
+    "celery.backend_cleanup": {"queue": "low_priority"},
 }
+app.conf.task_default_queue = "default"
 
 
 # Worker settings

@@ -14,6 +14,7 @@ from celery import shared_task
 from skyspy.models import AcarsMessage
 from skyspy.services.acars_decoder import decode_message_text
 from skyspy.services.libacars_binding import is_available as libacars_is_available
+from skyspy.tasks.locks import singleton_task
 
 logger = logging.getLogger(__name__)
 
@@ -69,14 +70,15 @@ def decode_acars_message(self, message_id: int):
             message.save(update_fields=["decoded"])
             logger.debug(f"ACARS message {message_id} undecodable, marked as attempted")
 
-    except Exception as e:
+    except Exception as e:  # broad: Celery task guard over libacars decode + DB save; retries transient failures
         logger.error(f"Error decoding ACARS message {message_id}: {e}")
         # Retry on transient errors
         if self.request.retries < self.max_retries:
             raise self.retry(exc=e)
 
 
-@shared_task
+@shared_task(ignore_result=True)
+@singleton_task(timeout=120)
 def process_acars_decode_queue():
     """
     Process batch of ACARS messages that haven't been decoded yet.
@@ -169,7 +171,7 @@ def decode_acars_batch(message_ids: list[int]):
                 message.decoded = {}
                 message.save(update_fields=["decoded"])
 
-        except Exception as e:
+        except Exception as e:  # broad: batch loop must continue past any per-message decode/save failure
             logger.error(f"Error decoding ACARS message {message.id}: {e}")
 
     if decoded_count > 0:

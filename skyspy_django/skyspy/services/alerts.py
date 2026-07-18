@@ -20,7 +20,7 @@ from django.utils import timezone
 
 # Maximum allowed regex pattern length to prevent ReDoS attacks
 MAX_REGEX_PATTERN_LENGTH = 500
-from skyspy.models import AlertHistory, AlertRule, NotificationConfig, NotificationLog
+from skyspy.models import AlertHistory, AlertRule, NotificationConfig
 from skyspy.services.alert_cooldowns import cooldown_manager
 from skyspy.services.alert_metrics import EvaluationTimer, alert_metrics
 from skyspy.services.alert_rule_cache import CompiledRule, rule_cache
@@ -129,12 +129,24 @@ class AlertService:
                         if not rule.can_match(ac):
                             continue
 
-                        # Full condition evaluation
-                        if self._check_rule(rule, ac):
-                            alert = self._trigger_alert(rule, ac)
-                            if alert:
-                                triggered.append(alert)
-                                timer.add_trigger()
+                        # Full condition evaluation - isolated per rule so one
+                        # malformed rule cannot abort the whole alert cycle
+                        try:
+                            if self._check_rule(rule, ac):
+                                alert = self._trigger_alert(rule, ac)
+                                if alert:
+                                    triggered.append(alert)
+                                    timer.add_trigger()
+                        except (KeyError, TypeError, AttributeError, ValueError, DatabaseError) as e:
+                            # DatabaseError included so a transient DB fault while
+                            # persisting ONE alert (re-raised by _trigger_alert after
+                            # clearing its cooldown) skips only that rule instead of
+                            # aborting the remaining rules/aircraft this cycle.
+                            logger.warning(
+                                f"Skipping rule {rule.id} ('{rule.name}') after evaluation error: "
+                                f"{type(e).__name__}: {e}"
+                            )
+                            continue
 
             except (KeyError, TypeError, AttributeError, ValueError, ConnectionError, OSError) as e:
                 logger.warning(f"Segmented lookup failed, falling back to full iteration: {type(e).__name__}: {e}")
@@ -169,15 +181,23 @@ class AlertService:
             else:
                 candidates = aircraft_list
 
-            for ac in candidates:
-                if not rule.can_match(ac):
-                    continue
+            # Isolate per rule so one malformed rule cannot abort the whole cycle
+            try:
+                for ac in candidates:
+                    if not rule.can_match(ac):
+                        continue
 
-                if self._check_rule(rule, ac):
-                    alert = self._trigger_alert(rule, ac)
-                    if alert:
-                        triggered.append(alert)
-                        timer.add_trigger()
+                    if self._check_rule(rule, ac):
+                        alert = self._trigger_alert(rule, ac)
+                        if alert:
+                            triggered.append(alert)
+                            timer.add_trigger()
+            except (KeyError, TypeError, AttributeError, ValueError, DatabaseError) as e:
+                # DatabaseError: see segmented path above — isolate per rule.
+                logger.warning(
+                    f"Skipping rule {rule.id} ('{rule.name}') after evaluation error: {type(e).__name__}: {e}"
+                )
+                continue
 
         return triggered
 
@@ -238,9 +258,11 @@ class AlertService:
                 return bool(db_flags & 1)
             return False
 
-        # Special handling for altitude - check both 'alt' and 'alt_baro'
+        # Special handling for altitude - check both 'alt' and 'alt_baro'.
+        # Use explicit None checks so a legitimate 0 ft altitude is preserved.
         if rule_type == "altitude":
-            return aircraft.get("alt") or aircraft.get("alt_baro")
+            alt = aircraft.get("alt")
+            return alt if alt is not None else aircraft.get("alt_baro")
 
         field = self.TYPE_MAPPING.get(rule_type)
         if not field:
@@ -260,6 +282,12 @@ class AlertService:
         Compare aircraft value with rule value using operator.
         """
         try:
+            # A missing/None rule value can never match. Malformed complex
+            # conditions may omit "value" - without this guard the string
+            # operations below raise AttributeError and kill the alert cycle.
+            if rule_value is None:
+                return False
+
             # Special handling for emergency type
             if rule_type == "emergency":
                 is_emergency = str(ac_value) in self.EMERGENCY_SQUAWKS
@@ -316,8 +344,11 @@ class AlertService:
         logic = conditions.get("logic", "AND").upper()
         groups = conditions.get("groups", [])
 
+        # Default-deny: a conditions dict with no groups is malformed. Returning
+        # True here would turn a misconfigured rule into a catch-all that matches
+        # every aircraft.
         if not groups:
-            return True
+            return False
 
         results = [self._evaluate_condition_group(aircraft, group) for group in groups]
 
@@ -333,8 +364,9 @@ class AlertService:
         logic = group.get("logic", "AND").upper()
         conditions = group.get("conditions", [])
 
+        # Default-deny: an empty condition group must not match every aircraft.
         if not conditions:
-            return True
+            return False
 
         results = []
         for cond in conditions:
@@ -377,20 +409,31 @@ class AlertService:
         callsign = aircraft.get("flight") or icao
         message = f"Alert '{rule.name}' triggered for {callsign}"
 
-        # Store in history and update rule atomically
-        with transaction.atomic():
-            AlertHistory.objects.create(
-                rule_id=rule.id,
-                rule_name=rule.name,
-                icao_hex=icao,
-                callsign=aircraft.get("flight"),
-                message=message,
-                priority=rule.priority,
-                aircraft_data=aircraft,
-            )
+        # Store in history and update rule atomically. On failure, roll back
+        # the cooldown that check_and_set just wrote - otherwise a transient
+        # DB error would silently suppress this alert (no history row, no
+        # broadcast, no notification) for the entire cooldown window.
+        try:
+            with transaction.atomic():
+                AlertHistory.objects.create(
+                    rule_id=rule.id,
+                    rule_name=rule.name,
+                    icao_hex=icao,
+                    callsign=aircraft.get("flight"),
+                    message=message,
+                    priority=rule.priority,
+                    aircraft_data=aircraft,
+                    # Attribute the alert to the rule owner so history can be
+                    # filtered directly by user (owner_id is carried on the
+                    # CompiledRule, no extra query needed).
+                    user_id=rule.owner_id,
+                )
 
-            # Update rule's last_triggered timestamp
-            AlertRule.objects.filter(id=rule.id).update(last_triggered=timezone.now())
+                # Update rule's last_triggered timestamp
+                AlertRule.objects.filter(id=rule.id).update(last_triggered=timezone.now())
+        except DatabaseError:
+            cooldown_manager.clear_one(rule.id, icao)
+            raise
 
         alert_data = {
             "rule_id": rule.id,
@@ -439,13 +482,12 @@ class AlertService:
         """
         Check if the rule is currently in a suppression window.
 
-        Suppression windows are stored in the database model, but we need
-        to fetch them. For now, return False as suppression windows
-        will be implemented in the model changes.
+        The rule's suppression_windows are carried on the CompiledRule (cached
+        from the DB model), so no DB fetch is needed on the hot path.
         """
-        # This will be implemented when suppression_windows field is added
-        # to AlertRule model
-        return False
+        from skyspy.models.alerts import evaluate_suppression_windows
+
+        return evaluate_suppression_windows(rule.suppression_windows)
 
     def _send_notification(self, alert_data: dict, rule: AlertRule | None = None):
         """
@@ -456,15 +498,6 @@ class AlertService:
         2. Global config (APPRISE_URLS from NotificationConfig) if use_global_notifications is True
         """
         try:
-            import apprise
-
-            # Determine notification type based on priority
-            notify_type = apprise.NotifyType.INFO
-            if alert_data["priority"] == "warning":
-                notify_type = apprise.NotifyType.WARNING
-            elif alert_data["priority"] == "critical":
-                notify_type = apprise.NotifyType.FAILURE
-
             # Use list of tuples (url, channel_id) to keep them aligned
             url_channel_pairs = []
             seen_urls = set()
@@ -496,35 +529,71 @@ class AlertService:
                 logger.debug("No notification URLs configured, skipping notification")
                 return
 
-            # Create Apprise object and add all URLs
-            apobj = apprise.Apprise()
-            for url, _ in url_channel_pairs:
-                apobj.add(url)
+            # Deliver via Celery so slow/timing-out notification endpoints
+            # never stall the aircraft polling hot path (mirrors the existing
+            # _call_webhook -> send_webhook_task pattern). The task owns the
+            # NotificationLog write and per-channel retry handling.
+            from skyspy.tasks.notifications import send_notification_task
 
-            # Send notification (apprise returns False if delivery failed)
-            success = apobj.notify(
-                title=f"SkysPy Alert: {alert_data['rule_name']}", body=alert_data["message"], notify_type=notify_type
-            )
-            if not success:
-                logger.warning(f"Apprise notification failed for alert rule '{alert_data['rule_name']}'")
+            # Render title/body from a matching NotificationTemplate when one is
+            # configured, otherwise fall back to the plain defaults. We keep the
+            # channel selection above (per-rule notification_channels + global
+            # config) rather than routing through
+            # notification_dispatcher.dispatch_alert(): that dispatcher selects
+            # channels by user preference + global NotificationChannel rows and
+            # does NOT honor a rule's notification_channels M2M or
+            # use_global_notifications, so switching would silently drop per-rule
+            # delivery. See services/notification_dispatcher.py.
+            title, body = self._render_alert_message(alert_data)
 
-            # Log notification for each channel
             for url, channel_id in url_channel_pairs:
-                NotificationLog.objects.create(
-                    notification_type="alert",
-                    icao_hex=alert_data["icao"],
-                    callsign=alert_data.get("callsign"),
-                    message=alert_data["message"],
-                    details=alert_data,
-                    channel_id=channel_id,
-                    channel_url=url,
-                    status="sent" if success else "failed",
-                )
+                # Isolate each iteration: a failure queueing one channel must
+                # not skip delivery to the remaining channels.
+                try:
+                    send_notification_task.delay(
+                        channel_url=url,
+                        title=title,
+                        body=body,
+                        priority=alert_data.get("priority", "info"),
+                        event_type="alert",
+                        channel_id=channel_id,
+                        context=alert_data,
+                    )
+                except Exception as e:  # broad: broker enqueue must never break the alert hot path
+                    logger.error(
+                        f"Failed to queue notification for channel "
+                        f"{channel_id if channel_id is not None else url[:50]} "
+                        f"(rule '{alert_data['rule_name']}'): {type(e).__name__}: {e}"
+                    )
 
-        except ImportError:
-            logger.debug("Apprise not installed, skipping notification")
         except (DatabaseError, ConnectionError, OSError, ValueError, TypeError) as e:
             logger.error(f"Failed to send notification: {type(e).__name__}: {e}")
+
+    def _render_alert_message(self, alert_data: dict) -> tuple[str, str]:
+        """Render notification (title, body) for an alert.
+
+        Uses a matching NotificationTemplate (by event_type "alert" + priority)
+        when configured, rendering its variables against the alert context;
+        otherwise falls back to the plain default title/body.
+        """
+        default_title = f"SkysPy Alert: {alert_data['rule_name']}"
+        default_body = alert_data.get("message", "")
+
+        try:
+            from skyspy.models.notifications import NotificationTemplate
+            from skyspy.services.template_engine import template_engine
+
+            template = NotificationTemplate.get_template_for("alert", alert_data.get("priority", "info"))
+            if not template:
+                return default_title, default_body
+
+            context = template_engine.build_context_from_alert(alert_data)
+            title = template_engine.render(template.title_template, context) or default_title
+            body = template_engine.render(template.body_template, context) or default_body
+            return title, body
+        except (DatabaseError, ValueError, KeyError, TypeError) as e:
+            logger.warning(f"Alert template render failed, using defaults: {type(e).__name__}: {e}")
+            return default_title, default_body
 
     def _call_webhook(self, url: str, data: dict, rule: CompiledRule):
         """

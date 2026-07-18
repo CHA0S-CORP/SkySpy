@@ -20,5 +20,10 @@ export {
   drawConflictWedges,
   drawJRings,
 } from './drawConflicts';
-export { drawMeasurementTool, drawCursorInfo, drawFpsCounter, drawKeyboardHint } from './drawMeasurements';
+export {
+  drawMeasurementTool,
+  drawCursorInfo,
+  drawFpsCounter,
+  drawKeyboardHint,
+} from './drawMeasurements';
 export { drawSweepLine, drawScanlines } from './drawEffects';

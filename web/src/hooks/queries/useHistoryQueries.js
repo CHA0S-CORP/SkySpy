@@ -10,7 +10,8 @@ export const historyKeys = {
 export function useHistoryFlights(params = {}, options = {}) {
   return useQuery({
     queryKey: historyKeys.flight(params),
-    queryFn: () => api.get('/history/flights/', { params }),
+    // Flight history is served by /sightings/ (there is no /history/flights/)
+    queryFn: () => api.getHistoryFlights(params),
     staleTime: 60 * 1000,
     keepPreviousData: true,
     ...options,

@@ -70,12 +70,24 @@ export function useApi(endpoint, interval = null, apiBase = '') {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  // Separate refs for effect and manual refetch to avoid race conditions
-  const effectAbortControllerRef = useRef(null);
-  const refetchAbortControllerRef = useRef(null);
+  // Monotonic request id: only the most recently started request may commit
+  // its result. This lets the effect fetch and a manual refetch share one
+  // ordering, so a refetch response can't overwrite state after the endpoint
+  // changed (and vice versa). A single shared abort ref cancels whatever
+  // request is currently in flight when a newer one starts.
+  const requestIdRef = useRef(0);
+  const inFlightAbortRef = useRef(null);
+
+  const startRequest = useCallback(() => {
+    // Cancel any request still in flight (effect or prior refetch)
+    if (inFlightAbortRef.current) inFlightAbortRef.current.abort();
+    const abortController = new AbortController();
+    inFlightAbortRef.current = abortController;
+    return { signal: abortController.signal, requestId: ++requestIdRef.current };
+  }, []);
 
   const fetchData = useCallback(
-    async (signal) => {
+    async (signal, requestId) => {
       try {
         const baseUrl = apiBase || '';
         const res = await fetch(`${baseUrl}${endpoint}`, { signal });
@@ -91,54 +103,46 @@ export function useApi(endpoint, interval = null, apiBase = '') {
           throw new Error('Invalid response format');
         }
 
+        // Drop stale responses: a newer request has since started
+        if (requestId !== requestIdRef.current) return;
         setData(json);
         setError(null);
       } catch (err) {
         if (err.name === 'AbortError') return;
+        if (requestId !== requestIdRef.current) return;
         setError(err.message);
       } finally {
-        setLoading(false);
+        if (requestId === requestIdRef.current) setLoading(false);
       }
     },
     [endpoint, apiBase]
   );
 
   useEffect(() => {
-    // Create a new AbortController for this effect lifecycle
-    const abortController = new AbortController();
-    effectAbortControllerRef.current = abortController;
-
-    fetchData(abortController.signal);
+    const { signal, requestId } = startRequest();
+    fetchData(signal, requestId);
 
     let intervalId;
     if (interval) {
       intervalId = setInterval(() => {
-        // Check if the current controller is still valid before fetching
-        if (!abortController.signal.aborted) {
-          fetchData(abortController.signal);
-        }
+        const next = startRequest();
+        fetchData(next.signal, next.requestId);
       }, interval);
     }
 
     return () => {
-      // Abort the controller and clear interval on cleanup
-      abortController.abort();
-      effectAbortControllerRef.current = null;
+      // Abort the in-flight request and clear interval on cleanup
+      if (inFlightAbortRef.current) inFlightAbortRef.current.abort();
       if (intervalId) clearInterval(intervalId);
     };
-  }, [fetchData, interval]);
+  }, [fetchData, interval, startRequest]);
 
   const refetch = useCallback(() => {
-    // Abort any previous manual refetch before starting a new one
-    // Use a separate ref to avoid interfering with the effect's controller
-    if (refetchAbortControllerRef.current) {
-      refetchAbortControllerRef.current.abort();
-    }
-    const abortController = new AbortController();
-    refetchAbortControllerRef.current = abortController;
+    // Supersede any in-flight request (effect or prior refetch)
+    const { signal, requestId } = startRequest();
     setLoading(true);
-    fetchData(abortController.signal);
-  }, [fetchData]);
+    fetchData(signal, requestId);
+  }, [fetchData, startRequest]);
 
   return { data, loading, error, refetch };
 }

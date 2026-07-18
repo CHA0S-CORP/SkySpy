@@ -1010,3 +1010,91 @@ class AcarsServiceEdgeCaseTests(TestCase):
         normalized = self.service._normalize_message(raw_msg, "unknown")
 
         self.assertIsNone(normalized)
+
+
+class AirframesPollerUnitTests(TestCase):
+    """Unit tests for the airframes.io firehose poller helpers."""
+
+    def setUp(self):
+        self.service = AcarsService()
+        self.service._af_airports = {"KLAX", "KVNY", "KNKX"}
+        self.service._af_lat = 33.9416
+        self.service._af_lon = -118.4085
+        self.service._af_radius_nm = 100.0
+
+    def test_station_ok_by_airport_icao(self):
+        """Station whose nearest airport is in the allow-list is kept."""
+        self.assertTrue(self.service._airframes_station_ok({"nearestAirportIcao": "KVNY"}))
+
+    def test_station_rejected_far_airport(self):
+        """Station near an unrelated airport with no coords is dropped."""
+        self.assertFalse(self.service._airframes_station_ok({"nearestAirportIcao": "KJFK"}))
+
+    def test_station_ok_by_radius(self):
+        """Station outside the allow-list but within radius (Long Beach) is kept."""
+        station = {"nearestAirportIcao": "KLGB", "latitude": 33.8177, "longitude": -118.1516}
+        self.assertTrue(self.service._airframes_station_ok(station))
+
+    def test_station_rejected_outside_radius(self):
+        """Station far outside the radius (SF) is dropped."""
+        station = {"nearestAirportIcao": "KSFO", "latitude": 37.6188, "longitude": -122.375}
+        self.assertFalse(self.service._airframes_station_ok(station))
+
+    def test_station_geoip_fallback_coords(self):
+        """Falls back to geoip coords when precise lat/lon are missing."""
+        station = {"nearestAirportIcao": "KLGB", "geoipLatitude": 33.8177, "geoipLongitude": -118.1516}
+        self.assertTrue(self.service._airframes_station_ok(station))
+
+    def test_to_flat_acars_maps_fields(self):
+        """An airframes ACARS message maps to the flat acarsdec shape."""
+        msg = {
+            "sourceType": "acars",
+            "timestamp": "2026-07-18T03:19:56.387Z",
+            "frequency": 131.55,
+            "channel": "2",
+            "airframe": {"icao": "A12345", "tail": "N123AB"},
+            "flightNumber": "UAL387",
+            "flight": {"flight": "UAL387"},
+            "label": "H1",
+            "blockId": "5",
+            "messageNumber": "M01A",
+            "ack": "NAK",
+            "mode": "2",
+            "text": "OPS NORMAL",
+            "level": -12.5,
+            "error": 0,
+            "station": {"ident": "SK-KLAX-ACARS"},
+        }
+        source, flat = self.service._airframes_to_flat(msg)
+        self.assertEqual(source, "acars")
+        self.assertEqual(flat["icao"], "A12345")
+        self.assertEqual(flat["tail"], "N123AB")
+        self.assertEqual(flat["flight"], "UAL387")
+        self.assertEqual(flat["label"], "H1")
+        self.assertEqual(flat["station_id"], "SK-KLAX-ACARS")
+        self.assertEqual(flat["text"], "OPS NORMAL")
+
+    def test_to_flat_vdl_source(self):
+        """sourceType 'vdl' maps to the vdlm2 pipeline source."""
+        source, _ = self.service._airframes_to_flat({"sourceType": "vdl", "station": {}})
+        self.assertEqual(source, "vdlm2")
+
+    def test_flat_message_normalizes_end_to_end(self):
+        """The flat shape produced by the poller is understood by _normalize_message."""
+        msg = {
+            "sourceType": "acars",
+            "timestamp": "2026-07-18T03:19:56.387Z",
+            "frequency": 131.55,
+            "airframe": {"icao": "a12345", "tail": "N123AB"},
+            "flightNumber": "UAL387",
+            "label": "H1",
+            "text": "HELLO",
+            "station": {"ident": "SK-KLAX-ACARS"},
+        }
+        source, flat = self.service._airframes_to_flat(msg)
+        normalized = self.service._normalize_message(flat, source)
+        self.assertIsNotNone(normalized)
+        self.assertEqual(normalized["source"], "acars")
+        self.assertEqual(normalized["icao_hex"], "A12345")
+        self.assertEqual(normalized["callsign"], "UAL387")
+        self.assertEqual(normalized["station_id"], "SK-KLAX-ACARS")

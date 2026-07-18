@@ -100,7 +100,7 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.SUCCESS("Task completed."))
                 if result is not None:
                     self.stdout.write(f"Result: {result}")
-            except Exception as e:
+            except Exception as e:  # broad: runs arbitrary Celery task; unknowable failure modes, re-raises
                 self.stderr.write(self.style.ERROR(f"Task failed: {e}"))
                 raise
 

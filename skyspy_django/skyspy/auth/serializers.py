@@ -173,7 +173,7 @@ class UserCreateSerializer(serializers.ModelSerializer):
         try:
             profile = request.user.skyspy_profile
             return profile.has_permission("users.create")
-        except Exception:
+        except (SkyspyUser.DoesNotExist, AttributeError):
             return False
 
     def create(self, validated_data):
@@ -279,7 +279,7 @@ class UserUpdateSerializer(serializers.ModelSerializer):
         try:
             profile = request.user.skyspy_profile
             return profile.has_permission("users.edit")
-        except Exception:
+        except (SkyspyUser.DoesNotExist, AttributeError):
             return False
 
     def update(self, instance, validated_data):

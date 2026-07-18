@@ -59,6 +59,7 @@ export function useCanvasDraw({
   setHashParams,
   // Aircraft
   sortedAircraft,
+  positionsRef,
   selectedAircraft,
   aircraftInfo,
   activeConflicts,
@@ -142,6 +143,26 @@ export function useCanvasDraw({
   const fpsRef = useRef({ frames: 0, lastTime: Date.now(), fps: 0 });
   const historyRef = useRef({});
   const trackHistoryRef = useRef({});
+
+  // Per-frame draw inputs (aircraft positions, cursor, tracks, safety events,
+  // measurement points, aviation overlays) are read through this ref so the
+  // canvas animation loop does NOT tear down and restart on every position
+  // update. Restarting the loop each update (~2x/sec) reset blink/pulse
+  // animation phase and hitched the canvas ("alerts don't blink smoothly / break
+  // other canvas things"). Only interaction-level inputs (mode, zoom, selection,
+  // toggles) remain in the draw effect's dependency array.
+  const liveDrawRef = useRef({});
+  liveDrawRef.current = {
+    sortedAircraft,
+    positionsRef,
+    cursorInfo,
+    trackHistory,
+    shortTrackHistory,
+    safetyEvents,
+    measurementPoints,
+    aviationData,
+    aviationOverlayData,
+  };
   const pinchStateRef = useRef({
     lastDistance: 0,
     startRange: 0,
@@ -260,11 +281,20 @@ export function useCanvasDraw({
       eventListeners.push({ target, event, handler, options });
     };
 
-    // Set canvas size to match container
+    // Set canvas size to match container.
+    // IMPORTANT: assigning canvas.width/height clears the canvas AND resets its
+    // transform — even when assigning the same value. This effect re-runs on
+    // every data change (sortedAircraft is a dependency), so unconditionally
+    // resizing here blanked the canvas on every aircraft update, producing a
+    // visible flash (worse with more aircraft / faster refresh). Only resize
+    // when the pixel dimensions actually changed.
     const resize = () => {
       const rect = container.getBoundingClientRect();
-      canvas.width = rect.width * window.devicePixelRatio;
-      canvas.height = rect.height * window.devicePixelRatio;
+      const w = Math.round(rect.width * window.devicePixelRatio);
+      const h = Math.round(rect.height * window.devicePixelRatio);
+      if (canvas.width === w && canvas.height === h) return;
+      canvas.width = w;
+      canvas.height = h;
       canvas.style.width = rect.width + 'px';
       canvas.style.height = rect.height + 'px';
       ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
@@ -447,6 +477,48 @@ export function useCanvasDraw({
     let frameCount = 0;
     const draw = () => {
       frameCount++;
+      // Read the latest per-frame data from the ref (see liveDrawRef above) so
+      // the loop reflects live updates without needing to restart.
+      const {
+        sortedAircraft: rawAircraft,
+        positionsRef,
+        cursorInfo,
+        trackHistory,
+        shortTrackHistory,
+        safetyEvents,
+        measurementPoints,
+        aviationData,
+        aviationOverlayData,
+      } = liveDrawRef.current;
+
+      // Overlay the high-frequency interpolated positions (from
+      // useSocketIOPositions' rAF loop) onto the React-state aircraft so the
+      // canvas renders gliding motion instead of snapping to each ~2Hz delta.
+      // positionsRef is a stable ref updated ~60x/sec; reading it here (not in
+      // the draw-effect deps) keeps the loop continuous. Falls back to the raw
+      // lat/lon when no interpolated sample exists for a hex.
+      const interp = positionsRef?.current || null;
+      const sortedAircraft =
+        interp && rawAircraft
+          ? rawAircraft.map((ac) => {
+              const p = interp[ac.hex?.toUpperCase()];
+              return p && Number.isFinite(p.lat) && Number.isFinite(p.lon)
+                ? {
+                    ...ac,
+                    lat: p.lat,
+                    lon: p.lon,
+                    track: Number.isFinite(p.track) ? p.track : ac.track,
+                  }
+                : ac;
+            })
+          : rawAircraft;
+
+      // Dev-only: expose the exact positions the canvas is rendering this frame
+      // so smoothness can be verified (interpolated motion should advance in
+      // small increments per frame, not ~1s jumps). Never shipped to prod.
+      if (import.meta.env?.DEV) {
+        window.__skyspyCanvasDraw = { t: performance.now(), aircraft: sortedAircraft };
+      }
       const width = canvas.width / window.devicePixelRatio;
       const height = canvas.height / window.devicePixelRatio;
       const centerX = width / 2;
@@ -715,9 +787,13 @@ export function useCanvasDraw({
         cancelAnimationFrame(animationRef.current);
       }
     };
+    // NOTE: high-frequency per-frame inputs (sortedAircraft, cursorInfo,
+    // trackHistory, shortTrackHistory, safetyEvents, measurementPoints,
+    // aviationData, aviationOverlayData) are intentionally NOT in this dep array
+    // — they are read live from liveDrawRef inside draw() so the animation loop
+    // stays running instead of restarting on every update (smooth blinking).
   }, [
     config.mapMode,
-    sortedAircraft,
     radarRange,
     feederLat,
     feederLon,
@@ -727,15 +803,10 @@ export function useCanvasDraw({
     selectedNavaid,
     selectedAirport,
     overlays,
-    aviationData,
-    aviationOverlayData,
     proPanOffset,
     followingAircraft,
-    trackHistory,
     showSelectedTrack,
-    safetyEvents,
     showShortTracks,
-    shortTrackHistory,
     config.shortTrackLength,
     gridOpacity,
     showCompassRose,
@@ -744,8 +815,6 @@ export function useCanvasDraw({
     predictionSeconds,
     showConflictVisualization,
     showDataBlocks,
-    measurementPoints,
-    cursorInfo,
     showFpsCounter,
     showAltitudeTrails,
     reducedMotion,

@@ -3,6 +3,7 @@ Map data API views for GeoJSON output.
 """
 
 import logging
+import math
 from datetime import datetime
 
 from django.conf import settings
@@ -163,8 +164,8 @@ class MapViewSet(viewsets.ViewSet):
                 continue
 
             # Calculate grid cell
-            grid_lat = int(lat / grid_size)
-            grid_lon = int(lon / grid_size)
+            grid_lat = math.floor(lat / grid_size)
+            grid_lon = math.floor(lon / grid_size)
             key = (grid_lat, grid_lon)
 
             if key not in clusters:

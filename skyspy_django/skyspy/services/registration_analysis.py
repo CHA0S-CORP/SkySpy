@@ -38,6 +38,27 @@ GENERIC_LLC_PATTERNS = [
     r"^WELLS\s+FARGO.*TRUSTEE",
 ]
 
+# Known FAA owner-trustee companies. Aircraft registered to these are held in
+# trust — the FAA "registered owner" is the trustee, the beneficial owner is
+# hidden (per GAO-24-107495, the main ownership-obfuscation vector). High signal.
+KNOWN_TRUSTEES = [
+    "BANK OF UTAH",
+    "WELLS FARGO",
+    "WILMINGTON TRUST",
+    "TVPX",
+    "AIRCRAFT GUARANTY",
+    "INSURED AIRCRAFT TITLE",
+    "1ST SOURCE BANK",
+    "U.S. BANK",
+    "US BANK",
+    "JSSI",
+    "AERSALE",
+    "MERITZ",
+    "AVPRO",
+    "WESTERN AIRCRAFT",
+    "NATIONAL AIRCRAFT FINANCE",
+]
+
 # Registered agent addresses (C/O Corporation Service, CT Corp, etc.)
 REGISTERED_AGENT_INDICATORS = [
     "C/O CT CORPORATION",
@@ -164,6 +185,13 @@ class RegistrationAnalysisService:
             if transfer_score > 0:
                 details["rapid_transfers_detected"] = True
 
+        # Sanctions / PEP / watchlist screening (opt-in; no-op when disabled)
+        if owner_name:
+            sanctions_score, sanctions_detail = self._check_sanctions(owner_name)
+            factors["sanctions_hit"] = sanctions_score
+            if sanctions_detail:
+                details["sanctions"] = sanctions_detail
+
         # LLC with no web presence (placeholder - would need external API)
         factors["llc_no_web_presence"] = 0.0
 
@@ -231,6 +259,11 @@ class RegistrationAnalysisService:
             "INDENTURE TRUSTEE",
         ]
 
+        # A known owner-trustee company is the strongest trust signal.
+        for trustee in KNOWN_TRUSTEES:
+            if trustee in owner_upper:
+                return 0.95
+
         for indicator in trust_indicators:
             if indicator in owner_upper:
                 # Bank trustee arrangements are very common for LE shell companies
@@ -239,6 +272,21 @@ class RegistrationAnalysisService:
                 return 0.7
 
         return 0.0
+
+    def _check_sanctions(self, owner_name: str) -> tuple[float, dict | None]:
+        """Screen the owner against OpenSanctions (opt-in). Returns (score, detail)."""
+        from skyspy.services import opensanctions
+
+        hit = opensanctions.screen_owner(owner_name)
+        if not hit or not hit.get("matched"):
+            return 0.0, None
+        # A sanctions/PEP hit is a strong risk signal on its own.
+        return 1.0, {
+            "caption": hit.get("caption"),
+            "score": hit.get("score"),
+            "topics": hit.get("topics"),
+            "datasets": hit.get("datasets"),
+        }
 
     def _check_transfer_history(self, registration: str) -> float:
         """
@@ -284,6 +332,8 @@ class RegistrationAnalysisService:
             "multiple_transfers": 0.20,
             "trust_ownership": 0.15,
             "generic_llc_name": 0.15,
+            # A sanctions/PEP hit dominates: on its own it pushes into high risk.
+            "sanctions_hit": 0.75,
         }
 
         score = 0.0
@@ -369,7 +419,7 @@ class RegistrationAnalysisService:
                 else:
                     stats["low_risk"] += 1
 
-            except Exception as e:
+            except Exception as e:  # broad: batch loop must continue past any per-aircraft failure
                 logger.error(f"Error analyzing {aircraft.icao_hex}: {e}")
                 stats["errors"] += 1
 
@@ -457,3 +507,56 @@ def get_analysis_service() -> RegistrationAnalysisService:
     if _analysis_service is None:
         _analysis_service = RegistrationAnalysisService()
     return _analysis_service
+
+
+# Above this score we flag an owner as a suspected shell/opaque structure.
+SHELL_SUSPECTED_THRESHOLD = 0.5
+
+
+def analyze_ownership(
+    icao_hex: str,
+    owner_name: str | None,
+    registration: str | None = None,
+    owner_city: str | None = None,
+    owner_state: str | None = None,
+    owner_address: str | None = None,
+    registrant_type: str | None = None,
+    fractional_owner: bool | None = None,
+) -> dict[str, Any]:
+    """
+    Compact ownership summary for enrichment onto ``AircraftInfo``.
+
+    Wraps the shell-company analysis into the exact fields the model stores, so
+    the enrich write path can spread it directly. Returns empty-ish values when
+    there is no owner to analyze.
+
+    ``owner_address`` (FAA STREET) activates the registered-agent / PO-box
+    heuristics. ``registrant_type`` (FAA TYPE-REGISTRANT) is the registry's own
+    entity classification and, when present, is authoritative over name-guessing.
+    """
+    if not owner_name:
+        return {"owner_type": None, "is_shell_suspected": False, "shell_score": None, "ownership_flags": None}
+
+    service = get_analysis_service()
+    result = service.analyze_registration(
+        icao_hex=icao_hex,
+        registration=registration,
+        owner_name=owner_name,
+        owner_address=owner_address,
+        owner_city=owner_city,
+        owner_state=owner_state,
+    )
+    flags = {
+        "risk_level": result.risk_level,
+        "factors": {k: v for k, v in result.factors.items() if v},
+        "details": result.details,
+    }
+    if fractional_owner:
+        flags["fractional_owner"] = True
+    return {
+        # FAA registrant type is authoritative; fall back to name inference.
+        "owner_type": registrant_type or service._infer_owner_type(owner_name),
+        "is_shell_suspected": result.shell_company_score >= SHELL_SUSPECTED_THRESHOLD,
+        "shell_score": round(result.shell_company_score, 3),
+        "ownership_flags": flags,
+    }

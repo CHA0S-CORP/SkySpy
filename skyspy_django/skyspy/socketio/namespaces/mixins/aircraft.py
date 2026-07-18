@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from asgiref.sync import sync_to_async
 from django.conf import settings
 from django.core.cache import cache
+from django.db import DatabaseError
 from django.utils import timezone
 
 from skyspy.socketio.namespaces.mixins import parse_int_param
@@ -107,8 +108,15 @@ class AircraftHandlerMixin:
 
         military_only = filters.get("military_only")
         category = filters.get("category")
-        min_alt = filters.get("min_altitude")
-        max_alt = filters.get("max_altitude")
+
+        def _num_or_none(v):
+            try:
+                return None if v is None else float(v)
+            except (ValueError, TypeError):
+                return None
+
+        min_alt = _num_or_none(filters.get("min_altitude"))
+        max_alt = _num_or_none(filters.get("max_altitude"))
 
         if not any([military_only, category, min_alt is not None, max_alt is not None]):
             return cached
@@ -119,7 +127,8 @@ class AircraftHandlerMixin:
                 return False
             if category and ac.get("category") != category:
                 return False
-            alt = ac.get("alt_baro") or 0
+            # alt_baro can be the string "ground" (readsb) - use the numeric helper
+            alt = _numeric_altitude(ac)
             if min_alt is not None and alt < min_alt:
                 return False
             return not (max_alt is not None and alt > max_alt)
@@ -333,12 +342,23 @@ class AircraftHandlerMixin:
 
         if getattr(settings, "PHOTO_CACHE_ENABLED", False):
             if getattr(settings, "S3_ENABLED", False):
+                from concurrent.futures import ThreadPoolExecutor
+
                 from skyspy.services.photo_cache import get_photo_url as get_cached_url
 
-                if get_cached_url(icao, is_thumbnail=False, verify_exists=True):
-                    photo_url = f"/api/v1/photos/{icao}"
-                if get_cached_url(icao, is_thumbnail=True, verify_exists=True):
-                    thumbnail_url = f"/api/v1/photos/{icao}/thumb"
+                # Run the full + thumbnail existence checks concurrently. Each
+                # is an independent Wasabi HEAD (~40-260ms cold); running them
+                # serially doubled the resolve latency. The signed URL is
+                # returned directly so the browser hits Wasabi without a
+                # redundant 3rd HEAD + presign via PhotoServeView.
+                def _resolve(is_thumbnail: bool):
+                    return get_cached_url(icao, is_thumbnail=is_thumbnail, signed=True, verify_exists=True)
+
+                with ThreadPoolExecutor(max_workers=2) as pool:
+                    full_future = pool.submit(_resolve, False)
+                    thumb_future = pool.submit(_resolve, True)
+                    photo_url = full_future.result()
+                    thumbnail_url = thumb_future.result()
             else:
                 cache_dir = Path(settings.PHOTO_CACHE_DIR)
                 photo_path = cache_dir / f"{icao}.jpg"
@@ -365,7 +385,7 @@ class AircraftHandlerMixin:
                 photographer = info.photo_photographer
                 source = info.photo_source
                 page_link = info.photo_page_link
-        except Exception:
+        except DatabaseError:
             pass
 
         return photographer, source, page_link

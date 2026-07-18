@@ -867,30 +867,45 @@ describe('useSocketIOData', () => {
       });
     });
 
-    it('should process stats:update events', () => {
+    it('should process stats:update events (backend {stat_type, stats} shape)', () => {
       const { result } = renderHook(() => useSocketIOData(true, 'http://localhost:8000'));
 
       act(() => {
         eventHandlers['stats:update']({
-          stats_type: 'flight_patterns',
-          data: { patterns: ['test'] },
+          stat_type: 'flight_patterns',
+          stats: { patterns: ['test'] },
         });
       });
 
       expect(result.current.extendedStats.flightPatterns).toEqual({ patterns: ['test'] });
     });
 
-    it('should update antenna analytics from stats', () => {
+    it('should update antenna analytics from stats (incl. antenna_analytics key)', () => {
       const { result } = renderHook(() => useSocketIOData(true, 'http://localhost:8000'));
 
       act(() => {
         eventHandlers['stats:update']({
-          stats_type: 'antenna',
-          data: { range: 100, messages: 1000 },
+          stat_type: 'antenna_analytics',
+          stats: { range: 100, messages: 1000 },
         });
       });
 
       expect(result.current.antennaAnalytics).toEqual({ range: 100, messages: 1000 });
+      expect(result.current.extendedStats.antenna).toEqual({ range: 100, messages: 1000 });
+    });
+
+    it('should store stats:tick payloads', () => {
+      const { result } = renderHook(() => useSocketIOData(true, 'http://localhost:8000'));
+
+      act(() => {
+        eventHandlers['stats:tick']({
+          ts: '2026-07-16T10:00:00Z',
+          traffic: { aircraft: 142 },
+          series: [],
+        });
+      });
+
+      expect(result.current.statsTick?.traffic.aircraft).toBe(142);
     });
   });
 

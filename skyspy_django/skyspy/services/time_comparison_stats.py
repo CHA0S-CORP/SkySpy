@@ -744,8 +744,8 @@ def refresh_time_comparison_cache(broadcast: bool = True) -> dict:
 
         return all_stats
 
-    except Exception as e:
-        logger.error(f"Error refreshing time comparison cache: {e}")
+    except Exception as e:  # broad: cache-refresh degradation boundary (tested)
+        logger.error(f"Error refreshing time comparison cache: {type(e).__name__}: {e}")
         return {}
 
 
@@ -756,8 +756,8 @@ def broadcast_time_comparison_update(data: dict) -> None:
     try:
         sync_emit("stats:update", {"stat_type": "time_comparison", "stats": data}, room="topic_stats")
         logger.debug("Broadcast time comparison stats update")
-    except Exception as e:
-        logger.warning(f"Failed to broadcast time comparison stats: {e}")
+    except Exception as e:  # broad: broadcast must never raise into the caller
+        logger.warning(f"Failed to broadcast time comparison stats: {type(e).__name__}: {e}")
 
 
 # Public API - Get Cached Data

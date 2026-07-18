@@ -22,6 +22,7 @@ import { NotamPanel } from './components/NotamPanel';
 import { KeyboardShortcutHelp } from './components/KeyboardShortcutHelp';
 import {
   useDataBlockPositions,
+  useDataBlockKeepAlive,
   DATA_BLOCK_DEFAULT_X,
   DATA_BLOCK_DEFAULT_Y,
   useMapAlarms,
@@ -40,6 +41,7 @@ import {
   usePhotoFetch,
 } from './hooks';
 import { SafetyBanner, getSeverityClass, getEventTypeName } from './components/SafetyBanner';
+import { SafetyEventsPanel } from './SafetyEventsPanel';
 import { handleCanvasClick, handleCanvasDoubleClick } from './utils/canvasClickHandlers';
 import { useHeatMap } from '../../hooks/useHeatMap';
 import { HeatMapLayer } from './components/HeatMapLayer';
@@ -623,12 +625,16 @@ function MapView({
     isDragging: isDataBlockDragging,
     hasCustomOffset: hasCustomDataBlockOffset,
     hitTestDataBlock,
-    pruneStaleAircraft: _pruneStaleDataBlockPositions,
+    pruneStaleAircraft: pruneStaleDataBlockPositions,
     customPositionCount: dataBlockCustomPositionCount,
-    updateLastSeen: _updateDataBlockLastSeen,
+    updateLastSeen: updateDataBlockLastSeen,
     maybeDeconflict,
     autoDeconflictEnabled,
   } = useDataBlockPositions();
+
+  // Keep custom data block positions alive for tracked aircraft (prevents the
+  // 30-min expiry from wiping Shift+drag positions on still-visible aircraft)
+  useDataBlockKeepAlive(aircraft, updateDataBlockLastSeen, pruneStaleDataBlockPositions);
 
   // Toast context for notifications (gracefully handles if not in provider)
   const toastContext = useToastContextSafe();
@@ -1763,6 +1769,7 @@ function MapView({
     setRadarRange,
     setHashParams,
     sortedAircraft,
+    positionsRef,
     selectedAircraft,
     aircraftInfo,
     activeConflicts,
@@ -2041,6 +2048,21 @@ function MapView({
         soundMuted={soundMuted}
         setSoundMuted={setSoundMuted}
       />
+
+      {/* Persistent Safety Events list — independent of the banner's recency window.
+          Fed by the full safetyEvents snapshot; gated on length > 0. */}
+      {safetyEvents.length > 0 && (
+        <SafetyEventsPanel
+          events={safetyEvents}
+          acknowledgedEvents={acknowledgedEvents}
+          onAcknowledge={acknowledgeEvent}
+          onSelectAircraft={(hex) => {
+            if (!hex) return;
+            const ac = aircraft.find((a) => a.hex?.toLowerCase() === hex.toLowerCase());
+            if (ac) selectAircraft(ac);
+          }}
+        />
+      )}
 
       {/* Simple Radar Mode */}
       {config.mapMode === 'radar' && (
@@ -2700,7 +2722,6 @@ function MapView({
         aircraft={aircraft}
         aircraftInfo={aircraftInfo}
         onSelectAircraft={selectAircraft}
-        highlightedHexes={highlightedHexes}
         setHighlightedHexes={setHighlightedHexes}
       />
 

@@ -320,6 +320,47 @@ describe('useSessionStats', () => {
         expect(result.current.totalPositionUpdates).toBeGreaterThan(firstCount);
       });
     });
+
+    it('does not double-count when array updates and the interval overlap', async () => {
+      const makeAircraft = () => [
+        { hex: 'AC1', lat: 47.5, lon: -122.3 },
+        { hex: 'AC2', lat: 47.6, lon: -122.4 },
+      ];
+
+      const { result, rerender } = renderHook(({ ac }) => useSessionStats(ac), {
+        initialProps: { ac: makeAircraft() },
+      });
+
+      // Simulate socket flushes: a new array reference every 500ms for 4s.
+      // The array-change effect counts each flush; the 2s interval fallback
+      // must NOT add the same aircraft set on top of that.
+      for (let i = 0; i < 8; i++) {
+        act(() => {
+          vi.advanceTimersByTime(500);
+        });
+        rerender({ ac: makeAircraft() });
+      }
+
+      // 9 array-driven counts (initial + 8 rerenders) x 2 aircraft = 18.
+      // Any interval double-counting would push this above 18.
+      expect(result.current.totalPositionUpdates).toBe(18);
+    });
+
+    it('still counts via the interval fallback when the array reference is stable', async () => {
+      const aircraft = [
+        { hex: 'AC1', lat: 47.5, lon: -122.3 },
+        { hex: 'AC2', lat: 47.6, lon: -122.4 },
+      ];
+
+      const { result } = renderHook(() => useSessionStats(aircraft));
+
+      // Initial effect counts 2; two interval ticks (2s, 4s) count 2 each
+      act(() => {
+        vi.advanceTimersByTime(4500);
+      });
+
+      expect(result.current.totalPositionUpdates).toBe(6);
+    });
   });
 
   describe('reset session', () => {

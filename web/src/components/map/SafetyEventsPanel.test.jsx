@@ -39,9 +39,7 @@ describe('SafetyEventsPanel', () => {
     });
 
     it('should return null when events is null', () => {
-      const { container } = render(
-        <SafetyEventsPanel {...defaultProps} events={null} />
-      );
+      const { container } = render(<SafetyEventsPanel {...defaultProps} events={null} />);
       expect(container.innerHTML).toBe('');
     });
 
@@ -170,9 +168,7 @@ describe('SafetyEventsPanel', () => {
         makeEvent({ id: 1, severity: 'warning', callsign: 'WARN1' }),
         makeEvent({ id: 2, severity: 'critical', callsign: 'CRIT1' }),
       ];
-      const { container } = render(
-        <SafetyEventsPanel {...defaultProps} events={events} />
-      );
+      const { container } = render(<SafetyEventsPanel {...defaultProps} events={events} />);
 
       const eventElements = container.querySelectorAll('.safety-event');
       expect(eventElements[0]).toHaveClass('severity-critical');
@@ -184,9 +180,7 @@ describe('SafetyEventsPanel', () => {
         makeEvent({ id: 1, severity: 'info', callsign: 'INFO1' }),
         makeEvent({ id: 2, severity: 'warning', callsign: 'WARN1' }),
       ];
-      const { container } = render(
-        <SafetyEventsPanel {...defaultProps} events={events} />
-      );
+      const { container } = render(<SafetyEventsPanel {...defaultProps} events={events} />);
 
       const eventElements = container.querySelectorAll('.safety-event');
       expect(eventElements[0]).toHaveClass('severity-warning');
@@ -195,12 +189,20 @@ describe('SafetyEventsPanel', () => {
 
     it('should sort same-severity events by timestamp (newest first)', () => {
       const events = [
-        makeEvent({ id: 1, severity: 'critical', timestamp: '2026-01-15T10:00:00Z', callsign: 'OLDER' }),
-        makeEvent({ id: 2, severity: 'critical', timestamp: '2026-01-15T12:00:00Z', callsign: 'NEWER' }),
+        makeEvent({
+          id: 1,
+          severity: 'critical',
+          timestamp: '2026-01-15T10:00:00Z',
+          callsign: 'OLDER',
+        }),
+        makeEvent({
+          id: 2,
+          severity: 'critical',
+          timestamp: '2026-01-15T12:00:00Z',
+          callsign: 'NEWER',
+        }),
       ];
-      const { container } = render(
-        <SafetyEventsPanel {...defaultProps} events={events} />
-      );
+      const { container } = render(<SafetyEventsPanel {...defaultProps} events={events} />);
 
       const callsigns = container.querySelectorAll('.event-callsign');
       expect(callsigns[0].textContent).toBe('NEWER');
@@ -212,9 +214,7 @@ describe('SafetyEventsPanel', () => {
         makeEvent({ id: 1, severity: 'unknown', callsign: 'UNK' }),
         makeEvent({ id: 2, severity: 'critical', callsign: 'CRIT' }),
       ];
-      const { container } = render(
-        <SafetyEventsPanel {...defaultProps} events={events} />
-      );
+      const { container } = render(<SafetyEventsPanel {...defaultProps} events={events} />);
 
       const callsigns = container.querySelectorAll('.event-callsign');
       expect(callsigns[0].textContent).toBe('CRIT');
@@ -226,11 +226,7 @@ describe('SafetyEventsPanel', () => {
     it('should add acknowledged class to acknowledged events', () => {
       const events = [makeEvent({ id: 42 })];
       const { container } = render(
-        <SafetyEventsPanel
-          {...defaultProps}
-          events={events}
-          acknowledgedEvents={new Set([42])}
-        />
+        <SafetyEventsPanel {...defaultProps} events={events} acknowledgedEvents={new Set([42])} />
       );
 
       expect(container.querySelector('.safety-event')).toHaveClass('acknowledged');
@@ -239,11 +235,7 @@ describe('SafetyEventsPanel', () => {
     it('should not show acknowledge button for acknowledged events', () => {
       const events = [makeEvent({ id: 42 })];
       render(
-        <SafetyEventsPanel
-          {...defaultProps}
-          events={events}
-          acknowledgedEvents={new Set([42])}
-        />
+        <SafetyEventsPanel {...defaultProps} events={events} acknowledgedEvents={new Set([42])} />
       );
 
       expect(screen.queryByTitle('Acknowledge')).not.toBeInTheDocument();
@@ -258,13 +250,7 @@ describe('SafetyEventsPanel', () => {
 
     it('should not show acknowledge button when onAcknowledge is not provided', () => {
       const events = [makeEvent()];
-      render(
-        <SafetyEventsPanel
-          {...defaultProps}
-          events={events}
-          onAcknowledge={undefined}
-        />
-      );
+      render(<SafetyEventsPanel {...defaultProps} events={events} onAcknowledge={undefined} />);
 
       expect(screen.queryByTitle('Acknowledge')).not.toBeInTheDocument();
     });
@@ -306,9 +292,7 @@ describe('SafetyEventsPanel', () => {
 
     it('should not render close button when onClose is not provided', () => {
       const events = [makeEvent()];
-      render(
-        <SafetyEventsPanel {...defaultProps} events={events} onClose={undefined} />
-      );
+      render(<SafetyEventsPanel {...defaultProps} events={events} onClose={undefined} />);
 
       expect(document.querySelector('.safety-close')).not.toBeInTheDocument();
     });
@@ -335,13 +319,7 @@ describe('SafetyEventsPanel', () => {
     it('should not throw when onSelectAircraft is undefined', async () => {
       const user = userEvent.setup();
       const events = [makeEvent()];
-      render(
-        <SafetyEventsPanel
-          {...defaultProps}
-          events={events}
-          onSelectAircraft={undefined}
-        />
-      );
+      render(<SafetyEventsPanel {...defaultProps} events={events} onSelectAircraft={undefined} />);
 
       await user.click(screen.getByText('UAL123'));
     });
@@ -353,9 +331,7 @@ describe('SafetyEventsPanel', () => {
         makeEvent({ id: undefined, callsign: 'NOID1' }),
         makeEvent({ id: undefined, callsign: 'NOID2' }),
       ];
-      const { container } = render(
-        <SafetyEventsPanel {...defaultProps} events={events} />
-      );
+      const { container } = render(<SafetyEventsPanel {...defaultProps} events={events} />);
 
       const eventElements = container.querySelectorAll('.safety-event');
       expect(eventElements).toHaveLength(2);
@@ -371,11 +347,7 @@ describe('SafetyEventsPanel', () => {
     it('should handle acknowledgedEvents being undefined', () => {
       const events = [makeEvent()];
       const { container } = render(
-        <SafetyEventsPanel
-          {...defaultProps}
-          events={events}
-          acknowledgedEvents={undefined}
-        />
+        <SafetyEventsPanel {...defaultProps} events={events} acknowledgedEvents={undefined} />
       );
 
       // Should render without crashing
@@ -388,9 +360,7 @@ describe('SafetyEventsPanel', () => {
         makeEvent({ id: 2, event_type: 'tcas_ra', squawk: null, message: 'TCAS RA' }),
         makeEvent({ id: 3, event_type: 'proximity_conflict', squawk: null, severity: 'warning' }),
       ];
-      const { container } = render(
-        <SafetyEventsPanel {...defaultProps} events={events} />
-      );
+      const { container } = render(<SafetyEventsPanel {...defaultProps} events={events} />);
 
       expect(container.querySelectorAll('.safety-event')).toHaveLength(3);
       expect(screen.getByText('3')).toBeInTheDocument();

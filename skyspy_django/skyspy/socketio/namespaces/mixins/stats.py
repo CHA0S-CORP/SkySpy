@@ -145,12 +145,17 @@ class StatsHandlerMixin:
         if military_only:
             queryset = queryset.filter(is_military=True)
 
-        hourly = list(
-            queryset.annotate(hour=TruncHour("timestamp"))
+        hourly = [
+            {
+                **row,
+                # datetimes must be serialized - the payload goes straight to JSON
+                "hour": row["hour"].isoformat().replace("+00:00", "Z") if row["hour"] else None,
+            }
+            for row in queryset.annotate(hour=TruncHour("timestamp"))
             .values("hour")
             .annotate(count=Count("id"), unique_aircraft=Count("icao_hex", distinct=True))
             .order_by("hour")
-        )
+        ]
 
         return {"hourly": hourly, "hours": hours, "timestamp": datetime.utcnow().isoformat() + "Z"}
 
@@ -165,31 +170,49 @@ class StatsHandlerMixin:
         cutoff = timezone.now() - timedelta(hours=hours)
         sessions = AircraftSession.objects.filter(last_seen__gte=cutoff)
 
-        longest = [
-            {
-                **row,
-                # datetimes must be serialized - the payload goes straight to JSON
-                "first_seen": row["first_seen"].isoformat().replace("+00:00", "Z") if row["first_seen"] else None,
-                "last_seen": row["last_seen"].isoformat().replace("+00:00", "Z") if row["last_seen"] else None,
+        def serialize_session(s):
+            # Mirror the REST top_performers serialize_session shape - the
+            # frontend consumes both interchangeably via useSocketApi.
+            duration = (s.last_seen - s.first_seen).total_seconds() / 60 if s.first_seen and s.last_seen else 0.0
+            return {
+                "icao_hex": s.icao_hex,
+                "callsign": s.callsign,
+                "aircraft_type": s.aircraft_type,
+                "is_military": s.is_military,
+                "first_seen": s.first_seen.isoformat() if s.first_seen else None,
+                "last_seen": s.last_seen.isoformat() if s.last_seen else None,
+                "duration_min": round(duration, 1),
+                "positions": s.total_positions,
+                "min_distance_nm": s.min_distance_nm,
+                "max_distance_nm": s.max_distance_nm,
+                "min_altitude": s.min_altitude,
+                "max_altitude": s.max_altitude,
             }
-            for row in sessions.order_by("-total_positions")[:limit].values(
-                "icao_hex", "callsign", "total_positions", "first_seen", "last_seen"
-            )
+
+        longest = [serialize_session(s) for s in sessions.order_by("-total_positions")[:limit]]
+        furthest = [
+            serialize_session(s)
+            for s in sessions.filter(max_distance_nm__isnull=False).order_by("-max_distance_nm")[:limit]
+        ]
+        highest = [
+            serialize_session(s) for s in sessions.filter(max_altitude__isnull=False).order_by("-max_altitude")[:limit]
+        ]
+        most_positions = [serialize_session(s) for s in sessions.order_by("-total_positions")[:limit]]
+        closest = [
+            serialize_session(s)
+            for s in sessions.filter(min_distance_nm__isnull=False).order_by("min_distance_nm")[:limit]
         ]
 
-        furthest = list(
-            sessions.filter(max_distance_nm__isnull=False)
-            .order_by("-max_distance_nm")[:limit]
-            .values("icao_hex", "callsign", "max_distance_nm")
-        )
-
-        highest = list(
-            sessions.filter(max_altitude__isnull=False)
-            .order_by("-max_altitude")[:limit]
-            .values("icao_hex", "callsign", "max_altitude")
-        )
-
-        return {"longest": longest, "furthest": furthest, "highest": highest, "hours": hours, "limit": limit}
+        return {
+            "longest_tracked": longest,
+            "furthest_distance": furthest,
+            "highest_altitude": highest,
+            "most_positions": most_positions,
+            "closest_approach": closest,
+            "fastest": [],
+            "time_range_hours": hours,
+            "limit": limit,
+        }
 
     @sync_to_async
     def _get_history_sessions(self, params: dict):
@@ -230,6 +253,7 @@ class StatsHandlerMixin:
                 "min_rssi",
                 "max_rssi",
                 "is_military",
+                "category",
                 "aircraft_type",
             )
         )
@@ -258,6 +282,7 @@ class StatsHandlerMixin:
                     "min_rssi": s["min_rssi"],
                     "max_rssi": s["max_rssi"],
                     "is_military": s["is_military"],
+                    "category": s["category"],
                     "type": s["aircraft_type"],
                     "safety_event_count": safety_counts.get(s["icao_hex"], 0),
                 }
@@ -377,9 +402,33 @@ class StatsHandlerMixin:
             .order_by("hour")
         )
 
-        time_patterns = list(hourly)
+        hourly_counts = []
+        peak_hour = None
+        peak_count = 0
+        for row in hourly:
+            count = row["unique_aircraft"] or 0
+            if count > peak_count:
+                peak_count = count
+                peak_hour = row["hour"]
+            hourly_counts.append(
+                {
+                    "hour": row["hour"],
+                    "unique_aircraft": count,
+                    "position_count": row["position_count"] or 0,
+                }
+            )
 
-        return {"altitude_vs_speed": altitude_vs_speed, "time_of_day_patterns": time_patterns, "hours": hours}
+        # Object shape matches REST /history/analytics/correlation (PatternsTab
+        # reads time_of_day_patterns.peak_hour / .peak_aircraft_count).
+        return {
+            "altitude_vs_speed": altitude_vs_speed,
+            "time_of_day_patterns": {
+                "hourly_counts": hourly_counts,
+                "peak_hour": peak_hour,
+                "peak_aircraft_count": peak_count,
+            },
+            "hours": hours,
+        }
 
     # -----------------------------------------------------------------
     # Data access — antenna analytics

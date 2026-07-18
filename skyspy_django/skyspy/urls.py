@@ -43,8 +43,10 @@ from skyspy.api.acars import AcarsViewSet
 from skyspy.api.aircraft import AircraftViewSet
 from skyspy.api.airframe import AirframeViewSet, PhotoServeView
 from skyspy.api.alerts import AlertHistoryViewSet, AlertRuleViewSet, AlertSubscriptionViewSet
+from skyspy.api.analytics import AnalyticsViewSet
 from skyspy.api.antenna import AntennaAnalyticsViewSet
 from skyspy.api.archive import ArchiveViewSet
+from skyspy.api.assistant import AssistantAskView, assistant_stream
 from skyspy.api.audio import AudioViewSet
 from skyspy.api.auth import (
     APIKeyViewSet,
@@ -104,7 +106,9 @@ from skyspy.auth.views import (
 )
 
 # Create router and register viewsets
-# Use default trailing_slash=True which allows both with/without trailing slash
+# Default trailing_slash=True: routes REQUIRE the trailing slash. Slashless
+# non-GET requests are NOT redirected (APPEND_SLASH only helps GET) - clients
+# must always call e.g. /api/v1/alerts/history/<id>/acknowledge/ with the slash.
 router = DefaultRouter()
 router.register(r"aircraft", AircraftViewSet, basename="aircraft")
 router.register(r"sightings", SightingViewSet, basename="sightings")
@@ -128,6 +132,7 @@ router.register(r"stats/favorites", FavoritesViewSet, basename="favorites")
 router.register(r"stats/flight-patterns", FlightPatternStatsViewSet, basename="flight-patterns")
 router.register(r"stats/geographic", GeographicStatsViewSet, basename="geographic")
 router.register(r"stats/combined", CombinedStatsViewSet, basename="combined-stats")
+router.register(r"analytics", AnalyticsViewSet, basename="analytics")
 router.register(r"notams", NotamViewSet, basename="notams")
 router.register(r"archive", ArchiveViewSet, basename="archive")
 router.register(r"mobile", MobileViewSet, basename="mobile")
@@ -173,6 +178,11 @@ urlpatterns = [
                     ActiveSafetyEventAcknowledgeView.as_view(),
                     name="safety-active-acknowledge",
                 ),
+                # LLM assistant (analytics/search Q&A)
+                path("assistant/ask", AssistantAskView.as_view(), name="assistant-ask"),
+                path("assistant/ask/", AssistantAskView.as_view(), name="assistant-ask-slash"),
+                path("assistant/stream", assistant_stream, name="assistant-stream"),
+                path("assistant/stream/", assistant_stream, name="assistant-stream-slash"),
                 # Authentication endpoints
                 path("auth/config", AuthConfigView.as_view(), name="auth-config"),
                 path("auth/config/", AuthConfigView.as_view(), name="auth-config-slash"),

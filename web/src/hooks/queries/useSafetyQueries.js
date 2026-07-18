@@ -9,7 +9,7 @@ export const safetyKeys = {
 export function useSafetyEvents(options = {}) {
   return useQuery({
     queryKey: safetyKeys.events(),
-    queryFn: () => api.get('/safety/events/'),
+    queryFn: () => api.getSafetyEvents(),
     staleTime: 30 * 1000,
     ...options,
   });

@@ -223,7 +223,7 @@ class NotificationRouter:
                         routed.append(channel)
                         seen_urls.add(channel.apprise_url)
 
-        except Exception as e:
+        except Exception as e:  # broad: subscription lookup must degrade gracefully (tested)
             # AlertSubscription model may not exist yet
             logger.debug(f"Could not get rule subscribers: {e}")
 
@@ -264,7 +264,7 @@ class NotificationRouter:
                                 supports_rich=channel_type in ("discord", "slack"),
                             )
                         )
-        except Exception as e:
+        except Exception as e:  # broad: fallback-channel lookup must degrade gracefully (tested)
             logger.warning(f"Failed to get fallback channels: {e}")
 
         return routed

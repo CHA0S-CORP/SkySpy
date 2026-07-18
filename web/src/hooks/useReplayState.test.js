@@ -486,5 +486,36 @@ describe('useReplayState', () => {
 
       expect(result.current.replayState['event1'].isPlaying).toBe(false);
     });
+
+    it('should adopt a slider drag while playing instead of snapping back', () => {
+      const { result } = renderHook(() => useReplayState(defaultProps));
+
+      // Set up initial state at 50%
+      act(() => {
+        result.current.handleReplayChange('event1', {}, 50);
+      });
+
+      // Start playing and let a few frames run
+      act(() => {
+        result.current.togglePlay('event1', {});
+      });
+      act(() => {
+        vi.advanceTimersByTime(48);
+      });
+
+      // Drag the slider back to 10 while playback is running
+      act(() => {
+        result.current.handleReplayChange('event1', {}, 10);
+      });
+
+      // The next frame must continue from the dragged position, not the
+      // loop's internally-tracked pre-drag position (~50)
+      act(() => {
+        vi.advanceTimersByTime(16);
+      });
+
+      expect(result.current.replayState['event1'].isPlaying).toBe(true);
+      expect(result.current.replayState['event1'].position).toBeLessThan(20);
+    });
   });
 });

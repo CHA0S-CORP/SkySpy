@@ -120,6 +120,69 @@ class AcarsViewSet(viewsets.ReadOnlyModelViewSet):
             }
         )
 
+    @extend_schema(
+        summary="Get plain-English AI summary of an ACARS message",
+        description=(
+            "Uses the configured LLM to explain a single ACARS/VDL2 message in plain "
+            "English. Opt-in (one LLM call, cached). Returns available=false if the LLM "
+            "is disabled/unconfigured; the client should fall back to the decoded fields."
+        ),
+    )
+    @action(detail=True, methods=["get"], url_path="ai-summary")
+    def ai_summary(self, request, pk=None):
+        """Plain-English LLM summary of one ACARS message."""
+        from skyspy.services import aviation_llm
+        from skyspy.services.acars_decoder import decode_message_text
+
+        msg = self.get_object()
+
+        if not aviation_llm.available():
+            return Response({"available": False, "summary": None})
+
+        decoded = msg.decoded or None
+        if not decoded and msg.text:
+            decoded = decode_message_text(msg.text, label=msg.label) or None
+
+        summary = aviation_llm.summarize_acars(
+            msg.text or "",
+            label=msg.label,
+            callsign=msg.callsign,
+            decoded=decoded,
+        )
+        return Response({"available": True, "summary": summary, "id": msg.id})
+
+    @extend_schema(
+        summary="Get structured AI analysis of an ACARS message",
+        description=(
+            "Uses the configured LLM to decode a single ACARS/VDL2 message into a structured "
+            "object (headline, message type, decoded fields, airports, notes) for rich UI "
+            "rendering. Opt-in (one LLM call, cached). Returns available=false when the LLM is "
+            "disabled/unconfigured; analysis=null when nothing could be decoded."
+        ),
+    )
+    @action(detail=True, methods=["get"], url_path="ai-analysis")
+    def ai_analysis(self, request, pk=None):
+        """Structured LLM decode of one ACARS message."""
+        from skyspy.services import aviation_llm
+        from skyspy.services.acars_decoder import decode_message_text
+
+        msg = self.get_object()
+
+        if not aviation_llm.available():
+            return Response({"available": False, "analysis": None})
+
+        decoded = msg.decoded or None
+        if not decoded and msg.text:
+            decoded = decode_message_text(msg.text, label=msg.label) or None
+
+        analysis = aviation_llm.analyze_acars(
+            msg.text or "",
+            label=msg.label,
+            callsign=msg.callsign,
+            decoded=decoded,
+        )
+        return Response({"available": True, "analysis": analysis, "id": msg.id})
+
     @extend_schema(summary="Get ACARS statistics", responses={200: AcarsStatsSerializer})
     @action(detail=False, methods=["get"])
     def stats(self, request):

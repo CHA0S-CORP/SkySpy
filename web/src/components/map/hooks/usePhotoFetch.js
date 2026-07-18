@@ -100,6 +100,15 @@ export function usePhotoFetch({ selectedAircraftHex, apiBaseUrl, wsRequest, wsCo
     }
   }, [selectedAircraftHex, apiBaseUrl, wsRequest, wsConnected, resolvePhotoUrl]);
 
+  // Prefetch the image bytes as soon as the URL resolves, before the (default-
+  // collapsed) Photo section is ever mounted. This warms the browser HTTP cache
+  // so the <img> in ProDetailsPanel renders instantly on section expand.
+  useEffect(() => {
+    if (!proPhotoUrl) return;
+    const img = new Image();
+    img.src = proPhotoUrl;
+  }, [proPhotoUrl]);
+
   return {
     proPhotoUrl,
     setProPhotoUrl,

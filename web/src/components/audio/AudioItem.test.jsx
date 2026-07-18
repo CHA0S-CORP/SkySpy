@@ -437,8 +437,6 @@ describe('AudioItem', () => {
       render(<AudioItem {...defaultProps} transmission={transmission} />);
 
       const flightTag = screen.getByText('UAL123').closest('button');
-      const clickEvent = { stopPropagation: vi.fn() };
-
       // Re-render to test with spy
       fireEvent.click(flightTag);
 

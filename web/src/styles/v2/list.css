@@ -1,0 +1,340 @@
+/* v2 Aircraft List screen (designs/Aircraft List.dc.html) */
+
+.v2-list {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  padding: 16px 20px;
+  font-size: 13px;
+  color: var(--txt);
+  font-family: var(--font-sans);
+}
+
+.v2-list__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.v2-list__search {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex: 1;
+  height: 42px;
+  padding: 0 14px;
+  background: var(--bg1);
+  border: 1px solid var(--bord);
+  border-radius: 11px;
+  color: var(--dim);
+}
+.v2-list__search:focus-within {
+  border-color: var(--accent);
+}
+.v2-list__search input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--txt);
+  font-family: var(--font-sans);
+  font-size: 13px;
+}
+.v2-list__search input::placeholder {
+  color: var(--dim2);
+}
+
+.v2-list__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.v2-list__chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 13px;
+  border-radius: 9px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  background: var(--bg1);
+  border: 1px solid var(--bord);
+  color: var(--dim);
+}
+.v2-list__chip:hover {
+  color: var(--txt);
+}
+.v2-list__chip--on {
+  background: color-mix(in srgb, var(--chip-dot) 18%, transparent);
+  border-color: var(--chip-dot);
+  color: var(--txt);
+}
+.v2-list__chip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--chip-dot);
+}
+.v2-list__chip-count {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--bg3);
+  color: var(--dim);
+  padding: 1px 7px;
+  border-radius: 12px;
+}
+
+.v2-list__table {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg1);
+  border: 1px solid var(--bord);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.v2-list__thead,
+.v2-list__row {
+  display: grid;
+  grid-template-columns: 132px minmax(140px, 1fr) 78px 118px 92px 116px 138px 100px 122px 88px;
+  align-items: center;
+  padding: 0 18px;
+}
+.v2-list__thead {
+  height: 46px;
+  border-bottom: 1px solid var(--bord2);
+  background: var(--bg2);
+  flex: 0 0 auto;
+}
+.v2-list__th {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 10px;
+  letter-spacing: 1px;
+  font-weight: 600;
+  color: var(--dim);
+  text-transform: uppercase;
+  padding: 0;
+}
+.v2-list__th--active {
+  color: var(--txt);
+}
+.v2-list__th-arrow {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--accent);
+}
+
+.v2-list__rows {
+  flex: 1;
+  overflow-y: auto;
+}
+.v2-list__row {
+  width: 100%;
+  height: 48px;
+  border: none;
+  border-bottom: 1px solid var(--bord);
+  border-left: 2px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  color: var(--txt);
+  font-size: 13px;
+}
+.v2-list__row:hover {
+  background: var(--bg2);
+}
+.v2-list__cell {
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+.v2-list__cell--icao {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+}
+.v2-list__cell--cs {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+  font-weight: 600;
+  min-width: 0;
+}
+.v2-list__tail {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--dim2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.v2-list__cell--type {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--dim);
+}
+.v2-list__operator,
+.v2-list__type-full {
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--dim2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.v2-list__year {
+  font-family: var(--font-mono);
+  color: var(--dim2);
+}
+.v2-list__cell--alt {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  font-weight: 500;
+}
+.v2-list__unit {
+  font-size: 10px;
+  color: var(--dim2);
+  font-family: var(--font-sans);
+}
+.v2-list__cell--vs {
+  font-size: 12px;
+  font-weight: 500;
+}
+.v2-list__cell--hdg {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+}
+.v2-list__hdg-dir {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--dim);
+  background: var(--bg3);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+.v2-list__cell--sig {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 16px;
+}
+.v2-list__cell--sig svg {
+  margin-right: 3px;
+  align-self: center;
+}
+.v2-list__bar {
+  width: 3px;
+  border-radius: 1px;
+}
+
+.v2-list__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 48px;
+  color: var(--dim2);
+  font-size: 13px;
+}
+
+.v2-list__footer {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 18px;
+  height: 44px;
+  border-top: 1px solid var(--bord2);
+  background: var(--bg2);
+  flex: 0 0 auto;
+}
+.v2-list__foot-stat {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--dim);
+}
+.v2-list__foot-spacer {
+  flex: 1;
+}
+.v2-list__legend {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--dim);
+}
+.v2-list__legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--mil);
+}
+
+/* off-hot-path bulk enrichment: photo thumbnail + privacy/interest flags */
+.v2-list__photo {
+  width: 26px;
+  height: 18px;
+  flex: none;
+  object-fit: cover;
+  border-radius: 4px;
+  border: 1px solid var(--bord);
+  background: var(--bg1);
+}
+.v2-list__flags {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.v2-list__flag {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: 5px;
+  border: 1px solid transparent;
+}
+.v2-list__flag--pia {
+  background: color-mix(in srgb, var(--accent2) 12%, transparent);
+  border-color: color-mix(in srgb, var(--accent2) 34%, transparent);
+  color: var(--accent2);
+}
+.v2-list__flag--ladd {
+  background: color-mix(in srgb, var(--warn) 12%, transparent);
+  border-color: color-mix(in srgb, var(--warn) 34%, transparent);
+  color: var(--warn);
+}
+.v2-list__flag--interesting {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 34%, transparent);
+  color: var(--accent);
+}

@@ -89,7 +89,7 @@ class Command(BaseCommand):
                         f"{stats['navaids']['count']} navaids"
                     )
                 )
-        except Exception as e:
+        except Exception as e:  # broad: per-step boundary — isolate geodata failure so later steps still run
             results["geodata"] = {"error": str(e)}
             self.stdout.write(self.style.ERROR(f"    ✗ Error: {e}"))
 
@@ -101,7 +101,7 @@ class Command(BaseCommand):
             stored = weather_cache.fetch_and_store_pireps()
             results["pireps"] = {"stored": stored}
             self.stdout.write(self.style.SUCCESS(f"    ✓ Stored {stored} new PIREPs"))
-        except Exception as e:
+        except Exception as e:  # broad: per-step boundary — isolate PIREP fetch failure so later steps still run
             results["pireps"] = {"error": str(e)}
             self.stdout.write(self.style.ERROR(f"    ✗ Error: {e}"))
 
@@ -113,7 +113,7 @@ class Command(BaseCommand):
             metars = weather_cache.fetch_and_cache_metars()
             results["metars"] = {"count": len(metars)}
             self.stdout.write(self.style.SUCCESS(f"    ✓ Cached {len(metars)} METARs"))
-        except Exception as e:
+        except Exception as e:  # broad: per-step boundary — isolate METAR fetch failure so later steps still run
             results["metars"] = {"error": str(e)}
             self.stdout.write(self.style.ERROR(f"    ✗ Error: {e}"))
 
@@ -125,7 +125,7 @@ class Command(BaseCommand):
             tafs = weather_cache.fetch_and_cache_tafs()
             results["tafs"] = {"count": len(tafs)}
             self.stdout.write(self.style.SUCCESS(f"    ✓ Cached {len(tafs)} TAFs"))
-        except Exception as e:
+        except Exception as e:  # broad: per-step boundary — isolate TAF fetch failure so later steps still run
             results["tafs"] = {"error": str(e)}
             self.stdout.write(self.style.ERROR(f"    ✗ Error: {e}"))
 
@@ -137,7 +137,7 @@ class Command(BaseCommand):
             count = notams.refresh_notams()
             results["notams"] = {"count": count}
             self.stdout.write(self.style.SUCCESS(f"    ✓ Cached {count} NOTAMs"))
-        except Exception as e:
+        except Exception as e:  # broad: per-step boundary — isolate NOTAM fetch failure so later steps still run
             results["notams"] = {"error": str(e)}
             self.stdout.write(self.style.ERROR(f"    ✗ Error: {e}"))
 
@@ -157,7 +157,7 @@ class Command(BaseCommand):
             count = AirspaceAdvisory.objects.filter(valid_from__lte=now, valid_to__gte=now).count()
             results["advisories"] = {"active": count}
             self.stdout.write(self.style.SUCCESS(f"    ✓ {count} active advisories"))
-        except Exception as e:
+        except Exception as e:  # broad: per-step boundary — isolate advisory fetch failure so later steps still run
             results["advisories"] = {"error": str(e)}
             self.stdout.write(self.style.ERROR(f"    ✗ Error: {e}"))
 
@@ -182,7 +182,7 @@ class Command(BaseCommand):
                         f"{result.get('total', 0)} total in database"
                     )
                 )
-            except Exception as e:
+            except Exception as e:  # broad: per-step boundary — isolate OpenAIP boundary fetch failure
                 results["boundaries"] = {"error": str(e)}
                 self.stdout.write(self.style.ERROR(f"    ✗ Error: {e}"))
 
@@ -240,7 +240,7 @@ class Command(BaseCommand):
                 results["boundaries"] = "skipped"
                 self.stdout.write("    - Skipped: refresh_airspace_boundaries (OpenAIP disabled)")
 
-        except Exception as e:
+        except Exception as e:  # broad: guards Celery import/queuing — report failure without crashing the command
             results["error"] = str(e)
             self.stdout.write(self.style.ERROR(f"    ✗ Error queuing tasks: {e}"))
 

@@ -1,4 +1,14 @@
-import { Moon, Sun, Filter, Layers, Navigation, Volume2, VolumeX, Maximize2, Minimize2 } from 'lucide-react';
+import {
+  Moon,
+  Sun,
+  Filter,
+  Layers,
+  Navigation,
+  Volume2,
+  VolumeX,
+  Maximize2,
+  Minimize2,
+} from 'lucide-react';
 
 function MapControlsBar({
   config,

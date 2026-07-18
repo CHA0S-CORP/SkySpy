@@ -34,7 +34,7 @@ class AlertHandlerMixin:
         rule_id = params.get("id")
         if not rule_id:
             raise ValueError("Missing rule id")
-        return await self._delete_alert_rule(rule_id)
+        return await self._delete_alert_rule(rule_id, params.get("_user"))
 
     async def _handle_alert_rule_toggle(self, params: dict):
         """Toggle an alert rule's enabled status."""
@@ -42,7 +42,7 @@ class AlertHandlerMixin:
         if not rule_id:
             raise ValueError("Missing rule id")
         enabled = params.get("enabled")
-        return await self._toggle_alert_rule(rule_id, enabled)
+        return await self._toggle_alert_rule(rule_id, enabled, params.get("_user"))
 
     async def _handle_alert_snapshot(self, params: dict):
         """Get alerts snapshot."""
@@ -52,12 +52,30 @@ class AlertHandlerMixin:
     # Data access
     # -----------------------------------------------------------------
 
-    @sync_to_async
-    def _get_alert_rules(self, params: dict):
-        """Get all alert rules."""
+    @staticmethod
+    def _scope_rules_for_user(user):
+        """Restrict an AlertRule queryset to what ``user`` may see.
+
+        Mirrors the REST AlertRuleViewSet.get_queryset ownership/visibility
+        rules: anonymous -> public only; owner sees their own + shared + public;
+        superusers see everything. Without this, the socket handler leaked every
+        user's private rules.
+        """
+        from django.db.models import Q
+
         from skyspy.models import AlertRule
 
-        rules = AlertRule.objects.all().order_by("-created_at")
+        qs = AlertRule.objects.all()
+        if user is None or not getattr(user, "is_authenticated", False):
+            return qs.filter(visibility="public")
+        if user.is_superuser:
+            return qs
+        return qs.filter(Q(owner=user) | Q(visibility="public") | Q(visibility="shared")).distinct()
+
+    @sync_to_async
+    def _get_alert_rules(self, params: dict):
+        """Get alert rules visible to the requesting user."""
+        rules = self._scope_rules_for_user(params.get("_user")).order_by("-created_at")
         return {
             "rules": [
                 {
@@ -77,9 +95,11 @@ class AlertHandlerMixin:
 
     @sync_to_async
     def _create_alert_rule(self, params: dict):
-        """Create a new alert rule."""
+        """Create a new alert rule owned by the requesting user."""
         from skyspy.models import AlertRule
 
+        user = params.get("_user")
+        owner = user if (user is not None and getattr(user, "is_authenticated", False)) else None
         rule = AlertRule.objects.create(
             name=params.get("name", "New Rule"),
             description=params.get("description", ""),
@@ -87,6 +107,7 @@ class AlertHandlerMixin:
             priority=params.get("priority", "info"),
             conditions=params.get("conditions", {}),
             cooldown_minutes=params.get("cooldown_minutes", 5),
+            owner=owner,
         )
         return {
             "id": str(rule.id),
@@ -108,6 +129,9 @@ class AlertHandlerMixin:
             rule = AlertRule.objects.get(id=rule_id)
         except AlertRule.DoesNotExist:
             raise ValueError("Rule not found")
+
+        if not rule.can_be_edited_by(params.get("_user")):
+            raise ValueError("Permission denied")
 
         update_fields = []
         if "name" in params:
@@ -145,24 +169,30 @@ class AlertHandlerMixin:
         }
 
     @sync_to_async
-    def _delete_alert_rule(self, rule_id):
-        """Delete an alert rule."""
+    def _delete_alert_rule(self, rule_id, user=None):
+        """Delete an alert rule (owner/superuser only; system rules protected)."""
         from skyspy.models import AlertRule
 
         try:
             rule = AlertRule.objects.get(id=rule_id)
-            rule.delete()
-            return {"success": True, "id": str(rule_id)}
         except AlertRule.DoesNotExist:
             raise ValueError("Rule not found")
 
+        if not rule.can_be_deleted_by(user):
+            raise ValueError("Permission denied")
+
+        rule.delete()
+        return {"success": True, "id": str(rule_id)}
+
     @sync_to_async
-    def _toggle_alert_rule(self, rule_id, enabled=None):
-        """Toggle an alert rule's enabled status."""
+    def _toggle_alert_rule(self, rule_id, enabled=None, user=None):
+        """Toggle an alert rule's enabled status (owner/superuser only)."""
         from skyspy.models import AlertRule
 
         try:
             rule = AlertRule.objects.get(id=rule_id)
+            if not rule.can_be_edited_by(user):
+                raise ValueError("Permission denied")
             if enabled is not None:
                 rule.enabled = enabled
             else:
@@ -197,7 +227,7 @@ class AlertHandlerMixin:
                     "priority": alert.priority,
                     "triggered_at": alert.triggered_at.isoformat() if alert.triggered_at else None,
                     "message": alert.message,
-                    "data": alert.data,
+                    "data": alert.aircraft_data,
                 }
             )
 

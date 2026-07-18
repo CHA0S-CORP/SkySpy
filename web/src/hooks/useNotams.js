@@ -24,9 +24,10 @@ const ACKNOWLEDGED_KEY = 'skyspy_acknowledged_notams';
  * @param {number} options.lat - Center latitude for area filtering
  * @param {number} options.lon - Center longitude for area filtering
  * @param {number} options.radius - Radius in nm for area filtering
+ * @param {boolean} options.enabled - Skip all fetching when false (default true)
  */
 export function useNotams(wsRequest, wsConnected, options = {}) {
-  const { typeFilter = null, refreshInterval = 300000, lat, lon, radius } = options;
+  const { typeFilter = null, refreshInterval = 300000, lat, lon, radius, enabled = true } = options;
 
   const [notams, setNotams] = useState([]);
   const [tfrs, setTfrs] = useState([]);
@@ -86,16 +87,18 @@ export function useNotams(wsRequest, wsConnected, options = {}) {
   }, [persistAcknowledged]);
 
   // Fetch NOTAMs
-  const fetchNotams = useCallback(async () => {
+  const fetchNotams = useCallback(async (opts = {}) => {
+    if (!enabled) return;
     if (!wsRequest || !wsConnected) {
       setError('Socket not connected');
       setLoading(false);
       return;
     }
 
-    // Debounce - don't fetch more than once per 10 seconds
+    // Debounce - don't fetch more than once per 10 seconds (a manual
+    // refresh() bypasses this so the button is never a silent no-op)
     const now = Date.now();
-    if (now - lastFetchRef.current < 10000) return;
+    if (!opts.force && now - lastFetchRef.current < 10000) return;
     lastFetchRef.current = now;
 
     setLoading(true);
@@ -145,7 +148,10 @@ export function useNotams(wsRequest, wsConnected, options = {}) {
     } catch (err) {
       if (!mountedRef.current) return;
       if (/disconnected/i.test(err?.message || '')) {
-        // Socket dropped mid-request (reconnect/unmount) - next poll retries
+        // Socket dropped mid-request (StrictMode remount / WS upgrade flap).
+        // Clear the debounce or the on-reconnect fetch is silently swallowed
+        // and the NOTAM layer stays empty until the 5-minute refresh.
+        lastFetchRef.current = 0;
         console.warn('NOTAMs fetch skipped, socket disconnected');
       } else {
         console.error('NOTAMs fetch error:', err);
@@ -156,15 +162,26 @@ export function useNotams(wsRequest, wsConnected, options = {}) {
         setLoading(false);
       }
     }
-  }, [wsRequest, wsConnected, typeFilter, lat, lon, radius]);
+  }, [wsRequest, wsConnected, typeFilter, lat, lon, radius, enabled]);
 
-  // Initial fetch when connected
+  // Track true mount state separately so a filter/location change (which
+  // recreates fetchNotams and re-runs the effect below) doesn't flip mountedRef
+  // false and discard an in-flight response.
   useEffect(() => {
     mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
-    if (!wsConnected || !wsRequest) {
-      return;
+  // Initial fetch when connected (or when the overlay is toggled on)
+  useEffect(() => {
+    if (!enabled || !wsConnected || !wsRequest) {
+      return undefined;
     }
+    // A toggle re-runs this effect; bypass the debounce window so enabling
+    // the layer shortly after another fetch isn't dropped
+    lastFetchRef.current = 0;
 
     // Fetch with small delay after connection
     const timeout = setTimeout(() => {
@@ -172,20 +189,19 @@ export function useNotams(wsRequest, wsConnected, options = {}) {
     }, 1000);
 
     return () => {
-      mountedRef.current = false;
       clearTimeout(timeout);
     };
-  }, [wsConnected, wsRequest, fetchNotams]);
+  }, [enabled, wsConnected, wsRequest, fetchNotams]);
 
   // Auto-refresh interval
   useEffect(() => {
-    if (!wsConnected || !wsRequest || !refreshInterval) {
+    if (!enabled || !wsConnected || !wsRequest || !refreshInterval) {
       return;
     }
 
     const interval = setInterval(fetchNotams, refreshInterval);
     return () => clearInterval(interval);
-  }, [wsConnected, wsRequest, refreshInterval, fetchNotams]);
+  }, [enabled, wsConnected, wsRequest, refreshInterval, fetchNotams]);
 
   // Combine NOTAMs and TFRs for display
   const allNotams = [...notams, ...tfrs.map((tfr) => ({ ...tfr, type: 'TFR' }))];
@@ -217,7 +233,7 @@ export function useNotams(wsRequest, wsConnected, options = {}) {
     clearAcknowledged,
     unacknowledgedCount,
     totalCount: filteredNotams.length,
-    refresh: fetchNotams,
+    refresh: () => fetchNotams({ force: true }),
     isAcknowledged: (id) => acknowledged.has(id),
   };
 }

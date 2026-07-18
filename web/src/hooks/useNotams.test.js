@@ -175,7 +175,7 @@ describe('useNotams', () => {
       expect(result.current.loading).toBe(false);
     });
 
-    it('should debounce fetch requests', async () => {
+    it('manual refresh bypasses the debounce (never a silent no-op)', async () => {
       mockWsRequest.mockResolvedValue({ notams: [] });
 
       const { result } = renderHook(() => useNotams(mockWsRequest, true));
@@ -184,16 +184,13 @@ describe('useNotams', () => {
       await act(async () => {
         await vi.advanceTimersByTimeAsync(1000);
       });
-
-      // Try to fetch multiple times rapidly
-      act(() => {
-        result.current.refresh();
-        result.current.refresh();
-        result.current.refresh();
-      });
-
-      // Only 1 fetch should have occurred (initial after delay)
       expect(mockWsRequest).toHaveBeenCalledTimes(1);
+
+      // A user-initiated refresh within the 10s window must still fetch
+      await act(async () => {
+        await result.current.refresh();
+      });
+      expect(mockWsRequest).toHaveBeenCalledTimes(2);
     });
 
     it('should include location params when provided', async () => {

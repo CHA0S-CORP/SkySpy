@@ -11,6 +11,8 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.core.cache import cache
+from django.core.exceptions import FieldError
+from django.db import DatabaseError
 from django.db.models import Avg, Case, CharField, Count, F, Max, Min, Q, Value, When
 from django.db.models.functions import ExtractHour, Floor, TruncHour
 from django.utils import timezone
@@ -20,6 +22,9 @@ from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from skyspy.api.params import parse_int
+from skyspy.auth.authentication import APIKeyAuthentication, OptionalJWTAuthentication
+from skyspy.auth.permissions import FeatureBasedPermission
 from skyspy.models import AircraftSession, AircraftSighting
 from skyspy.serializers.history import (
     HistoryStatsSerializer,
@@ -44,6 +49,8 @@ class SightingViewSet(viewsets.ModelViewSet):
 
     queryset = AircraftSighting.objects.all()
     serializer_class = SightingSerializer
+    authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
+    permission_classes = [FeatureBasedPermission]
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ["icao_hex", "callsign", "is_military"]
     http_method_names = ["get"]
@@ -177,6 +184,8 @@ class SessionViewSet(viewsets.ModelViewSet):
 
     queryset = AircraftSession.objects.all()
     serializer_class = SessionSerializer
+    authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
+    permission_classes = [FeatureBasedPermission]
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ["icao_hex", "callsign", "is_military"]
     http_method_names = ["get"]
@@ -214,12 +223,18 @@ class SessionViewSet(viewsets.ModelViewSet):
     )
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())
-        serializer = self.get_serializer(queryset, many=True)
-        return Response({"sessions": serializer.data, "count": queryset.count()})
+        total_count = queryset.count()
+        # Honor the limit param and enforce the hard cap (RPi optimization)
+        limit = parse_int(request.query_params, "limit", MAX_QUERY_RESULTS, min_value=1, max_value=MAX_QUERY_RESULTS)
+        serializer = self.get_serializer(queryset[:limit], many=True)
+        return Response({"sessions": serializer.data, "count": total_count})
 
 
 class HistoryViewSet(viewsets.ViewSet):
     """ViewSet for history statistics and analytics."""
+
+    authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
+    permission_classes = [FeatureBasedPermission]
 
     @extend_schema(
         summary="Get history statistics",
@@ -232,7 +247,7 @@ class HistoryViewSet(viewsets.ViewSet):
     def stats(self, request):
         """Get historical statistics."""
         try:
-            hours = int(request.query_params.get("hours", 24))
+            hours = parse_int(request.query_params, "hours", 24, min_value=1, max_value=8760)
         except (ValueError, TypeError):
             hours = 24
 
@@ -294,7 +309,7 @@ class HistoryViewSet(viewsets.ViewSet):
     def trends(self, request):
         """Get time-based activity trends."""
         try:
-            hours = int(request.query_params.get("hours", 24))
+            hours = parse_int(request.query_params, "hours", 24, min_value=1, max_value=8760)
         except (ValueError, TypeError):
             hours = 24
         interval = request.query_params.get("interval", "hour")
@@ -378,7 +393,7 @@ class HistoryViewSet(viewsets.ViewSet):
         from skyspy.models import AircraftInfo
 
         try:
-            hours = int(request.query_params.get("hours", 24))
+            hours = parse_int(request.query_params, "hours", 24, min_value=1, max_value=8760)
         except (ValueError, TypeError):
             hours = 24
         try:
@@ -460,7 +475,7 @@ class HistoryViewSet(viewsets.ViewSet):
         try:
             fastest_qs = sessions.filter(max_ground_speed__isnull=False).order_by("-max_ground_speed")[:limit]
             fastest = [serialize_session(s) for s in fastest_qs]
-        except Exception as e:
+        except (FieldError, DatabaseError) as e:
             # Field may not exist in older schema versions
             logger.debug(f"max_ground_speed field not available: {e}")
 
@@ -495,7 +510,7 @@ class HistoryViewSet(viewsets.ViewSet):
         import statistics as stats_lib
 
         try:
-            hours = int(request.query_params.get("hours", 24))
+            hours = parse_int(request.query_params, "hours", 24, min_value=1, max_value=8760)
         except (ValueError, TypeError):
             hours = 24
         military_only = request.query_params.get("military_only", "false").lower() == "true"
@@ -586,7 +601,7 @@ class HistoryViewSet(viewsets.ViewSet):
         import statistics as stats_lib
 
         try:
-            hours = int(request.query_params.get("hours", 24))
+            hours = parse_int(request.query_params, "hours", 24, min_value=1, max_value=8760)
         except (ValueError, TypeError):
             hours = 24
         military_only = request.query_params.get("military_only", "false").lower() == "true"
@@ -600,7 +615,10 @@ class HistoryViewSet(viewsets.ViewSet):
         if military_only:
             sightings = sightings.filter(is_military=True)
         if min_altitude:
-            sightings = sightings.filter(altitude_baro__gte=int(min_altitude))
+            try:
+                sightings = sightings.filter(altitude_baro__gte=int(min_altitude))
+            except (ValueError, TypeError):
+                logger.debug(f"Invalid min_altitude parameter: {min_altitude}")
 
         # Get max speed per aircraft
         speed_data = sightings.values("icao_hex", "callsign").annotate(
@@ -686,7 +704,7 @@ class HistoryViewSet(viewsets.ViewSet):
     def analytics_correlation(self, request):
         """Get correlation and pattern analytics."""
         try:
-            hours = int(request.query_params.get("hours", 24))
+            hours = parse_int(request.query_params, "hours", 24, min_value=1, max_value=8760)
         except (ValueError, TypeError):
             hours = 24
         military_only = request.query_params.get("military_only", "false").lower() == "true"
@@ -805,7 +823,7 @@ class HistoryViewSet(viewsets.ViewSet):
         """Get antenna polar coverage data for polar diagram visualization."""
 
         try:
-            hours = int(request.query_params.get("hours", 24))
+            hours = parse_int(request.query_params, "hours", 24, min_value=1, max_value=8760)
         except (ValueError, TypeError):
             hours = 24
         min_distance = request.query_params.get("min_distance")
@@ -816,7 +834,10 @@ class HistoryViewSet(viewsets.ViewSet):
             timestamp__gte=cutoff, track__isnull=False, distance_nm__isnull=False
         )
         if min_distance:
-            sightings = sightings.filter(distance_nm__gte=float(min_distance))
+            try:
+                sightings = sightings.filter(distance_nm__gte=float(min_distance))
+            except (ValueError, TypeError):
+                logger.debug(f"Invalid min_distance parameter: {min_distance}")
 
         # Group by bearing sector (10 degree increments)
         bearing_data_raw = (
@@ -906,7 +927,7 @@ class HistoryViewSet(viewsets.ViewSet):
         import statistics as stats_lib
 
         try:
-            hours = int(request.query_params.get("hours", 24))
+            hours = parse_int(request.query_params, "hours", 24, min_value=1, max_value=8760)
         except (ValueError, TypeError):
             hours = 24
         try:
@@ -1036,7 +1057,7 @@ class HistoryViewSet(viewsets.ViewSet):
         """Get antenna performance summary statistics."""
 
         try:
-            hours = int(request.query_params.get("hours", 24))
+            hours = parse_int(request.query_params, "hours", 24, min_value=1, max_value=8760)
         except (ValueError, TypeError):
             hours = 24
         cutoff = timezone.now() - timedelta(hours=hours)

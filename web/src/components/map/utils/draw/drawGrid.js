@@ -81,7 +81,6 @@ export function drawProGrid(ctx, geo) {
 
   for (let lat = minGridLat; lat <= maxGridLat; lat += gridSpacingDeg) {
     const p1 = latLonToScreen(lat, feederLon - radarRange * degPerNm * 1.5);
-    // eslint-disable-next-line no-unused-vars
     const _p2 = latLonToScreen(lat, feederLon + radarRange * degPerNm * 1.5);
     if (p1.y > 0 && p1.y < height) {
       ctx.beginPath();
@@ -96,11 +95,9 @@ export function drawProGrid(ctx, geo) {
   // Longitude lines (vertical)
   const lonScale = Math.cos((feederLat * Math.PI) / 180);
   const minGridLon =
-    Math.floor((feederLon - (radarRange * degPerNm) / lonScale) / gridSpacingDeg) *
-    gridSpacingDeg;
+    Math.floor((feederLon - (radarRange * degPerNm) / lonScale) / gridSpacingDeg) * gridSpacingDeg;
   const maxGridLon =
-    Math.ceil((feederLon + (radarRange * degPerNm) / lonScale) / gridSpacingDeg) *
-    gridSpacingDeg;
+    Math.ceil((feederLon + (radarRange * degPerNm) / lonScale) / gridSpacingDeg) * gridSpacingDeg;
 
   for (let lon = minGridLon; lon <= maxGridLon; lon += gridSpacingDeg) {
     const p1 = latLonToScreen(feederLat, lon);
@@ -115,8 +112,7 @@ export function drawProGrid(ctx, geo) {
   }
 
   // --- Scale bar (theme-aware) --------------------------------------------
-  const scaleBarNm =
-    radarRange <= 30 ? 10 : radarRange <= 75 ? 25 : radarRange <= 150 ? 50 : 100;
+  const scaleBarNm = radarRange <= 30 ? 10 : radarRange <= 75 ? 25 : radarRange <= 150 ? 50 : 100;
   const scaleBarPx = (scaleBarNm / radarRange) * (Math.min(width, height) * 0.45);
   const scaleBarY = height - 20;
 
@@ -196,10 +192,7 @@ export function drawProGrid(ctx, geo) {
         centerX + Math.cos(rad) * (compassRadius - tickLength),
         centerY + Math.sin(rad) * (compassRadius - tickLength)
       );
-      ctx.lineTo(
-        centerX + Math.cos(rad) * compassRadius,
-        centerY + Math.sin(rad) * compassRadius
-      );
+      ctx.lineTo(centerX + Math.cos(rad) * compassRadius, centerY + Math.sin(rad) * compassRadius);
       ctx.stroke();
     }
 

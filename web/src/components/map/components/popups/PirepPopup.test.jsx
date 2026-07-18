@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { PirepPopup } from './PirepPopup';
 
@@ -77,10 +77,10 @@ vi.mock('../../../../utils', () => ({
 
 // Mock the PIREP visualization components
 vi.mock('../../../pirep', () => ({
-  PirepHazardBanner: ({ decoded, severity }) => (
+  PirepHazardBanner: ({ severity }) => (
     <div data-testid="hazard-banner">Hazard: {severity?.type}</div>
   ),
-  TimeFreshnessIndicator: ({ pirep, decoded }) => (
+  TimeFreshnessIndicator: ({ decoded }) => (
     <div data-testid="time-indicator">Time: {decoded?.time}</div>
   ),
   SeverityGauge: ({ type, level, label }) => (
@@ -88,7 +88,7 @@ vi.mock('../../../pirep', () => ({
       {label}: Level {level}
     </div>
   ),
-  AltitudeRangeViz: ({ decoded, pirep }) => (
+  AltitudeRangeViz: ({ decoded }) => (
     <div data-testid="altitude-viz">Altitude: {decoded?.altitude?.text}</div>
   ),
 }));

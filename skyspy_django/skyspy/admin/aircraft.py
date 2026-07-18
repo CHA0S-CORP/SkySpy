@@ -205,17 +205,18 @@ class AircraftInfoAdmin(admin.ModelAdmin):
     @admin.action(description="Refresh aircraft info from external sources")
     def refresh_aircraft_info(self, request, queryset):
         """Queue selected aircraft for info refresh."""
-        from skyspy.services.aircraft_info import AircraftInfoService
+        from skyspy.services.aircraft_info import refresh_aircraft_info as refresh_info_service
 
-        service = AircraftInfoService()
         refreshed = 0
         failed = 0
 
         for aircraft_info in queryset:
             try:
-                service.refresh_info(aircraft_info.icao_hex)
+                refresh_info_service(aircraft_info.icao_hex)
                 refreshed += 1
-            except Exception:
+            except (
+                Exception
+            ):  # broad: per-item guard for bulk admin action; any failure counts as failed, loop continues
                 failed += 1
 
         if refreshed > 0:

@@ -18,6 +18,8 @@ import apprise
 from celery import shared_task
 from django.utils import timezone
 
+from skyspy.tasks.locks import singleton_task
+
 logger = logging.getLogger(__name__)
 
 
@@ -124,7 +126,9 @@ def send_notification_task(
         log_entry.mark_failed("Apprise library not installed")
         return {"status": "failed", "error": "Apprise not installed"}
 
-    except Exception as e:
+    except (
+        Exception
+    ) as e:  # broad: Celery task guard; apprise delivery has unknowable failure modes, re-raises for retry
         error_msg = str(e)
         # Track attempts on the log entry (self.request.retries is always 0
         # here because redelivery happens via process_notification_queue,
@@ -156,7 +160,7 @@ def send_notification_task(
         raise
 
 
-@shared_task
+@shared_task(ignore_result=True)
 def process_notification_queue():
     """
     Process pending notification retries.
@@ -207,13 +211,14 @@ def process_notification_queue():
                 notification_log_id=log_entry.id,
             )
             processed += 1
-        except Exception as e:
+        except Exception as e:  # broad: background loop must keep processing remaining items on per-item failure
             logger.error(f"Failed to re-queue notification {log_entry.id}: {e}")
 
     return {"processed": processed}
 
 
 @shared_task
+@singleton_task(timeout=1200)
 def cleanup_old_notification_logs(days: int = 30):
     """
     Clean up old notification logs.
@@ -271,7 +276,7 @@ def verify_notification_channel(channel_id: int) -> dict[str, Any]:
 
     except ImportError:
         return {"success": False, "error": "Apprise library not installed"}
-    except Exception as e:
+    except Exception as e:  # broad: apprise notify() has unknowable failure modes; records failure and returns result
         channel.last_failure = timezone.now()
         channel.last_error = str(e)
         channel.save(update_fields=["last_failure", "last_error"])
@@ -292,7 +297,7 @@ def send_bulk_notifications(notifications: list, delay_between_ms: int = 100):
         try:
             result = send_notification_task.delay(**notif)
             results.append({"index": i, "task_id": result.id})
-        except Exception as e:
+        except Exception as e:  # broad: loop must continue queueing remaining notifications on per-item failure
             results.append({"index": i, "error": str(e)})
 
         # Rate limiting delay
@@ -303,6 +308,7 @@ def send_bulk_notifications(notifications: list, delay_between_ms: int = 100):
 
 
 @shared_task
+@singleton_task(timeout=300)
 def cleanup_notification_cooldowns():
     """
     Clean up old notification cooldown entries to prevent memory growth.
@@ -321,7 +327,7 @@ def cleanup_notification_cooldowns():
     except ImportError:
         logger.debug("Notifications service not available")
         return {"status": "skipped", "reason": "module not available"}
-    except Exception as e:
+    except Exception as e:  # broad: periodic beat task guard; must never crash the worker
         logger.warning(f"Failed to cleanup notification cooldowns: {e}")
         return {"status": "error", "error": str(e)}
 
@@ -360,16 +366,17 @@ def send_webhook_task(
     """
     import httpx
 
-    from skyspy.services.notifications import _is_safe_url
+    from skyspy.services.notifications import pin_and_validate_url
 
-    # Validate URL safety (SSRF prevention)
-    if not _is_safe_url(url):
+    # Validate URL safety and pin the resolved IP (SSRF / DNS-rebinding prevention)
+    request_url, extra_headers = pin_and_validate_url(url)
+    if request_url is None:
         logger.warning(f"Blocked unsafe webhook URL for rule {rule_id}: {url[:100]}")
         return {"status": "blocked", "reason": "unsafe_url"}
 
     try:
         with httpx.Client(timeout=timeout) as client:
-            response = client.post(url, json=data)
+            response = client.post(request_url, json=data, headers=extra_headers or None)
             response.raise_for_status()
 
             logger.debug(f"Webhook delivered to {url[:50]}... status={response.status_code}")
@@ -394,6 +401,6 @@ def send_webhook_task(
             "rule_id": rule_id,
         }
 
-    except Exception as e:
+    except Exception as e:  # broad: catch-all fallback after specific httpx handlers; re-raises to trigger Celery retry
         logger.error(f"Webhook failed for rule {rule_id}: {e}")
         raise  # Will trigger retry

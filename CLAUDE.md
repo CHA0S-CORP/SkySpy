@@ -33,7 +33,7 @@ make lint             # Run all linters (Python + Go + Frontend)
 
 Services: Dashboard :3000, Django API :8000, Django Admin :8000/admin/ (admin/admin), Mock Ultrafeeder :18080, Mock Dump978 :18081, PgBouncer :5432, Redis :6379, Celery worker + beat also start.
 
-The mock ultrafeeder serves synthetic traffic by default. Set `MOCK_DATA_SOURCE=live` in `.env.test` to feed **real aircraft** from a keyless open ADS-B API (`MOCK_LIVE_SOURCE`: `adsb_lol` (default) / `adsb_fi` / `airplanes_live`), centered on `FEEDER_LAT/LON` — all endpoints and streams (aircraft.json, SSE, TCP JSON) serve the live data. Poll cadence `MOCK_LIVE_POLL_INTERVAL` (min 2s — community APIs ask ≤1 req/s), radius `MOCK_LIVE_RADIUS_NM` (max 250). UAT/978 stays simulated. Check `curl :18080/health` for live-poll status.
+The mock ultrafeeder serves synthetic traffic by default. Set `MOCK_DATA_SOURCE=live` in `.env.test` to feed **real aircraft** from an open ADS-B API (`MOCK_LIVE_SOURCE`: `adsb_lol` (default) / `adsb_fi` / `airplanes_live` / `adsbexchange`), centered on `FEEDER_LAT/LON` — all endpoints and streams (aircraft.json, SSE, TCP JSON) serve the live data. Poll cadence `MOCK_LIVE_POLL_INTERVAL` (min 2s for the keyless community APIs which ask ≤1 req/s; min 1s for `adsbexchange`), radius `MOCK_LIVE_RADIUS_NM` (max 250). `adsbexchange` (RapidAPI, `adsbexchange-com1.p.rapidapi.com`) refreshes faster/denser but requires `MOCK_LIVE_API_KEY` (keep in gitignored `.env.test`). UAT/978 stays simulated. Check `curl :18080/health` for live-poll status.
 
 API docs (dev): Swagger UI at `/api/docs/`, ReDoc at `/api/redoc/`, OpenAPI schema at `/api/schema/`
 
@@ -181,15 +181,103 @@ DATABASE_URL, REDIS_URL, DJANGO_SECRET_KEY
 ULTRAFEEDER_HOST/PORT          # ADS-B receiver
 FEEDER_LAT/LON                 # Antenna location for distance calc
 
+# Aviation reference-data fetch radius (nm) around FEEDER_LAT/LON. Airspace
+# boundaries (OpenAIP) + airports/navaids (AWC) are fetched within this radius
+# so the map layers populate near the antenna (was a fixed CONUS grid that
+# rate-limited OpenAIP to empty). AIRSPACE_EXTRA_REGIONS = JSON list of
+# [lat, lon, radius_nm] for multi-site coverage.
+AIRSPACE_FETCH_RADIUS_NM=250
+GEODATA_FETCH_RADIUS_NM=250
+AIRSPACE_EXTRA_REGIONS=[]
+
 # Feature toggles
 AUTH_MODE=public|private|hybrid
-AIRCRAFT_STREAM_MODE=sse|tcp|adsbx|auto
+AIRCRAFT_STREAM_MODE=sse|tcp|adsbx|adsblol|auto   # adsblol = keyless community feed, round-robins AIRCRAFT_STREAM_FREE_SOURCES (adsb.lol,adsb.fi,airplanes.live) — radius max 250nm around FEEDER_LAT/LON
 SAFETY_MONITORING_ENABLED, ACARS_ENABLED
+
+# Airframes.io live ACARS (open, no-hardware source). When AIRFRAMES_ACARS_ENABLED,
+# run_acars polls api.airframes.io's firehose and keeps only the ground stations
+# whose nearest airport is in AIRFRAMES_ACARS_AIRPORTS (default = LAX metro) OR
+# within AIRFRAMES_ACARS_RADIUS_NM of the center (default LAX), then feeds them
+# through the same normalize/dedupe/store/broadcast path as the UDP listener — so
+# the History → ACARS tab shows real LAX-area traffic. Free/keyless today; set the
+# API key for a feeder rate limit. The newest-100 firehose window is ~5s, so keep
+# POLL_INTERVAL low (default 4s); the 30s dedupe cache absorbs the overlap.
+AIRFRAMES_ACARS_ENABLED=False
+AIRFRAMES_ACARS_URL=https://api.airframes.io/v1/messages
+AIRFRAMES_ACARS_API_KEY=
+AIRFRAMES_ACARS_POLL_INTERVAL=4
+AIRFRAMES_ACARS_AIRPORTS=KLAX,KVNY,KBUR,...      # comma ICAOs; empty = radius only
+AIRFRAMES_ACARS_CENTER_LAT=33.9416
+AIRFRAMES_ACARS_CENTER_LON=-118.4085
+AIRFRAMES_ACARS_RADIUS_NM=100
+
+# OpenSanctions owner screening (feeds ownership/shell-risk analysis). Screens
+# owner names against sanctions/PEP/watchlists. Needs an API key (free for
+# non-commercial); off by default = no-op without a key. Ownership analysis also
+# now uses the FAA MASTER TYPE-REGISTRANT code (authoritative entity type),
+# STREET address (registered-agent/PO-box heuristics) and FRACT-OWNER flag.
+OPENSANCTIONS_ENABLED=False
+OPENSANCTIONS_API_URL=https://api.opensanctions.org
+OPENSANCTIONS_API_KEY=
+OPENSANCTIONS_DATASET=default
 
 # REST throttling (public dashboards are anonymous - keep anon above one
 # dashboard's polling volume)
 API_THROTTLE_ANON=600/minute
 API_THROTTLE_USER=2000/minute
+
+# Statistics screen KPI tick (stats:tick broadcast) interval in seconds
+# (RPi celery profile overrides to 30)
+STATS_TICK_INTERVAL=10
+
+# Airframe RAG embeddings (each falls back to the matching LLM_* value).
+# Requires the Postgres image to be pgvector/pgvector:pg16 (already set in the
+# compose files) — the AirframeDocument embedding column + similarity search
+# depend on the pgvector extension. EMBEDDING_DIM must match the model.
+EMBEDDING_API_URL=       # defaults to LLM_API_URL
+EMBEDDING_API_KEY=       # defaults to LLM_API_KEY
+EMBEDDING_MODEL=text-embedding-3-small
+EMBEDDING_DIM=1536
+
+# LLM assistant (LangChain tool-calling agent over analytics/search services,
+# served by an OpenAI-compatible endpoint — vLLM in prod behind the compose
+# `gpu` profile, OpenAI/Ollama in dev). Requires LLM_ENABLED + a tool-calling
+# model. Endpoint at POST /api/v1/assistant/ask/ and SSE /api/v1/assistant/stream/.
+ASSISTANT_ENABLED=False
+ASSISTANT_MODEL=         # defaults to LLM_MODEL
+ASSISTANT_MAX_STEPS=10   # tool-call budget/query; higher = chain more tools into one synthesized answer
+ASSISTANT_TIMEOUT=60
+# Auto-inject a compact live-traffic snapshot into each query so answers are
+# grounded in the current picture without spending a tool call. Disable on
+# tiny/RPi models if the extra context hurts.
+ASSISTANT_BRIEFING_ENABLED=True
+# Context-window budget knobs (raise for large-context models, keep low on RPi).
+ASSISTANT_MAX_RESULT_CHARS=6000   # per-tool result cap
+ASSISTANT_MAX_HISTORY_MSGS=16     # prior turns carried
+ASSISTANT_MAX_HISTORY_CHARS=3000  # per-message cap
+# Model's max context window (tokens). Set for small local models (e.g. 8192 vLLM/
+# Ollama). When <=16000 the assistant auto-switches to COMPACT MODE: a short system
+# prompt (COMPACT_SYSTEM_PROMPT), first-sentence-only tool descriptions, and tighter
+# result/history/briefing/page-context caps — the fixed SYSTEM_PROMPT (~3k tokens) +
+# 31 tool schemas would otherwise overflow an 8k window on the first model call
+# ("prompt contains at least 8193 input tokens"). 0 (default) = assume large, no
+# compaction.
+ASSISTANT_CONTEXT_WINDOW=0
+# Airframe photos in assistant answers are rendered from the fetch_airframe_photo
+# tool call with a server-templated <img> src (NOT LLM markdown — the model was
+# hallucinating photo URLs). Empty (default) auto-infers: a signed S3 URL when
+# S3_ENABLED, else same-origin /api/v1/photos/<hex>. Set a public asset base to
+# force <base>/<HEX>.jpg (e.g. https://sky-spy-assets.s3.amazonaws.com/photos).
+ASSISTANT_PHOTO_BASE_URL=
+
+# Aircraft photo enrichment. The photo chain is planespotters (hex then reg) →
+# airport-data.com (hex/reg) → hexdb.io → flickr (GA tail fallback). Planespotters'
+# free photo API 403s any request whose User-Agent lacks a contact URL or email —
+# so ALL planespotters photo calls send this UA. Set your own contact so they can
+# reach the operator. Registration fallback matters: many US GA airframes and
+# helicopters (e.g. N882SD) are indexed by tail only, not by Mode-S hex.
+PHOTO_PLANESPOTTERS_USER_AGENT=skyspy/2.6 (+https://github.com/skyspy/skyspy)
 ```
 
 ### Redis Layout
@@ -211,17 +299,23 @@ API_THROTTLE_USER=2000/minute
 The 4 API test files (`test_api_aircraft.py`, `test_api_alerts.py`, `test_api_history.py`, `test_api_safety.py`) were previously excluded from CI due to PgBouncer deadlocks. They have been converted from `APITestCase` to pytest-style and are now included in CI. Coverage target set to 55% (`--cov-fail-under=55`). Target: restore to 80%.
 
 ### Broad Exception Handlers
-~140 `except Exception` handlers remain across ~34 service files. The 5 most critical files have been fixed with specific exception types:
-- `services/safety.py` — 2 handlers → `DatabaseError`, `(ConnectionError, OSError, RuntimeError)`
-- `services/alerts.py` — 4 handlers → specific types per operation
-- `services/external_db.py` — 15 handlers → `httpx.HTTPError`, `DatabaseError`, `OSError`, etc.
-- `services/aircraft_info.py` — 11 handlers → `DatabaseError`, `httpx.HTTPError`, etc.
-- `services/stats_cache.py` — 7 handlers → `(DatabaseError, ConnectionError, OSError)`
+A codebase-wide pass narrowed ~185 `except Exception` handlers to specific
+types (matching the established idiom: `DatabaseError`, `httpx.HTTPError`,
+`(ConnectionError, OSError)`, `(ValueError, KeyError, TypeError)`, etc.). The
+remaining ~215 are **intentionally broad resilience boundaries** and are
+annotated in-source with a trailing `# broad: <reason>` comment. Do not narrow
+those — they include:
+- Celery task top-level guards and periodic-beat loops that must never crash the worker
+- Sentry / error-reporting blocks (the reporting itself must never raise)
+- ASGI-startup guards (a narrow catch could crash the app at boot)
+- Third-party fan-out calls (e.g. Apprise `notify()`) with unknowable failure modes
 
-Remaining top offenders (not yet fixed): `swim_fns.py` (12), `flight_pattern_stats.py` (11), `storage.py` (9), `audio.py` (9).
+When adding a new handler: narrow it if it guards a specific operation (DB/HTTP/
+parse); leave it broad **with a `# broad:` comment** only if it is a genuine
+resilience boundary of the kinds above.
 
 ### Frontend Tech Debt
-- `MapView.jsx` — ~12,240 lines, no test coverage (keyboard shortcuts extracted to `useProKeyboardShortcuts` hook)
+- `MapView.jsx` — ~3,070 lines (decomposed from ~12,240), still no direct test coverage (keyboard shortcuts extracted to `useProKeyboardShortcuts` hook; see `web/src/components/map/CLAUDE.md`)
 - `react-hooks/exhaustive-deps` ESLint rule is `'off'` ("too many false positives with complex hooks")
 - ESLint `no-console` now set to `['warn', { allow: ['warn', 'error'] }]`, max-warnings lowered from 250 to 150
 

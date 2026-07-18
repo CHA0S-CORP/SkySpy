@@ -22,6 +22,9 @@ sync:
     - ".DS_Store"
     - "screenshots/**"
     - "logo.png"
+    # Internal process artifacts — not user-facing docs
+    - "socketio/CONVERSION_COMPLETE.md"
+    - "socketio/FIXES_APPLIED.md"
 
 # Category mappings
 categories:

@@ -69,8 +69,9 @@ if not BUILD_MODE and "default" in DATABASES:
 # WebSocket/Channel Layer Optimization
 # =============================================================================
 # Reduce channel layer capacity for lower memory usage
-if not BUILD_MODE:
-    CHANNEL_LAYERS["default"]["CONFIG"]["capacity"] = WEBSOCKET_CAPACITY
+if not BUILD_MODE and "CHANNEL_LAYERS" in globals():
+    # Base settings only define CHANNEL_LAYERS when django-channels is in use
+    CHANNEL_LAYERS["default"]["CONFIG"]["capacity"] = WEBSOCKET_CAPACITY  # noqa: F821
 
 # =============================================================================
 # Celery Beat Schedule Adjustments
@@ -120,6 +121,7 @@ WS_RATE_LIMITS = {
     "aircraft:position": 5,  # Max 5 Hz for position-only updates
     "aircraft:delta": 10,  # Max 10 Hz for delta updates
     "stats:update": 0.5,  # Max 0.5 Hz (2 second minimum)
+    "stats:tick": 0.1,  # Max 0.1 Hz (10s minimum — RPi beat emits every 30s)
     "default": 5,  # Default rate limit
 }
 

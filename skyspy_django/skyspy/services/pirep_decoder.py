@@ -166,10 +166,21 @@ def decode_icing(pirep: CachedPirep) -> dict | None:
     # Parse intensity
     ice_upper = (icing_type or icing_intensity or "").upper()
 
+    # Check for compound codes first (e.g., TRC-LGT, LGT-MOD, MOD-SEV)
     intensity_info = None
-    for code, info in ICING_CODES.items():
-        if code in ice_upper and (intensity_info is None or info["level"] > intensity_info["level"]):
-            intensity_info = {"code": code, **info}
+    compound_codes = ["TRC-LGT", "LGT-MOD", "MOD-SEV"]
+    for code in compound_codes:
+        if code in ice_upper:
+            intensity_info = {"code": code, **ICING_CODES[code]}
+            break
+
+    # If no compound code found, check single codes
+    if not intensity_info:
+        for code, info in ICING_CODES.items():
+            if "-" in code:  # Skip compound codes in this pass
+                continue
+            if code in ice_upper and (intensity_info is None or info["level"] > intensity_info["level"]):
+                intensity_info = {"code": code, **info}
 
     if not intensity_info:
         intensity_info = {

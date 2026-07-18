@@ -38,6 +38,7 @@ from skyspy.services.law_enforcement_db import (
 )
 from skyspy.socketio.middleware import authenticate_socket, check_topic_permission
 from skyspy.socketio.server import sio
+from skyspy.socketio.utils.rate_limiter import RateLimiter
 
 logger = logging.getLogger(__name__)
 
@@ -120,6 +121,7 @@ class CannonballNamespace(socketio.AsyncNamespace):
                 "previous_position": None,
                 "heading": None,
                 "threat_radius_nm": 25.0,
+                "rate_limiter": RateLimiter(),
             },
             namespace="/cannonball",
         )
@@ -164,7 +166,7 @@ class CannonballNamespace(socketio.AsyncNamespace):
             # Clear session data
             await sio.save_session(sid, {}, namespace="/cannonball")
 
-        except Exception as e:
+        except Exception as e:  # broad: disconnect cleanup must never raise
             logger.debug(f"Error during disconnect cleanup: {e}")
 
         logger.info(f"Client disconnected from /cannonball: {sid}")
@@ -229,8 +231,21 @@ class CannonballNamespace(socketio.AsyncNamespace):
             )
             return
 
+        # Validate heading before touching the session - a bad value must not
+        # leave the position half-updated with no threats recomputation
+        if heading is not None:
+            try:
+                heading = float(heading) % 360
+            except (ValueError, TypeError):
+                heading = None
+
         # Get current session
         session = await sio.get_session(sid, namespace="/cannonball")
+
+        # Rate limit: position updates trigger a full aircraft-cache LE scan
+        rate_limiter = session.get("rate_limiter")
+        if rate_limiter and not rate_limiter.can_send("aircraft:position"):
+            return
 
         # Store previous position for trend calculation
         previous_position = session.get("position")
@@ -241,7 +256,7 @@ class CannonballNamespace(socketio.AsyncNamespace):
         session["position"] = current_position
 
         if heading is not None:
-            session["heading"] = float(heading)
+            session["heading"] = heading
 
         # Save updated session
         await sio.save_session(sid, session, namespace="/cannonball")
@@ -325,6 +340,13 @@ class CannonballNamespace(socketio.AsyncNamespace):
     async def on_get_threats(self, sid):
         """Handle request for current threats without position update."""
         session = await sio.get_session(sid, namespace="/cannonball")
+
+        # Rate limit: threats recomputation scans the full aircraft cache
+        rate_limiter = session.get("rate_limiter")
+        if rate_limiter and not rate_limiter.can_send("request"):
+            await self.emit("error", {"message": "Rate limit exceeded, please slow down"}, room=sid)
+            return
+
         position = session.get("position")
 
         if not position:
@@ -546,7 +568,7 @@ class CannonballNamespace(socketio.AsyncNamespace):
                 },
                 room=sid,
             )
-        except Exception as e:
+        except Exception as e:  # broad: request-dispatch catch-all must not crash the socket handler
             logger.exception(f"Error handling request {request_type} for {sid}: {e}")
             await self.emit(
                 "error",
@@ -628,6 +650,7 @@ class CannonballNamespace(socketio.AsyncNamespace):
                 operator=aircraft.get("ownOp") or aircraft.get("operator"),
                 category=aircraft.get("category"),
                 type_code=aircraft.get("t") or aircraft.get("type"),
+                owner=aircraft.get("owner"),
             )
 
             # Only include if it's a threat (law enforcement, helicopter, or surveillance type)
@@ -903,6 +926,7 @@ class CannonballNamespace(socketio.AsyncNamespace):
             operator=params.get("operator"),
             category=params.get("category"),
             type_code=params.get("type_code"),
+            owner=params.get("owner"),
         )
 
         return {

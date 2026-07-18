@@ -149,11 +149,8 @@ describe('EnhancedFlightMap', () => {
       const replayPosition = { lat: 40.78, lon: -73.92 };
       render(<EnhancedFlightMap {...defaultProps} replayPosition={replayPosition} />);
 
-      const markers = screen.getAllByTestId('marker');
-      const replayMarker = markers.find(
-        (m) => m.getAttribute('data-lat') === '40.78' && m.getAttribute('data-lon') === '-73.92'
-      );
       // Replay marker should be present
+      screen.getAllByTestId('marker');
     });
 
     it('should not render replay marker when replayPosition is null', () => {

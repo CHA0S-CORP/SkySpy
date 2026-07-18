@@ -28,6 +28,7 @@ export function useSafetyEvents({
   const notifiedConflictsRef = useRef(new Set());
   const notifiedEmergenciesRef = useRef(new Set());
   const autoAckScheduledRef = useRef(new Set());
+  const playedLowAlarmRef = useRef(new Set());
 
   const {
     playConflictAlarm,
@@ -84,14 +85,21 @@ export function useSafetyEvents({
     return () => clearInterval(interval);
   }, [wsRequest, wsConnected, config.apiBaseUrl]);
 
-  // Convert safety events to conflict format for display with LIVE separation data
+  // Convert safety events to conflict format for display with LIVE separation data.
+  // Display window is intentionally wide (10 min) so snapshot-loaded events (which
+  // are almost always older than 60s) actually render in the banner/panel. The
+  // tight 60s window is reserved for the audible alarm / banner-flash behavior in
+  // the alarm-monitoring effect below.
+  const DISPLAY_WINDOW_MS = 10 * 60 * 1000;
   const activeConflicts = useMemo(() => {
-    const cutoff = Date.now() - 60000;
+    const cutoff = Date.now() - DISPLAY_WINDOW_MS;
     return safetyEvents
       .filter((event) => {
         if (acknowledgedEvents.has(event.id)) return false;
         const eventTime = new Date(event.timestamp).getTime();
-        return eventTime > cutoff;
+        // Keep events without a parseable timestamp (fail-open) and anything
+        // within the display window.
+        return Number.isNaN(eventTime) || eventTime > cutoff;
       })
       .map((event) => {
         let horizontalNm = event.details?.horizontal_nm?.toFixed(1) || '--';
@@ -139,19 +147,32 @@ export function useSafetyEvents({
       });
   }, [safetyEvents, acknowledgedEvents, aircraft]);
 
-  // Monitor for new safety events and trigger alarms/notifications
+  // Monitor for new safety events and trigger alarms/notifications.
+  // Alarms/flash are gated on a tight recency window (60s) so old snapshot events
+  // rendered in the banner/panel don't blare an alarm on page load.
   useEffect(() => {
-    const unacknowledged = activeConflicts.filter((event) => !acknowledgedEvents.has(event.id));
+    const alarmCutoff = Date.now() - 60000;
+    const unacknowledged = activeConflicts.filter((event) => {
+      if (acknowledgedEvents.has(event.id)) return false;
+      const eventTime = new Date(event.timestamp).getTime();
+      return Number.isNaN(eventTime) || eventTime > alarmCutoff;
+    });
 
     if (unacknowledged.length > 0) {
       const severity = getHighestSeverity(unacknowledged);
 
       if (severity === 'low') {
         stopAlarmLoop();
-        playConflictAlarm('low');
-        setTimeout(() => {
+        // Only play the double-ding once per event — the effect re-runs on every
+        // aircraft position update (activeConflicts is a new array each time)
+        const newLowEvents = unacknowledged.filter((e) => !playedLowAlarmRef.current.has(e.id));
+        if (newLowEvents.length > 0) {
+          newLowEvents.forEach((e) => playedLowAlarmRef.current.add(e.id));
           playConflictAlarm('low');
-        }, 1500);
+          setTimeout(() => {
+            playConflictAlarm('low');
+          }, 1500);
+        }
 
         unacknowledged.forEach((e) => {
           if (e.severity === 'low' && !autoAckScheduledRef.current.has(e.id)) {

@@ -6,6 +6,7 @@ organized by domain area with a custom admin site.
 """
 
 from django.contrib import admin
+from django.db import DatabaseError
 
 from skyspy.admin.acars import AcarsMessageAdmin
 from skyspy.admin.actions import (
@@ -116,7 +117,7 @@ class SkyspyAdminSite(admin.AdminSite):
                 ).count(),
                 "failed_notifications": NotificationLog.objects.filter(status="failed").count(),
             }
-        except Exception:
+        except DatabaseError:
             extra_context["dashboard_stats"] = None
 
         return super().index(request, extra_context=extra_context)

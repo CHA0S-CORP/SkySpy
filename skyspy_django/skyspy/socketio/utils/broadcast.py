@@ -20,6 +20,18 @@ from threading import Lock
 
 from django.conf import settings
 
+try:
+    from redis.exceptions import RedisError
+
+    _REDIS_ERRORS: tuple[type[BaseException], ...] = (RedisError,)
+except ImportError:  # pragma: no cover - redis is an optional runtime dependency
+    _REDIS_ERRORS = ()
+
+# Redis publish failures: connection/timeout errors (which subclass the builtins in redis-py)
+# plus RedisError for protocol/response errors. TypeError/ValueError cover json.dumps() failures
+# on a non-serializable data payload.
+_BROADCAST_ERRORS = (ConnectionError, OSError, TimeoutError, TypeError, ValueError, *_REDIS_ERRORS)
+
 logger = logging.getLogger(__name__)
 
 # Redis connection pool for sync Socket.IO broadcasts (thread-safe singleton)
@@ -210,7 +222,7 @@ def sync_emit(
 
         return True
 
-    except Exception as e:
+    except _BROADCAST_ERRORS as e:
         logger.warning(
             f"Socket.IO sync_emit error: {e} (event={event}, room={room}, namespace={namespace})", exc_info=True
         )
@@ -317,33 +329,6 @@ def broadcast_aircraft_update(
         room=room,
         event="aircraft:update",
         data=aircraft_data,
-        namespace=namespace,
-    )
-
-
-def broadcast_alert(
-    alert_data: dict,
-    room: str = "alerts",
-    namespace: str = "/",
-) -> bool:
-    """
-    Broadcast an alert event.
-
-    Convenience function for broadcasting alert notifications to clients
-    subscribed to alerts.
-
-    Args:
-        alert_data: The alert data dict
-        room: The room for alerts (default 'alerts')
-        namespace: The Socket.IO namespace (default '/')
-
-    Returns:
-        True if the message was published successfully, False otherwise
-    """
-    return broadcast_to_room(
-        room=room,
-        event="alert:new",
-        data=alert_data,
         namespace=namespace,
     )
 

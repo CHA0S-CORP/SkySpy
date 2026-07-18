@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { SortControls } from './SortControls';
 
 describe('SortControls', () => {
@@ -236,7 +236,7 @@ describe('SortControls', () => {
     });
 
     it('should handle single field', () => {
-      const { container } = render(
+      render(
         <SortControls
           {...defaultProps}
           fields={[{ key: 'single', label: 'Single' }]}

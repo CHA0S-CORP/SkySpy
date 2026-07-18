@@ -52,7 +52,7 @@ describe('MultiSelectFacet', () => {
     });
 
     it('should close dropdown on outside click', () => {
-      const { container } = render(
+      render(
         <div>
           <MultiSelectFacet {...defaultProps} />
           <div data-testid="outside">Outside</div>

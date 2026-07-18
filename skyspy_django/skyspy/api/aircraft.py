@@ -11,6 +11,8 @@ from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from skyspy.auth.authentication import APIKeyAuthentication, OptionalJWTAuthentication
+from skyspy.auth.permissions import FeatureBasedPermission
 from skyspy.serializers.aircraft import (
     AircraftListSerializer,
     AircraftSerializer,
@@ -27,6 +29,9 @@ class AircraftViewSet(viewsets.ViewSet):
 
     Provides real-time aircraft position data from ADS-B receivers.
     """
+
+    authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
+    permission_classes = [FeatureBasedPermission]
 
     @extend_schema(
         summary="List all aircraft",

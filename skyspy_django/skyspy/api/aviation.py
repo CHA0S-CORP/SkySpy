@@ -8,7 +8,7 @@ from datetime import timedelta
 from django.core.cache import cache
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, extend_schema
-from rest_framework import viewsets
+from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
@@ -64,8 +64,12 @@ class AviationViewSet(viewsets.ViewSet):
             radius_nm = 500
 
         if lat and lon:
-            lat = float(lat)
-            lon = float(lon)
+            try:
+                lat = float(lat)
+                lon = float(lon)
+            except (ValueError, TypeError):
+                lat = None
+                lon = None
         else:
             lat = None
             lon = None
@@ -268,6 +272,70 @@ class AviationViewSet(viewsets.ViewSet):
         cache.set(cache_key, response_data, timeout=120)
 
         return Response(response_data)
+
+    @extend_schema(
+        summary="Get plain-English AI summary of a PIREP",
+        description=(
+            "Uses the configured LLM to explain a stored PIREP in plain English. Opt-in "
+            "(one LLM call, cached). Falls back to the rule-based decoder summary when the "
+            "LLM is disabled/unconfigured."
+        ),
+    )
+    @action(detail=False, methods=["get"], url_path=r"pireps/(?P<pirep_id>[^/]+)/summary")
+    def pirep_summary(self, request, pirep_id=None):
+        """Plain-English summary of one PIREP (LLM if available, else rule-based)."""
+        from skyspy.services import aviation_llm, pirep_decoder
+
+        pirep = CachedPirep.objects.filter(pirep_id=pirep_id).first()
+        if not pirep:
+            return Response({"error": "PIREP not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        decoded = pirep_decoder.decode_pirep(pirep)
+        rule_summary = decoded.get("human_summary")
+
+        ai = aviation_llm.explain_pirep(pirep.raw_text or "", decoded=decoded) if aviation_llm.available() else None
+
+        return Response(
+            {
+                "pirep_id": pirep_id,
+                "summary": ai or rule_summary,
+                "source": "llm" if ai else "rule",
+                "severity": decoded.get("severity"),
+                "hazards": decoded.get("hazards"),
+            }
+        )
+
+    @extend_schema(
+        summary="Plain-English explanation of raw aviation text",
+        description=(
+            "Uses the configured LLM to explain arbitrary raw aviation text (METAR, TAF, "
+            "SIGMET, NOTAM, PIREP, ACARS) in plain English. POST {kind, text, context?}. "
+            "Returns available=false if the LLM is disabled/unconfigured."
+        ),
+    )
+    @action(detail=False, methods=["post"])
+    def explain(self, request):
+        """Generic LLM explainer for any supported aviation text kind."""
+        from skyspy.services import aviation_llm
+
+        kind = (request.data.get("kind") or "").strip()
+        text = request.data.get("text") or ""
+        context = request.data.get("context") if isinstance(request.data.get("context"), dict) else None
+
+        if not text.strip():
+            return Response({"error": "text is required"}, status=status.HTTP_400_BAD_REQUEST)
+        if not aviation_llm.available():
+            return Response({"available": False, "summary": None})
+
+        summary = aviation_llm.explain(kind, text, context)
+        return Response(
+            {
+                "available": True,
+                "kind": kind or None,
+                "summary": summary,
+                "supported_kinds": list(aviation_llm.SUPPORTED_KINDS),
+            }
+        )
 
     @extend_schema(
         summary="Get SIGMET data",

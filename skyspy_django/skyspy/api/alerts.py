@@ -14,6 +14,7 @@ from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from skyspy.api.params import parse_int
 from skyspy.api.throttles import AuthRateThrottle
 from skyspy.auth.authentication import APIKeyAuthentication, OptionalJWTAuthentication
 from skyspy.auth.permissions import CanAccessAlert, IsOwnerOrAdmin
@@ -474,8 +475,8 @@ class AlertRuleViewSet(viewsets.ModelViewSet):
             limit = int(request.query_params.get("limit", 500))
         except (ValueError, TypeError):
             limit = 500
-        # Cap at reasonable maximum
-        limit = min(limit, 1000)
+        # Cap at reasonable maximum (and floor at 0 - negative slicing raises)
+        limit = max(0, min(limit, 1000))
 
         if request.user.is_authenticated:
             queryset = AlertRule.objects.filter(owner=request.user)[:limit]
@@ -572,7 +573,7 @@ class AlertSubscriptionViewSet(viewsets.ModelViewSet):
 
         try:
             rule = AlertRule.objects.get(id=rule_id)
-        except AlertRule.DoesNotExist:
+        except (AlertRule.DoesNotExist, ValueError, TypeError):
             return Response({"error": "Rule not found"}, status=status.HTTP_404_NOT_FOUND)
 
         # Check if rule is subscribable
@@ -609,7 +610,7 @@ class AlertSubscriptionViewSet(viewsets.ModelViewSet):
             subscription = AlertSubscription.objects.get(rule_id=rule_id, user=request.user)
             subscription.delete()
             return Response(status=status.HTTP_204_NO_CONTENT)
-        except AlertSubscription.DoesNotExist:
+        except (AlertSubscription.DoesNotExist, ValueError, TypeError):
             return Response({"error": "Subscription not found"}, status=status.HTTP_404_NOT_FOUND)
 
     @extend_schema(summary="Subscribe to a rule (alternative endpoint)", responses={201: AlertSubscriptionSerializer})
@@ -630,7 +631,10 @@ class AlertSubscriptionViewSet(viewsets.ModelViewSet):
         if not request.user.is_authenticated:
             return Response({"error": "Authentication required"}, status=status.HTTP_401_UNAUTHORIZED)
 
-        deleted, _ = AlertSubscription.objects.filter(rule_id=rule_id, user=request.user).delete()
+        try:
+            deleted, _ = AlertSubscription.objects.filter(rule_id=rule_id, user=request.user).delete()
+        except (ValueError, TypeError):
+            return Response({"error": "Invalid rule_id"}, status=status.HTTP_400_BAD_REQUEST)
 
         return Response(
             {
@@ -705,8 +709,7 @@ class AlertHistoryViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=False, methods=["get"])
     def aggregated(self, request):
         """Get alert history aggregated by rule and time window."""
-        hours = int(request.query_params.get("hours", 24))
-        int(request.query_params.get("window_minutes", 60))
+        hours = parse_int(request.query_params, "hours", 24, min_value=1, max_value=24 * 365)
 
         cutoff = timezone.now() - timedelta(hours=hours)
         aggregates = (

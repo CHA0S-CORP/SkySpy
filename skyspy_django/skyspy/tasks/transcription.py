@@ -21,11 +21,13 @@ from skyspy.services.audio import (
     process_transcription,
 )
 from skyspy.socketio.utils import sync_emit
+from skyspy.tasks.locks import singleton_task
 
 logger = logging.getLogger(__name__)
 
 
-@shared_task
+@shared_task(ignore_result=True)
+@singleton_task(timeout=300)
 def process_transcription_queue():
     """
     Process queued audio transcriptions.
@@ -107,6 +109,7 @@ def transcribe_audio(self, transmission_id: int):
             if self.request.retries < self.max_retries:
                 raise Exception(transmission.transcription_error or "Transcription failed")
 
+    # broad: Celery task boundary — transcription failure modes are unknowable; must retry, not crash the worker
     except Exception as e:
         logger.error(f"Failed to transcribe {transmission_id}: {e}")
 
@@ -150,7 +153,7 @@ def _broadcast_transcription_update(transmission, status: str):
             room="audio_transmissions",
             namespace="/audio",
         )
-    except Exception as e:
+    except Exception as e:  # broad: Socket.IO broadcast must never raise into the caller
         logger.warning(f"Failed to broadcast transcription update: {e}")
 
 

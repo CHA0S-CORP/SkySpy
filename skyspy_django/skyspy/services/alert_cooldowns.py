@@ -9,9 +9,21 @@ import logging
 import threading
 import time
 from collections import OrderedDict
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from django.conf import settings
+from django.utils import timezone
+
+try:
+    from redis.exceptions import RedisError
+
+    _REDIS_ERRORS: tuple[type[BaseException], ...] = (RedisError,)
+except ImportError:  # pragma: no cover - redis is an optional runtime dependency
+    _REDIS_ERRORS = ()
+
+# Redis command failures: connection/timeout errors (which subclass the builtins in redis-py)
+# plus RedisError for protocol/response errors such as Lua script (ResponseError) failures.
+_REDIS_OP_ERRORS = (ConnectionError, OSError, TimeoutError, *_REDIS_ERRORS)
 
 logger = logging.getLogger(__name__)
 
@@ -113,7 +125,7 @@ class LRUCooldownCache:
             return
 
         self._last_cleanup = now
-        cutoff = datetime.utcnow() - timedelta(minutes=30)  # Keep for 30 min max
+        cutoff = timezone.now() - timedelta(minutes=30)  # Keep for 30 min max
 
         # Remove expired entries (iterate over copy of keys)
         keys_to_remove = [k for k, v in self._cache.items() if v < cutoff]
@@ -148,7 +160,7 @@ class DistributedCooldownManager:
                 self._redis = redis.from_url(redis_url, decode_responses=True)
                 # Test connection
                 self._redis.ping()
-            except Exception as e:
+            except Exception as e:  # broad: connection bootstrap must always fall back to in-memory cache
                 logger.warning(f"Redis not available for cooldowns, using in-memory fallback: {e}")
                 self._redis = False  # Mark as unavailable
         return self._redis if self._redis else None
@@ -180,7 +192,7 @@ class DistributedCooldownManager:
             - last_trigger_time: When the cooldown was last set (None if first trigger)
         """
         key = self._get_key(rule_id, icao_hex)
-        now = datetime.utcnow()
+        now = timezone.now()
         now_ts = now.timestamp()
 
         if self.redis:
@@ -200,11 +212,11 @@ class DistributedCooldownManager:
                 else:
                     # Key exists - still in cooldown
                     if last_ts is not None:
-                        last_time = datetime.fromtimestamp(float(last_ts))
+                        last_time = datetime.fromtimestamp(float(last_ts), tz=UTC)
                         return False, last_time
                     return False, None
 
-            except Exception as e:
+            except (*_REDIS_OP_ERRORS, ValueError, TypeError, IndexError) as e:
                 logger.warning(f"Redis cooldown check failed, using fallback: {e}")
                 return self._check_fallback(rule_id, icao_hex, cooldown_seconds)
         else:
@@ -213,7 +225,7 @@ class DistributedCooldownManager:
     def _check_fallback(self, rule_id: int, icao_hex: str, cooldown_seconds: int) -> tuple[bool, datetime | None]:
         """In-memory fallback when Redis is unavailable. Uses thread-safe LRU cache."""
         key = (rule_id, icao_hex.upper())
-        now = datetime.utcnow()
+        now = timezone.now()
 
         last_trigger = self._fallback_cooldowns.get(key)
 
@@ -238,10 +250,34 @@ class DistributedCooldownManager:
             try:
                 ttl = self.redis.ttl(key)
                 return ttl if ttl > 0 else None
-            except Exception as e:
+            except _REDIS_OP_ERRORS as e:
                 logger.warning(f"Redis TTL check failed: {e}")
                 return None
         return None
+
+    def clear_one(self, rule_id: int, icao_hex: str) -> bool:
+        """
+        Clear the cooldown for a single rule/aircraft pair.
+
+        Used to roll back a cooldown that check_and_set just wrote when the
+        alert could not be persisted, so the next evaluation cycle can retry.
+
+        Returns:
+            True if a cooldown was removed
+        """
+        removed = False
+
+        if self.redis:
+            try:
+                removed = bool(self.redis.delete(self._get_key(rule_id, icao_hex)))
+            except _REDIS_OP_ERRORS as e:
+                logger.warning(f"Redis clear_one failed: {e}")
+
+        # Also clear in-memory fallback
+        if self._fallback_cooldowns.remove((rule_id, icao_hex.upper())):
+            removed = True
+
+        return removed
 
     def clear_rule(self, rule_id: int) -> int:
         """
@@ -265,7 +301,7 @@ class DistributedCooldownManager:
                         count += self.redis.delete(*keys)
                     if cursor == 0:
                         break
-            except Exception as e:
+            except _REDIS_OP_ERRORS as e:
                 logger.warning(f"Redis clear_rule failed: {e}")
 
         # Also clear in-memory fallback using predicate
@@ -294,7 +330,7 @@ class DistributedCooldownManager:
                         count += self.redis.delete(*keys)
                     if cursor == 0:
                         break
-            except Exception as e:
+            except _REDIS_OP_ERRORS as e:
                 logger.warning(f"Redis clear_aircraft failed: {e}")
 
         # Also clear in-memory fallback using predicate
@@ -323,7 +359,7 @@ class DistributedCooldownManager:
                         count += self.redis.delete(*keys)
                     if cursor == 0:
                         break
-            except Exception as e:
+            except _REDIS_OP_ERRORS as e:
                 logger.warning(f"Redis clear_all failed: {e}")
 
         # Clear in-memory fallback
@@ -350,7 +386,7 @@ class DistributedCooldownManager:
                     count += len(keys)
                     if cursor == 0:
                         break
-            except Exception as e:
+            except _REDIS_OP_ERRORS as e:
                 logger.warning(f"Redis count failed: {e}")
                 count = len(self._fallback_cooldowns)
         else:

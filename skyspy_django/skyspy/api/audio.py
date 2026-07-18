@@ -192,7 +192,7 @@ class AudioViewSet(viewsets.ModelViewSet):
 
         except ValueError as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        except Exception as e:
+        except Exception as e:  # broad: view-level 500 fallback over multi-step upload (S3/DB/file I/O/audio)
             logger.error(f"Failed to upload audio: {e}")
             return Response({"error": "Failed to upload audio"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 

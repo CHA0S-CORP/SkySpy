@@ -58,7 +58,7 @@ src/
     │
     └── map/                   # Map/radar components (~16,900 lines)
         ├── index.js           # Barrel export
-        ├── MapView.jsx        # Main map orchestrator (~12,240 lines — NO TESTS)
+        ├── MapView.jsx        # Main map orchestrator (~3,070 lines — NO TESTS)
         ├── MapControls.jsx    # Zoom, fullscreen, toggles (157 lines)
         ├── AircraftPopup.jsx  # Selected aircraft info popup (400 lines)
         ├── AircraftListPanel.jsx  # Floating aircraft list (204 lines)
@@ -78,7 +78,7 @@ src/
 Clean orchestration of views with tab-based navigation.
 
 ### MapView Subsystem
-MapView.jsx is currently ~12,240 lines with no test coverage. Some logic has been extracted into hooks and sub-components, but the main file still contains ~50 useState hooks, ~30 useEffect hooks, canvas rendering for aviation overlays, and inline event handlers. Sub-components extracted so far:
+MapView.jsx is currently ~3,070 lines with no test coverage (reduced from ~12,240 via a 6-phase decomposition; see `components/map/CLAUDE.md`). Most rendering is delegated to extracted hooks and sub-components, but the main file still contains ~45 useState hooks, remaining useEffect hooks, and composition of the extracted pieces. Sub-components extracted so far:
 
 **Custom Hooks:**
 - `useMapAlarms` - Three-stage Web Audio alarm system

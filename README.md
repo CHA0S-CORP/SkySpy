@@ -101,6 +101,162 @@ Configure API endpoints, map display modes, and themes.
 
 ![Settings](docs/screenshots/settings.gif)
 
+### Full Interface Gallery
+
+> The images below are generated automatically by the Playwright documentation
+> pipeline (`npm run docs:generate` from `web/`) and cover every screen across
+> desktop/tablet/mobile viewports. Do not edit between the marker comments — the
+> pipeline rewrites those regions. See [`web/e2e/docs/README.md`](web/e2e/docs/README.md).
+
+#### Live Map
+
+<!-- SCREENSHOTS:map:START -->
+![Map Aircraft Popup](docs/screenshots/desktop/map-aircraft-popup.png)
+![Map Emergency Aircraft](docs/screenshots/desktop/map-emergency-aircraft.png)
+![Map Filters](docs/screenshots/desktop/map-filters.png)
+![Map Full Controls](docs/screenshots/desktop/map-full-controls.png)
+![Map Overlays](docs/screenshots/desktop/map-overlays.png)
+![Map Overview](docs/screenshots/desktop/map-overview.png)
+
+<sub>Also captured for: mobile, tablet (see `docs/screenshots/`).</sub>
+<!-- SCREENSHOTS:map:END -->
+
+#### Aircraft List
+
+<!-- SCREENSHOTS:aircraft:START -->
+![Aircraft List Column Menu](docs/screenshots/desktop/aircraft-list-column-menu.png)
+![Aircraft List Filtered](docs/screenshots/desktop/aircraft-list-filtered.png)
+![Aircraft List Mobile](docs/screenshots/desktop/aircraft-list-mobile.png)
+![Aircraft List Row Expanded](docs/screenshots/desktop/aircraft-list-row-expanded.png)
+![Aircraft List Sorted](docs/screenshots/desktop/aircraft-list-sorted.png)
+![Aircraft List Table](docs/screenshots/desktop/aircraft-list-table.png)
+
+<sub>Also captured for: mobile, tablet (see `docs/screenshots/`).</sub>
+<!-- SCREENSHOTS:aircraft:END -->
+
+#### Aircraft Detail
+
+<!-- SCREENSHOTS:airframe:START -->
+![Airframe Communications Tab](docs/screenshots/desktop/airframe-communications-tab.png)
+![Airframe Info Tab](docs/screenshots/desktop/airframe-info-tab.png)
+![Airframe Overview](docs/screenshots/desktop/airframe-overview.png)
+![Airframe Safety Tab](docs/screenshots/desktop/airframe-safety-tab.png)
+![Airframe Track Tab](docs/screenshots/desktop/airframe-track-tab.png)
+
+<sub>Also captured for: mobile, tablet (see `docs/screenshots/`).</sub>
+<!-- SCREENSHOTS:airframe:END -->
+
+#### Statistics
+
+<!-- SCREENSHOTS:stats:START -->
+![Stats Cards Overview](docs/screenshots/desktop/stats-cards-overview.png)
+![Stats Charts](docs/screenshots/desktop/stats-charts.png)
+![Stats Coverage](docs/screenshots/desktop/stats-coverage.png)
+![Stats Dashboard](docs/screenshots/desktop/stats-dashboard.png)
+![Stats Time Range](docs/screenshots/desktop/stats-time-range.png)
+![Stats Top Aircraft](docs/screenshots/desktop/stats-top-aircraft.png)
+
+<sub>Also captured for: mobile, tablet (see `docs/screenshots/`).</sub>
+<!-- SCREENSHOTS:stats:END -->
+
+#### Advanced Analytics
+
+<!-- SCREENSHOTS:analytics:START -->
+![Analytics Geographic](docs/screenshots/desktop/analytics-geographic.png)
+![Analytics Overview](docs/screenshots/desktop/analytics-overview.png)
+
+<sub>Also captured for: mobile, tablet (see `docs/screenshots/`).</sub>
+<!-- SCREENSHOTS:analytics:END -->
+
+#### Flight History
+
+<!-- SCREENSHOTS:history:START -->
+![History Acars](docs/screenshots/desktop/history-acars.png)
+![History Analytics](docs/screenshots/desktop/history-analytics.png)
+![History Archive](docs/screenshots/desktop/history-archive.png)
+![History Date Picker](docs/screenshots/desktop/history-date-picker.png)
+![History Notams](docs/screenshots/desktop/history-notams.png)
+![History Pireps](docs/screenshots/desktop/history-pireps.png)
+![History Safety Events](docs/screenshots/desktop/history-safety-events.png)
+![History Session Detail](docs/screenshots/desktop/history-session-detail.png)
+![History Sessions](docs/screenshots/desktop/history-sessions.png)
+![History Sightings](docs/screenshots/desktop/history-sightings.png)
+![History With Replay](docs/screenshots/desktop/history-with-replay.png)
+
+<sub>Also captured for: mobile, tablet (see `docs/screenshots/`).</sub>
+<!-- SCREENSHOTS:history:END -->
+
+#### Radio / ACARS
+
+<!-- SCREENSHOTS:audio:START -->
+![Audio Emergency](docs/screenshots/desktop/audio-emergency.png)
+![Audio Filters](docs/screenshots/desktop/audio-filters.png)
+![Audio List](docs/screenshots/desktop/audio-list.png)
+![Audio Playback](docs/screenshots/desktop/audio-playback.png)
+![Audio Transcript](docs/screenshots/desktop/audio-transcript.png)
+![Audio With Stats](docs/screenshots/desktop/audio-with-stats.png)
+
+<sub>Also captured for: mobile, tablet (see `docs/screenshots/`).</sub>
+<!-- SCREENSHOTS:audio:END -->
+
+#### Alerts
+
+<!-- SCREENSHOTS:alerts:START -->
+![Alerts Condition Form](docs/screenshots/desktop/alerts-condition-form.png)
+![Alerts Notification Settings](docs/screenshots/desktop/alerts-notification-settings.png)
+![Alerts Rule Builder](docs/screenshots/desktop/alerts-rule-builder.png)
+![Alerts Rules List](docs/screenshots/desktop/alerts-rules-list.png)
+![Alerts Test Modal](docs/screenshots/desktop/alerts-test-modal.png)
+
+<sub>Also captured for: mobile, tablet (see `docs/screenshots/`).</sub>
+<!-- SCREENSHOTS:alerts:END -->
+
+#### Safety Events
+
+<!-- SCREENSHOTS:safety:START -->
+![Safety Event Full](docs/screenshots/desktop/safety-event-full.png)
+![Safety Event Map](docs/screenshots/desktop/safety-event-map.png)
+
+<sub>Also captured for: mobile, tablet (see `docs/screenshots/`).</sub>
+<!-- SCREENSHOTS:safety:END -->
+
+#### System
+
+<!-- SCREENSHOTS:system:START -->
+![System Overview](docs/screenshots/desktop/system-overview.png)
+![System Services](docs/screenshots/desktop/system-services.png)
+
+<sub>Also captured for: mobile, tablet (see `docs/screenshots/`).</sub>
+<!-- SCREENSHOTS:system:END -->
+
+#### Assistant
+
+<!-- SCREENSHOTS:assistant:START -->
+![Assistant Overview](docs/screenshots/desktop/assistant-overview.png)
+![Assistant Prompt](docs/screenshots/desktop/assistant-prompt.png)
+
+<sub>Also captured for: mobile, tablet (see `docs/screenshots/`).</sub>
+<!-- SCREENSHOTS:assistant:END -->
+
+#### Cannonball Mode
+
+<!-- SCREENSHOTS:cannonball:START -->
+![Cannonball Hud](docs/screenshots/desktop/cannonball-hud.png)
+![Cannonball Mobile Hud](docs/screenshots/desktop/cannonball-mobile-hud.png)
+![Cannonball Radar View](docs/screenshots/desktop/cannonball-radar-view.png)
+![Cannonball Settings](docs/screenshots/desktop/cannonball-settings.png)
+
+<sub>Also captured for: mobile, tablet (see `docs/screenshots/`).</sub>
+<!-- SCREENSHOTS:cannonball:END -->
+
+#### Login
+
+<!-- SCREENSHOTS:login:START -->
+![Login Form](docs/screenshots/desktop/login-form.png)
+
+<sub>Also captured for: mobile, tablet (see `docs/screenshots/`).</sub>
+<!-- SCREENSHOTS:login:END -->
+
 ## Architecture
 
 ```
@@ -132,13 +288,13 @@ Configure API endpoints, map display modes, and themes.
 
 ## Tech Stack
 
-**Backend (adsb-api)**
+**Backend (skyspy_django)**
 - Python 3.12+
-- FastAPI with async/await
-- SQLAlchemy 2.0+ (async ORM)
-- Socket.IO for real-time streaming
-- PostgreSQL for data persistence
-- Redis for pub/sub messaging
+- Django + Django REST Framework
+- Django ASGI (Daphne) with Socket.IO for real-time streaming
+- Celery for background tasks (6 queues)
+- PostgreSQL (via PgBouncer) for data persistence
+- Redis for cache and pub/sub messaging
 - Apprise for notifications
 
 **Frontend (web)**
@@ -200,9 +356,10 @@ make dev-down
 
 ```bash
 # Backend
-cd adsb-api
-pip install -e ".[dev]"
-uvicorn app.main:app --host 0.0.0.0 --port 5000 --reload
+cd skyspy_django
+uv sync
+python manage.py migrate
+python manage.py runserver 0.0.0.0:8000
 
 # Frontend
 cd web
@@ -362,26 +519,29 @@ Safety events are logged, displayed on the dashboard, and can trigger push notif
 make test
 
 # Run backend tests locally
-cd adsb-api
+cd skyspy_django
 pytest
 
 # Run with coverage
-pytest --cov=app --cov-report=html
+pytest --cov=skyspy --cov-report=html
 ```
 
 ## Project Structure
 
 ```
 skyspy/
-├── adsb-api/                 # Backend API
-│   ├── app/
-│   │   ├── main.py           # FastAPI application
-│   │   ├── models.py         # SQLAlchemy models
-│   │   ├── schemas.py        # Pydantic schemas
-│   │   ├── routers/          # API endpoints
-│   │   └── services/         # Business logic
-│   ├── tests/                # Test suite
-│   └── pyproject.toml        # Python dependencies
+├── skyspy_django/            # Django backend API
+│   ├── skyspy/
+│   │   ├── settings.py       # Django settings
+│   │   ├── models/           # Django models (by domain)
+│   │   ├── api/              # DRF ViewSets (/api/v1/)
+│   │   ├── serializers/      # DRF serializers
+│   │   ├── services/         # Business logic layer
+│   │   ├── tasks/            # Celery background tasks
+│   │   ├── socketio/         # Socket.IO namespaces + mixins
+│   │   └── tests/            # Test suite (pytest)
+│   ├── manage.py
+│   └── pytest.ini            # Test config (--reuse-db)
 │
 ├── web/                      # Frontend dashboard
 │   ├── src/
@@ -389,6 +549,9 @@ skyspy/
 │   │   ├── hooks/            # Custom hooks
 │   │   └── utils/            # Utilities
 │   └── package.json          # Node dependencies
+│
+├── skyspy-go/                # Go CLI TUI radar client (Bubble Tea + Cobra)
+├── skyspy_common/            # Shared Python package (libacars CFFI bindings)
 │
 ├── test/                     # Test infrastructure
 │   ├── mock-1090/            # Mock ADS-B receiver

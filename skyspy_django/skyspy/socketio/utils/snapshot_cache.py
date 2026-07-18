@@ -72,7 +72,7 @@ class SnapshotCache:
                 with self._lock:
                     self._local_cache[cache_key] = (data, now + self.DEFAULT_TTL)
                 return data
-        except Exception as e:
+        except (ConnectionError, OSError) as e:
             logger.warning(f"Error reading snapshot cache for {topic}: {e}")
 
         logger.debug(f"Snapshot cache miss for topic: {topic}")
@@ -114,7 +114,7 @@ class SnapshotCache:
             cache.set(cache_key, json_data, timeout=ttl)
             logger.debug(f"Snapshot cached for topic: {topic} (ttl={ttl}s)")
             return True
-        except Exception as e:
+        except (ConnectionError, OSError) as e:
             logger.warning(f"Error setting snapshot cache for {topic}: {e}")
             return False
 
@@ -135,7 +135,7 @@ class SnapshotCache:
         try:
             cache.delete(cache_key)
             logger.debug(f"Snapshot cache invalidated for topic: {topic}")
-        except Exception as e:
+        except (ConnectionError, OSError) as e:
             logger.warning(f"Error invalidating snapshot cache for {topic}: {e}")
 
     def invalidate_all(self) -> None:
@@ -154,7 +154,7 @@ class SnapshotCache:
                 cache_key = f"{self.CACHE_KEY_PREFIX}:{topic}"
                 cache.delete(cache_key)
             logger.debug("All snapshot caches invalidated")
-        except Exception as e:
+        except (ConnectionError, OSError) as e:
             logger.warning(f"Error invalidating all snapshot caches: {e}")
 
     def get_stats(self) -> dict:

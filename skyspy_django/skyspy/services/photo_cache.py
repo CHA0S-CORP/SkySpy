@@ -16,6 +16,7 @@ from pathlib import Path
 
 import httpx
 from django.conf import settings
+from django.db import DatabaseError
 from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
 from skyspy.models import AircraftInfo
@@ -81,6 +82,17 @@ def get_photo_path(icao_hex: str, is_thumbnail: bool = False) -> Path:
     return cache_dir / f"{icao_hex.upper()}{suffix}.jpg"
 
 
+def is_photo_cached(icao_hex: str, is_thumbnail: bool = False) -> bool:
+    """True when the photo already exists in the cache (S3 object or local file)."""
+    if not settings.PHOTO_CACHE_ENABLED:
+        return False
+    icao_hex = icao_hex.upper()
+    if settings.S3_ENABLED:
+        return _check_s3_photo_exists(icao_hex, is_thumbnail)
+    path = get_photo_path(icao_hex, is_thumbnail)
+    return path.exists() and path.stat().st_size > 0
+
+
 def _get_s3_photo_key(icao_hex: str, is_thumbnail: bool = False) -> str:
     """Get S3 key for photo."""
     suffix = "_thumb" if is_thumbnail else ""
@@ -106,6 +118,26 @@ def _get_s3_photo_url(icao_hex: str, is_thumbnail: bool = False) -> str:
     return f"https://{settings.S3_BUCKET}.s3.{settings.S3_REGION}.amazonaws.com/{key}"
 
 
+def _check_redis_photo_set(icao_hex: str, is_thumbnail: bool = False) -> bool | None:
+    """
+    Fast-path existence check against the Redis `cached_photo_icaos` set
+    (populated periodically by tasks.external_db.update_cached_photo_set).
+
+    Returns True if the ICAO is present in the set, else None (unknown — the
+    set may be stale/cold, so callers must fall back to a live HEAD).
+    """
+    set_key = "cached_photo_thumb_icaos" if is_thumbnail else "cached_photo_icaos"
+    try:
+        from django.core.cache import cache
+
+        cached = cache.get(set_key)
+    except (ConnectionError, OSError):
+        return None
+    if not cached:
+        return None
+    return True if icao_hex.upper() in cached else None
+
+
 def _check_s3_photo_exists(icao_hex: str, is_thumbnail: bool = False) -> bool:
     """Check if photo exists in S3 with caching."""
     cache_key = f"{icao_hex}:{'thumb' if is_thumbnail else 'full'}"
@@ -117,6 +149,14 @@ def _check_s3_photo_exists(icao_hex: str, is_thumbnail: bool = False) -> bool:
             if now - cached_at < _S3_EXISTS_CACHE_TTL:
                 return exists
 
+    # Redis fast-path: if the periodic set says the object exists, trust it and
+    # skip the ~40-260ms Wasabi HEAD round-trip. A miss is inconclusive (cold/
+    # stale set), so fall through to the live HEAD below.
+    if _check_redis_photo_set(icao_hex, is_thumbnail):
+        with _s3_exists_cache_lock:
+            _s3_exists_cache[cache_key] = (True, now)
+        return True
+
     key = _get_s3_photo_key(icao_hex, is_thumbnail)
 
     # Use storage module's check
@@ -127,7 +167,7 @@ def _check_s3_photo_exists(icao_hex: str, is_thumbnail: bool = False) -> bool:
         return False
 
     try:
-        from botocore.exceptions import ClientError
+        from botocore.exceptions import BotoCoreError, ClientError
 
         client.head_object(Bucket=settings.S3_BUCKET, Key=key)
         with _s3_exists_cache_lock:
@@ -139,7 +179,7 @@ def _check_s3_photo_exists(icao_hex: str, is_thumbnail: bool = False) -> bool:
             with _s3_exists_cache_lock:
                 _s3_exists_cache[cache_key] = (False, now)
         return False
-    except Exception:
+    except (BotoCoreError, ConnectionError, OSError):
         return False
 
 
@@ -173,7 +213,7 @@ def _upload_photo_to_s3(data: bytes, icao_hex: str, is_thumbnail: bool = False) 
                 _s3_exists_cache[cache_key] = (True, time.time())
             return url
 
-        except Exception as e:
+        except Exception as e:  # broad: upload retry loop must tolerate any error (tested)
             last_error = e
             if attempt < MAX_RETRIES - 1:
                 logger.warning(f"S3 upload attempt {attempt + 1} failed: {e}, retrying...")
@@ -204,8 +244,31 @@ def get_signed_photo_url(icao_hex: str, is_thumbnail: bool = False, expires_in: 
             ExpiresIn=expires_in,
         )
         return url
-    except Exception as e:
+    except Exception as e:  # broad: signed-URL generation returns None on any error (tested)
         logger.error(f"Failed to generate signed URL for {icao_hex}: {e}")
+        return None
+
+
+def get_photo_bytes(icao_hex: str, is_thumbnail: bool = False) -> bytes | None:
+    """Fetch cached photo bytes from S3 so they can be served through our own API.
+
+    Lets the frontend always hit /api/v1/photos/<icao> (same-origin) instead of
+    being redirected to a remote signed URL.
+    """
+    from skyspy.services.storage import _get_s3_client
+
+    client = _get_s3_client()
+    if not client:
+        return None
+
+    key = _get_s3_photo_key(icao_hex, is_thumbnail)
+    try:
+        from botocore.exceptions import BotoCoreError, ClientError
+
+        response = client.get_object(Bucket=settings.S3_BUCKET, Key=key)
+        return response["Body"].read()
+    except (BotoCoreError, ClientError) as e:
+        logger.warning(f"S3 photo fetch failed for {icao_hex}: {e}")
         return None
 
 
@@ -280,7 +343,7 @@ def _scrape_planespotters_full_size(page_url: str) -> str | None:
 
     except httpx.HTTPStatusError as e:
         logger.warning(f"HTTP {e.response.status_code} scraping {page_url}")
-    except Exception as e:
+    except (httpx.HTTPError, ConnectionError, OSError) as e:
         logger.warning(f"Failed to scrape {page_url}: {e}")
 
     return None
@@ -385,7 +448,7 @@ def download_photo(
     except httpx.HTTPStatusError as e:
         logger.warning(f"HTTP error downloading photo for {icao_hex}: {e.response.status_code}")
         return None
-    except Exception as e:
+    except (httpx.HTTPError, ConnectionError, OSError) as e:
         logger.error(f"Error downloading photo for {icao_hex}: {e}")
         return None
     finally:
@@ -450,7 +513,7 @@ def update_photo_paths(icao_hex: str, photo_path: str | None = None, thumb_path:
         return
     try:
         AircraftInfo.objects.filter(icao_hex=icao_hex).update(**updates)
-    except Exception as e:
+    except DatabaseError as e:
         logger.error(f"Error updating photo cache paths for {icao_hex}: {e}")
 
 

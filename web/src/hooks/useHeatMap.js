@@ -277,22 +277,10 @@ export function useHeatMap({
     try {
       let positions = [];
 
-      // Try WebSocket first
-      if (wsRequest && wsConnected) {
-        const result = await wsRequest('history-positions', {
-          hours,
-          limit: 10000,
-        });
-
-        if (result?.positions) {
-          positions = result.positions;
-        } else if (result?.sightings) {
-          positions = result.sightings;
-        }
-      }
-
-      // Fallback to REST API
-      if (positions.length === 0 && apiBaseUrl) {
+      // Load historical positions over REST. There is no WS 'history-positions'
+      // request type — awaiting it rejected and (being unguarded) skipped this
+      // fallback entirely, so the historical layer never loaded while WS was up.
+      if (apiBaseUrl) {
         const response = await fetch(
           `${apiBaseUrl}/api/v1/sightings?hours=${hours}&limit=10000&fields=lat,lon,timestamp`
         );

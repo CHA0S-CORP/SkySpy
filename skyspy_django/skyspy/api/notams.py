@@ -227,6 +227,119 @@ class NotamViewSet(viewsets.ViewSet):
         )
 
     @extend_schema(
+        summary="Get plain-English AI summary of a NOTAM",
+        description=(
+            "Uses the configured LLM to explain a stored NOTAM in plain English. Opt-in "
+            "(one LLM call, cached). Falls back to the rule-based decoder summary when the "
+            "LLM is disabled/unconfigured."
+        ),
+    )
+    @action(detail=False, methods=["get"], url_path=r"(?P<notam_id>[^/]+)/ai-summary")
+    def ai_summary(self, request, notam_id=None):
+        """Plain-English summary of one NOTAM (LLM if available, else rule-based)."""
+        from skyspy.models import CachedNotam
+        from skyspy.services import aviation_llm, notam_decoder
+
+        notam = CachedNotam.objects.filter(notam_id=notam_id).first()
+        if not notam:
+            return Response({"error": "NOTAM not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        decoded = notam_decoder.decode_notam(notam)
+        rule_summary = decoded.get("human_summary")
+        raw = notam.raw_text or notam.text or ""
+
+        ai = aviation_llm.explain_notam(raw, decoded=decoded) if aviation_llm.available() else None
+
+        return Response(
+            {
+                "notam_id": notam_id,
+                "summary": ai or rule_summary,
+                "source": "llm" if ai else "rule",
+                "severity": decoded.get("severity"),
+                "category": decoded.get("category"),
+            }
+        )
+
+    @extend_schema(
+        summary="Get one NOTAM by id",
+        description="Full detail (including raw text and schedule) for a single cached NOTAM.",
+        parameters=[OpenApiParameter(name="notam_id", type=str, required=True, description="NOTAM id")],
+        responses={200: NotamListResponseSerializer},
+    )
+    @action(detail=False, methods=["get"], url_path="detail")
+    def record(self, request):
+        """Full detail for a single NOTAM (powers the NOTAM detail page).
+
+        Uses a query param (``?notam_id=6/6038``) because NOTAM ids can contain
+        slashes, which would break a path segment.
+        """
+        from skyspy.services import notams
+
+        notam_id = request.query_params.get("notam_id")
+        if not notam_id:
+            return Response({"error": "notam_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        detail = notams.get_notam_detail(notam_id)
+        if not detail:
+            return Response({"error": "NOTAM not found"}, status=status.HTTP_404_NOT_FOUND)
+        return Response(detail)
+
+    @extend_schema(
+        summary="Get structured AI briefing for a NOTAM",
+        description=(
+            "LLM-generated flight-ops briefing broken into headline, plain-language "
+            "summary, key restrictions, and observer implications. Opt-in (one cached "
+            "LLM call). Falls back to the rule-based summary when the LLM is disabled "
+            "or the structured response can't be parsed."
+        ),
+        parameters=[OpenApiParameter(name="notam_id", type=str, required=True, description="NOTAM id")],
+    )
+    @action(detail=False, methods=["get"])
+    def brief(self, request):
+        """Structured plain-language briefing for one NOTAM (query-param id)."""
+        from skyspy.models import CachedNotam
+        from skyspy.services import aviation_llm, notam_decoder
+
+        notam_id = request.query_params.get("notam_id")
+        if not notam_id:
+            return Response({"error": "notam_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        notam = CachedNotam.objects.filter(notam_id=notam_id).first()
+        if not notam:
+            return Response({"error": "NOTAM not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        decoded = notam_decoder.decode_notam(notam)
+        raw = notam.raw_text or notam.text or ""
+
+        brief = aviation_llm.brief_notam(raw, decoded=decoded) if aviation_llm.available() else None
+        if brief:
+            return Response(
+                {
+                    "notam_id": notam_id,
+                    "available": True,
+                    "source": "llm",
+                    **brief,
+                    "severity": decoded.get("severity"),
+                    "category": decoded.get("category"),
+                }
+            )
+
+        # Fallback: single-string rule-based summary, no structured columns.
+        return Response(
+            {
+                "notam_id": notam_id,
+                "available": False,
+                "source": "rule",
+                "headline": decoded.get("human_summary") or "",
+                "summary": decoded.get("human_summary") or "",
+                "restrictions": [],
+                "implications": [],
+                "severity": decoded.get("severity"),
+                "category": decoded.get("category"),
+            }
+        )
+
+    @extend_schema(
         summary="Get NOTAM statistics",
         description="Get statistics about cached NOTAMs",
         responses={200: NotamStatsSerializer},

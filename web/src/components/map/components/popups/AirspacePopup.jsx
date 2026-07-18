@@ -32,10 +32,7 @@ export function AirspacePopup({
         <span
           className={`airport-class-badge class-${(airspace.class || airspace.airspace_class || '').toLowerCase()}`}
         >
-          {airspace.class ||
-            airspace.airspace_class ||
-            airspace.type ||
-            'Airspace'}
+          {airspace.class || airspace.airspace_class || airspace.type || 'Airspace'}
         </span>
       </div>
 
@@ -49,35 +46,23 @@ export function AirspacePopup({
 
         <div className="detail-row">
           <span>Class/Type</span>
-          <span>
-            {airspace.class ||
-              airspace.airspace_class ||
-              airspace.type ||
-              'Unknown'}
-          </span>
+          <span>{airspace.class || airspace.airspace_class || airspace.type || 'Unknown'}</span>
         </div>
 
-        {(airspace.floor_ft !== undefined ||
-          airspace.lower_alt_ft !== undefined) && (
+        {(airspace.floor_ft !== undefined || airspace.lower_alt_ft !== undefined) && (
           <div className="detail-row">
             <span>Floor</span>
             <span>
-              {(airspace.floor_ft ?? airspace.lower_alt_ft)?.toLocaleString() ||
-                'SFC'}{' '}
-              ft
+              {(airspace.floor_ft ?? airspace.lower_alt_ft)?.toLocaleString() || 'SFC'} ft
             </span>
           </div>
         )}
 
-        {(airspace.ceiling_ft !== undefined ||
-          airspace.upper_alt_ft !== undefined) && (
+        {(airspace.ceiling_ft !== undefined || airspace.upper_alt_ft !== undefined) && (
           <div className="detail-row">
             <span>Ceiling</span>
             <span>
-              {(
-                airspace.ceiling_ft ?? airspace.upper_alt_ft
-              )?.toLocaleString() || 'UNL'}{' '}
-              ft
+              {(airspace.ceiling_ft ?? airspace.upper_alt_ft)?.toLocaleString() || 'UNL'} ft
             </span>
           </div>
         )}

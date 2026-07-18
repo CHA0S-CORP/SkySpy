@@ -212,7 +212,9 @@ export function useProKeyboardShortcuts({ mapMode, state, actions }) {
         case 'd': // Reset all data block positions to default
           if (state.dataBlockCustomPositionCount > 0) {
             actions.resetAllDataBlockOffsets();
-            state.toastContext?.success?.(`Reset ${state.dataBlockCustomPositionCount} data block position(s)`);
+            state.toastContext?.success?.(
+              `Reset ${state.dataBlockCustomPositionCount} data block position(s)`
+            );
           }
           break;
         case ' ': // Space: Toggle play/pause in playback mode

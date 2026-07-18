@@ -17,6 +17,7 @@ from urllib.parse import urlparse
 
 import apprise
 from django.conf import settings
+from django.db import DatabaseError
 
 from skyspy.models import NotificationConfig, NotificationLog
 
@@ -107,9 +108,64 @@ def _is_safe_url(url: str) -> bool:
 
         return True
 
-    except Exception as e:
+    except Exception as e:  # broad: SSRF security boundary must fail closed on any unexpected error
         logger.warning(f"URL validation error: {e}")
         return False
+
+
+def pin_and_validate_url(url: str) -> tuple[str | None, dict]:
+    """
+    Validate a webhook URL and pin its DNS resolution (SSRF prevention).
+
+    _is_safe_url alone is validate-then-fetch: the delivery client re-resolves
+    the hostname, so TTL-0 DNS rebinding can swap in a private IP between the
+    check and the connect. For plain-http URLs we therefore resolve ONCE,
+    validate the literal IP, and rewrite the URL to connect to that pinned IP
+    while preserving the original hostname in a Host header. HTTPS URLs keep
+    their hostname: certificate verification already defeats rebinding (an
+    internal service cannot present a valid cert for the attacker's domain).
+
+    Returns:
+        (request_url, extra_headers) - request_url is None if the URL is unsafe.
+    """
+    if not _is_safe_url(url):
+        return None, {}
+
+    parsed = urlparse(url)
+    if parsed.scheme != "http" or not parsed.hostname:
+        return url, {}
+
+    # Already a literal IP - nothing to pin
+    try:
+        ipaddress.ip_address(parsed.hostname)
+        return url, {}
+    except ValueError:
+        pass
+
+    try:
+        addr_info = socket.getaddrinfo(parsed.hostname, parsed.port or 80, proto=socket.IPPROTO_TCP)
+    except (socket.gaierror, OSError):
+        return None, {}
+
+    pinned = None
+    for _family, _type, _proto, _canonname, sockaddr in addr_info:
+        try:
+            resolved = ipaddress.ip_address(sockaddr[0])
+        except ValueError:
+            return None, {}
+        if _is_blocked_ip(resolved):
+            return None, {}
+        if pinned is None:
+            pinned = resolved
+
+    if pinned is None:
+        return None, {}
+
+    host_header = parsed.hostname if parsed.port is None else f"{parsed.hostname}:{parsed.port}"
+    ip_literal = f"[{pinned}]" if pinned.version == 6 else str(pinned)
+    netloc = ip_literal if parsed.port is None else f"{ip_literal}:{parsed.port}"
+    pinned_url = parsed._replace(netloc=netloc).geturl()
+    return pinned_url, {"Host": host_header}
 
 
 class NotificationManager:
@@ -203,7 +259,7 @@ class NotificationManager:
             if config and not config.enabled:
                 return False
             cooldown = config.cooldown_seconds if config else getattr(settings, "NOTIFICATION_COOLDOWN", 300)
-        except Exception as e:
+        except DatabaseError as e:
             logger.warning(f"Failed to check notification config: {e}")
             cooldown = getattr(settings, "NOTIFICATION_COOLDOWN", 300)
 
@@ -245,7 +301,7 @@ class NotificationManager:
                         message=f"{title}: {body}",
                         details=details or {},
                     )
-                except Exception as e:
+                except DatabaseError as e:
                     logger.warning(f"Failed to log notification: {e}")
 
                 logger.info(f"Notification sent: {title}")
@@ -254,7 +310,7 @@ class NotificationManager:
 
             return result
 
-        except Exception as e:
+        except Exception as e:  # broad: Apprise dispatches to many third-party platforms with unknowable failure modes
             logger.error(f"Notification error: {e}")
             return False
 
@@ -269,7 +325,7 @@ class NotificationManager:
             config = NotificationConfig.get_config()
             enabled = config.enabled if config else True
             cooldown = config.cooldown_seconds if config else getattr(settings, "NOTIFICATION_COOLDOWN", 300)
-        except Exception:
+        except DatabaseError:
             enabled = True
             cooldown = 300
 
@@ -354,7 +410,7 @@ def cleanup_cooldowns():
     try:
         config = NotificationConfig.get_config()
         cooldown = (config.cooldown_seconds if config else None) or getattr(settings, "NOTIFICATION_COOLDOWN", 300)
-    except Exception as e:
+    except DatabaseError as e:
         logger.warning(f"Failed to read notification config for cooldown cleanup: {e}")
         cooldown = getattr(settings, "NOTIFICATION_COOLDOWN", 300)
     cutoff = now - max(600, cooldown * 2)

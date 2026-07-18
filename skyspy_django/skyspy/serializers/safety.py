@@ -10,8 +10,10 @@ from skyspy.models import SafetyEvent
 class SafetyEventSerializer(serializers.ModelSerializer):
     """Single safety event record."""
 
-    icao = serializers.CharField(source="icao_hex", read_only=True)
-    icao_2 = serializers.CharField(source="icao_hex_2", read_only=True)
+    # Writable so authenticated create (POST /safety/events/) can set the
+    # aircraft — a read-only alias would silently store icao_hex=''
+    icao = serializers.CharField(source="icao_hex", required=False)
+    icao_2 = serializers.CharField(source="icao_hex_2", required=False, allow_null=True)
     timestamp = serializers.DateTimeField(read_only=True)
 
     class Meta:

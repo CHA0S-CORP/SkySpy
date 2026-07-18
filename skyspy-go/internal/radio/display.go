@@ -263,8 +263,17 @@ func (m *Model) handleAircraftMsg(msg ws.Message) {
 	case string(ws.AircraftSnapshot):
 		aircraft, err := ws.ParseAircraftSnapshot(msg.Data)
 		if err == nil {
+			// Snapshot is authoritative: aircraft:remove events missed
+			// during a disconnect must not leave ghost aircraft behind.
+			seen := make(map[string]bool, len(aircraft))
 			for _, ac := range aircraft {
 				m.updateAircraft(&ac)
+				seen[ac.Hex] = true
+			}
+			for hex := range m.Aircraft {
+				if !seen[hex] {
+					delete(m.Aircraft, hex)
+				}
 			}
 		}
 	case string(ws.AircraftUpdate), string(ws.AircraftNew):

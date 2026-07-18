@@ -14,6 +14,7 @@ vi.mock('./socket', () => ({
   useSocketIO: vi.fn(() => ({
     connected: false,
     on: vi.fn(() => vi.fn()),
+    emit: vi.fn(),
   })),
 }));
 
@@ -68,6 +69,7 @@ describe('useAlertRules', () => {
     useSocketIO.mockReturnValue({
       connected: false,
       on: mockOnAlertEvent,
+      emit: vi.fn(),
     });
   });
 
@@ -717,6 +719,7 @@ describe('useAlertRules', () => {
       useSocketIO.mockReturnValue({
         connected: true,
         on: mockOnAlertEvent,
+        emit: vi.fn(),
       });
 
       renderHook(() =>

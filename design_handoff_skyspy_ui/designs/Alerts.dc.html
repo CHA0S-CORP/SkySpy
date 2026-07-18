@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing:border-box; margin:0; padding:0; }
+  :root {
+    --bg0:#080b11; --bg1:#0d131b; --bg2:#141d28; --bg3:#1a2531;
+    --bord:#1b2531; --bord2:#28343f;
+    --txt:#e8eff6; --dim:#8b98a7; --dim2:#586472;
+    --accent:#3ddc84; --accent2:#4cc9f0; --warn:#f5b544; --danger:#f2585d; --mil:#b39dff;
+  }
+  [data-theme="slate"] { --bg0:#0a111e; --bg1:#101a2b; --bg2:#182437; --bg3:#1f2d43; --bord:#1e2c40; --bord2:#2b3c54; --txt:#eaf1f9; --dim:#93a1b5; --dim2:#5a6a80; --accent:#4cc9f0; --accent2:#5eead4; }
+  [data-theme="amber"] { --bg0:#0c0a06; --bg1:#15110a; --bg2:#1f1810; --bg3:#291f13; --bord:#2a2113; --bord2:#3a2e1c; --txt:#f4ead6; --dim:#b39c78; --dim2:#7a6a4d; --accent:#f5b544; --accent2:#ffd479; }
+  html,body { height:100%; background:var(--bg0); }
+  body { font-family:'IBM Plex Sans',system-ui,sans-serif; -webkit-font-smoothing:antialiased; }
+  a { text-decoration:none; color:inherit; }
+  select { -webkit-appearance:none; appearance:none; }
+  select option { background:var(--bg2); color:var(--txt); }
+  ::-webkit-scrollbar { width:10px; height:10px; }
+  ::-webkit-scrollbar-track { background:transparent; }
+  ::-webkit-scrollbar-thumb { background:var(--bord2); border-radius:6px; border:2px solid var(--bg1); }
+  @keyframes blink { 0%,100%{opacity:1;} 50%{opacity:.25;} }
+</style>
+</helmet>
+<div style="display:flex;flex-direction:column;height:100vh;width:100vw;overflow:hidden;background:var(--bg0);color:var(--txt);font-size:13px;">
+
+  <header style="display:flex;align-items:center;height:60px;flex:0 0 60px;background:var(--bg1);border-bottom:1px solid var(--bord);padding:0 18px;">
+    <div style="display:flex;align-items:center;gap:11px;width:214px;flex:0 0 214px;">
+      <div style="width:30px;height:30px;border-radius:8px;background:radial-gradient(circle at 30% 30%,var(--accent),transparent 70%),var(--bg3);display:flex;align-items:center;justify-content:center;border:1px solid var(--bord2);"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.9"><circle cx="12" cy="12" r="9"></circle><path d="M12 3v18M3 12h18" opacity=".5"></path><circle cx="12" cy="12" r="3.4" fill="var(--accent)" stroke="none"></circle></svg></div>
+      <div style="font-size:20px;font-weight:700;letter-spacing:-.4px;">Sky<span style="color:var(--accent);">Spy</span></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:22px;padding-left:8px;">
+      <div style="display:flex;align-items:center;gap:8px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.7"><path d="M22 2 15 22 11 13 2 9z"></path></svg><span style="font-family:'IBM Plex Mono';font-size:17px;font-weight:600;color:var(--accent);">152</span><span style="font-size:10px;letter-spacing:1.2px;color:var(--dim);font-weight:600;">AIRCRAFT</span></div>
+      <div style="width:1px;height:22px;background:var(--bord2);"></div>
+      <div style="display:flex;align-items:center;gap:8px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent2)" stroke-width="1.7"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0116 0z"></path><circle cx="12" cy="10" r="2.6"></circle></svg><span style="font-family:'IBM Plex Mono';font-size:15px;font-weight:600;color:var(--accent2);">32.8</span><span style="font-size:10px;letter-spacing:1.2px;color:var(--dim);font-weight:600;">LAT</span></div>
+      <div style="display:flex;align-items:center;gap:8px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent2)" stroke-width="1.7"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0116 0z"></path><circle cx="12" cy="10" r="2.6"></circle></svg><span style="font-family:'IBM Plex Mono';font-size:15px;font-weight:600;color:var(--accent2);">-117.2</span><span style="font-size:10px;letter-spacing:1.2px;color:var(--dim);font-weight:600;">LON</span></div>
+    </div>
+    <div style="flex:1;"></div>
+    <div style="display:flex;align-items:center;gap:7px;padding:0 6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--dim)" stroke-width="1.6"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg><span style="font-family:'IBM Plex Mono';font-size:13px;font-weight:500;color:var(--dim);">05:56:14</span><span style="font-size:10px;color:var(--dim2);font-weight:600;">UTC</span></div>
+  </header>
+
+  <div style="display:flex;flex:1;min-height:0;">
+    <nav style="width:214px;flex:0 0 214px;background:var(--bg1);border-right:1px solid var(--bord);display:flex;flex-direction:column;padding:14px 12px;">
+      <div style="font-size:10px;letter-spacing:1.4px;color:var(--dim2);font-weight:600;padding:2px 10px 10px;">NAVIGATION</div>
+      <a href="#" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:9px;color:var(--dim);" style-hover="background:var(--bg2);color:var(--txt);"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3zM9 3v15M15 6v15"></path></svg>Live Map</a>
+      <a href="Aircraft List.dc.html" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:9px;color:var(--dim);margin-top:2px;" style-hover="background:var(--bg2);color:var(--txt);"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 12 15 12 13 21 11 3 9 12 2 12"></path></svg>Aircraft List</a>
+      <a href="Statistics.dc.html" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:9px;color:var(--dim);margin-top:2px;" style-hover="background:var(--bg2);color:var(--txt);"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"></path></svg>Statistics</a>
+      <a href="History.dc.html" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:9px;color:var(--dim);margin-top:2px;" style-hover="background:var(--bg2);color:var(--txt);"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12a9 9 0 109-9 9 9 0 00-8 5M3 3v5h5M12 7v5l3 2"></path></svg>History</a>
+      <a href="Radio.dc.html" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:9px;color:var(--dim);margin-top:2px;" style-hover="background:var(--bg2);color:var(--txt);"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="2.4"></circle><path d="M7 8a7 7 0 000 8M17 8a7 7 0 010 8M4.5 5a11 11 0 000 14M19.5 5a11 11 0 010 14"></path></svg>Radio</a>
+      <a href="#" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:9px;margin-top:2px;background:linear-gradient(90deg,color-mix(in srgb,var(--accent) 16%,transparent),transparent);color:var(--accent);font-weight:600;border-left:2px solid var(--accent);"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 8a6 6 0 00-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 01-3.4 0"></path></svg>Alerts<span style="margin-left:auto;font-family:'IBM Plex Mono';font-size:10px;font-weight:600;background:color-mix(in srgb,var(--warn) 20%,transparent);color:var(--warn);padding:2px 6px;border-radius:20px;">{{ activeCount }}</span></a>
+      <a href="System.dc.html" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:9px;color:var(--dim);margin-top:2px;" style-hover="background:var(--bg2);color:var(--txt);"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12h4l2 6 4-14 2 8h6"></path></svg>System</a>
+      <a href="Cannonball.dc.html" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:9px;margin-top:8px;color:var(--danger);background:color-mix(in srgb,var(--danger) 12%,transparent);border:1px solid color-mix(in srgb,var(--danger) 30%,transparent);font-weight:600;" style-hover="background:color-mix(in srgb,var(--danger) 20%,transparent);"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"></circle><circle cx="12" cy="12" r="4"></circle><path d="M12 1v4M12 19v4M1 12h4M19 12h4"></path></svg>Cannonball</a>
+      <div style="flex:1;"></div>
+      <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;"><span style="width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 8px var(--accent);animation:blink 2s infinite;"></span><span style="font-size:11px;font-weight:600;letter-spacing:.6px;color:var(--accent);">LIVE</span><span style="margin-left:auto;font-family:'IBM Plex Mono';font-size:10px;color:var(--dim2);">v2.5.0</span></div>
+    </nav>
+
+    <main style="flex:1;min-width:0;display:flex;flex-direction:column;min-height:0;">
+      <!-- tabs + actions -->
+      <div style="display:flex;align-items:center;gap:12px;padding:16px 20px 0;flex:0 0 auto;">
+        <div style="display:flex;gap:4px;padding:4px;border-radius:11px;background:var(--bg1);border:1px solid var(--bord);">
+          <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="3"><button onClick="{{ t.onClick }}" style="display:flex;align-items:center;gap:7px;height:34px;padding:0 15px;border:none;border-radius:8px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;color:{{ t.fg }};background:{{ t.bg }};">{{ t.label }}<sc-if value="{{ t.hasCount }}" hint-placeholder-val="{{ false }}"><span style="font-family:'IBM Plex Mono';font-size:10px;background:var(--bg3);color:var(--dim);padding:1px 6px;border-radius:10px;">{{ t.count }}</span></sc-if></button></sc-for>
+        </div>
+        <div style="flex:1;"></div>
+        <button style="display:flex;align-items:center;gap:8px;height:38px;padding:0 15px;border-radius:10px;background:var(--bg1);border:1px solid var(--bord);color:var(--dim);cursor:pointer;font-family:inherit;font-size:13px;" style-hover="border-color:var(--accent);color:var(--txt);"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 3v12M8 7l4-4 4 4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"></path></svg>Import</button>
+        <button onClick="{{ openModal }}" style="display:flex;align-items:center;gap:8px;height:38px;padding:0 17px;border-radius:10px;background:linear-gradient(90deg,var(--accent),var(--accent2));border:none;color:var(--bg0);cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14"></path></svg>New Rule</button>
+      </div>
+
+      <!-- RULES TAB -->
+      <sc-if value="{{ isRules }}" hint-placeholder-val="{{ true }}">
+      <div style="flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:14px 20px;">
+        <div style="display:flex;align-items:center;gap:9px;flex:1;max-width:360px;height:40px;padding:0 13px;background:var(--bg1);border:1px solid var(--bord);border-radius:10px;" style-focus-within="border-color:var(--accent);"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--dim)" stroke-width="1.8"><circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4.3-4.3"></path></svg><input value="{{ query }}" onInput="{{ onSearch }}" placeholder="Search rules…" style="flex:1;background:transparent;border:none;outline:none;color:var(--txt);font-family:inherit;font-size:13px;"></div>
+        <select value="{{ fPri }}" onChange="{{ onPri }}" style="height:40px;padding:0 12px;border-radius:10px;background:var(--bg1);border:1px solid var(--bord);color:var(--txt);font-family:inherit;font-size:12px;cursor:pointer;"><sc-for list="{{ priOpts }}" as="o" hint-placeholder-count="5"><option value="{{ o }}">{{ o }}</option></sc-for></select>
+        <select value="{{ fStatus }}" onChange="{{ onStatus }}" style="height:40px;padding:0 12px;border-radius:10px;background:var(--bg1);border:1px solid var(--bord);color:var(--txt);font-family:inherit;font-size:12px;cursor:pointer;"><sc-for list="{{ statusOpts }}" as="o" hint-placeholder-count="3"><option value="{{ o }}">{{ o }}</option></sc-for></select>
+        <div style="flex:1;"></div>
+        <span style="font-family:'IBM Plex Mono';font-size:12px;color:var(--dim);">{{ shown }} rules</span>
+      </div>
+      <div style="flex:1;overflow-y:auto;padding:0 20px 20px;">
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:14px;">
+          <sc-for list="{{ rules }}" as="r" hint-placeholder-count="6">
+            <div style="border-radius:13px;background:var(--bg1);border:1px solid var(--bord);border-left:3px solid {{ r.color }};padding:16px;opacity:{{ r.opacity }};">
+              <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:12px;">
+                <span style="display:flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:10px;background:color-mix(in srgb,{{ r.color }} 14%,transparent);color:{{ r.color }};flex:0 0 auto;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="{{ r.icon }}"></path></svg></span>
+                <div style="flex:1;min-width:0;">
+                  <div style="font-size:14px;font-weight:600;">{{ r.name }}</div>
+                  <div style="font-size:12px;color:var(--dim);margin-top:2px;">{{ r.desc }}</div>
+                </div>
+                <span style="font-size:9px;font-weight:700;letter-spacing:.6px;color:{{ r.color }};background:color-mix(in srgb,{{ r.color }} 15%,transparent);padding:3px 8px;border-radius:6px;flex:0 0 auto;">{{ r.priLabel }}</span>
+              </div>
+              <div style="font-family:'IBM Plex Mono';font-size:11px;color:var(--dim2);background:var(--bg0);border:1px solid var(--bord);border-radius:8px;padding:8px 11px;margin-bottom:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ r.cond }}</div>
+              <div style="display:flex;align-items:center;gap:14px;">
+                <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--dim);"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M13 2 3 14h7l-1 8 10-12h-7z"></path></svg><span style="font-family:'IBM Plex Mono';font-weight:600;color:var(--txt);">{{ r.triggers }}</span> triggers</div>
+                <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--dim);"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>{{ r.last }}</div>
+                <div style="flex:1;"></div>
+                <button style="display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:8px;background:var(--bg2);border:1px solid var(--bord);color:var(--dim);cursor:pointer;" style-hover="color:var(--accent2);border-color:var(--accent2);"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"></path></svg></button>
+                <button onClick="{{ r.toggle }}" title="Toggle" style="position:relative;width:44px;height:24px;border-radius:14px;border:none;cursor:pointer;background:{{ r.swBg }};flex:0 0 auto;"><span style="position:absolute;top:3px;left:{{ r.swX }};width:18px;height:18px;border-radius:50%;background:#fff;transition:left .15s;"></span></button>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+        <sc-if value="{{ empty }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:70px;gap:14px;color:var(--dim2);"><svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M18 8a6 6 0 00-12 0c0 7-3 9-3 9h18s-3-2-3-9"></path></svg><span style="font-size:14px;color:var(--dim);">No rules match your filters</span><button onClick="{{ openModal }}" style="display:flex;align-items:center;gap:8px;height:40px;padding:0 18px;border-radius:10px;background:linear-gradient(90deg,var(--accent),var(--accent2));border:none;color:var(--bg0);cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14"></path></svg>Create Rule</button></div>
+        </sc-if>
+      </div>
+      </sc-if>
+
+      <!-- HISTORY TAB -->
+      <sc-if value="{{ isHistory }}" hint-placeholder-val="{{ false }}">
+      <div style="flex:1;overflow-y:auto;padding:16px 20px 20px;">
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <sc-for list="{{ fired }}" as="f" hint-placeholder-count="8">
+            <div style="display:flex;align-items:center;gap:14px;padding:13px 16px;border-radius:11px;background:var(--bg1);border:1px solid var(--bord);border-left:3px solid {{ f.color }};">
+              <span style="display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:9px;background:color-mix(in srgb,{{ f.color }} 14%,transparent);color:{{ f.color }};flex:0 0 auto;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 8a6 6 0 00-12 0c0 7-3 9-3 9h18s-3-2-3-9"></path></svg></span>
+              <div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:600;">{{ f.rule }}</div><div style="font-size:12px;color:var(--dim);">Triggered by <span style="font-family:'IBM Plex Mono';color:var(--accent2);">{{ f.cs }}</span> · {{ f.detail }}</div></div>
+              <span style="font-size:9px;font-weight:700;letter-spacing:.6px;color:{{ f.color }};background:color-mix(in srgb,{{ f.color }} 15%,transparent);padding:3px 8px;border-radius:6px;">{{ f.priLabel }}</span>
+              <span style="font-family:'IBM Plex Mono';font-size:11px;color:var(--dim2);min-width:96px;text-align:right;">{{ f.time }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      </sc-if>
+
+      <!-- NOTIFICATIONS TAB -->
+      <sc-if value="{{ isNotif }}" hint-placeholder-val="{{ false }}">
+      <div style="flex:1;overflow-y:auto;padding:16px 20px 20px;">
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px;">
+          <sc-for list="{{ channels }}" as="c" hint-placeholder-count="4">
+            <div style="border-radius:13px;background:var(--bg1);border:1px solid var(--bord);padding:16px;">
+              <div style="display:flex;align-items:center;gap:12px;">
+                <span style="display:flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:10px;background:var(--bg2);color:{{ c.color }};flex:0 0 auto;"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="{{ c.icon }}"></path></svg></span>
+                <div style="flex:1;"><div style="font-size:14px;font-weight:600;">{{ c.name }}</div><div style="font-size:12px;color:var(--dim);">{{ c.detail }}</div></div>
+                <button onClick="{{ c.toggle }}" style="position:relative;width:44px;height:24px;border-radius:14px;border:none;cursor:pointer;background:{{ c.swBg }};flex:0 0 auto;"><span style="position:absolute;top:3px;left:{{ c.swX }};width:18px;height:18px;border-radius:50%;background:#fff;transition:left .15s;"></span></button>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      </sc-if>
+    </main>
+  </div>
+
+  <!-- CREATE RULE MODAL -->
+  <sc-if value="{{ modalOpen }}" hint-placeholder-val="{{ false }}">
+  <div onClick="{{ closeModal }}" style="position:fixed;inset:0;z-index:40;background:color-mix(in srgb,#000 70%,transparent);backdrop-filter:blur(4px);display:flex;align-items:flex-start;justify-content:center;padding:30px 20px;overflow-y:auto;">
+    <div onClick="{{ stop }}" style="width:min(720px,100%);border-radius:16px;background:var(--bg1);border:1px solid var(--bord2);box-shadow:0 30px 80px rgba(0,0,0,.6);">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--bord);position:sticky;top:0;background:var(--bg1);border-radius:16px 16px 0 0;z-index:1;">
+        <span style="font-size:18px;font-weight:700;">Create Alert Rule</span>
+        <button onClick="{{ closeModal }}" style="display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:9px;background:var(--bg2);border:1px solid var(--bord2);color:var(--dim);cursor:pointer;" style-hover="color:var(--danger);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M6 6l12 12M18 6L6 18"></path></svg></button>
+      </div>
+      <div style="padding:22px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent2)" stroke-width="1.7"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"></path><path d="M14 2v6h6"></path></svg><span style="font-size:13px;font-weight:600;">Quick Start Templates</span></div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:22px;">
+          <sc-for list="{{ templates }}" as="tp" hint-placeholder-count="6">
+            <button onClick="{{ tp.onClick }}" style="display:flex;flex-direction:column;align-items:center;gap:7px;padding:16px 12px;border-radius:11px;background:var(--bg2);border:1px solid {{ tp.bord }};cursor:pointer;text-align:center;" style-hover="border-color:var(--accent2);"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="{{ tp.color }}" stroke-width="1.7"><path d="{{ tp.icon }}"></path></svg><span style="font-size:12px;font-weight:600;color:var(--txt);">{{ tp.name }}</span><span style="font-size:10px;color:var(--dim2);line-height:1.3;">{{ tp.desc }}</span></button>
+          </sc-for>
+        </div>
+
+        <div style="font-size:11px;letter-spacing:1px;color:var(--dim);font-weight:600;margin-bottom:8px;">RULE NAME *</div>
+        <input value="{{ mName }}" onInput="{{ onName }}" placeholder="e.g., Military Aircraft Alert" style="width:100%;height:46px;padding:0 15px;border-radius:11px;background:var(--bg0);border:1px solid var(--accent2);outline:none;color:var(--txt);font-family:inherit;font-size:14px;margin-bottom:22px;">
+
+        <div style="font-size:13px;font-weight:600;margin-bottom:10px;">Priority</div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:22px;">
+          <sc-for list="{{ priBtns }}" as="p" hint-placeholder-count="4">
+            <button onClick="{{ p.onClick }}" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:13px;border-radius:11px;background:{{ p.bg }};border:1px solid {{ p.bord }};cursor:pointer;"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="{{ p.color }}" stroke-width="1.8"><path d="{{ p.icon }}"></path></svg><span style="font-size:12px;font-weight:600;color:{{ p.fg }};">{{ p.label }}</span></button>
+          </sc-for>
+        </div>
+
+        <div style="font-size:13px;font-weight:600;margin-bottom:10px;">Conditions *</div>
+        <div style="border-radius:12px;background:var(--bg2);border:1px solid var(--bord);padding:16px;margin-bottom:18px;">
+          <div style="font-size:11px;color:var(--dim2);letter-spacing:.6px;margin-bottom:12px;">GROUP 1</div>
+          <sc-for list="{{ conds }}" as="c" hint-placeholder-count="1">
+            <div style="display:flex;gap:8px;margin-bottom:10px;">
+              <select value="{{ c.field }}" onChange="{{ c.onField }}" style="flex:1;height:42px;padding:0 12px;border-radius:9px;background:var(--bg0);border:1px solid var(--bord2);color:var(--txt);font-family:inherit;font-size:13px;cursor:pointer;"><sc-for list="{{ fieldOpts }}" as="o" hint-placeholder-count="9"><option value="{{ o }}">{{ o }}</option></sc-for></select>
+              <select value="{{ c.op }}" onChange="{{ c.onOp }}" style="width:130px;height:42px;padding:0 12px;border-radius:9px;background:var(--bg0);border:1px solid var(--bord2);color:var(--txt);font-family:inherit;font-size:13px;cursor:pointer;"><sc-for list="{{ opOpts }}" as="o" hint-placeholder-count="5"><option value="{{ o }}">{{ o }}</option></sc-for></select>
+              <input value="{{ c.val }}" onInput="{{ c.onVal }}" placeholder="e.g., A12345" style="flex:1;height:42px;padding:0 12px;border-radius:9px;background:var(--bg0);border:1px solid var(--bord2);outline:none;color:var(--txt);font-family:'IBM Plex Mono';font-size:13px;">
+              <button onClick="{{ c.remove }}" style="width:42px;height:42px;border-radius:9px;background:var(--bg0);border:1px solid var(--bord2);color:var(--dim);cursor:pointer;flex:0 0 auto;" style-hover="color:var(--danger);"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" style="margin:auto;"><path d="M6 6l12 12M18 6L6 18"></path></svg></button>
+            </div>
+          </sc-for>
+          <button onClick="{{ addCond }}" style="display:flex;align-items:center;gap:7px;height:36px;padding:0 13px;border-radius:9px;background:transparent;border:1px dashed var(--bord2);color:var(--dim);cursor:pointer;font-family:inherit;font-size:12px;" style-hover="border-color:var(--accent);color:var(--accent);"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"></path></svg>Add Condition</button>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:9px;padding:12px 16px;border-radius:11px;background:color-mix(in srgb,var(--accent2) 8%,var(--bg2));border:1px solid color-mix(in srgb,var(--accent2) 25%,var(--bord));margin-bottom:20px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent2)" stroke-width="1.7"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"></path><circle cx="12" cy="12" r="3"></circle></svg><span style="font-size:13px;">Matching <span style="font-family:'IBM Plex Mono';font-weight:700;color:var(--accent2);">{{ matchCount }}</span> of 150 aircraft</span></div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
+          <div><div style="font-size:11px;letter-spacing:1px;color:var(--dim);font-weight:600;margin-bottom:8px;">COOLDOWN (SECONDS)</div><input value="{{ mCooldown }}" onInput="{{ onCooldown }}" style="width:100%;height:44px;padding:0 14px;border-radius:10px;background:var(--bg0);border:1px solid var(--bord2);outline:none;color:var(--txt);font-family:'IBM Plex Mono';font-size:14px;"><div style="font-size:11px;color:var(--dim2);margin-top:6px;">Time between repeated alerts</div></div>
+          <div style="display:flex;align-items:center;gap:10px;padding-top:26px;"><button onClick="{{ toggleEnabled }}" style="position:relative;width:44px;height:24px;border-radius:14px;border:none;cursor:pointer;background:{{ mEnBg }};flex:0 0 auto;"><span style="position:absolute;top:3px;left:{{ mEnX }};width:18px;height:18px;border-radius:50%;background:#fff;transition:left .15s;"></span></button><span style="font-size:13px;font-weight:600;">Enabled</span></div>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:10px;padding:14px 16px;border-radius:11px;background:var(--bg2);border:1px solid var(--bord);margin-bottom:22px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--dim)" stroke-width="1.7"><path d="M18 8a6 6 0 00-12 0c0 7-3 9-3 9h18s-3-2-3-9"></path></svg><span style="font-size:13px;flex:1;">Use global notification channels</span><button onClick="{{ toggleGlobal }}" style="position:relative;width:44px;height:24px;border-radius:14px;border:none;cursor:pointer;background:{{ mGlBg }};flex:0 0 auto;"><span style="position:absolute;top:3px;left:{{ mGlX }};width:18px;height:18px;border-radius:50%;background:#fff;transition:left .15s;"></span></button></div>
+
+        <div style="display:flex;gap:12px;">
+          <button onClick="{{ closeModal }}" style="flex:1;height:48px;border-radius:11px;background:var(--bg2);border:1px solid var(--bord2);color:var(--txt);cursor:pointer;font-family:inherit;font-size:14px;font-weight:600;" style-hover="border-color:var(--dim);">Cancel</button>
+          <button onClick="{{ saveRule }}" style="flex:2;height:48px;border-radius:11px;background:linear-gradient(90deg,var(--accent),var(--accent2));border:none;color:var(--bg0);cursor:pointer;font-family:inherit;font-size:14px;font-weight:700;">Create Rule</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+
+  <sc-if value="{{ toast }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;bottom:24px;right:24px;z-index:60;display:flex;align-items:center;gap:10px;padding:14px 20px;border-radius:12px;background:var(--bg2);border:1px solid var(--accent);color:var(--txt);font-size:14px;font-weight:600;box-shadow:0 14px 40px rgba(0,0,0,.5);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><path d="M20 6L9 17l-5-5"></path></svg>{{ toastMsg }}</div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{
+  &quot;accentTheme&quot;: { &quot;editor&quot;: &quot;enum&quot;, &quot;options&quot;: [&quot;radar&quot;, &quot;slate&quot;, &quot;amber&quot;], &quot;default&quot;: &quot;radar&quot;, &quot;tsType&quot;: &quot;'radar' | 'slate' | 'amber'&quot;, &quot;section&quot;: &quot;Appearance&quot; }
+}">
+class Component extends DCLogic {
+  state = {
+    theme:'radar', tab:'rules', query:'', fPri:'All Priorities', fStatus:'All Status',
+    modalOpen:false, mName:'', mPriority:'info', mCooldown:'300', mEnabled:true, mGlobal:true,
+    conds:[{field:'ICAO Hex',op:'equals',val:''}], toast:null,
+    rules:[
+      {id:1,name:'Emergency Squawk',priority:'emergency',desc:'Distress transponder codes',cond:'squawk in [7500, 7600, 7700]',triggers:3,last:'2m ago',enabled:true,icon:'M10.3 3.9 1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0zM12 9v4M12 17h.01'},
+      {id:2,name:'Law Enforcement',priority:'critical',desc:'Police & sheriff air units',cond:'operator contains "police" OR "sheriff"',triggers:7,last:'14m ago',enabled:true,icon:'M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z'},
+      {id:3,name:'Military Aircraft',priority:'warning',desc:'Any military category contact',cond:'category equals "military"',triggers:42,last:'6m ago',enabled:true,icon:'M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z'},
+      {id:4,name:'Low Flying Aircraft',priority:'warning',desc:'Below 1,000 ft AGL',cond:'altitude < 1000 AND speed > 0',triggers:128,last:'just now',enabled:true,icon:'M12 5v14M5 12l7 7 7-7'},
+      {id:5,name:'Nearby Aircraft',priority:'info',desc:'Within 5 nm of station',cond:'distance < 5',triggers:512,last:'just now',enabled:false,icon:'M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0116 0z'},
+      {id:6,name:'Helicopter Activity',priority:'info',desc:'Rotary-wing traffic',cond:'type in [H60, EC35, AS50]',triggers:89,last:'21m ago',enabled:true,icon:'M13 2 3 14h7l-1 8 10-12h-7z'},
+    ],
+    channels:[
+      {id:'browser',name:'Browser Push',detail:'Desktop notifications',enabled:true,color:'var(--accent2)',icon:'M18 8a6 6 0 00-12 0c0 7-3 9-3 9h18s-3-2-3-9'},
+      {id:'sound',name:'Audio Alerts',detail:'Chime on trigger',enabled:true,color:'var(--accent)',icon:'M11 5 6 9H2v6h4l5 4zM19 12a4 4 0 00-2-3.5'},
+      {id:'webhook',name:'Webhook',detail:'POST to https://\u2026/hook',enabled:false,color:'var(--warn)',icon:'M10 13a5 5 0 007 0l3-3a5 5 0 00-7-7l-1 1M14 11a5 5 0 00-7 0l-3 3a5 5 0 007 7l1-1'},
+      {id:'email',name:'Email',detail:'ops@chaos.corp',enabled:false,color:'var(--mil)',icon:'M4 4h16v16H4zM4 6l8 6 8-6'},
+    ],
+  };
+  componentDidMount(){ document.documentElement.setAttribute('data-theme', this.props.accentTheme || this.state.theme); }
+  componentWillUnmount(){ clearTimeout(this._t); }
+  fireToast(m){ clearTimeout(this._t); this.setState({toast:m}); this._t=setTimeout(()=>this.setState({toast:null}),2200); }
+
+  pconf(p){ return { info:{c:'var(--accent2)',l:'INFO',icon:'M12 16v-4M12 8h.01M12 2a10 10 0 100 20 10 10 0 000-20z'},
+    warning:{c:'var(--warn)',l:'WARNING',icon:'M10.3 3.9 1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0zM12 9v4M12 17h.01'},
+    critical:{c:'var(--danger)',l:'CRITICAL',icon:'M12 8v4M12 16h.01M12 2a10 10 0 100 20 10 10 0 000-20z'},
+    emergency:{c:'var(--danger)',l:'EMERGENCY',icon:'M12 8v4M12 16h.01M12 2a10 10 0 100 20 10 10 0 000-20z'} }[p]; }
+
+  renderVals(){
+    const S=this.state;
+    const mkTab=(k,l,cnt)=>({label:l,hasCount:cnt!=null,count:cnt,bg:S.tab===k?'var(--bg2)':'transparent',fg:S.tab===k?'var(--txt)':'var(--dim)',onClick:()=>this.setState({tab:k})});
+    const tabs=[mkTab('rules','Rules',S.rules.length),mkTab('history','History',24),mkTab('notif','Notifications')];
+
+    let list=S.rules.slice();
+    const q=S.query.trim().toLowerCase();
+    if(q) list=list.filter(r=>(r.name+r.desc+r.cond).toLowerCase().includes(q));
+    if(S.fPri!=='All Priorities') list=list.filter(r=>r.priority===S.fPri.toLowerCase());
+    if(S.fStatus!=='All Status') list=list.filter(r=> S.fStatus==='Enabled'?r.enabled:!r.enabled);
+    const rules=list.map(r=>{ const pc=this.pconf(r.priority); return {...r, color:pc.c, priLabel:pc.l, opacity:r.enabled?1:0.55,
+      swBg:r.enabled?'var(--accent)':'var(--bord2)', swX:r.enabled?'23px':'3px',
+      toggle:()=>this.setState(s=>({rules:s.rules.map(x=>x.id===r.id?{...x,enabled:!x.enabled}:x)})) }; });
+
+    const fired=[
+      {rule:'Low Flying Aircraft',cs:'N953GM',detail:'925 ft · 4.8 nm',priority:'warning',time:'05:55:12'},
+      {rule:'Emergency Squawk',cs:'N512JT',detail:'squawk 7700',priority:'emergency',time:'05:52:40'},
+      {rule:'Military Aircraft',cs:'LDACE21',detail:'V22 · 6.0 nm',priority:'warning',time:'05:48:03'},
+      {rule:'Law Enforcement',cs:'N911PD',detail:'AS50 · 2.1 nm',priority:'critical',time:'05:41:19'},
+      {rule:'Helicopter Activity',cs:'LSO9',detail:'H60 · 9.7 nm',priority:'info',time:'05:37:55'},
+      {rule:'Nearby Aircraft',cs:'DAL571',detail:'2.7 nm',priority:'info',time:'05:33:20'},
+    ].map(f=>{ const pc=this.pconf(f.priority); return {...f,color:pc.c,priLabel:pc.l}; });
+
+    const channels=S.channels.map(c=>({...c, swBg:c.enabled?'var(--accent)':'var(--bord2)', swX:c.enabled?'23px':'3px',
+      toggle:()=>this.setState(s=>({channels:s.channels.map(x=>x.id===c.id?{...x,enabled:!x.enabled}:x)})) }));
+
+    const templates=[
+      {name:'Military Aircraft',desc:'Alert when military aircraft detected',color:'var(--mil)',icon:'M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z',pre:{name:'Military Aircraft Alert',pri:'warning',field:'Category',op:'equals',val:'military'}},
+      {name:'Emergency Squawk',desc:'Codes 7500 / 7600 / 7700',color:'var(--danger)',icon:'M10.3 3.9 1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0zM12 9v4M12 17h.01',pre:{name:'Emergency Squawk Alert',pri:'emergency',field:'Squawk',op:'in list',val:'7500,7600,7700'}},
+      {name:'Low Flying Aircraft',desc:'Below a certain altitude',color:'var(--accent2)',icon:'M12 5v14M5 12l7 7 7-7',pre:{name:'Low Flying Alert',pri:'warning',field:'Altitude',op:'less than',val:'1000'}},
+      {name:'Nearby Aircraft',desc:'Within range of station',color:'var(--accent)',icon:'M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0116 0z',pre:{name:'Nearby Aircraft Alert',pri:'info',field:'Distance',op:'less than',val:'5'}},
+      {name:'Helicopter Activity',desc:'Alert on rotary-wing',color:'var(--warn)',icon:'M13 2 3 14h7l-1 8 10-12h-7z',pre:{name:'Helicopter Alert',pri:'info',field:'Type',op:'in list',val:'H60,EC35,AS50'}},
+      {name:'Law Enforcement',desc:'Police & sheriff units',color:'var(--danger)',icon:'M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z',pre:{name:'Law Enforcement Alert',pri:'critical',field:'Operator',op:'contains',val:'police'}},
+    ].map(t=>({...t, bord:'var(--bord2)', onClick:()=>this.setState({mName:t.pre.name,mPriority:t.pre.pri,conds:[{field:t.pre.field,op:t.pre.op,val:t.pre.val}]})}));
+
+    const priBtns=['info','warning','critical','emergency'].map(p=>{ const pc=this.pconf(p); const on=S.mPriority===p;
+      return {label:pc.l,color:pc.c,icon:pc.icon,fg:on?'var(--txt)':'var(--dim)',bg:on?'color-mix(in srgb,'+pc.c+' 14%,transparent)':'var(--bg2)',bord:on?pc.c:'var(--bord2)',onClick:()=>this.setState({mPriority:p})}; });
+
+    const conds=S.conds.map((c,i)=>({...c,
+      onField:e=>this.setState(s=>({conds:s.conds.map((x,j)=>j===i?{...x,field:e.target.value}:x)})),
+      onOp:e=>this.setState(s=>({conds:s.conds.map((x,j)=>j===i?{...x,op:e.target.value}:x)})),
+      onVal:e=>this.setState(s=>({conds:s.conds.map((x,j)=>j===i?{...x,val:e.target.value}:x)})),
+      remove:()=>this.setState(s=>({conds:s.conds.length>1?s.conds.filter((_,j)=>j!==i):s.conds})) }));
+
+    return {
+      activeCount:S.rules.filter(r=>r.enabled&&(r.priority==='critical'||r.priority==='emergency')).length,
+      tabs, isRules:S.tab==='rules', isHistory:S.tab==='history', isNotif:S.tab==='notif',
+      rules, shown:rules.length, empty:rules.length===0, fired, channels,
+      query:S.query, onSearch:e=>this.setState({query:e.target.value}),
+      priOpts:['All Priorities','Info','Warning','Critical','Emergency'], statusOpts:['All Status','Enabled','Disabled'],
+      fPri:S.fPri, fStatus:S.fStatus, onPri:e=>this.setState({fPri:e.target.value}), onStatus:e=>this.setState({fStatus:e.target.value}),
+      openModal:()=>this.setState({modalOpen:true}), closeModal:()=>this.setState({modalOpen:false}), stop:(e)=>e.stopPropagation(), modalOpen:S.modalOpen,
+      templates, priBtns, conds, addCond:()=>this.setState(s=>({conds:[...s.conds,{field:'Callsign',op:'contains',val:''}]})),
+      fieldOpts:['ICAO Hex','Callsign','Category','Altitude','Speed','Distance','Squawk','Type','Operator'], opOpts:['equals','contains','greater than','less than','in list'],
+      mName:S.mName, onName:e=>this.setState({mName:e.target.value}),
+      mCooldown:S.mCooldown, onCooldown:e=>this.setState({mCooldown:e.target.value}),
+      mEnabled:S.mEnabled, toggleEnabled:()=>this.setState(s=>({mEnabled:!s.mEnabled})), mEnBg:S.mEnabled?'var(--accent)':'var(--bord2)', mEnX:S.mEnabled?'23px':'3px',
+      mGlobal:S.mGlobal, toggleGlobal:()=>this.setState(s=>({mGlobal:!s.mGlobal})), mGlBg:S.mGlobal?'var(--accent)':'var(--bord2)', mGlX:S.mGlobal?'23px':'3px',
+      matchCount:S.mPriority==='emergency'?0:(S.mPriority==='info'?12:3),
+      saveRule:()=>{ const pc=this.pconf(S.mPriority); const nm=S.mName.trim()||'New Rule'; const c0=S.conds[0];
+        const rule={id:Date.now(),name:nm,priority:S.mPriority,desc:'Custom rule',cond:`${c0.field.toLowerCase()} ${c0.op} ${c0.val||'\u2026'}`,triggers:0,last:'never',enabled:S.mEnabled,icon:pc.icon};
+        this.setState(s=>({rules:[rule,...s.rules],modalOpen:false,mName:'',mPriority:'info',conds:[{field:'ICAO Hex',op:'equals',val:''}]}));
+        this.fireToast('Alert rule created'); },
+      toast:!!S.toast, toastMsg:S.toast||'',
+    };
+  }
+}
+</script>
+</body>
+</html>

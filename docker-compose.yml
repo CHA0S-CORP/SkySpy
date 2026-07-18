@@ -22,7 +22,7 @@ services:
   # PostgreSQL Database
   # ---------------------------------------------------------------------------
   postgres:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     container_name: skyspy-postgres
     restart: unless-stopped
     environment:
@@ -133,6 +133,13 @@ services:
       LLM_CACHE_TTL: ${LLM_CACHE_TTL:-3600}
       LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-500}
       LLM_TEMPERATURE: ${LLM_TEMPERATURE:-0.1}
+
+      # LLM Assistant (LangChain tool-calling agent). Point LLM_API_URL at the
+      # vllm service (http://vllm:8000/v1) where a GPU is available.
+      ASSISTANT_ENABLED: ${ASSISTANT_ENABLED:-False}
+      ASSISTANT_MODEL: ${ASSISTANT_MODEL:-}
+      ASSISTANT_MAX_STEPS: ${ASSISTANT_MAX_STEPS:-6}
+      ASSISTANT_TIMEOUT: ${ASSISTANT_TIMEOUT:-60}
 
       # OpenSky Database
       OPENSKY_DB_ENABLED: ${OPENSKY_DB_ENABLED:-True}
@@ -335,6 +342,48 @@ services:
     networks:
       - skyspy-network
     command: python manage.py run_acars
+
+  # ---------------------------------------------------------------------------
+  # vLLM — self-hosted OpenAI-compatible model server (GPU only)
+  # ---------------------------------------------------------------------------
+  # Behind the `gpu` profile so it never starts on a machine without CUDA.
+  # Where a GPU exists: `docker compose --profile gpu up -d vllm` and set
+  #   LLM_API_URL=http://vllm:8000/v1
+  #   ASSISTANT_MODEL / LLM_MODEL=<the served model>
+  # Use a tool-calling-capable model; the parser must match it (hermes shown).
+  # Context window: --max-model-len sets how many tokens the server accepts. The
+  # SkySpy assistant's prompt + 31 tool schemas need well over 8k, so this defaults
+  # to 32768 (Qwen2.5-7B's native max). Raise VLLM_MAX_MODEL_LEN up to the model's
+  # limit; if vLLM logs it auto-reduced the window (KV cache won't fit), lower it
+  # or bump VLLM_GPU_MEMORY_UTILIZATION / use a bigger GPU. It must be <= the
+  # model's native max_position_embeddings.
+  vllm:
+    image: vllm/vllm-openai:latest
+    container_name: skyspy-vllm
+    restart: unless-stopped
+    profiles:
+      - gpu
+    environment:
+      HUGGING_FACE_HUB_TOKEN: ${HUGGING_FACE_HUB_TOKEN:-}
+    command: >
+      --model ${VLLM_MODEL:-Qwen/Qwen2.5-7B-Instruct}
+      --served-model-name ${ASSISTANT_MODEL:-Qwen/Qwen2.5-7B-Instruct}
+      --max-model-len ${VLLM_MAX_MODEL_LEN:-32768}
+      --gpu-memory-utilization ${VLLM_GPU_MEMORY_UTILIZATION:-0.90}
+      --enable-auto-tool-choice
+      --tool-call-parser ${VLLM_TOOL_PARSER:-hermes}
+      --port 8000
+    ports:
+      - "${VLLM_PORT:-8000}:8000"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    networks:
+      - skyspy-network
 
 # =============================================================================
 # Networks

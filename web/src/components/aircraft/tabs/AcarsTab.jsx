@@ -31,6 +31,20 @@ export function AcarsTab({
         })
       : acarsMessages;
 
+  // Group consecutive messages by flight number (callsign) so the history is
+  // split per flight leg, each group carrying a flight badge. Preserve the
+  // original index so expand/collapse keys stay stable.
+  const flightGroups = [];
+  filteredMessages.forEach((msg, i) => {
+    const flightLabel = (msg.callsign || '').trim() || 'No Flight ID';
+    const last = flightGroups[flightGroups.length - 1];
+    if (last && last.flightLabel === flightLabel) {
+      last.items.push({ msg, i });
+    } else {
+      flightGroups.push({ flightLabel, airline: msg.airline, items: [{ msg, i }] });
+    }
+  });
+
   return (
     <div className="detail-acars" id="panel-acars" role="tabpanel" aria-labelledby="tab-acars">
       {/* Filter Toolbar */}
@@ -139,144 +153,169 @@ export function AcarsTab({
           className={`acars-list ${acarsCompactMode ? 'compact' : ''}`}
           aria-label="ACARS messages"
         >
-          {filteredMessages.map((msg, i) => {
-            const timestamp =
-              typeof msg.timestamp === 'number'
-                ? new Date(msg.timestamp * 1000)
-                : new Date(msg.timestamp);
-            const labelDesc = getAcarsLabelDescription(msg.label, msg.label_info);
-            const labelCategory = getLabelCategory(msg.label);
-            const msgId = `${msg.timestamp}-${i}`;
-            const isExpanded = allMessagesExpanded || expandedMessages[msgId];
-            const textContent = msg.formatted_text || msg.text || '';
-            const isLongText = textContent.length > 100;
-
-            return (
-              <li
-                key={i}
-                className={`acars-item${labelCategory ? ` category-${labelCategory}` : ''}`}
-              >
-                <div className="acars-item-header">
-                  {msg.callsign && <span className="acars-item-callsign">{msg.callsign}</span>}
-                  {msg.airline?.name && (
-                    <span
-                      className="acars-item-airline"
-                      title={msg.airline.icao || msg.airline.iata}
-                    >
-                      <Plane size={12} aria-hidden="true" />
-                      {msg.airline.name}
-                    </span>
-                  )}
-                  <span className="acars-item-time">
-                    <time dateTime={timestamp.toISOString()}>{timestamp.toLocaleString()}</time>
-                  </span>
+          {flightGroups.map((group, gi) => (
+            <React.Fragment key={`flight-group-${gi}-${group.flightLabel}`}>
+              <li className="acars-flight-group">
+                <span className="acars-flight-group-badge">
+                  <Plane size={12} aria-hidden="true" />
+                  {group.flightLabel}
+                </span>
+                {group.airline?.name && (
                   <span
-                    className={`acars-item-label${labelCategory ? ` category-${labelCategory}` : ''}`}
-                    title={msg.label_info?.description || labelDesc || msg.label}
+                    className="acars-flight-group-airline"
+                    title={group.airline.icao || group.airline.iata}
                   >
-                    {msg.label || '--'}
-                    {labelDesc && <span className="acars-label-desc">{labelDesc}</span>}
+                    {group.airline.name}
                   </span>
-                  <span className="acars-item-source">{msg.source}</span>
-                  {msg.frequency && <span className="acars-item-freq">{msg.frequency} MHz</span>}
-                  <span className="acars-compact-preview">
-                    {textContent.slice(0, 60)}
-                    {textContent.length > 60 ? '...' : ''}
-                  </span>
-                </div>
-
-                {msg.icao_hex && (
-                  <div className="acars-item-aircraft">
-                    <span className="acars-item-icao">{msg.icao_hex}</span>
-                  </div>
                 )}
-
-                {/* Message Text */}
-                {msg.formatted_text ? (
-                  <div className="acars-formatted-text">
-                    <div className="acars-formatted-header">Decoded:</div>
-                    <pre
-                      className={`acars-item-text ${!isExpanded && isLongText ? 'collapsed' : ''}`}
-                    >
-                      {msg.formatted_text}
-                    </pre>
-                    {isLongText && (
-                      <button
-                        className="acars-text-toggle"
-                        onClick={() =>
-                          setExpandedMessages((prev) => ({
-                            ...prev,
-                            [msgId]: !prev[msgId],
-                          }))
-                        }
-                        aria-expanded={isExpanded}
-                      >
-                        {isExpanded ? (
-                          <ChevronUp size={12} aria-hidden="true" />
-                        ) : (
-                          <ChevronDown size={12} aria-hidden="true" />
-                        )}
-                        {isExpanded ? 'Show less' : 'Show more'}
-                      </button>
-                    )}
-                    {msg.text && (
-                      <details className="acars-raw-toggle">
-                        <summary>Raw Message</summary>
-                        <pre className="acars-item-text">{msg.text}</pre>
-                      </details>
-                    )}
-                  </div>
-                ) : (
-                  msg.text && (
-                    <>
-                      <pre
-                        className={`acars-item-text ${!isExpanded && isLongText ? 'collapsed' : ''}`}
-                      >
-                        {msg.text}
-                      </pre>
-                      {isLongText && (
-                        <button
-                          className="acars-text-toggle"
-                          onClick={() =>
-                            setExpandedMessages((prev) => ({
-                              ...prev,
-                              [msgId]: !prev[msgId],
-                            }))
-                          }
-                          aria-expanded={isExpanded}
-                        >
-                          {isExpanded ? (
-                            <ChevronUp size={12} aria-hidden="true" />
-                          ) : (
-                            <ChevronDown size={12} aria-hidden="true" />
-                          )}
-                          {isExpanded ? 'Show less' : 'Show more'}
-                        </button>
-                      )}
-                    </>
-                  )
-                )}
-
-                {/* Decoded data tags */}
-                {msg.decoded_text &&
-                  Object.keys(msg.decoded_text).length > 0 &&
-                  !msg.formatted_text && (
-                    <div className="acars-item-decoded">
-                      {msg.decoded_text.airports_mentioned && (
-                        <span className="decoded-tag" title="Airports mentioned">
-                          ✈ {msg.decoded_text.airports_mentioned.join(', ')}
-                        </span>
-                      )}
-                      {msg.decoded_text.flight_levels && (
-                        <span className="decoded-tag" title="Flight levels">
-                          ⬆ FL{msg.decoded_text.flight_levels.join(', FL')}
-                        </span>
-                      )}
-                    </div>
-                  )}
+                <span className="acars-flight-group-count">
+                  {group.items.length} message{group.items.length !== 1 ? 's' : ''}
+                </span>
               </li>
-            );
-          })}
+              {group.items.map(({ msg, i }) => {
+                const timestamp =
+                  typeof msg.timestamp === 'number'
+                    ? new Date(msg.timestamp * 1000)
+                    : new Date(msg.timestamp);
+                const labelDesc = getAcarsLabelDescription(msg.label, msg.label_info);
+                const labelCategory = getLabelCategory(msg.label);
+                const msgId = `${msg.timestamp}-${i}`;
+                const isExpanded = allMessagesExpanded || expandedMessages[msgId];
+                const textContent = msg.formatted_text || msg.text || '';
+                const isLongText = textContent.length > 100;
+
+                return (
+                  <li
+                    key={i}
+                    className={`acars-item${labelCategory ? ` category-${labelCategory}` : ''}`}
+                  >
+                    <div className="acars-item-header">
+                      <span className="acars-item-callsign acars-item-flight-badge">
+                        {(msg.callsign || '').trim() || 'No Flight ID'}
+                      </span>
+                      {msg.airline?.name && (
+                        <span
+                          className="acars-item-airline"
+                          title={msg.airline.icao || msg.airline.iata}
+                        >
+                          <Plane size={12} aria-hidden="true" />
+                          {msg.airline.name}
+                        </span>
+                      )}
+                      <span className="acars-item-time">
+                        <time dateTime={timestamp.toISOString()}>{timestamp.toLocaleString()}</time>
+                      </span>
+                      <span
+                        className={`acars-item-label${labelCategory ? ` category-${labelCategory}` : ''}`}
+                        title={msg.label_info?.description || labelDesc || msg.label}
+                      >
+                        {msg.label || '--'}
+                        {labelDesc && <span className="acars-label-desc">{labelDesc}</span>}
+                      </span>
+                      <span className="acars-item-source">{msg.source}</span>
+                      {msg.frequency && (
+                        <span className="acars-item-freq">{msg.frequency} MHz</span>
+                      )}
+                      <span className="acars-compact-preview">
+                        {textContent.slice(0, 60)}
+                        {textContent.length > 60 ? '...' : ''}
+                      </span>
+                    </div>
+
+                    {msg.icao_hex && (
+                      <div className="acars-item-aircraft">
+                        <span className="acars-item-icao">{msg.icao_hex}</span>
+                      </div>
+                    )}
+
+                    {/* Message Text */}
+                    {msg.formatted_text ? (
+                      <div className="acars-formatted-text">
+                        <div className="acars-formatted-header">Decoded:</div>
+                        <pre
+                          className={`acars-item-text ${!isExpanded && isLongText ? 'collapsed' : ''}`}
+                        >
+                          {msg.formatted_text}
+                        </pre>
+                        {isLongText && (
+                          <button
+                            className="acars-text-toggle"
+                            onClick={() =>
+                              setExpandedMessages((prev) => ({
+                                ...prev,
+                                [msgId]: !prev[msgId],
+                              }))
+                            }
+                            aria-expanded={isExpanded}
+                          >
+                            {isExpanded ? (
+                              <ChevronUp size={12} aria-hidden="true" />
+                            ) : (
+                              <ChevronDown size={12} aria-hidden="true" />
+                            )}
+                            {isExpanded ? 'Show less' : 'Show more'}
+                          </button>
+                        )}
+                        {msg.text && (
+                          <details className="acars-raw-toggle">
+                            <summary>Raw Message</summary>
+                            <pre className="acars-item-text">{msg.text}</pre>
+                          </details>
+                        )}
+                      </div>
+                    ) : (
+                      msg.text && (
+                        <>
+                          <pre
+                            className={`acars-item-text ${!isExpanded && isLongText ? 'collapsed' : ''}`}
+                          >
+                            {msg.text}
+                          </pre>
+                          {isLongText && (
+                            <button
+                              className="acars-text-toggle"
+                              onClick={() =>
+                                setExpandedMessages((prev) => ({
+                                  ...prev,
+                                  [msgId]: !prev[msgId],
+                                }))
+                              }
+                              aria-expanded={isExpanded}
+                            >
+                              {isExpanded ? (
+                                <ChevronUp size={12} aria-hidden="true" />
+                              ) : (
+                                <ChevronDown size={12} aria-hidden="true" />
+                              )}
+                              {isExpanded ? 'Show less' : 'Show more'}
+                            </button>
+                          )}
+                        </>
+                      )
+                    )}
+
+                    {/* Decoded data tags */}
+                    {msg.decoded_text &&
+                      Object.keys(msg.decoded_text).length > 0 &&
+                      !msg.formatted_text && (
+                        <div className="acars-item-decoded">
+                          {msg.decoded_text.airports_mentioned && (
+                            <span className="decoded-tag" title="Airports mentioned">
+                              ✈ {msg.decoded_text.airports_mentioned.join(', ')}
+                            </span>
+                          )}
+                          {msg.decoded_text.flight_levels && (
+                            <span className="decoded-tag" title="Flight levels">
+                              ⬆ FL{msg.decoded_text.flight_levels.join(', FL')}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                  </li>
+                );
+              })}
+            </React.Fragment>
+          ))}
         </ul>
       )}
     </div>

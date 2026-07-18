@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing:border-box; margin:0; padding:0; }
+  :root {
+    --bg0:#080b11; --bg1:#0d131b; --bg2:#141d28; --bg3:#1a2531;
+    --bord:#1b2531; --bord2:#28343f;
+    --txt:#e8eff6; --dim:#8b98a7; --dim2:#586472;
+    --accent:#3ddc84; --accent2:#4cc9f0; --warn:#f5b544; --danger:#f2585d; --mil:#b39dff;
+  }
+  [data-theme="slate"] { --bg0:#0a111e; --bg1:#101a2b; --bg2:#182437; --bg3:#1f2d43; --bord:#1e2c40; --bord2:#2b3c54; --txt:#eaf1f9; --dim:#93a1b5; --dim2:#5a6a80; --accent:#4cc9f0; --accent2:#5eead4; }
+  [data-theme="amber"] { --bg0:#0c0a06; --bg1:#15110a; --bg2:#1f1810; --bg3:#291f13; --bord:#2a2113; --bord2:#3a2e1c; --txt:#f4ead6; --dim:#b39c78; --dim2:#7a6a4d; --accent:#f5b544; --accent2:#ffd479; }
+  html,body { height:100%; background:var(--bg0); }
+  body { font-family:'IBM Plex Sans',system-ui,sans-serif; -webkit-font-smoothing:antialiased; }
+  a { color:var(--accent2); text-decoration:none; }
+  a:hover { color:var(--accent); }
+  ::-webkit-scrollbar { width:9px; height:9px; }
+  ::-webkit-scrollbar-track { background:transparent; }
+  ::-webkit-scrollbar-thumb { background:var(--bord2); border-radius:6px; border:2px solid var(--bg1); }
+  input[type=range]{ -webkit-appearance:none; appearance:none; height:4px; border-radius:3px; background:var(--bord2); outline:none; }
+  input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; width:14px; height:14px; border-radius:50%; background:var(--accent); box-shadow:0 0 8px var(--accent); cursor:pointer; }
+  @keyframes blink { 0%,100%{opacity:1;} 50%{opacity:.25;} }
+</style>
+</helmet>
+<div style="display:flex;flex-direction:column;height:100vh;width:100vw;overflow:hidden;background:var(--bg0);color:var(--txt);font-size:13px;">
+
+  <!-- HEADER -->
+  <header style="display:flex;align-items:center;height:60px;flex:0 0 60px;background:var(--bg1);border-bottom:1px solid var(--bord);padding:0 18px;">
+    <div style="display:flex;align-items:center;gap:11px;width:214px;flex:0 0 214px;">
+      <div style="width:30px;height:30px;border-radius:8px;background:radial-gradient(circle at 30% 30%,var(--accent),transparent 70%),var(--bg3);display:flex;align-items:center;justify-content:center;border:1px solid var(--bord2);">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.9"><circle cx="12" cy="12" r="9"></circle><path d="M12 3v18M3 12h18" opacity=".5"></path><circle cx="12" cy="12" r="3.4" fill="var(--accent)" stroke="none"></circle></svg>
+      </div>
+      <div style="font-size:20px;font-weight:700;letter-spacing:-.4px;">Sky<span style="color:var(--accent);">Spy</span></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:22px;padding-left:8px;">
+      <div style="display:flex;align-items:center;gap:8px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.7"><path d="M22 2 15 22 11 13 2 9z"></path></svg><span style="font-family:'IBM Plex Mono';font-size:17px;font-weight:600;color:var(--accent);">196</span><span style="font-size:10px;letter-spacing:1.2px;color:var(--dim);font-weight:600;">AIRCRAFT</span></div>
+      <div style="width:1px;height:22px;background:var(--bord2);"></div>
+      <div style="display:flex;align-items:center;gap:8px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent2)" stroke-width="1.7"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0116 0z"></path><circle cx="12" cy="10" r="2.6"></circle></svg><span style="font-family:'IBM Plex Mono';font-size:15px;font-weight:600;color:var(--accent2);">32.8</span><span style="font-size:10px;letter-spacing:1.2px;color:var(--dim);font-weight:600;">LAT</span></div>
+      <div style="display:flex;align-items:center;gap:8px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent2)" stroke-width="1.7"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0116 0z"></path><circle cx="12" cy="10" r="2.6"></circle></svg><span style="font-family:'IBM Plex Mono';font-size:15px;font-weight:600;color:var(--accent2);">-117.2</span><span style="font-size:10px;letter-spacing:1.2px;color:var(--dim);font-weight:600;">LON</span></div>
+    </div>
+    <div style="flex:1;"></div>
+    <div style="display:flex;align-items:center;gap:4px;">
+      <button title="Notifications" style="display:flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:8px;background:transparent;border:1px solid transparent;color:var(--dim);cursor:pointer;" style-hover="background:var(--bg2);color:var(--txt);"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M18 8a6 6 0 00-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 01-3.4 0"></path><path d="M2 2l20 20" stroke="var(--dim2)"></path></svg></button>
+      <button title="Settings" style="display:flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:8px;background:transparent;border:1px solid transparent;color:var(--dim);cursor:pointer;" style-hover="background:var(--bg2);color:var(--txt);"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="3.2"></circle><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"></path></svg></button>
+      <div style="display:flex;align-items:center;gap:7px;padding:0 6px 0 12px;border-left:1px solid var(--bord2);margin-left:6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--dim)" stroke-width="1.6"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg><span style="font-family:'IBM Plex Mono';font-size:13px;font-weight:500;color:var(--dim);">05:06:44</span><span style="font-size:10px;color:var(--dim2);font-weight:600;">UTC</span></div>
+    </div>
+  </header>
+
+  <div style="display:flex;flex:1;min-height:0;">
+    <!-- NAV -->
+    <nav style="width:214px;flex:0 0 214px;background:var(--bg1);border-right:1px solid var(--bord);display:flex;flex-direction:column;padding:14px 12px;">
+      <div style="font-size:10px;letter-spacing:1.4px;color:var(--dim2);font-weight:600;padding:2px 10px 10px;">NAVIGATION</div>
+      <a href="#" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:9px;color:var(--dim);" style-hover="background:var(--bg2);color:var(--txt);"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3zM9 3v15M15 6v15"></path></svg>Live Map</a>
+      <a href="#" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:9px;margin-top:2px;background:linear-gradient(90deg,color-mix(in srgb,var(--accent) 16%,transparent),transparent);color:var(--accent);font-weight:600;border-left:2px solid var(--accent);"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 12 15 12 13 21 11 3 9 12 2 12"></path></svg>Aircraft List</a>
+      <a href="#" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:9px;color:var(--dim);margin-top:2px;" style-hover="background:var(--bg2);color:var(--txt);"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"></path></svg>Statistics</a>
+      <a href="#" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:9px;color:var(--dim);margin-top:2px;" style-hover="background:var(--bg2);color:var(--txt);"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12a9 9 0 109-9 9 9 0 00-8 5M3 3v5h5M12 7v5l3 2"></path></svg>History</a>
+      <a href="#" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:9px;color:var(--dim);margin-top:2px;" style-hover="background:var(--bg2);color:var(--txt);"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="2.4"></circle><path d="M7 8a7 7 0 000 8M17 8a7 7 0 010 8M4.5 5a11 11 0 000 14M19.5 5a11 11 0 010 14"></path></svg>Radio</a>
+      <a href="#" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:9px;color:var(--dim);margin-top:2px;" style-hover="background:var(--bg2);color:var(--txt);"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 8a6 6 0 00-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 01-3.4 0"></path></svg>Alerts<span style="margin-left:auto;font-family:'IBM Plex Mono';font-size:10px;font-weight:600;background:color-mix(in srgb,var(--warn) 20%,transparent);color:var(--warn);padding:2px 6px;border-radius:20px;">3</span></a>
+      <a href="#" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:9px;color:var(--dim);margin-top:2px;" style-hover="background:var(--bg2);color:var(--txt);"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12h4l2 6 4-14 2 8h6"></path></svg>System</a>
+      <a href="#" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:9px;margin-top:8px;color:var(--danger);background:color-mix(in srgb,var(--danger) 12%,transparent);border:1px solid color-mix(in srgb,var(--danger) 30%,transparent);font-weight:600;" style-hover="background:color-mix(in srgb,var(--danger) 20%,transparent);"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"></circle><circle cx="12" cy="12" r="4"></circle><path d="M12 1v4M12 19v4M1 12h4M19 12h4"></path></svg>Cannonball</a>
+      <div style="flex:1;"></div>
+      <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;"><span style="width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 8px var(--accent);animation:blink 2s infinite;"></span><span style="font-size:11px;font-weight:600;letter-spacing:.6px;color:var(--accent);">LIVE</span><span style="margin-left:auto;font-family:'IBM Plex Mono';font-size:10px;color:var(--dim2);">v2.5.0</span></div>
+    </nav>
+
+    <!-- MAIN (scroll) -->
+    <main style="flex:1;min-width:0;overflow-y:auto;padding:20px 24px 28px;">
+
+      <!-- IDENTITY BAR -->
+      <div style="display:flex;align-items:center;gap:16px;padding:16px 18px;border-radius:14px;background:linear-gradient(180deg,var(--bg2),var(--bg1));border:1px solid var(--bord);margin-bottom:14px;">
+        <span style="display:inline-flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono';font-size:11px;font-weight:700;width:34px;height:22px;border-radius:4px;background:linear-gradient(#b22234 33%,#fff 33% 66%,#3c3b6e 66%);color:#fff;text-shadow:0 0 2px #000;">US</span>
+        <div style="display:flex;flex-direction:column;gap:4px;">
+          <div style="display:flex;align-items:center;gap:12px;">
+            <span style="font-family:'IBM Plex Mono';font-size:26px;font-weight:700;letter-spacing:-.5px;">SWA3838</span>
+            <span style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,transparent);padding:4px 11px;border-radius:20px;"><span style="width:7px;height:7px;border-radius:50%;background:var(--accent);"></span>ON APPROACH</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="font-family:'IBM Plex Mono';font-size:12px;color:var(--dim);">Mode-S ABBC52</span>
+            <span style="font-family:'IBM Plex Mono';font-size:11px;padding:3px 8px;border-radius:6px;background:color-mix(in srgb,var(--accent2) 12%,transparent);border:1px solid color-mix(in srgb,var(--accent2) 32%,transparent);color:var(--accent2);">B737-800/W</span>
+            <span style="font-size:11px;padding:3px 8px;border-radius:6px;background:var(--bg3);border:1px solid var(--bord2);color:var(--dim);">Southwest Airlines</span>
+          </div>
+        </div>
+        <div style="flex:1;"></div>
+        <div style="display:flex;gap:8px;">
+          <button style="display:flex;align-items:center;gap:7px;height:38px;padding:0 14px;border-radius:9px;background:var(--bg2);border:1px solid var(--bord);color:var(--txt);cursor:pointer;font-family:inherit;font-size:12px;font-weight:500;" style-hover="border-color:var(--accent);color:var(--accent);"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M18 8a6 6 0 00-12 0c0 7-3 9-3 9h18s-3-2-3-9"></path></svg>Alert</button>
+          <button title="Follow" style="display:flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:9px;background:var(--bg2);border:1px solid var(--bord);color:var(--dim);cursor:pointer;" style-hover="border-color:var(--accent);color:var(--accent);"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 2l3 6.5 7 .8-5.2 4.7 1.5 6.9L12 17.8 5.2 20.9l1.5-6.9L1.5 9.3l7-.8z"></path></svg></button>
+          <button title="Share" style="display:flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:9px;background:var(--bg2);border:1px solid var(--bord);color:var(--dim);cursor:pointer;" style-hover="border-color:var(--accent);color:var(--accent);"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"></path></svg></button>
+          <button title="Close" style="display:flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:9px;background:var(--bg2);border:1px solid var(--bord);color:var(--dim);cursor:pointer;" style-hover="border-color:var(--danger);color:var(--danger);"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M6 6l12 12M18 6L6 18"></path></svg></button>
+        </div>
+      </div>
+
+      <!-- STAT STRIP -->
+      <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:16px;">
+        <div style="padding:13px 15px;border-radius:12px;background:var(--bg1);border:1px solid var(--bord);">
+          <div style="font-size:10px;letter-spacing:1px;color:var(--dim);font-weight:600;margin-bottom:6px;">ALTITUDE</div>
+          <div style="display:flex;align-items:baseline;gap:5px;"><span style="font-family:'IBM Plex Mono';font-size:22px;font-weight:600;">1,125</span><span style="font-size:11px;color:var(--dim);">ft</span></div>
+          <div style="display:flex;align-items:center;gap:4px;margin-top:5px;font-size:10px;color:var(--danger);"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M6 9l6 6 6-6"></path></svg>descending</div>
+        </div>
+        <div style="padding:13px 15px;border-radius:12px;background:var(--bg1);border:1px solid var(--bord);">
+          <div style="font-size:10px;letter-spacing:1px;color:var(--dim);font-weight:600;margin-bottom:6px;">GROUND SPD</div>
+          <div style="display:flex;align-items:baseline;gap:5px;"><span style="font-family:'IBM Plex Mono';font-size:22px;font-weight:600;">157</span><span style="font-size:11px;color:var(--dim);">kts</span></div>
+          <div style="display:flex;align-items:center;gap:4px;margin-top:5px;font-size:10px;color:var(--danger);"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M6 9l6 6 6-6"></path></svg>slowing</div>
+        </div>
+        <div style="padding:13px 15px;border-radius:12px;background:var(--bg1);border:1px solid color-mix(in srgb,var(--warn) 28%,var(--bord));">
+          <div style="font-size:10px;letter-spacing:1px;color:var(--dim);font-weight:600;margin-bottom:6px;">VERT SPEED</div>
+          <div style="display:flex;align-items:baseline;gap:5px;"><span style="font-family:'IBM Plex Mono';font-size:22px;font-weight:600;color:var(--warn);">-960</span><span style="font-size:11px;color:var(--dim);">fpm</span></div>
+          <div style="font-size:10px;color:var(--dim2);margin-top:5px;">glideslope</div>
+        </div>
+        <div style="padding:13px 15px;border-radius:12px;background:var(--bg1);border:1px solid var(--bord);">
+          <div style="font-size:10px;letter-spacing:1px;color:var(--dim);font-weight:600;margin-bottom:6px;">TRACK</div>
+          <div style="display:flex;align-items:baseline;gap:5px;"><span style="font-family:'IBM Plex Mono';font-size:22px;font-weight:600;">286</span><span style="font-size:11px;color:var(--dim);">°W</span></div>
+          <div style="font-size:10px;color:var(--dim2);margin-top:5px;">heading WNW</div>
+        </div>
+        <div style="padding:13px 15px;border-radius:12px;background:var(--bg1);border:1px solid var(--bord);">
+          <div style="font-size:10px;letter-spacing:1px;color:var(--dim);font-weight:600;margin-bottom:6px;">DISTANCE</div>
+          <div style="display:flex;align-items:baseline;gap:5px;"><span style="font-family:'IBM Plex Mono';font-size:22px;font-weight:600;">7.4</span><span style="font-size:11px;color:var(--dim);">nm</span></div>
+          <div style="font-size:10px;color:var(--dim2);margin-top:5px;">from station</div>
+        </div>
+        <div style="padding:13px 15px;border-radius:12px;background:var(--bg1);border:1px solid var(--bord);">
+          <div style="font-size:10px;letter-spacing:1px;color:var(--dim);font-weight:600;margin-bottom:6px;">SQUAWK</div>
+          <div style="display:flex;align-items:baseline;gap:5px;"><span style="font-family:'IBM Plex Mono';font-size:22px;font-weight:600;">4701</span></div>
+          <div style="font-size:10px;color:var(--accent);margin-top:5px;">normal</div>
+        </div>
+      </div>
+
+      <!-- CONTENT GRID -->
+      <div style="display:grid;grid-template-columns:400px 1fr;gap:16px;align-items:start;">
+
+        <!-- LEFT COLUMN -->
+        <div style="display:flex;flex-direction:column;gap:16px;">
+
+          <!-- photo hero -->
+          <div onClick="{{ openPhoto }}" style="position:relative;height:{{ photoH }}px;border-radius:14px;overflow:hidden;border:1px solid var(--bord);background:repeating-linear-gradient(45deg,var(--bg2),var(--bg2) 12px,var(--bg1) 12px,var(--bg1) 24px);cursor:zoom-in;" style-hover="border-color:var(--accent2);">
+            <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;"><span style="font-family:'IBM Plex Mono';font-size:11px;color:var(--dim2);padding:6px 12px;border:1px dashed var(--dim2);border-radius:6px;background:color-mix(in srgb,var(--bg0) 45%,transparent);">B737-800 · aircraft photo</span></div>
+            <div style="position:absolute;left:0;right:0;bottom:0;height:70px;background:linear-gradient(transparent,var(--bg1));"></div>
+            <div style="position:absolute;left:16px;bottom:12px;"><div style="font-family:'IBM Plex Mono';font-size:16px;font-weight:700;text-shadow:0 1px 8px rgba(0,0,0,.7);">N8512Z</div><div style="font-size:11px;color:var(--dim);">Boeing 737-8H4 · delivered 2013</div></div>
+            <div style="position:absolute;right:12px;top:12px;display:flex;align-items:center;gap:6px;font-size:9px;letter-spacing:.6px;color:var(--dim2);font-family:'IBM Plex Mono';">© PLANESPOTTERS</div>
+            <div style="position:absolute;left:12px;top:12px;display:flex;align-items:center;gap:5px;padding:4px 8px;border-radius:7px;background:color-mix(in srgb,var(--bg0) 55%,transparent);border:1px solid var(--bord2);color:var(--dim);font-size:10px;font-weight:600;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"></path></svg>Enlarge</div>
+          </div>
+
+          <!-- aircraft info -->
+          <div style="border-radius:14px;background:var(--bg1);border:1px solid var(--bord);overflow:hidden;">
+            <div style="display:flex;align-items:center;gap:9px;padding:14px 16px;border-bottom:1px solid var(--bord);"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.7"><path d="M22 2 15 22 11 13 2 9z"></path></svg><span style="font-size:12px;font-weight:600;letter-spacing:.4px;">Aircraft Info</span></div>
+            <div style="padding:6px 16px 14px;">
+              <div style="font-size:10px;letter-spacing:1px;color:var(--dim2);font-weight:600;padding:12px 0 4px;">AIRFRAME</div>
+              <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--bord);"><span style="color:var(--dim);">ICAO Type</span><span style="font-family:'IBM Plex Mono';font-weight:600;">B738</span></div>
+              <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--bord);"><span style="color:var(--dim);">Manufacturer</span><span style="font-weight:600;">Boeing</span></div>
+              <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--bord);"><span style="color:var(--dim);">Model</span><span style="font-weight:600;">737-800 (winglets)</span></div>
+              <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--bord);"><span style="color:var(--dim);">Serial (MSN)</span><span style="font-family:'IBM Plex Mono';font-weight:600;">36891</span></div>
+              <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--bord);"><span style="color:var(--dim);">Engines</span><span style="font-weight:600;">2 × CFM56-7B</span></div>
+              <div style="display:flex;justify-content:space-between;padding:8px 0;"><span style="color:var(--dim);">Age</span><span style="font-weight:600;">12 years</span></div>
+
+              <div style="font-size:10px;letter-spacing:1px;color:var(--dim2);font-weight:600;padding:14px 0 4px;">OPERATOR & REGISTRATION</div>
+              <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--bord);"><span style="color:var(--dim);">Operator</span><span style="font-weight:600;">Southwest Airlines</span></div>
+              <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--bord);"><span style="color:var(--dim);">Callsign</span><span style="font-family:'IBM Plex Mono';font-weight:600;">SOUTHWEST</span></div>
+              <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--bord);"><span style="color:var(--dim);">Registration</span><span style="font-family:'IBM Plex Mono';font-weight:600;">N8512Z</span></div>
+              <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--bord);"><span style="color:var(--dim);">ICAO 24-bit</span><span style="font-family:'IBM Plex Mono';font-weight:600;">ABBC52</span></div>
+              <div style="display:flex;justify-content:space-between;padding:8px 0;"><span style="color:var(--dim);">Country</span><span style="font-weight:600;">United States</span></div>
+            </div>
+          </div>
+
+          <!-- route / progress -->
+          <div style="border-radius:14px;background:var(--bg1);border:1px solid var(--bord);padding:16px;">
+            <div style="display:flex;align-items:center;gap:9px;margin-bottom:16px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.7"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0116 0z"></path><circle cx="12" cy="10" r="2.4"></circle></svg><span style="font-size:12px;font-weight:600;letter-spacing:.4px;">Flight Route</span></div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+              <div><div style="font-family:'IBM Plex Mono';font-size:22px;font-weight:700;">PHX</div><div style="font-size:11px;color:var(--dim);">Phoenix</div></div>
+              <div style="flex:1;display:flex;align-items:center;gap:6px;padding:0 12px;color:var(--dim2);"><span style="flex:1;height:1px;background:var(--bord2);"></span><svg width="16" height="16" viewBox="0 0 24 24" fill="var(--accent)" stroke="none"><path d="M22 2 15 22 11 13 2 9z"></path></svg><span style="flex:1;height:1px;background:var(--bord2);"></span></div>
+              <div style="text-align:right;"><div style="font-family:'IBM Plex Mono';font-size:22px;font-weight:700;">SAN</div><div style="font-size:11px;color:var(--dim);">San Diego</div></div>
+            </div>
+            <div style="position:relative;height:5px;border-radius:3px;background:var(--bord2);margin-bottom:8px;"><div style="position:absolute;left:0;top:0;height:5px;width:88%;border-radius:3px;background:var(--accent);"></div><div style="position:absolute;left:88%;top:50%;transform:translate(-50%,-50%);width:11px;height:11px;border-radius:50%;background:var(--accent);box-shadow:0 0 8px var(--accent);"></div></div>
+            <div style="display:flex;justify-content:space-between;font-family:'IBM Plex Mono';font-size:11px;color:var(--dim);"><span>DEP 04:12Z</span><span style="color:var(--accent);">88% · 6 min out</span><span>ETA 05:14Z</span></div>
+          </div>
+        </div>
+
+        <!-- RIGHT COLUMN -->
+        <div style="display:flex;flex-direction:column;gap:16px;">
+
+          <!-- track & position -->
+          <div style="border-radius:14px;background:var(--bg1);border:1px solid var(--bord);overflow:hidden;">
+            <div style="display:flex;align-items:center;gap:9px;padding:14px 16px;border-bottom:1px solid var(--bord);"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.7"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0116 0z"></path><circle cx="12" cy="10" r="2.4"></circle></svg><span style="font-size:12px;font-weight:600;letter-spacing:.4px;">Track & Position</span><span style="margin-left:auto;font-family:'IBM Plex Mono';font-size:11px;color:var(--dim);">33.0321°N · 117.0982°W</span></div>
+
+            <!-- map -->
+            <div style="position:relative;height:340px;margin:16px;border-radius:12px;overflow:hidden;background:#0a0f15;border:1px solid var(--bord);">
+              <svg style="position:absolute;inset:0;width:100%;height:100%;opacity:.5;"><defs><pattern id="roads" width="90" height="90" patternUnits="userSpaceOnUse"><path d="M90 0H0V90" fill="none" stroke="var(--bord2)" stroke-width="1"></path></pattern></defs><rect width="100%" height="100%" fill="url(#roads)"></rect></svg>
+              <svg style="position:absolute;inset:0;width:100%;height:100%;" viewBox="0 0 100 100" preserveAspectRatio="none">
+                <polyline points="8,78 26,70 40,66 62,40 82,30 95,22" fill="none" stroke="var(--dim2)" stroke-width="1.4" opacity=".5" vector-effect="non-scaling-stroke"></polyline>
+                <polyline points="18,10 30,44 44,64 55,96" fill="none" stroke="var(--dim2)" stroke-width="1.2" opacity=".4" vector-effect="non-scaling-stroke"></polyline>
+                <polyline points="12,40 44,54 70,58 96,66" fill="none" stroke="var(--dim2)" stroke-width="1.2" opacity=".35" vector-effect="non-scaling-stroke"></polyline>
+                <polyline points="10,30 92,74" fill="none" stroke="var(--accent)" stroke-width="2.4" stroke-linecap="round" opacity=".95" vector-effect="non-scaling-stroke"></polyline>
+              </svg>
+              <div style="position:absolute;left:{{ posClamp }}%;top:{{ posY }}%;transform:translate(-50%,-50%);"><div style="width:38px;height:38px;border-radius:50%;border:1.5px dashed var(--accent);position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);"></div><svg width="16" height="16" viewBox="0 0 24 24" style="transform:rotate(120deg);filter:drop-shadow(0 0 4px var(--accent));"><path d="M12 2 19 21 12 16 5 21z" fill="var(--accent)"></path></svg></div>
+              <div style="position:absolute;left:14px;bottom:12px;font-family:'IBM Plex Mono';font-size:10px;letter-spacing:1px;color:var(--dim);background:color-mix(in srgb,var(--bg0) 60%,transparent);padding:4px 8px;border-radius:5px;">SOUTH ENCANTO</div>
+            </div>
+
+            <!-- mini graphs -->
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;padding:0 16px;">
+              <div style="padding:12px;border-radius:11px;background:var(--bg2);border:1px solid var(--bord);">
+                <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;"><span style="font-size:10px;letter-spacing:.6px;color:var(--dim);">ALTITUDE</span><span style="font-family:'IBM Plex Mono';font-size:13px;font-weight:600;color:var(--accent);">2,525 ft</span></div>
+                <div style="position:relative;"><svg width="100%" height="46" viewBox="0 0 160 46" preserveAspectRatio="none"><polyline points="0,6 40,6 44,20 60,20 66,10 90,28 130,36 160,40" fill="none" stroke="var(--accent)" stroke-width="2" vector-effect="non-scaling-stroke"></polyline></svg><div style="position:absolute;top:0;bottom:0;left:{{ posClamp }}%;width:1px;background:var(--accent2);"></div></div>
+                <div style="display:flex;justify-content:space-between;font-family:'IBM Plex Mono';font-size:9px;color:var(--dim2);margin-top:4px;"><span>2,400</span><span>2,600 ft</span></div>
+              </div>
+              <div style="padding:12px;border-radius:11px;background:var(--bg2);border:1px solid var(--bord);">
+                <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;"><span style="font-size:10px;letter-spacing:.6px;color:var(--dim);">SPEED</span><span style="font-family:'IBM Plex Mono';font-size:13px;font-weight:600;color:var(--accent2);">197 kts</span></div>
+                <div style="position:relative;"><svg width="100%" height="46" viewBox="0 0 160 46" preserveAspectRatio="none"><polyline points="0,10 36,10 42,26 64,26 70,18 100,30 130,34 160,36" fill="none" stroke="var(--accent2)" stroke-width="2" vector-effect="non-scaling-stroke"></polyline></svg><div style="position:absolute;top:0;bottom:0;left:{{ posClamp }}%;width:1px;background:var(--accent2);"></div></div>
+                <div style="display:flex;justify-content:space-between;font-family:'IBM Plex Mono';font-size:9px;color:var(--dim2);margin-top:4px;"><span>192</span><span>198 kts</span></div>
+              </div>
+              <div style="padding:12px;border-radius:11px;background:var(--bg2);border:1px solid var(--bord);">
+                <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;"><span style="font-size:10px;letter-spacing:.6px;color:var(--dim);">V/S</span><span style="font-family:'IBM Plex Mono';font-size:13px;font-weight:600;color:var(--warn);">-1152 fpm</span></div>
+                <div style="position:relative;"><svg width="100%" height="46" viewBox="0 0 160 46" preserveAspectRatio="none"><line x1="0" y1="16" x2="160" y2="16" stroke="var(--bord2)" stroke-width="1" stroke-dasharray="3 3" vector-effect="non-scaling-stroke"></line><polyline points="0,14 40,14 46,30 90,32 130,26 160,30" fill="none" stroke="var(--warn)" stroke-width="2" vector-effect="non-scaling-stroke"></polyline></svg><div style="position:absolute;top:0;bottom:0;left:{{ posClamp }}%;width:1px;background:var(--accent2);"></div></div>
+                <div style="display:flex;justify-content:space-between;font-family:'IBM Plex Mono';font-size:9px;color:var(--dim2);margin-top:4px;"><span>-1280</span><span>-896 fpm</span></div>
+              </div>
+            </div>
+
+            <!-- playback -->
+            <div style="display:flex;align-items:center;gap:14px;padding:16px;">
+              <div style="display:flex;align-items:center;gap:4px;">
+                <button title="Restart" onClick="{{ restart }}" style="display:flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:9px;background:var(--bg2);border:1px solid var(--bord);color:var(--dim);cursor:pointer;" style-hover="color:var(--txt);"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h2v14H6zM20 5v14l-11-7z"></path></svg></button>
+                <button onClick="{{ togglePlay }}" style="display:flex;align-items:center;justify-content:center;width:42px;height:42px;border-radius:10px;background:var(--accent);border:none;color:var(--bg0);cursor:pointer;"><svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="{{ playPath }}"></path></svg></button>
+                <button title="Skip to live" onClick="{{ skipEnd }}" style="display:flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:9px;background:var(--bg2);border:1px solid var(--bord);color:var(--dim);cursor:pointer;" style-hover="color:var(--txt);"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M16 5h2v14h-2zM4 5v14l11-7z"></path></svg></button>
+              </div>
+              <div style="display:flex;gap:3px;padding:3px;border-radius:9px;background:var(--bg2);border:1px solid var(--bord);">
+                <sc-for list="{{ speeds }}" as="s" hint-placeholder-count="4">
+                  <button onClick="{{ s.onClick }}" style="min-width:34px;height:28px;border:none;border-radius:6px;cursor:pointer;font-family:'IBM Plex Mono';font-size:11px;font-weight:600;color:{{ s.fg }};background:{{ s.bg }};">{{ s.label }}</button>
+                </sc-for>
+              </div>
+              <input type="range" min="0" max="100" value="{{ pos }}" onInput="{{ onScrub }}" style="flex:1;">
+              <span style="font-family:'IBM Plex Mono';font-size:12px;color:var(--dim);min-width:74px;text-align:right;">{{ clock }}</span>
+            </div>
+          </div>
+
+          <!-- reception + communications -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+            <!-- reception -->
+            <div style="border-radius:14px;background:var(--bg1);border:1px solid var(--bord);overflow:hidden;">
+              <div style="display:flex;align-items:center;gap:9px;padding:14px 16px;border-bottom:1px solid var(--bord);"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.7"><path d="M4 20h16M4 20V10M4 20l8-6 8 6M4 10l8-6 8 6"></path></svg><span style="font-size:12px;font-weight:600;letter-spacing:.4px;">Reception</span><span style="margin-left:auto;font-family:'IBM Plex Mono';font-size:10px;color:var(--accent);">4 receivers</span></div>
+              <div style="padding:8px 16px 14px;">
+                <sc-for list="{{ sources }}" as="r" hint-placeholder-count="4">
+                  <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--bord);">
+                    <span style="width:8px;height:8px;border-radius:50%;background:{{ r.color }};box-shadow:0 0 6px {{ r.color }};flex:0 0 auto;"></span>
+                    <span style="font-family:'IBM Plex Mono';font-size:12px;font-weight:500;flex:1;">{{ r.name }}</span>
+                    <div style="width:60px;height:5px;border-radius:3px;background:var(--bord2);overflow:hidden;"><div style="height:5px;border-radius:3px;background:{{ r.color }};width:{{ r.pct }}%;"></div></div>
+                    <span style="font-family:'IBM Plex Mono';font-size:11px;color:var(--dim);min-width:52px;text-align:right;">{{ r.rssi }} dB</span>
+                  </div>
+                </sc-for>
+                <div style="display:flex;justify-content:space-between;padding-top:10px;font-family:'IBM Plex Mono';font-size:11px;color:var(--dim);"><span>12.4 msg/s</span><span>last seen 0.3s ago</span></div>
+              </div>
+            </div>
+            <!-- communications -->
+            <div style="border-radius:14px;background:var(--bg1);border:1px solid var(--bord);overflow:hidden;">
+              <div style="display:flex;align-items:center;gap:9px;padding:14px 16px;border-bottom:1px solid var(--bord);"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.7"><circle cx="12" cy="12" r="2.4"></circle><path d="M7 8a7 7 0 000 8M17 8a7 7 0 010 8"></path></svg><span style="font-size:12px;font-weight:600;letter-spacing:.4px;">Transponder Log</span></div>
+              <div style="padding:8px 16px 14px;">
+                <sc-for list="{{ comms }}" as="c" hint-placeholder-count="4">
+                  <div style="display:flex;gap:11px;padding:9px 0;border-bottom:1px solid var(--bord);">
+                    <span style="font-family:'IBM Plex Mono';font-size:11px;color:var(--dim2);min-width:52px;">{{ c.t }}</span>
+                    <div style="flex:1;"><div style="font-size:12px;">{{ c.msg }}</div></div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+
+          <!-- flight & airframe history -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+            <div style="border-radius:14px;background:var(--bg1);border:1px solid var(--bord);overflow:hidden;">
+              <div style="display:flex;align-items:center;gap:9px;padding:14px 16px;border-bottom:1px solid var(--bord);"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.7"><path d="M3 12a9 9 0 109-9 9 9 0 00-8 5M3 3v5h5M12 7v5l3 2"></path></svg><span style="font-size:12px;font-weight:600;letter-spacing:.4px;">Flight History</span><span style="margin-left:auto;font-family:'IBM Plex Mono';font-size:10px;color:var(--dim);">last 5 flights</span></div>
+              <div style="padding:4px 16px 12px;">
+                <sc-for list="{{ flights }}" as="f" hint-placeholder-count="5">
+                  <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--bord);">
+                    <div style="flex:0 0 auto;"><div style="font-family:'IBM Plex Mono';font-size:12px;font-weight:600;">{{ f.route }}</div><div style="font-size:10px;color:var(--dim2);">{{ f.date }}</div></div>
+                    <div style="flex:1;"></div>
+                    <div style="text-align:right;"><div style="font-family:'IBM Plex Mono';font-size:12px;color:var(--dim);">{{ f.cs }}</div><div style="font-size:10px;color:var(--dim2);">{{ f.dur }}</div></div>
+                    <span style="display:flex;align-items:center;gap:5px;font-size:10px;font-weight:600;color:{{ f.color }};background:{{ f.bg }};padding:3px 8px;border-radius:20px;flex:0 0 auto;">{{ f.status }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+            <div style="border-radius:14px;background:var(--bg1);border:1px solid var(--bord);overflow:hidden;">
+              <div style="display:flex;align-items:center;gap:9px;padding:14px 16px;border-bottom:1px solid var(--bord);"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.7"><circle cx="12" cy="12" r="3"></circle><path d="M12 3v3M12 18v3M3 12h3M18 12h3"></path></svg><span style="font-size:12px;font-weight:600;letter-spacing:.4px;">Sighting History</span><span style="margin-left:auto;font-family:'IBM Plex Mono';font-size:10px;color:var(--dim);">seen 12× here</span></div>
+              <div style="padding:14px 16px;">
+                <sc-for list="{{ airframe }}" as="a" hint-placeholder-count="5">
+                  <div style="display:flex;gap:12px;">
+                    <div style="display:flex;flex-direction:column;align-items:center;padding-top:3px;">
+                      <span style="width:9px;height:9px;border-radius:50%;background:{{ a.dot }};border:2px solid var(--bg1);flex:0 0 auto;"></span>
+                      <span style="flex:1;width:1px;background:var(--bord2);"></span>
+                    </div>
+                    <div style="flex:1;padding-bottom:14px;">
+                      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;"><span style="font-size:12px;font-weight:500;">{{ a.ev }}</span><span style="font-family:'IBM Plex Mono';font-size:11px;color:var(--dim);">{{ a.year }}</span></div>
+                      <div style="font-size:11px;color:var(--dim2);margin-top:2px;">{{ a.note }}</div>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+
+          <!-- safety events -->
+          <div style="border-radius:14px;background:var(--bg1);border:1px solid var(--bord);overflow:hidden;">
+            <div style="display:flex;align-items:center;gap:9px;padding:14px 16px;border-bottom:1px solid var(--bord);"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.7"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"></path><path d="M9 12l2 2 4-4"></path></svg><span style="font-size:12px;font-weight:600;letter-spacing:.4px;">Safety Status</span><span style="margin-left:auto;display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,transparent);padding:4px 11px;border-radius:20px;"><span style="width:7px;height:7px;border-radius:50%;background:var(--accent);"></span>ALL CLEAR</span></div>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;padding:16px;">
+              <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:11px;background:var(--bg2);border:1px solid var(--bord);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.8"><path d="M20 6L9 17l-5-5"></path></svg><div><div style="font-size:12px;font-weight:500;">TCAS</div><div style="font-size:11px;color:var(--dim);">No advisories</div></div></div>
+              <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:11px;background:var(--bg2);border:1px solid var(--bord);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.8"><path d="M20 6L9 17l-5-5"></path></svg><div><div style="font-size:12px;font-weight:500;">Squawk</div><div style="font-size:11px;color:var(--dim);">No 7500/7600/7700</div></div></div>
+              <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:11px;background:var(--bg2);border:1px solid var(--bord);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.8"><path d="M20 6L9 17l-5-5"></path></svg><div><div style="font-size:12px;font-weight:500;">Geofence</div><div style="font-size:11px;color:var(--dim);">No incursions</div></div></div>
+            </div>
+          </div>
+
+          <!-- safety events log -->
+          <div style="border-radius:14px;background:var(--bg1);border:1px solid var(--bord);overflow:hidden;">
+            <div style="display:flex;align-items:center;gap:9px;padding:14px 16px;border-bottom:1px solid var(--bord);"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--warn)" stroke-width="1.7"><path d="M10.3 3.9 1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"></path><path d="M12 9v4M12 17h.01"></path></svg><span style="font-size:12px;font-weight:600;letter-spacing:.4px;">Safety Events</span><span style="margin-left:auto;font-family:'IBM Plex Mono';font-size:10px;color:var(--dim);">{{ safetyCount }} this flight</span></div>
+            <div style="padding:6px 16px 12px;">
+              <sc-for list="{{ safetyEvents }}" as="e" hint-placeholder-count="3">
+                <div style="display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--bord);">
+                  <span style="display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:8px;background:{{ e.bg }};color:{{ e.color }};flex:0 0 auto;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"></path></svg></span>
+                  <div style="flex:1;"><div style="font-size:12px;font-weight:500;">{{ e.title }}</div><div style="font-size:11px;color:var(--dim2);">{{ e.detail }}</div></div>
+                  <span style="font-size:10px;font-weight:600;color:{{ e.color }};background:{{ e.bg }};padding:3px 9px;border-radius:20px;flex:0 0 auto;">{{ e.sev }}</span>
+                  <span style="font-family:'IBM Plex Mono';font-size:11px;color:var(--dim);min-width:58px;text-align:right;">{{ e.t }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+
+          <!-- external -->
+          <div style="display:flex;align-items:center;gap:10px;padding:4px 2px;">
+            <span style="font-size:11px;letter-spacing:1px;color:var(--dim2);font-weight:600;">EXTERNAL</span>
+            <a href="#" style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--dim);" style-hover="color:var(--accent);">FlightAware<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M15 3h6v6M21 3l-9 9M10 5H5a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2v-5"></path></svg></a>
+            <a href="#" style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--dim);" style-hover="color:var(--accent);">ADSBexchange<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M15 3h6v6M21 3l-9 9M10 5H5a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2v-5"></path></svg></a>
+            <a href="#" style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--dim);" style-hover="color:var(--accent);">Flightradar24<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M15 3h6v6M21 3l-9 9M10 5H5a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2v-5"></path></svg></a>
+            <a href="#" style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--dim);" style-hover="color:var(--accent);">Planespotters<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M15 3h6v6M21 3l-9 9M10 5H5a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2v-5"></path></svg></a>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- PHOTO LIGHTBOX -->
+  <sc-if value="{{ photoOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closePhoto }}" style="position:fixed;inset:0;z-index:50;background:color-mix(in srgb,#000 78%,transparent);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;padding:48px;cursor:zoom-out;">
+      <div style="position:relative;width:min(1100px,92vw);max-height:86vh;aspect-ratio:16/9;border-radius:16px;overflow:hidden;border:1px solid var(--bord2);background:repeating-linear-gradient(45deg,var(--bg2),var(--bg2) 20px,var(--bg1) 20px,var(--bg1) 40px);box-shadow:0 30px 80px rgba(0,0,0,.6);">
+        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;"><span style="font-family:'IBM Plex Mono';font-size:13px;color:var(--dim2);padding:8px 16px;border:1px dashed var(--dim2);border-radius:8px;background:color-mix(in srgb,var(--bg0) 45%,transparent);">B737-800 · N8512Z · full-resolution photo</span></div>
+        <div style="position:absolute;left:0;right:0;bottom:0;height:110px;background:linear-gradient(transparent,var(--bg1));"></div>
+        <div style="position:absolute;left:22px;bottom:18px;"><div style="font-family:'IBM Plex Mono';font-size:22px;font-weight:700;">N8512Z</div><div style="font-size:12px;color:var(--dim);">Southwest Airlines · Boeing 737-8H4 · © Planespotters</div></div>
+      </div>
+      <button onClick="{{ closePhoto }}" title="Close" style="position:fixed;top:24px;right:24px;display:flex;align-items:center;justify-content:center;width:42px;height:42px;border-radius:11px;background:var(--bg1);border:1px solid var(--bord2);color:var(--txt);cursor:pointer;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M6 6l12 12M18 6L6 18"></path></svg></button>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{
+  &quot;accentTheme&quot;: { &quot;editor&quot;: &quot;enum&quot;, &quot;options&quot;: [&quot;radar&quot;, &quot;slate&quot;, &quot;amber&quot;], &quot;default&quot;: &quot;radar&quot;, &quot;tsType&quot;: &quot;'radar' | 'slate' | 'amber'&quot;, &quot;section&quot;: &quot;Appearance&quot; },
+  &quot;photoHeight&quot;: { &quot;editor&quot;: &quot;range&quot;, &quot;default&quot;: 170, &quot;min&quot;: 120, &quot;max&quot;: 280, &quot;step&quot;: 10, &quot;unit&quot;: &quot;px&quot;, &quot;tsType&quot;: &quot;number&quot;, &quot;section&quot;: &quot;Appearance&quot; }
+}">
+class Component extends DCLogic {
+  state = { theme:'radar', playing:false, speed:1, pos:62, photoOpen:false };
+
+  componentDidMount(){
+    document.documentElement.setAttribute('data-theme', this.props.accentTheme || this.state.theme);
+    this.timer=setInterval(()=>{
+      if(!this.state.playing) return;
+      this.setState(s=>{ let p=s.pos + s.speed*1.5; if(p>=100){ p=100; return {pos:p, playing:false}; } return {pos:p}; });
+    }, 250);
+  }
+  componentWillUnmount(){ clearInterval(this.timer); }
+
+  renderVals(){
+    const S=this.state;
+    const speeds=[0.5,1,2,4].map(v=>({
+      label:v+'x', bg:S.speed===v?'var(--accent)':'transparent', fg:S.speed===v?'var(--bg0)':'var(--dim)',
+      onClick:()=>this.setState({speed:v}),
+    }));
+    const totalSec=1980; // 33 min track
+    const cur=Math.round(totalSec*S.pos/100);
+    const mm=String(Math.floor(cur/60)).padStart(2,'0'), ss=String(cur%60).padStart(2,'0');
+    const clock=`${mm}:${ss} / 33:00`;
+
+    const sources=[
+      {name:'KSAN-01',   rssi:'-4.2',  pct:92, color:'var(--accent)'},
+      {name:'Encanto-7', rssi:'-8.6',  pct:74, color:'var(--accent)'},
+      {name:'CoastAir-3',rssi:'-13.1', pct:52, color:'var(--warn)'},
+      {name:'Mil-North', rssi:'-19.8', pct:28, color:'var(--danger)'},
+    ];
+    const comms=[
+      {t:'05:06:40', msg:'Position report · FL011 · 4701'},
+      {t:'05:05:12', msg:'Squawk assigned 4701 by SoCal Approach'},
+      {t:'05:02:03', msg:'Descent through 5,000 ft'},
+      {t:'04:58:47', msg:'Handoff LAX Center → SoCal Approach'},
+    ];
+
+    // map marker travels along the green track (10,30 → 92,74)
+    const posClamp=Math.max(0,Math.min(100,S.pos));
+    const posY=30 + (74-30)*(posClamp-10)/(92-10);
+
+    return {
+      playing:S.playing, togglePlay:()=>this.setState(s=>({playing:!s.playing})),
+      restart:()=>this.setState({pos:0, playing:false}),
+      skipEnd:()=>this.setState({pos:100, playing:false}),
+      playPath:S.playing?'M6 5h4v14H6zM14 5h4v14h-4z':'M7 5v14l11-7z',
+      speed:S.speed, speeds,
+      pos:S.pos, onScrub:(e)=>this.setState({pos:Number(e.target.value)}),
+      clock, sources, comms,
+      posClamp, posY:Math.max(0,Math.min(100,posY)),
+      photoH:this.props.photoHeight ?? 170,
+      safetyCount:3,
+      safetyEvents:[
+        {title:'High descent rate', detail:'V/S -1,152 fpm below 3,000 ft AGL', sev:'CAUTION', t:'05:06:12', color:'var(--warn)', bg:'color-mix(in srgb,var(--warn) 15%,transparent)'},
+        {title:'Rapid altitude change', detail:'Lost 900 ft in 42 s during approach', sev:'CAUTION', t:'05:04:38', color:'var(--warn)', bg:'color-mix(in srgb,var(--warn) 15%,transparent)'},
+        {title:'Proximity advisory', detail:'2.1 nm lateral to N441WN at similar FL', sev:'INFO', t:'05:01:20', color:'var(--accent2)', bg:'color-mix(in srgb,var(--accent2) 14%,transparent)'},
+      ],
+      photoOpen:S.photoOpen,
+      openPhoto:()=>this.setState({photoOpen:true}),
+      closePhoto:()=>this.setState({photoOpen:false}),
+      flights:[
+        {route:'PHX → SAN', date:'Today · 04:12Z', cs:'SWA3838', dur:'1h 02m', status:'ACTIVE', color:'var(--accent)', bg:'color-mix(in srgb,var(--accent) 14%,transparent)'},
+        {route:'SAN → PHX', date:'Today · 01:44Z', cs:'SWA3711', dur:'1h 05m', status:'ARRIVED', color:'var(--dim)', bg:'var(--bg2)'},
+        {route:'OAK → SAN', date:'Yesterday', cs:'SWA2290', dur:'1h 21m', status:'ARRIVED', color:'var(--dim)', bg:'var(--bg2)'},
+        {route:'SAN → OAK', date:'Yesterday', cs:'SWA1980', dur:'1h 18m', status:'ARRIVED', color:'var(--dim)', bg:'var(--bg2)'},
+        {route:'LAS → SAN', date:'2 days ago', cs:'SWA640',  dur:'0h 58m', status:'ARRIVED', color:'var(--dim)', bg:'var(--bg2)'},
+      ],
+      airframe:[
+        {ev:'SWA3838 · PHX → SAN', year:'now', note:'in view · peak -4.2 dB · 33 min tracked', dot:'var(--accent)'},
+        {ev:'SWA1215 · SAN → PHX', year:'6d ago', note:'peak -6.1 dB · 28 min · closest 3.9 nm', dot:'var(--dim)'},
+        {ev:'SWA904 · OAK → SAN', year:'19d ago', note:'peak -9.7 dB · 21 min · closest 7.2 nm', dot:'var(--dim)'},
+        {ev:'SWA3838 · PHX → SAN', year:'27d ago', note:'peak -5.4 dB · 31 min · closest 4.4 nm', dot:'var(--dim)'},
+        {ev:'SWA2461 · SAN → LAS', year:'42d ago', note:'peak -12.8 dB · 14 min · closest 9.1 nm', dot:'var(--dim2)'},
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -67,6 +67,7 @@ Stateless business logic layer. Views delegate to services; services coordinate 
 | `acars_stats.py` | 557 | 3 | ACARS statistics: message types, airlines, trends |
 | `pirep_decoder.py` | ~200 | 0 | PIREP decoder for turbulence/icing codes |
 | `notam_decoder.py` | ~200 | 0 | NOTAM abbreviation and code translation |
+| `aviation_llm.py` | ~130 | 0 | LLM plain-English summaries of ACARS/PIREP/NOTAM/METAR/TAF/SIGMET (gated on `llm_client.is_available()`, falls back to rule-based decoders) |
 | `libacars_binding.py` | 162 | 0 | Python bindings for libacars CFFI/ctypes |
 
 ### Audio & Media

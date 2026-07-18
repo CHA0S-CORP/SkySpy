@@ -7,7 +7,14 @@ organized by domain area.
 
 # Import all models for Django's model registry
 from skyspy.models.acars import AcarsMessage
-from skyspy.models.aircraft import AircraftInfo, AircraftSession, AircraftSighting, AirframeSourceData
+from skyspy.models.aircraft import (
+    AircraftIncident,
+    AircraftInfo,
+    AircraftSession,
+    AircraftSighting,
+    AirframeDocument,
+    AirframeSourceData,
+)
 from skyspy.models.airspace import AirspaceAdvisory, AirspaceBoundary
 from skyspy.models.alerts import AlertAggregate, AlertHistory, AlertRule, AlertSubscription
 from skyspy.models.antenna import AntennaAnalyticsSnapshot
@@ -47,6 +54,7 @@ from skyspy.models.notifications import (
     NotificationTemplate,
     UserNotificationPreference,
 )
+from skyspy.models.rag import RagDocument
 from skyspy.models.safety import SafetyEvent
 from skyspy.models.stats import (
     DailyStats,
@@ -65,7 +73,9 @@ __all__ = [
     # Aircraft
     "AircraftSighting",
     "AircraftSession",
+    "AircraftIncident",
     "AircraftInfo",
+    "AirframeDocument",
     "AirframeSourceData",
     # Alerts
     "AlertRule",
@@ -78,6 +88,8 @@ __all__ = [
     "NotificationChannel",
     "NotificationTemplate",
     "UserNotificationPreference",
+    # RAG
+    "RagDocument",
     # Safety
     "SafetyEvent",
     # ACARS

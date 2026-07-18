@@ -20,7 +20,7 @@ from datetime import UTC, datetime
 from typing import Any, Optional
 
 from django.conf import settings
-from django.db import transaction
+from django.db import DatabaseError, transaction
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
@@ -131,7 +131,7 @@ class SwimFnsConsumer:
         except ImportError:
             logger.error("solace-pubsubplus package not installed. Run: pip install solace-pubsubplus")
             return False
-        except Exception as e:
+        except Exception as e:  # broad: Solace client has unknowable failure modes; must not crash consumer
             logger.error(f"Failed to connect to SWIM FNS: {e}")
             return False
 
@@ -149,7 +149,7 @@ class SwimFnsConsumer:
                 self.messaging_service = None
 
             logger.info("Disconnected from SWIM FNS")
-        except Exception as e:
+        except Exception as e:  # broad: teardown cleanup of third-party Solace resources must never raise
             logger.error(f"Error disconnecting from SWIM FNS: {e}")
 
     def consume_messages(self, max_messages: int | None = None, timeout_ms: int = 5000):
@@ -186,7 +186,7 @@ class SwimFnsConsumer:
                             self.message_handler(payload)
                             self._stats["messages_processed"] += 1
                             message_count += 1
-                        except Exception as e:
+                        except Exception as e:  # broad: pluggable message_handler callback; must not stop the loop
                             logger.error(f"Error processing NOTAM message: {e}")
                             self._stats["errors"] += 1
 
@@ -198,7 +198,7 @@ class SwimFnsConsumer:
                         logger.info(f"Reached message limit: {max_messages}")
                         break
 
-            except Exception as e:
+            except Exception as e:  # broad: long-running consume loop must survive any Solace receive error
                 if self.running:
                     logger.error(f"Error receiving message: {e}")
                     self._stats["errors"] += 1
@@ -391,7 +391,7 @@ def parse_aixm_notam(xml_payload: str) -> dict[str, Any] | None:
     except ET.ParseError as e:
         logger.warning(f"Failed to parse AIXM XML: {e}")
         return None
-    except Exception as e:
+    except (AttributeError, TypeError, KeyError, ValueError) as e:
         logger.error(f"Error parsing NOTAM: {e}")
         return None
 
@@ -521,7 +521,7 @@ def store_notam(notam_data: dict[str, Any]) -> bool:
 
         return True
 
-    except Exception as e:
+    except (DatabaseError, KeyError) as e:
         logger.error(f"Failed to store NOTAM: {e}")
         return False
 
@@ -680,7 +680,7 @@ def _subprocess_consume_script(config: dict, max_messages: int, timeout_seconds:
 
                     receiver.ack(message)
 
-            except Exception as e:
+            except Exception as e:  # broad: subprocess consume loop must survive any Solace receive error
                 stats["errors"] += 1
                 print(f"Error receiving message: {e}", file=sys.stderr)
                 time.sleep(1)
@@ -691,7 +691,7 @@ def _subprocess_consume_script(config: dict, max_messages: int, timeout_seconds:
         stats["status"] = "complete"
         print(f"Completed: {stats}", file=sys.stderr)
 
-    except Exception as e:
+    except Exception as e:  # broad: subprocess entrypoint must record any error to the result file, never crash
         stats["status"] = "error"
         stats["error_message"] = str(e)
         print(f"SWIM consumer error: {e}", file=sys.stderr)
@@ -866,7 +866,7 @@ with open("{result_file}", "w") as f:
     except subprocess.TimeoutExpired:
         logger.warning("SWIM consumer subprocess timed out")
         return {"status": "timeout", "messages_processed": 0, "errors": 1}
-    except Exception as e:
+    except Exception as e:  # broad: task-level runner guard; must always return a status dict, never propagate
         logger.error(f"Failed to run SWIM subprocess: {e}")
         return {"status": "error", "error_message": str(e)}
     finally:

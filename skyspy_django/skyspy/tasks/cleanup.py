@@ -22,8 +22,20 @@ from datetime import timedelta
 
 from celery import shared_task
 from django.conf import settings
-from django.db import connection
+from django.db import DatabaseError, connection
 from django.utils import timezone
+
+from skyspy.tasks.locks import singleton_task
+
+try:
+    from redis.exceptions import RedisError
+
+    _REDIS_ERRORS: tuple[type[BaseException], ...] = (RedisError,)
+except ImportError:  # pragma: no cover - redis is an optional runtime dependency
+    _REDIS_ERRORS = ()
+
+# Redis command failures: connection/timeout errors (subclassed by redis-py) plus RedisError.
+_REDIS_OP_ERRORS = (ConnectionError, OSError, TimeoutError, *_REDIS_ERRORS)
 
 logger = logging.getLogger(__name__)
 
@@ -91,7 +103,7 @@ def cleanup_old_sightings():
 
         return {"deleted": total_deleted, "retention_days": retention_days, "cutoff": cutoff.isoformat()}
 
-    except Exception as e:
+    except DatabaseError as e:
         logger.error(f"Error cleaning up old sightings: {e}")
         raise
 
@@ -116,7 +128,7 @@ def cleanup_old_sessions():
 
         return {"deleted": deleted, "retention_days": retention_days, "cutoff": cutoff.isoformat()}
 
-    except Exception as e:
+    except DatabaseError as e:
         logger.error(f"Error cleaning up old sessions: {e}")
         raise
 
@@ -141,7 +153,7 @@ def cleanup_old_alert_history():
 
         return {"deleted": deleted, "retention_days": retention_days, "cutoff": cutoff.isoformat()}
 
-    except Exception as e:
+    except DatabaseError as e:
         logger.error(f"Error cleaning up old alert history: {e}")
         raise
 
@@ -166,7 +178,7 @@ def cleanup_old_safety_events():
 
         return {"deleted": deleted, "retention_days": retention_days, "cutoff": cutoff.isoformat()}
 
-    except Exception as e:
+    except DatabaseError as e:
         logger.error(f"Error cleaning up old safety events: {e}")
         raise
 
@@ -191,7 +203,7 @@ def cleanup_old_notification_logs():
 
         return {"deleted": deleted, "retention_days": retention_days, "cutoff": cutoff.isoformat()}
 
-    except Exception as e:
+    except DatabaseError as e:
         logger.error(f"Error cleaning up old notification logs: {e}")
         raise
 
@@ -247,7 +259,7 @@ def cleanup_old_antenna_snapshots():
             "retention_days": retention_days,
         }
 
-    except Exception as e:
+    except DatabaseError as e:
         logger.error(f"Error cleaning up old antenna snapshots: {e}")
         raise
 
@@ -272,12 +284,82 @@ def cleanup_old_acars_messages():
 
         return {"deleted": deleted, "retention_days": retention_days, "cutoff": cutoff.isoformat()}
 
-    except Exception as e:
+    except DatabaseError as e:
         logger.error(f"Error cleaning up old ACARS messages: {e}")
         raise
 
 
 @shared_task
+def cleanup_old_audio_transmissions():
+    """
+    Clean up old radio transmissions based on retention policy.
+
+    Retention: RADIO_RETENTION_DAYS (default: 7 days)
+
+    Deletes both the AudioTransmission rows and their local audio files
+    under RADIO_AUDIO_DIR (S3-stored audio keeps only the DB row removal;
+    S3 lifecycle rules own remote expiry).
+    """
+    import os
+
+    from django.conf import settings
+
+    from skyspy.models import AudioTransmission
+
+    retention_days = _get_retention_days("RADIO_RETENTION_DAYS", 7)
+    cutoff = timezone.now() - timedelta(days=retention_days)
+    audio_dir = getattr(settings, "RADIO_AUDIO_DIR", "/data/radio")
+
+    try:
+        batch_size = 1000
+        total_deleted = 0
+        files_deleted = 0
+
+        while True:
+            batch = list(AudioTransmission.objects.filter(created_at__lt=cutoff).values("id", "filename")[:batch_size])
+            if not batch:
+                break
+
+            for row in batch:
+                filename = row.get("filename")
+                if not filename:
+                    continue
+                # filenames are stored bare; refuse anything path-like
+                if os.path.basename(filename) != filename:
+                    logger.warning(f"Skipping suspicious audio filename during cleanup: {filename!r}")
+                    continue
+                path = os.path.join(audio_dir, filename)
+                try:
+                    os.remove(path)
+                    files_deleted += 1
+                except FileNotFoundError:
+                    pass
+                except OSError as e:
+                    logger.warning(f"Could not delete audio file {path}: {e}")
+
+            deleted, _ = AudioTransmission.objects.filter(id__in=[row["id"] for row in batch]).delete()
+            total_deleted += deleted
+
+        if total_deleted:
+            logger.info(
+                f"Audio cleanup: deleted {total_deleted} transmissions ({files_deleted} files) "
+                f"older than {retention_days} days"
+            )
+
+        return {
+            "deleted": total_deleted,
+            "files_deleted": files_deleted,
+            "retention_days": retention_days,
+            "cutoff": cutoff.isoformat(),
+        }
+
+    except DatabaseError as e:
+        logger.error(f"Error cleaning up old audio transmissions: {e}")
+        raise
+
+
+@shared_task
+@singleton_task(timeout=3600)
 def run_all_cleanup_tasks():
     """
     Run all data retention cleanup tasks.
@@ -290,38 +372,43 @@ def run_all_cleanup_tasks():
     # Run each cleanup task
     try:
         results["sightings"] = cleanup_old_sightings()
-    except Exception as e:
+    except Exception as e:  # broad: isolate sub-task failure so remaining cleanups still run
         results["sightings"] = {"error": str(e)}
 
     try:
         results["sessions"] = cleanup_old_sessions()
-    except Exception as e:
+    except Exception as e:  # broad: isolate sub-task failure so remaining cleanups still run
         results["sessions"] = {"error": str(e)}
 
     try:
         results["alert_history"] = cleanup_old_alert_history()
-    except Exception as e:
+    except Exception as e:  # broad: isolate sub-task failure so remaining cleanups still run
         results["alert_history"] = {"error": str(e)}
 
     try:
         results["safety_events"] = cleanup_old_safety_events()
-    except Exception as e:
+    except Exception as e:  # broad: isolate sub-task failure so remaining cleanups still run
         results["safety_events"] = {"error": str(e)}
 
     try:
         results["notification_logs"] = cleanup_old_notification_logs()
-    except Exception as e:
+    except Exception as e:  # broad: isolate sub-task failure so remaining cleanups still run
         results["notification_logs"] = {"error": str(e)}
 
     try:
         results["antenna_snapshots"] = cleanup_old_antenna_snapshots()
-    except Exception as e:
+    except Exception as e:  # broad: isolate sub-task failure so remaining cleanups still run
         results["antenna_snapshots"] = {"error": str(e)}
 
     try:
         results["acars_messages"] = cleanup_old_acars_messages()
-    except Exception as e:
+    except Exception as e:  # broad: isolate sub-task failure so remaining cleanups still run
         results["acars_messages"] = {"error": str(e)}
+
+    try:
+        results["audio_transmissions"] = cleanup_old_audio_transmissions()
+    except Exception as e:  # broad: isolate sub-task failure so remaining cleanups still run
+        results["audio_transmissions"] = {"error": str(e)}
 
     # Calculate totals
     total_deleted = sum(
@@ -339,6 +426,7 @@ def run_all_cleanup_tasks():
 
 
 @shared_task
+@singleton_task(timeout=600)
 def cleanup_orphan_cooldown_keys():
     """
     Clean up Redis cooldown keys for deleted alert rules.
@@ -402,12 +490,13 @@ def cleanup_orphan_cooldown_keys():
     except ImportError:
         logger.warning("Redis not available for cooldown key cleanup")
         return {"error": "redis_not_available"}
-    except Exception as e:
+    except (DatabaseError, *_REDIS_OP_ERRORS) as e:
         logger.error(f"Failed to cleanup orphan cooldown keys: {e}")
         raise
 
 
 @shared_task
+@singleton_task(timeout=600)
 def cleanup_stale_cooldown_keys(max_age_hours: int = 24):
     """
     Clean up cooldown keys that have no TTL set.
@@ -459,12 +548,13 @@ def cleanup_stale_cooldown_keys(max_age_hours: int = 24):
     except ImportError:
         logger.warning("Redis not available for stale cooldown key cleanup")
         return {"error": "redis_not_available"}
-    except Exception as e:
+    except _REDIS_OP_ERRORS as e:
         logger.error(f"Failed to cleanup stale cooldown keys: {e}")
         raise
 
 
 @shared_task
+@singleton_task(timeout=3600)
 def vacuum_analyze_tables():
     """
     Run VACUUM ANALYZE on frequently updated tables.
@@ -503,7 +593,7 @@ def vacuum_analyze_tables():
                 cursor.execute(f"VACUUM ANALYZE {table}")
             results[table] = "success"
             logger.debug(f"VACUUM ANALYZE completed for {table}")
-        except Exception as e:
+        except Exception as e:  # broad: maintenance task must not crash on any DB error (tested)
             results[table] = f"error: {str(e)}"
             errors.append(f"{table}: {e}")
             logger.warning(f"VACUUM ANALYZE failed for {table}: {e}")

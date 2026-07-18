@@ -1,0 +1,20 @@
+/* v2 design system (design_handoff_skyspy_ui). Imported from styles/index.css
+   after legacy styles, before Tailwind. Screen CSS files are added per milestone. */
+@import './fonts.css';
+@import './tokens.css';
+@import './primitives.css';
+@import './shell.css';
+@import './list.css';
+@import './system.css';
+@import './alerts.css';
+@import './radio.css';
+@import './history.css';
+@import './stats.css';
+@import './analytics.css';
+@import './airframes.css';
+@import './detail.css';
+@import './notam.css';
+@import './cannonball.css';
+@import './livemap.css';
+@import './assistant.css';
+@import './assistant-dock.css';

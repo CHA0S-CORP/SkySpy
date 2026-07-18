@@ -10,7 +10,8 @@ export const acarsKeys = {
 export function useAcarsMessages(options = {}) {
   return useQuery({
     queryKey: acarsKeys.messages(),
-    queryFn: () => api.get('/acars/messages/'),
+    // Messages are served by /acars/ (there is no /acars/messages/)
+    queryFn: () => api.getAcarsMessages(),
     staleTime: 30 * 1000,
     ...options,
   });
@@ -19,7 +20,7 @@ export function useAcarsMessages(options = {}) {
 export function useAcarsStats(options = {}) {
   return useQuery({
     queryKey: acarsKeys.stats(),
-    queryFn: () => api.get('/acars/stats/'),
+    queryFn: () => api.getAcarsStats(),
     staleTime: 60 * 1000,
     ...options,
   });

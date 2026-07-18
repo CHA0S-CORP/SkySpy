@@ -138,6 +138,21 @@ def clear_cache():
     cache.clear()
 
 
+@pytest.fixture(autouse=True)
+def clear_rule_cache():
+    """Invalidate the module-singleton alert rule cache before each test.
+
+    Rule create/delete signals invalidate via transaction.on_commit, which
+    never fires inside a test transaction - without this, rules cached by one
+    test leak into the next (the cache versions match in no-Redis test mode).
+    """
+    from skyspy.services.alert_rule_cache import rule_cache
+
+    rule_cache.invalidate()
+    yield
+    rule_cache.invalidate()
+
+
 @pytest.fixture
 def temp_audio_dir():
     """Create temporary directory for audio files."""

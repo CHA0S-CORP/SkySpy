@@ -168,6 +168,20 @@ class AlertRuleUpdateSerializer(serializers.Serializer):
         required=False, help_text="Also send to global notification URLs from environment"
     )
 
+    def validate_conditions(self, value):
+        """Validate complex conditions structure.
+
+        A raw JSONField would persist malformed conditions (e.g. a group
+        condition without a "value" key), which crashes alert evaluation.
+        Validate explicitly with a non-partial serializer because nested
+        `required` checks are skipped when the root serializer is partial (PATCH).
+        """
+        if value is None:
+            return value
+        serializer = ComplexConditionsSerializer(data=value)
+        serializer.is_valid(raise_exception=True)
+        return serializer.validated_data
+
     def update(self, instance, validated_data):
         """Update an existing alert rule."""
         # Handle notification channels separately

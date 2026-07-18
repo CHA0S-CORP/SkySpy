@@ -648,3 +648,165 @@ class AnalyticsEdgeCasesTest(TestCase):
         result = calculate_daily_stats()
         # Task returns None (logs instead of returning dict)
         self.assertIsNone(result)
+
+
+@pytest.mark.django_db
+def test_hourly_aggregate_uses_latest_snapshot_not_sum_of_overlapping_windows():
+    """Hourly total_positions must not sum the ~12 overlapping trailing-hour counts.
+
+    Each scheduled snapshot's total_positions covers a trailing 1-hour window, so
+    consecutive 5-minute snapshots re-count nearly the same sightings. The hourly
+    aggregate must take the latest snapshot's count, not Sum() (~12x inflation).
+    """
+    from skyspy.models import AntennaAnalyticsSnapshot
+    from skyspy.tasks.analytics import aggregate_hourly_antenna_analytics
+
+    now = timezone.now()
+    hour_end = now.replace(minute=0, second=0, microsecond=0)
+    hour_start = hour_end - timedelta(hours=1)
+
+    for offset_min, positions in ((5, 90), (25, 95), (55, 100)):
+        AntennaAnalyticsSnapshot.objects.create(
+            timestamp=hour_start + timedelta(minutes=offset_min),
+            snapshot_type="scheduled",
+            window_hours=1.0,
+            total_positions=positions,
+            unique_aircraft=10,
+            positions_per_hour=float(positions),
+        )
+
+    snapshot_id = aggregate_hourly_antenna_analytics()
+
+    assert snapshot_id is not None
+    hourly = AntennaAnalyticsSnapshot.objects.get(id=snapshot_id)
+    # Latest snapshot's trailing 1h window approximates the target hour
+    assert hourly.total_positions == 100
+    assert hourly.positions_per_hour == 100.0
+
+
+@pytest.mark.django_db
+def test_hourly_aggregate_skips_when_already_exists():
+    """Re-running the hourly aggregation must stay idempotent (no duplicates)."""
+    from skyspy.models import AntennaAnalyticsSnapshot
+    from skyspy.tasks.analytics import aggregate_hourly_antenna_analytics
+
+    now = timezone.now()
+    hour_end = now.replace(minute=0, second=0, microsecond=0)
+    hour_start = hour_end - timedelta(hours=1)
+
+    AntennaAnalyticsSnapshot.objects.create(
+        timestamp=hour_start + timedelta(minutes=30),
+        snapshot_type="scheduled",
+        window_hours=1.0,
+        total_positions=50,
+        unique_aircraft=5,
+        positions_per_hour=50.0,
+    )
+
+    first_id = aggregate_hourly_antenna_analytics()
+    assert first_id is not None
+
+    assert aggregate_hourly_antenna_analytics() is None
+    assert AntennaAnalyticsSnapshot.objects.filter(snapshot_type="hourly", timestamp=hour_end).count() == 1
+
+
+# =============================================================================
+# emit_stats_tick (stats:tick KPI broadcast)
+# =============================================================================
+
+
+class TestEmitStatsTick(TestCase):
+    """Tests for the lightweight stats:tick KPI broadcast task."""
+
+    def setUp(self):
+        cache.clear()
+
+    def tearDown(self):
+        cache.clear()
+
+    def _seed_cache(self):
+        cache.set(
+            "current_aircraft",
+            [
+                {"hex": "A1", "lat": 32.0, "lon": -117.0, "military": True, "distance": 42.5, "rssi": -12.0},
+                {"hex": "B2", "lat": None, "lon": None, "rssi": -20.0},
+                {"hex": "C3", "lat": 33.0, "lon": -116.0, "distance_nm": 100.2},
+            ],
+            timeout=30,
+        )
+        cache.set("aircraft_messages", 1000, timeout=30)
+        cache.set("adsb_online", True, timeout=30)
+        cache.set("celery_heartbeat", True, timeout=120)
+
+    @patch("skyspy.socketio.utils.sync_emit")
+    def test_emits_payload_shape(self, mock_emit):
+        from skyspy.tasks.analytics import emit_stats_tick
+
+        self._seed_cache()
+        result = emit_stats_tick()
+
+        assert result["status"] == "ok"
+        assert result["aircraft"] == 3
+        mock_emit.assert_called_once()
+        event, payload = mock_emit.call_args[0][0], mock_emit.call_args[0][1]
+        assert event == "stats:tick"
+        assert mock_emit.call_args[1]["room"] == "topic_stats"
+        assert payload["traffic"]["aircraft"] == 3
+        assert payload["traffic"]["with_position"] == 2
+        assert payload["traffic"]["military"] == 1
+        assert payload["reception"]["max_range_nm"] == 100.2
+        assert payload["reception"]["avg_rssi"] == -16.0
+        assert payload["system"]["adsb_online"] is True
+        assert payload["system"]["celery_ok"] is True
+        assert isinstance(payload["series"], list)
+        # bookkeeping fields stripped from client series
+        assert "ts_epoch" not in payload["series"][0]
+        assert "messages" not in payload["series"][0]
+
+    @patch("skyspy.socketio.utils.sync_emit")
+    def test_series_accumulates_and_caps(self, mock_emit):
+        from skyspy.tasks.analytics import emit_stats_tick
+
+        self._seed_cache()
+        # Pre-fill series near the cap
+        cache.set(
+            "stats_tick_series",
+            [{"ts": "x", "ts_epoch": 0.0, "aircraft": 1, "messages": 0}] * 119,
+            timeout=1800,
+        )
+        emit_stats_tick()
+        series = cache.get("stats_tick_series")
+        assert len(series) == 120
+        emit_stats_tick()
+        assert len(cache.get("stats_tick_series")) == 120
+
+    @patch("skyspy.socketio.utils.sync_emit")
+    def test_msg_rate_from_previous_sample(self, mock_emit):
+        from skyspy.tasks.analytics import emit_stats_tick
+
+        self._seed_cache()
+        emit_stats_tick()
+        cache.set("aircraft_messages", 1100, timeout=30)
+        emit_stats_tick()
+        payload = mock_emit.call_args[0][1]
+        assert payload["traffic"]["msg_rate"] is not None
+        assert payload["traffic"]["msg_rate"] > 0
+
+    @patch("skyspy.socketio.utils.sync_emit")
+    def test_resilient_when_caches_empty(self, mock_emit):
+        from skyspy.tasks.analytics import emit_stats_tick
+
+        result = emit_stats_tick()
+        assert result["status"] == "ok"
+        assert result["aircraft"] == 0
+        payload = mock_emit.call_args[0][1]
+        assert payload["traffic"]["aircraft"] == 0
+        assert payload["reception"]["avg_rssi"] is None
+
+    @patch("skyspy.socketio.utils.sync_emit", side_effect=ConnectionError("no redis"))
+    def test_emit_failure_does_not_crash(self, mock_emit):
+        from skyspy.tasks.analytics import emit_stats_tick
+
+        self._seed_cache()
+        result = emit_stats_tick()
+        assert result["status"] == "ok"

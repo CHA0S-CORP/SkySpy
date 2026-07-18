@@ -2,7 +2,9 @@
 Aircraft-related models for position tracking, sessions, and cached aircraft information.
 """
 
+from django.conf import settings
 from django.db import models
+from pgvector.django import VectorField
 
 
 class AircraftSighting(models.Model):
@@ -124,6 +126,26 @@ class AircraftInfo(models.Model):
     # Additional data as JSON
     extra_data = models.JSONField(blank=True, null=True)
 
+    # Field-level provenance: maps a merged field name -> the source that won it
+    # (e.g. {"registration": "faa", "operator": "opensky"}). Lets the UI/RAG
+    # attribute each fact instead of relying on the flat ``source`` string.
+    field_sources = models.JSONField(blank=True, null=True)
+
+    # Ownership analysis (derived from owner/city/state via registration_analysis)
+    owner_type = models.CharField(max_length=20, blank=True, null=True)  # llc/trust/corporation/...
+    is_shell_suspected = models.BooleanField(default=False)
+    shell_score = models.FloatField(blank=True, null=True)  # 0..1 shell-company likelihood
+    ownership_flags = models.JSONField(blank=True, null=True)  # factors/details from the analysis
+
+    # Flight route (origin/destination airports) resolved from the current
+    # callsign via adsb.im / adsbdb / hexdb. Route is per-flight, so we record
+    # which callsign it belongs to and refresh when the callsign changes.
+    # route_data shape: {callsign, airline_code, flight_number, origin{icao,iata,
+    # name,city,country,lat,lon}, destination{...}} (see external_db._airport_brief).
+    route_data = models.JSONField(blank=True, null=True)
+    route_callsign = models.CharField(max_length=16, blank=True, null=True)
+    route_fetched_at = models.DateTimeField(blank=True, null=True)
+
     # Cache management
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -138,6 +160,54 @@ class AircraftInfo(models.Model):
 
     def __str__(self):
         return f"{self.icao_hex} - {self.registration or 'Unknown'}"
+
+
+class AircraftIncident(models.Model):
+    """
+    A safety incident/accident record for an airframe, from a public registry.
+
+    Keyed by registration (the stable identity across an airframe's life) and
+    linked to ICAO hex when known. One row per source record (e.g. an NTSB
+    case), deduped on (source, external_id).
+    """
+
+    SOURCE_CHOICES = [
+        ("ntsb", "NTSB (US)"),
+        ("asn", "Aviation Safety Network"),
+    ]
+
+    icao_hex = models.CharField(max_length=10, blank=True, null=True, db_index=True)
+    registration = models.CharField(max_length=20, db_index=True)
+    source = models.CharField(max_length=20, choices=SOURCE_CHOICES, default="ntsb", db_index=True)
+    external_id = models.CharField(max_length=50, db_index=True)  # e.g. NTSB number
+
+    event_type = models.CharField(max_length=50, blank=True, null=True)  # Accident / Incident
+    event_date = models.DateTimeField(blank=True, null=True, db_index=True)
+    severity = models.CharField(max_length=50, blank=True, null=True)  # highest injury / damage
+    city = models.CharField(max_length=100, blank=True, null=True)
+    state = models.CharField(max_length=50, blank=True, null=True)
+    country = models.CharField(max_length=50, blank=True, null=True)
+    make = models.CharField(max_length=100, blank=True, null=True)
+    model = models.CharField(max_length=100, blank=True, null=True)
+    report_number = models.CharField(max_length=50, blank=True, null=True)
+    narrative = models.TextField(blank=True, null=True)
+    url = models.CharField(max_length=500, blank=True, null=True)
+
+    # Full source record for audit / RAG.
+    raw_data = models.JSONField(default=dict)
+
+    fetched_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "aircraft_incident"
+        unique_together = [["source", "external_id"]]
+        indexes = [
+            models.Index(fields=["registration", "event_date"], name="idx_incident_reg_date"),
+        ]
+
+    def __str__(self):
+        return f"{self.registration} - {self.source}:{self.external_id}"
 
 
 class AirframeSourceData(models.Model):
@@ -155,6 +225,7 @@ class AirframeSourceData(models.Model):
         ("opensky", "OpenSky Network"),
         ("hexdb", "HexDB API"),
         ("adsblol", "adsb.lol API"),
+        ("adsbdb", "ADSBdb API"),
         ("planespotters", "Planespotters API"),
     ]
 
@@ -197,3 +268,28 @@ class AirframeSourceData(models.Model):
 
     def __str__(self):
         return f"{self.aircraft_info.icao_hex} - {self.source}"
+
+
+class AirframeDocument(models.Model):
+    """
+    A per-airframe RAG document: the dossier text + its embedding vector.
+
+    One row per ICAO hex, rebuilt when the underlying AircraftInfo changes.
+    ``content`` is the compact text produced by ``airframe_dossier``; ``embedding``
+    is its vector (pgvector). ``content_hash`` lets the refresh task skip
+    re-embedding unchanged dossiers.
+    """
+
+    icao_hex = models.CharField(max_length=10, unique=True, db_index=True)
+    registration = models.CharField(max_length=20, blank=True, null=True, db_index=True)
+    content = models.TextField()
+    content_hash = models.CharField(max_length=64, db_index=True)
+    embedding = VectorField(dimensions=settings.EMBEDDING_DIM, null=True, blank=True)
+    embedding_model = models.CharField(max_length=100, blank=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "airframe_document"
+
+    def __str__(self):
+        return f"AirframeDocument({self.icao_hex})"

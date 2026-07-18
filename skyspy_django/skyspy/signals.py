@@ -56,5 +56,5 @@ def connect_cache_signals():
         _connect_signals()
         _signals_connected = True
         logger.info("Cache invalidation signals connected")
-    except Exception as e:
+    except (ImportError, AttributeError, TypeError) as e:
         logger.warning(f"Failed to connect cache signals: {e}")

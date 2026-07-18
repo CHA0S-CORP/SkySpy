@@ -336,7 +336,7 @@ def timed_task(func: Any = None, *, name: str = None):
 
             try:
                 return fn(*args, **kwargs)
-            except Exception as e:
+            except Exception as e:  # broad: task metrics wrapper must record any task failure, then re-raise
                 success = False
                 error = str(e)
                 raise

@@ -13,7 +13,7 @@ export const aircraftKeys = {
 export function useAircraft(options = {}) {
   return useQuery({
     queryKey: aircraftKeys.lists(),
-    queryFn: () => api.get('/aircraft/'),
+    queryFn: () => api.getAircraft(),
     staleTime: 5 * 1000,
     ...options,
   });
@@ -22,7 +22,7 @@ export function useAircraft(options = {}) {
 export function useAircraftDetail(hex, options = {}) {
   return useQuery({
     queryKey: aircraftKeys.detail(hex),
-    queryFn: () => api.get(`/aircraft/${hex}/`),
+    queryFn: () => api.getAircraftDetail(hex),
     enabled: !!hex,
     ...options,
   });
@@ -31,7 +31,8 @@ export function useAircraftDetail(hex, options = {}) {
 export function useAircraftHistory(hex, options = {}) {
   return useQuery({
     queryKey: aircraftKeys.history(hex),
-    queryFn: () => api.get(`/aircraft/${hex}/history/`),
+    // History lives at /sightings/?icao=<hex> (there is no /aircraft/{hex}/history/)
+    queryFn: () => api.getAircraftHistory(hex),
     enabled: !!hex,
     ...options,
   });

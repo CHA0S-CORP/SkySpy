@@ -53,6 +53,7 @@ _last_refresh: datetime | None = None
     stop=stop_after_attempt(3),
     wait=wait_exponential(multiplier=1, min=1, max=10),
     retry=retry_if_exception_type((httpx.HTTPError, httpx.TimeoutException)),
+    reraise=True,
 )
 def _http_post_with_retry(url: str, json_data: dict, headers: dict, timeout: float = 15.0) -> httpx.Response:
     """HTTP POST with retry logic for NOTAM API."""
@@ -65,6 +66,7 @@ def _http_post_with_retry(url: str, json_data: dict, headers: dict, timeout: flo
     stop=stop_after_attempt(3),
     wait=wait_exponential(multiplier=1, min=1, max=10),
     retry=retry_if_exception_type((httpx.HTTPError, httpx.TimeoutException)),
+    reraise=True,
 )
 def _http_get_with_retry(url: str, headers: dict, timeout: float = 15.0) -> httpx.Response:
     """HTTP GET with retry logic for TFR API."""
@@ -173,7 +175,7 @@ def fetch_notams_from_api(
     except httpx.HTTPStatusError as e:
         logger.error(f"NOTAM API HTTP error: {e.response.status_code}")
         return []
-    except Exception as e:
+    except (httpx.HTTPError, ConnectionError, OSError, TimeoutError, ValueError, KeyError, TypeError) as e:
         logger.error(f"NOTAM API request failed: {e}")
         return []
 
@@ -282,7 +284,7 @@ def fetch_tfrs_from_api(
     except httpx.HTTPStatusError as e:
         logger.error(f"TFR GeoServer HTTP error: {e.response.status_code}")
         return []
-    except Exception as e:
+    except (httpx.HTTPError, ConnectionError, OSError, TimeoutError, ValueError, KeyError, TypeError) as e:
         logger.error(f"TFR GeoServer request failed: {e}")
         return []
 
@@ -359,13 +361,16 @@ def parse_notam(raw_notam: dict[str, Any]) -> dict[str, Any] | None:
         start_str = raw_notam.get("effectiveStart") or raw_notam.get("startValidity")
         end_str = raw_notam.get("effectiveEnd") or raw_notam.get("endValidity")
 
+        start_estimated = False
         if start_str:
             effective_start = _parse_notam_datetime(start_str)
             if effective_start is None:
                 logger.warning(f"Unparseable NOTAM start time {start_str!r} for {notam_id}; defaulting to now")
                 effective_start = timezone.now()
+                start_estimated = True
         else:
             effective_start = timezone.now()
+            start_estimated = True
 
         if end_str:
             if str(end_str).upper() in ("PERM", "PERMANENT"):
@@ -401,6 +406,9 @@ def parse_notam(raw_notam: dict[str, Any]) -> dict[str, Any] | None:
             "floor_ft": floor_ft,
             "ceiling_ft": ceiling_ft,
             "effective_start": effective_start,
+            # Internal flag (popped before upsert): start was not provided by
+            # the feed - do not overwrite an existing row's stored start
+            "_start_estimated": start_estimated,
             "effective_end": effective_end,
             "is_permanent": is_permanent,
             "text": text,
@@ -411,7 +419,7 @@ def parse_notam(raw_notam: dict[str, Any]) -> dict[str, Any] | None:
             "source_data": raw_notam,
         }
 
-    except Exception as e:
+    except (AttributeError, TypeError, KeyError, ValueError) as e:
         logger.warning(f"Failed to parse NOTAM: {e}")
         return None
 
@@ -421,8 +429,11 @@ def _notam_broadcast_payload(notam_id: str, notam_data: dict[str, Any], now) -> 
     payload = {
         "notam_id": notam_id,
         **notam_data,
+        # Snapshot path serves the type under 'type' - keep pushes consistent
+        "type": notam_data.get("notam_type"),
         "timestamp": now.isoformat().replace("+00:00", "Z"),
     }
+    payload.pop("_start_estimated", None)
     for field in ("effective_start", "effective_end"):
         value = payload.get(field)
         if isinstance(value, datetime):
@@ -470,7 +481,8 @@ def refresh_notams(
             all_notams.extend(notams)
 
     # If no specific search, fetch TFRs (NOTAMs require airport-specific queries)
-    if not bbox and not icao_list:
+    full_tfr_fetch = not bbox and not icao_list
+    if full_tfr_fetch:
         # Fetch TFRs from dedicated TFR feed
         tfrs = fetch_tfrs_from_api(lat=39.0, lon=-98.0, radius_nm=2000)
         all_notams.extend(tfrs)
@@ -481,7 +493,7 @@ def refresh_notams(
             try:
                 notams = fetch_notams_from_api(icao=airport)
                 all_notams.extend(notams)
-            except Exception as e:
+            except (httpx.HTTPError, ConnectionError, OSError, TimeoutError) as e:
                 logger.warning(f"Failed to fetch NOTAMs for {airport}: {e}")
 
     if not all_notams:
@@ -505,25 +517,54 @@ def refresh_notams(
     new_notams = []
     updated_notams = []
 
+    fetched_tfr_ids = {nid for nid, nd in parsed_notams.items() if nd.get("notam_type") == "TFR"}
+    existing_rows = CachedNotam.objects.filter(notam_id__in=parsed_notams.keys()).in_bulk(field_name="notam_id")
+    # Fields compared to decide whether an existing NOTAM actually changed
+    change_fields = ("notam_type", "text", "effective_end", "is_permanent", "latitude", "longitude", "radius_nm")
+
     with transaction.atomic():
         for notam_data in parsed_notams.values():
             notam_id = notam_data.pop("notam_id")
+            start_estimated = notam_data.pop("_start_estimated", False)
+            existing = existing_rows.get(notam_id)
 
-            obj, created = CachedNotam.objects.update_or_create(
-                notam_id=notam_id,
-                defaults={
-                    **notam_data,
-                    "fetched_at": now,
-                },
-            )
+            # Re-fetched NOTAMs are active by definition: clear any archive
+            # state so a TFR dropped by one partial FAA response (and archived
+            # by the reconcile pass below) reappears instead of staying
+            # archived forever.
+            defaults = {
+                **notam_data,
+                "fetched_at": now,
+                "is_archived": False,
+                "archived_at": None,
+                "archive_reason": None,
+            }
+            if start_estimated and existing is not None:
+                # Feed provided no start time - keep the stored original
+                # instead of rewriting it to "now" every refresh cycle
+                defaults["effective_start"] = existing.effective_start
+
+            obj, created = CachedNotam.objects.update_or_create(notam_id=notam_id, defaults=defaults)
             updated_count += 1
 
             # Track for broadcasting (datetimes ISO-formatted for JSON emit)
-            notam_broadcast_data = _notam_broadcast_payload(notam_id, notam_data, now)
             if created:
-                new_notams.append(notam_broadcast_data)
-            else:
-                updated_notams.append(notam_broadcast_data)
+                new_notams.append(_notam_broadcast_payload(notam_id, notam_data, now))
+            elif existing is None or any(getattr(existing, f) != notam_data.get(f) for f in change_fields):
+                # Only broadcast updates that changed something observable
+                updated_notams.append(_notam_broadcast_payload(notam_id, notam_data, now))
+
+        # Reconcile TFRs the FAA feed no longer serves: the GeoServer WFS feed
+        # carries no end times, so a cancelled TFR would otherwise stay
+        # "active" forever. Only runs on the default full-TFR fetch path.
+        if full_tfr_fetch and fetched_tfr_ids:
+            removed = (
+                CachedNotam.objects.filter(notam_type="TFR", is_archived=False)
+                .exclude(notam_id__in=fetched_tfr_ids)
+                .update(is_archived=True, archived_at=now, archive_reason="removed_from_feed")
+            )
+            if removed:
+                logger.info(f"Archived {removed} TFRs no longer present in the FAA feed")
 
         # Soft archive expired NOTAMs (7+ days past expiration, not yet archived)
         archive_cutoff = now - timedelta(days=7)
@@ -562,7 +603,7 @@ def refresh_notams(
             try:
                 event_name = "notam:tfr_new" if notam.get("notam_type") == "TFR" else "notam:new"
                 sync_emit(event_name, notam, room="topic_notams")
-            except Exception as e:
+            except Exception as e:  # broad: Socket.IO broadcast must never break the refresh loop
                 logger.warning(f"Failed to broadcast new NOTAM: {e}")
 
     # Broadcast updated NOTAMs
@@ -572,7 +613,7 @@ def refresh_notams(
         for notam in updated_notams[:20]:  # Limit broadcasts
             try:
                 sync_emit("notam:update", notam, room="topic_notams")
-            except Exception as e:
+            except Exception as e:  # broad: Socket.IO broadcast must never break the refresh loop
                 logger.warning(f"Failed to broadcast NOTAM update: {e}")
 
     if archived_count:
@@ -592,7 +633,7 @@ def refresh_notams(
                     },
                     room="topic_notams",
                 )
-            except Exception as e:
+            except Exception as e:  # broad: Socket.IO broadcast must never break the refresh loop
                 logger.warning(f"Failed to broadcast expired NOTAM: {e}")
 
     if deleted:
@@ -712,6 +753,45 @@ def get_notams(
         results.sort(key=lambda x: x.get("effective_start", ""), reverse=True)
 
     return results[:limit]
+
+
+def get_notam_detail(notam_id: str) -> dict[str, Any] | None:
+    """Full detail for a single cached NOTAM (by ``notam_id``), or ``None``.
+
+    Same shape as :func:`get_notams` items, plus ``raw_text`` and the effective
+    schedule/keywords needed by the NOTAM detail page.
+    """
+    from skyspy.services.notam_decoder import decode_notam
+
+    notam = CachedNotam.objects.filter(notam_id=notam_id).first()
+    if not notam:
+        return None
+
+    decoded = decode_notam(notam)
+    return {
+        "notam_id": notam.notam_id,
+        "notam_type": notam.notam_type,
+        "classification": notam.classification,
+        "location": notam.location,
+        "latitude": notam.latitude,
+        "longitude": notam.longitude,
+        "radius_nm": notam.radius_nm,
+        "floor_ft": notam.floor_ft,
+        "ceiling_ft": notam.ceiling_ft,
+        "effective_start": notam.effective_start.isoformat() if notam.effective_start else None,
+        "effective_end": notam.effective_end.isoformat() if notam.effective_end else None,
+        "is_permanent": notam.is_permanent,
+        "text": notam.text,
+        "raw_text": notam.raw_text or notam.text,
+        "keywords": notam.keywords,
+        "geometry": notam.geometry,
+        "reason": notam.reason,
+        "is_active": notam.is_active,
+        "is_tfr": notam.is_tfr,
+        "severity": decoded["severity"],
+        "human_summary": decoded["human_summary"],
+        "decoded": decoded,
+    }
 
 
 @cached_with_ttl(ttl=60)

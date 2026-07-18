@@ -10,7 +10,7 @@ import re
 from datetime import date, datetime, timedelta
 
 from django.core.cache import cache
-from django.db import transaction
+from django.db import DatabaseError, transaction
 from django.db.models import Count, Max, Sum
 from django.utils import timezone
 
@@ -140,6 +140,9 @@ DEFAULT_NOTABLE_CALLSIGNS = [
 
 DEFAULT_RARE_TYPES = [
     {"type_code": "B748", "type_name": "Boeing 747-8", "category": "rare", "rarity_score": 6},
+    # A388 is the ICAO designator aircraft actually broadcast; A380 is kept as a
+    # family-code alias for feeds that report it (mirrors migration 0017/0026).
+    {"type_code": "A388", "type_name": "Airbus A380-800", "category": "rare", "rarity_score": 6},
     {"type_code": "A380", "type_name": "Airbus A380", "category": "rare", "rarity_score": 6},
     {"type_code": "A225", "type_name": "Antonov An-225", "category": "historic", "rarity_score": 10},
     {"type_code": "CONC", "type_name": "Concorde", "category": "historic", "rarity_score": 10},
@@ -380,7 +383,7 @@ class GamificationService:
                         "previous_value": previous_value,
                     }
 
-        except Exception as e:
+        except DatabaseError as e:
             logger.error(f"Error checking record {record_type}: {e}")
 
         return None
@@ -670,7 +673,7 @@ class GamificationService:
                 "rarity_score": rarity_score,
             }
 
-        except Exception as e:
+        except DatabaseError as e:
             logger.error(f"Error creating rare sighting: {e}")
             return None
 
@@ -878,7 +881,7 @@ class GamificationService:
             # Invalidate collection cache
             cache.delete(CACHE_KEY_COLLECTION_STATS)
 
-        except Exception as e:
+        except DatabaseError as e:
             logger.error(f"Error updating spotted aircraft: {e}")
 
     def _update_spotted_counts(self, session: AircraftSession, aircraft_info: AircraftInfo | None, is_new: bool):
@@ -1067,7 +1070,7 @@ class GamificationService:
 
                 streak.save()
 
-        except Exception as e:
+        except DatabaseError as e:
             logger.error(f"Error updating streak {streak_type}: {e}")
 
     # ==========================================================================
@@ -1196,7 +1199,7 @@ class GamificationService:
 
             logger.debug(f"Updated daily stats for {for_date}: {unique_hexes} aircraft")
 
-        except Exception as e:
+        except DatabaseError as e:
             logger.error(f"Error updating daily stats for {for_date}: {e}")
 
     # ==========================================================================

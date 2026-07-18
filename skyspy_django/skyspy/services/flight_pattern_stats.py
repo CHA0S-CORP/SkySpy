@@ -25,6 +25,7 @@ from collections import Counter, defaultdict
 from datetime import datetime, timedelta
 
 from django.core.cache import cache
+from django.db import DatabaseError
 from django.db.models import Avg, Count, F, Max, Min, Q, Sum
 from django.db.models.functions import Extract, ExtractHour
 from django.utils import timezone
@@ -236,14 +237,14 @@ def calculate_frequent_routes(hours: int = 24, limit: int = 20) -> list:
     try:
         acars_routes = _extract_routes_from_acars(cutoff, limit)
         routes.extend(acars_routes)
-    except Exception as e:
+    except Exception as e:  # broad: route calc returns empty on any error (tested)
         logger.warning(f"Error extracting ACARS routes: {e}")
 
     # === Method 2: Analyze callsign patterns (airline codes) ===
     try:
         callsign_routes = _analyze_callsign_routes(cutoff, limit)
         routes.extend(callsign_routes)
-    except Exception as e:
+    except (DatabaseError, ValueError, KeyError, TypeError, AttributeError) as e:
         logger.warning(f"Error analyzing callsign routes: {e}")
 
     # Deduplicate and sort by frequency
@@ -506,7 +507,7 @@ def calculate_duration_by_type(hours: int = 24, limit: int = 25) -> list:
             for icao_code, name in cached_types:
                 if icao_code not in type_names:
                     type_names[icao_code] = name
-        except Exception:
+        except (DatabaseError, ImportError):
             pass  # Silently ignore if table doesn't exist
 
     for item in result:
@@ -582,7 +583,7 @@ def calculate_common_aircraft_types(hours: int = 24, limit: int = 30) -> list:
                     type_info[icao_code]["type_name"] = cached["name"]
                 if not type_info[icao_code].get("manufacturer"):
                     type_info[icao_code]["manufacturer"] = cached["manufacturer"]
-        except Exception:
+        except (DatabaseError, ImportError):
             pass  # Silently ignore if table doesn't exist
 
     for item in result:
@@ -726,7 +727,7 @@ def calculate_airport_connectivity(hours: int = 24, limit: int = 20) -> list:
                     if apt and len(apt) == 4:
                         airport_mentions[apt.upper()] += 5  # Weight decoded data higher
 
-    except Exception as e:
+    except (DatabaseError, ValueError, KeyError, TypeError, AttributeError) as e:
         logger.warning(f"Error extracting ACARS airport data: {e}")
 
     # === Method 2: Match with cached airports for enrichment ===
@@ -861,7 +862,7 @@ def calculate_flight_pattern_stats(hours: int = 24) -> dict:
             "time_range_hours": hours,
             "timestamp": now.isoformat().replace("+00:00", "Z"),
         }
-    except Exception as e:
+    except Exception as e:  # broad: stats calc must return an empty-shaped result on any error (tested)
         logger.error(f"Error calculating flight pattern stats: {e}")
         return {
             "frequent_routes": [],
@@ -913,7 +914,7 @@ def calculate_geographic_stats(hours: int = 24) -> dict:
             "time_range_hours": hours,
             "timestamp": now.isoformat().replace("+00:00", "Z"),
         }
-    except Exception as e:
+    except Exception as e:  # broad: geographic stats returns empty-shaped on any error (tested)
         logger.error(f"Error calculating geographic stats: {e}")
         return {
             "countries_breakdown": [],
@@ -963,7 +964,7 @@ def refresh_flight_pattern_stats_cache(broadcast: bool = True) -> None:
         if broadcast:
             broadcast_stats_update("flight_patterns", stats)
 
-    except Exception as e:
+    except (DatabaseError, ConnectionError, OSError) as e:
         logger.error(f"Error refreshing flight pattern stats cache: {e}")
 
 
@@ -979,7 +980,7 @@ def refresh_geographic_stats_cache(broadcast: bool = True) -> None:
         if broadcast:
             broadcast_stats_update("geographic", stats)
 
-    except Exception as e:
+    except (DatabaseError, ConnectionError, OSError) as e:
         logger.error(f"Error refreshing geographic stats cache: {e}")
 
 
@@ -1013,7 +1014,7 @@ def refresh_all_stats_cache(broadcast: bool = True) -> dict:
 
         return all_stats
 
-    except Exception as e:
+    except (DatabaseError, ConnectionError, OSError) as e:
         logger.error(f"Error refreshing all stats cache: {e}")
         return {}
 
@@ -1025,7 +1026,7 @@ def broadcast_stats_update(stat_type: str, data: dict) -> None:
     try:
         sync_emit("stats:update", {"stat_type": stat_type, "stats": data}, room="topic_stats")
         logger.debug(f"Broadcast flight pattern stats update: {stat_type}")
-    except Exception as e:
+    except (ConnectionError, OSError, RuntimeError) as e:
         logger.warning(f"Failed to broadcast flight pattern stats update: {e}")
 
 

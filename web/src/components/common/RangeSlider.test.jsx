@@ -113,9 +113,7 @@ describe('RangeSlider', () => {
   describe('step values', () => {
     it('should snap to step values', () => {
       const onChange = vi.fn();
-      const { container } = render(
-        <RangeSlider {...defaultProps} step={10} showInputs onChange={onChange} />
-      );
+      render(<RangeSlider {...defaultProps} step={10} showInputs onChange={onChange} />);
 
       const inputs = screen.getAllByRole('spinbutton');
       fireEvent.change(inputs[0], { target: { value: '25' } });

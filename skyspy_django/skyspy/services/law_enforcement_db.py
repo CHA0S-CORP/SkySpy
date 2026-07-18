@@ -141,6 +141,79 @@ SURVEILLANCE_AIRCRAFT_TYPES: dict[str, dict[str, str]] = {
 # Helicopter category code
 HELICOPTER_CATEGORIES = ["A7"]
 
+# Owner-name patterns (FAA registered owner). Catches agency aircraft that carry
+# no LE callsign and no known operator ICAO — e.g. a police/sheriff helo
+# registered to the agency, or "CITY OF SAN DIEGO" (N882SD, SDPD ABLE H125).
+# Format: (regex, category, description). Matched case-insensitively on the owner.
+LAW_ENFORCEMENT_OWNER_PATTERNS: list[tuple[str, str, str]] = [
+    (r"\bPOLICE\b", "Police Aviation", "Police Department"),
+    (r"\bSHERIFF", "Police Aviation", "Sheriff's Office"),
+    (r"\b(STATE POLICE|STATE PATROL|HIGHWAY PATROL)\b", "State Police", "State Police / Patrol"),
+    (r"\bPUBLIC SAFETY\b", "Police Aviation", "Dept of Public Safety"),
+    (r"\b(MARSHAL|CONSTABLE)\b", "Police Aviation", "Marshal / Constable"),
+    (r"\bCORRECTION", "Government", "Dept of Corrections"),
+    (r"\b(BORDER PATROL|CUSTOMS|HOMELAND SECURITY|\bCBP\b)\b", "Federal Law Enforcement", "DHS / CBP"),
+    (
+        r"\b(DRUG ENFORCEMENT|\bDEA\b|ALCOHOL[, ]+TOBACCO|\bATF\b|\bF\.?B\.?I\.?\b)\b",
+        "Federal Law Enforcement",
+        "Federal LE",
+    ),
+    (r"\bDEP(AR)?T(MENT)?\s+OF\s+JUSTICE\b", "Federal Law Enforcement", "Dept of Justice"),
+]
+
+# Municipal / government owners. These alone are not conclusive (a city also owns
+# fire trucks and buses), so they only flag when the airframe is a helicopter or
+# a known surveillance type — the combination that means public-safety aviation.
+MUNICIPAL_OWNER_PATTERNS: list[tuple[str, str, str]] = [
+    (r"\bCITY OF\b", "Municipal Aviation", "City government"),
+    (r"\bCOUNTY OF\b|\b[A-Z]+ COUNTY\b", "Municipal Aviation", "County government"),
+    (r"\b(TOWN|VILLAGE|BOROUGH) OF\b", "Municipal Aviation", "Town / village government"),
+    (r"\bSTATE OF\b", "Government", "State government"),
+]
+
+
+def identify_by_owner(owner: str | None, is_public_safety_airframe: bool = False) -> dict[str, Any] | None:
+    """
+    Identify law-enforcement / public-safety aircraft by FAA registered owner.
+
+    Args:
+        owner: Registered owner name (e.g. "CITY OF SAN DIEGO", "LA COUNTY SHERIFF")
+        is_public_safety_airframe: True if the aircraft is a helicopter or a known
+            surveillance type. Municipal/gov owners only flag when this is True.
+
+    Returns:
+        Identification dict or None if the owner does not match.
+    """
+    if not owner:
+        return None
+
+    owner_upper = owner.upper().strip()
+
+    # Explicit agency ownership — conclusive on its own.
+    for pattern, category, description in LAW_ENFORCEMENT_OWNER_PATTERNS:
+        if re.search(pattern, owner_upper):
+            return {
+                "is_law_enforcement": category != "Government",
+                "is_interest": True,
+                "category": category,
+                "description": description,
+                "confidence": "high",
+            }
+
+    # City/county/state ownership — only compelling for a helo / surveillance type.
+    if is_public_safety_airframe:
+        for pattern, category, description in MUNICIPAL_OWNER_PATTERNS:
+            if re.search(pattern, owner_upper):
+                return {
+                    "is_law_enforcement": category != "Government",
+                    "is_interest": True,
+                    "category": category,
+                    "description": f"{description} (public-safety aircraft)",
+                    "confidence": "medium",
+                }
+
+    return None
+
 
 def identify_by_callsign(callsign: str) -> dict[str, Any] | None:
     """
@@ -246,6 +319,8 @@ def identify_law_enforcement(
     registration: str | None = None,
     category: str | None = None,
     type_code: str | None = None,
+    owner: str | None = None,
+    is_helicopter_hint: bool = False,
 ) -> dict[str, Any]:
     """
     Comprehensive law enforcement aircraft identification.
@@ -304,8 +379,8 @@ def identify_law_enforcement(
             result["description"] = cs_result["description"]
         result["identifiers"].append("callsign")
 
-    # Check if helicopter
-    result["is_helicopter"] = is_helicopter(category, type_code)
+    # Check if helicopter (category/type, or an external hint e.g. FAA rotorcraft)
+    result["is_helicopter"] = is_helicopter(category, type_code) or bool(is_helicopter_hint)
     if result["is_helicopter"]:
         result["identifiers"].append("helicopter")
 
@@ -315,6 +390,24 @@ def identify_law_enforcement(
         result["identifiers"].append("surveillance_type")
         if result["confidence"] == "none":
             result["confidence"] = "low"
+
+    # Check registered owner — catches agency aircraft (police/sheriff/city helos)
+    # that carry no LE callsign or known operator ICAO. Municipal owners only
+    # count when paired with a helicopter / surveillance airframe.
+    owner_result = identify_by_owner(
+        owner, is_public_safety_airframe=result["is_helicopter"] or result["is_surveillance_type"]
+    )
+    if owner_result:
+        if not result["is_law_enforcement"]:
+            result["is_law_enforcement"] = owner_result["is_law_enforcement"]
+        result["is_interest"] = True
+        if not result["category"]:
+            result["category"] = owner_result["category"]
+            result["description"] = owner_result["description"]
+        # Owner ownership is stronger than a bare surveillance-type guess.
+        if result["confidence"] in ("none", "low"):
+            result["confidence"] = owner_result["confidence"]
+        result["identifiers"].append("owner")
 
     # Set is_interest if any indicator is present
     if result["is_helicopter"] or result["is_surveillance_type"] or result["is_law_enforcement"]:

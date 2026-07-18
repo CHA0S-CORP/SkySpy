@@ -223,6 +223,11 @@ DUMP978_URL = f"http://{DUMP978_HOST}:{DUMP978_PORT}"
 FEEDER_LAT = 47.9377
 FEEDER_LON = -121.9687
 
+# Aviation reference-data fetch radius around the feeder
+AIRSPACE_FETCH_RADIUS_NM = 250.0
+GEODATA_FETCH_RADIUS_NM = 250.0
+AIRSPACE_EXTRA_REGIONS = []
+
 # Polling - faster for tests
 POLLING_INTERVAL = 1
 DB_STORE_INTERVAL = 1
@@ -233,6 +238,9 @@ AIRCRAFT_STREAM_HOST = "localhost"
 AIRCRAFT_STREAM_PORT = 30047
 AIRCRAFT_STREAM_RECONNECT_DELAY = 1
 AIRCRAFT_STREAM_BATCH_MS = 100
+AIRCRAFT_STREAM_ADSBLOL_INTERVAL = 2.0
+AIRCRAFT_STREAM_ADSBLOL_RADIUS = 250
+AIRCRAFT_STREAM_FREE_SOURCES = "adsb.lol,adsb.fi,airplanes.live"
 
 # Session Management
 SESSION_TIMEOUT_MINUTES = 5
@@ -247,16 +255,29 @@ SAFETY_CLOSURE_RATE_KT = 200.0
 SAFETY_TCAS_VS_THRESHOLD = 1500
 
 # Default Alerts
-PROXIMITY_ALERT_NM = 5.0
 WATCH_ICAO_LIST = ""
 WATCH_FLIGHT_LIST = ""
-ALERT_MILITARY = True
-ALERT_EMERGENCY = True
 
 # ACARS Settings - test ports
 ACARS_PORT = 15555
 VDLM2_PORT = 15556
 ACARS_ENABLED = True
+
+# Airframes.io live ACARS feed - disabled in tests (no network)
+AIRFRAMES_ACARS_ENABLED = False
+
+# OpenSanctions owner screening - disabled in tests (no network / no key)
+OPENSANCTIONS_ENABLED = False
+OPENSANCTIONS_API_URL = "https://api.opensanctions.org"
+OPENSANCTIONS_API_KEY = ""
+OPENSANCTIONS_DATASET = "default"
+AIRFRAMES_ACARS_URL = "https://api.airframes.io/v1/messages"
+AIRFRAMES_ACARS_API_KEY = ""
+AIRFRAMES_ACARS_POLL_INTERVAL = 4
+AIRFRAMES_ACARS_AIRPORTS = "KLAX,KVNY,KBUR,KSNA,KLGB,KONT,KHHR,KNKX"
+AIRFRAMES_ACARS_CENTER_LAT = 33.9416
+AIRFRAMES_ACARS_CENTER_LON = -118.4085
+AIRFRAMES_ACARS_RADIUS_NM = 100.0
 
 # Notifications - disabled for tests
 APPRISE_URLS = ""
@@ -270,6 +291,7 @@ UPSTREAM_API_MIN_INTERVAL = 5
 PHOTO_CACHE_ENABLED = False
 PHOTO_CACHE_DIR = "/tmp/skyspy-test-photos"
 PHOTO_AUTO_DOWNLOAD = False
+PHOTO_PLANESPOTTERS_USER_AGENT = "skyspy-test/1.0 (+https://example.com/contact)"
 
 # S3 Storage - disabled for tests
 S3_ENABLED = False
@@ -321,6 +343,25 @@ LLM_CACHE_TTL = 300
 LLM_MAX_TOKENS = 1000
 LLM_TEMPERATURE = 0.7
 
+# Embeddings / airframe RAG - disabled for tests
+EMBEDDING_API_URL = ""
+EMBEDDING_API_KEY = ""
+EMBEDDING_MODEL = "test-embedding-model"
+EMBEDDING_DIM = 1536
+
+# LLM assistant - disabled for tests (tool-selection tests stub the model)
+ASSISTANT_ENABLED = False
+ASSISTANT_MODEL = "test-model"
+ASSISTANT_MAX_STEPS = 6
+ASSISTANT_TIMEOUT = 60
+ASSISTANT_MAX_RESULT_CHARS = 6000
+ASSISTANT_MAX_HISTORY_MSGS = 16
+ASSISTANT_MAX_HISTORY_CHARS = 3000
+ASSISTANT_CONTEXT_WINDOW = 0
+# Off in tests so tool-selection assertions see a clean query (no live snapshot).
+ASSISTANT_BRIEFING_ENABLED = False
+ASSISTANT_PHOTO_BASE_URL = ""
+
 # Sentry - disabled for tests
 SENTRY_DSN = None
 SENTRY_ENVIRONMENT = "test"
@@ -334,6 +375,11 @@ REDIS_URL = ""
 
 # Version
 VERSION = "1.0.0-test"
+
+# Embedding dimension for the pgvector VectorField on AirframeDocument. Mirrors the
+# main settings default (text-embedding-3-small = 1536); required or model import
+# fails at django.setup().
+EMBEDDING_DIM = int(os.environ.get("EMBEDDING_DIM", "1536"))
 
 # Celery heartbeat
 CELERY_HEARTBEAT_KEY = "celery_heartbeat"

@@ -9,11 +9,13 @@ from datetime import timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
-from django.db import transaction
+from django.contrib.auth.models import User
+from django.db import DatabaseError, transaction
 from django.test import TestCase
 from django.utils import timezone
 
 from skyspy.models import AlertHistory, AlertRule, NotificationConfig, NotificationLog
+from skyspy.services.alert_cooldowns import cooldown_manager
 from skyspy.services.alert_rule_cache import CompiledRule
 from skyspy.services.alerts import AlertService
 
@@ -458,18 +460,19 @@ class AlertServiceComplexConditionTests(TestCase):
         self.assertTrue(result)
 
     def test_complex_conditions_empty_groups(self):
-        """Test that empty groups return True."""
+        """Empty groups must NOT match (default-deny), else a malformed rule
+        becomes a catch-all matching every aircraft."""
         aircraft = {"hex": "ABC123"}
         conditions = {"logic": "AND", "groups": []}
         result = self.service._evaluate_complex_conditions(aircraft, conditions)
-        self.assertTrue(result)
+        self.assertFalse(result)
 
     def test_complex_conditions_empty_conditions_in_group(self):
-        """Test that empty conditions in group return True."""
+        """An empty condition group must NOT match (default-deny)."""
         aircraft = {"hex": "ABC123"}
         conditions = {"logic": "AND", "groups": [{"logic": "AND", "conditions": []}]}
         result = self.service._evaluate_complex_conditions(aircraft, conditions)
-        self.assertTrue(result)
+        self.assertFalse(result)
 
     def test_complex_conditions_default_and_logic(self):
         """Test that missing logic defaults to AND."""
@@ -712,6 +715,74 @@ class AlertServiceTriggerTests(TestCase):
 
             # Two history records
             self.assertEqual(AlertHistory.objects.count(), 2)
+
+
+class AlertServiceSuppressionAndAttributionTests(TestCase):
+    """Suppression windows and alert-history owner attribution."""
+
+    def setUp(self):
+        cooldown_manager.clear_all()
+        self.service = AlertService()
+        self.service._legacy_cooldowns = {}
+
+    def tearDown(self):
+        cooldown_manager.clear_all()
+        AlertHistory.objects.all().delete()
+        AlertRule.objects.all().delete()
+        User.objects.all().delete()
+
+    @patch("skyspy.services.alerts.sync_emit")
+    def test_active_suppression_window_blocks_trigger(self, mock_sync_emit):
+        mock_sync_emit.return_value = True
+        db_rule = AlertRule.objects.create(
+            name="Suppressed",
+            rule_type="icao",
+            operator="eq",
+            value="ABC123",
+            # No day => every day; 00:00-23:59 => always within window.
+            suppression_windows=[{"start": "00:00", "end": "23:59"}],
+        )
+        rule = CompiledRule.from_db_rule(db_rule)
+
+        result = self.service._trigger_alert(rule, {"hex": "ABC123", "flight": "X"})
+
+        assert result is None
+        assert AlertHistory.objects.count() == 0
+
+    @patch("skyspy.services.alerts.sync_emit")
+    def test_no_suppression_window_allows_trigger(self, mock_sync_emit):
+        mock_sync_emit.return_value = True
+        db_rule = AlertRule.objects.create(
+            name="Not Suppressed",
+            rule_type="icao",
+            operator="eq",
+            value="ABC123",
+            suppression_windows=[],
+        )
+        rule = CompiledRule.from_db_rule(db_rule)
+
+        result = self.service._trigger_alert(rule, {"hex": "ABC123", "flight": "X"})
+
+        assert result is not None
+        assert AlertHistory.objects.count() == 1
+
+    @patch("skyspy.services.alerts.sync_emit")
+    def test_history_attributed_to_rule_owner(self, mock_sync_emit):
+        mock_sync_emit.return_value = True
+        owner = User.objects.create(username="rule-owner")
+        db_rule = AlertRule.objects.create(
+            name="Owned",
+            rule_type="icao",
+            operator="eq",
+            value="ABC123",
+            owner=owner,
+        )
+        rule = CompiledRule.from_db_rule(db_rule)
+
+        self.service._trigger_alert(rule, {"hex": "ABC123", "flight": "X"})
+
+        history = AlertHistory.objects.get()
+        assert history.user_id == owner.id
 
 
 class AlertServiceCheckAlertsTests(TestCase):
@@ -1087,3 +1158,236 @@ class AlertServiceEdgeCaseTests(TestCase):
 
             # Should NOT trigger because ICAO hex is required for cooldown tracking
             self.assertEqual(len(triggered), 0)
+
+
+# ---------------------------------------------------------------------------
+# Regression tests (pytest-style)
+# ---------------------------------------------------------------------------
+
+
+def _make_compiled_rule(rule_id, name, **overrides):
+    """Build a CompiledRule with sensible defaults for regression tests."""
+    kwargs = {
+        "id": rule_id,
+        "name": name,
+        "rule_type": None,
+        "operator": "eq",
+        "value": None,
+        "conditions": None,
+        "priority": "info",
+        "cooldown_seconds": 300,
+        "api_url": None,
+        "owner_id": None,
+        "visibility": "private",
+        "is_system": False,
+        "starts_at": None,
+        "expires_at": None,
+    }
+    kwargs.update(overrides)
+    return CompiledRule(**kwargs)
+
+
+class TestCompareValuesNoneRuleValue:
+    """Regression: a None rule value must not crash evaluation (AttributeError)."""
+
+    def test_emergency_condition_with_none_value_returns_false(self):
+        service = AlertService()
+        assert service._compare_values("7700", "eq", None, rule_type="emergency") is False
+
+    def test_military_condition_with_none_value_returns_false(self):
+        service = AlertService()
+        assert service._compare_values(True, "eq", None, rule_type="military") is False
+
+    def test_string_operator_with_none_value_returns_false(self):
+        service = AlertService()
+        assert service._compare_values("UAL123", "contains", None) is False
+
+
+@pytest.mark.django_db
+class TestBadRuleIsolation:
+    """Regression: one malformed rule must not abort the whole alert cycle."""
+
+    def test_check_alerts_survives_valueless_emergency_condition(self):
+        """A complex rule with {"type": "emergency"} and no value used to raise
+        AttributeError out of check_alerts, killing every rule in the cycle."""
+        AlertRule.objects.create(
+            name="Broken Emergency",
+            conditions={"logic": "AND", "groups": [{"logic": "AND", "conditions": [{"type": "emergency"}]}]},
+            enabled=True,
+        )
+        AlertRule.objects.create(name="Good ICAO", rule_type="icao", operator="eq", value="ABC123", enabled=True)
+
+        service = AlertService()
+        with patch("skyspy.services.alerts.sync_emit"):
+            triggered = service.check_alerts([{"hex": "ABC123", "squawk": "7700", "flight": "TEST1"}])
+
+        assert [t["rule_name"] for t in triggered] == ["Good ICAO"]
+
+    def test_full_iteration_isolates_bad_rule(self):
+        """The full-iteration fallback must skip a rule whose evaluation raises
+        instead of propagating and dropping every remaining rule."""
+        good_db = AlertRule.objects.create(
+            name="Good Rule", rule_type="icao", operator="eq", value="ABC123", enabled=True
+        )
+        good = CompiledRule.from_db_rule(good_db)
+        # Conditions list contains a non-dict entry: cond.get() raises AttributeError
+        bad = _make_compiled_rule(
+            good_db.id + 1000,
+            "Bad Rule",
+            conditions={"logic": "AND", "groups": [{"logic": "AND", "conditions": ["not-a-dict"]}]},
+        )
+        service = AlertService()
+        timer = MagicMock()
+
+        with (
+            patch.object(service, "_get_rules_from_db", return_value=[bad, good]),
+            patch("skyspy.services.alerts.sync_emit"),
+        ):
+            triggered = service._check_alerts_full_iteration(
+                [{"hex": "ABC123", "flight": "TEST2"}], timezone.now(), timer
+            )
+
+        assert [t["rule_name"] for t in triggered] == ["Good Rule"]
+
+
+class TestAltitudeZeroRegression:
+    """Regression: a legitimate 0 ft altitude must not be dropped by a falsy `or`."""
+
+    def test_get_aircraft_value_alt_zero(self):
+        service = AlertService()
+        assert service._get_aircraft_value({"alt": 0}, "altitude") == 0
+
+    def test_get_aircraft_value_alt_zero_with_null_baro(self):
+        service = AlertService()
+        assert service._get_aircraft_value({"alt": 0, "alt_baro": None}, "altitude") == 0
+
+    def test_get_aircraft_value_falls_back_to_alt_baro(self):
+        service = AlertService()
+        assert service._get_aircraft_value({"alt": None, "alt_baro": 500}, "altitude") == 500
+
+    def test_altitude_rule_matches_zero_altitude(self):
+        service = AlertService()
+        assert service._evaluate_simple_condition({"alt": 0}, "altitude", "lt", "100") is True
+
+
+@pytest.mark.django_db
+class TestPerChannelNotificationStatus:
+    """Delivery is deferred to Celery (send_notification_task) so slow
+    notification endpoints never stall the polling hot path; each channel
+    must be enqueued individually (the task owns per-channel logging)."""
+
+    def test_each_channel_enqueued_individually(self):
+        config = NotificationConfig.get_config()
+        config.enabled = True
+        config.apprise_urls = "json://good.example.com;json://bad.example.com"
+        config.save()
+
+        alert_data = {"rule_name": "Test Alert", "message": "msg", "priority": "info", "icao": "ABC123"}
+
+        with patch("skyspy.tasks.notifications.send_notification_task") as mock_task:
+            AlertService()._send_notification(alert_data)
+
+        urls = [c.kwargs["channel_url"] for c in mock_task.delay.call_args_list]
+        assert urls == ["json://good.example.com", "json://bad.example.com"]
+        # Body is rendered from the default "alert" NotificationTemplate (seeded
+        # in migration 0004) and must be identical across every channel.
+        bodies = {c.kwargs["body"] for c in mock_task.delay.call_args_list}
+        assert len(bodies) == 1
+        rendered_body = bodies.pop()
+        assert "Test Alert" in rendered_body  # {rule_name} substituted
+        for c in mock_task.delay.call_args_list:
+            assert c.kwargs["event_type"] == "alert"
+
+
+@pytest.mark.django_db
+class TestPerChannelNotificationIsolation:
+    """Regression: one channel's failure (e.g. a broker error enqueueing its
+    delivery task) must not skip delivery to the remaining channels."""
+
+    def test_enqueue_error_on_first_channel_does_not_skip_remaining(self):
+        config = NotificationConfig.get_config()
+        config.enabled = True
+        config.apprise_urls = "json://one.example.com;json://two.example.com"
+        config.save()
+
+        alert_data = {"rule_name": "Test Alert", "message": "msg", "priority": "info", "icao": "ABC123"}
+
+        with patch("skyspy.tasks.notifications.send_notification_task") as mock_task:
+            mock_task.delay.side_effect = [RuntimeError("broker down"), None]
+            AlertService()._send_notification(alert_data)
+
+        # The second channel must still be enqueued even though the first raised.
+        assert mock_task.delay.call_count == 2
+        assert mock_task.delay.call_args_list[1].kwargs["channel_url"] == "json://two.example.com"
+
+
+@pytest.mark.django_db
+class TestCooldownClearedOnPersistFailure:
+    """Regression: a DB failure while persisting a triggered alert must roll
+    back the just-set cooldown, or the alert is silently suppressed (no
+    history row, no broadcast, no notification) for the whole cooldown
+    window."""
+
+    def setup_method(self):
+        cooldown_manager.clear_all()
+
+    def teardown_method(self):
+        cooldown_manager.clear_all()
+
+    def test_persist_failure_clears_cooldown_so_next_cycle_can_retry(self):
+        db_rule = AlertRule.objects.create(
+            name="Persist Fail", rule_type="icao", operator="eq", value="ABC123", enabled=True
+        )
+        rule = create_compiled_rule(db_rule)
+        aircraft = {"hex": "ABC123", "flight": "TEST1"}
+        service = AlertService()
+
+        with (
+            patch("skyspy.services.alerts.sync_emit"),
+            patch.object(AlertHistory.objects, "create", side_effect=DatabaseError("db down")),
+            pytest.raises(DatabaseError),
+        ):
+            service._trigger_alert(rule, aircraft)
+
+        assert AlertHistory.objects.count() == 0
+
+        # The next evaluation cycle must be able to retry: the cooldown set
+        # before the failed persist must have been cleared.
+        with patch("skyspy.services.alerts.sync_emit"):
+            alert = service._trigger_alert(rule, aircraft)
+
+        assert alert is not None
+        assert AlertHistory.objects.count() == 1
+
+    def test_db_error_on_one_rule_does_not_abort_whole_cycle(self):
+        """A transient DB fault while persisting one alert must skip only that
+        rule; other rules in the same check_alerts() cycle must still fire.
+
+        Regression: _trigger_alert re-raises DatabaseError (after clearing its
+        cooldown), but the per-rule isolation except clauses did not list
+        DatabaseError, so the whole cycle aborted and every not-yet-evaluated
+        rule's alert was silently dropped."""
+        AlertRule.objects.create(name="Bad", rule_type="icao", operator="eq", value="AAA111", enabled=True)
+        AlertRule.objects.create(name="Good", rule_type="icao", operator="eq", value="BBB222", enabled=True)
+        aircraft_list = [
+            {"hex": "AAA111", "flight": "BAD1"},
+            {"hex": "BBB222", "flight": "GOOD1"},
+        ]
+        service = AlertService()
+
+        real_create = AlertHistory.objects.create
+
+        def create_side_effect(*args, **kwargs):
+            if kwargs.get("icao_hex") == "AAA111" or kwargs.get("icao") == "AAA111":
+                raise DatabaseError("db down")
+            return real_create(*args, **kwargs)
+
+        with (
+            patch("skyspy.services.alerts.sync_emit"),
+            patch.object(AlertHistory.objects, "create", side_effect=create_side_effect),
+        ):
+            triggered = service.check_alerts(aircraft_list)
+
+        # The good rule still fired despite the bad rule's DB error.
+        assert any(a.get("icao") == "BBB222" or a.get("icao_hex") == "BBB222" for a in triggered)
+        assert AlertHistory.objects.filter(icao_hex="BBB222").exists()

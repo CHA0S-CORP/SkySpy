@@ -129,7 +129,7 @@ def run_safety_and_alert_checks(aircraft_list: list):
         logger.exception("Unexpected error in alert evaluation")
 
 
-@shared_task(bind=True, max_retries=0)
+@shared_task(bind=True, max_retries=0, ignore_result=True)
 def poll_aircraft(self):
     """
     Poll aircraft from ultrafeeder and update cache.
@@ -179,6 +179,12 @@ def poll_aircraft(self):
             ac["military"] = ac.get("dbFlags", 0) & 1 == 1
             ac["emergency"] = ac.get("squawk") in ("7500", "7600", "7700")
 
+        # Tag non-ICAO (~) duplicates against real ICAO tracks (same helper as
+        # the stream path) so poll-sourced data behaves identically.
+        from skyspy.tasks.aircraft_stream import annotate_ghosts
+
+        annotate_ghosts(aircraft_list)
+
         # Update cache
         cache.set("current_aircraft", aircraft_list, timeout=30)
         cache.set("aircraft_timestamp", now_timestamp, timeout=30)
@@ -189,7 +195,7 @@ def poll_aircraft(self):
         # Queue new aircraft for background info lookup
         try:
             queue_new_aircraft_for_lookup(aircraft_list)
-        except Exception as e:
+        except Exception as e:  # broad: Celery dispatch/broker + malformed data must not break the poll
             logger.debug(f"Failed to queue aircraft lookups: {e}")
 
         # Run safety monitoring and alert rule evaluation against live data
@@ -264,7 +270,7 @@ def poll_aircraft(self):
                 {"aircraft": aircraft_list, "count": len(aircraft_list), "timestamp": timestamp},
                 room="topic_aircraft",
             )
-        except Exception as e:
+        except Exception as e:  # broad: Socket.IO/Redis emit must never break the poll cycle
             logger.warning(f"Failed to broadcast aircraft update: {e}")
 
         # Update previous aircraft state for next poll
@@ -282,16 +288,16 @@ def poll_aircraft(self):
             from skyspy.utils.sentry import capture_task_error
 
             capture_task_error(e, "poll_aircraft", extra={"url": f"{settings.ULTRAFEEDER_URL}/data/aircraft.json"})
-        except Exception as sentry_err:
+        except Exception as sentry_err:  # broad: error reporting must never raise
             logger.debug(f"Could not report to Sentry: {sentry_err}")
-    except Exception as e:
+    except Exception as e:  # broad: Celery task top-level guard - never crash the worker
         logger.exception(f"Error in poll_aircraft: {e}")
         # Capture unexpected errors to Sentry
         try:
             from skyspy.utils.sentry import capture_task_error
 
             capture_task_error(e, "poll_aircraft")
-        except Exception as sentry_err:
+        except Exception as sentry_err:  # broad: error reporting must never raise
             logger.debug(f"Could not report to Sentry: {sentry_err}")
 
 
@@ -358,7 +364,7 @@ def store_aircraft_sightings(aircraft_data: list):
             logger.debug(f"Stored {len(sightings)} sightings")
 
 
-@shared_task
+@shared_task(ignore_result=True)
 def update_aircraft_sessions_from_cache():
     """
     Periodic task to update aircraft sessions from cached aircraft data.
@@ -483,7 +489,7 @@ def _update_aircraft_sessions(aircraft_data: list):
                 )
 
 
-@shared_task
+@shared_task(ignore_result=True)
 def update_stats_cache():
     """
     Update cached statistics for quick retrieval.

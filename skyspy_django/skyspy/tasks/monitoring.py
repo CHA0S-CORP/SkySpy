@@ -15,10 +15,21 @@ import logging
 from celery import shared_task
 from django.conf import settings
 
+try:
+    from redis.exceptions import RedisError
+
+    _REDIS_ERRORS: tuple[type[BaseException], ...] = (RedisError,)
+except ImportError:  # pragma: no cover - redis is an optional runtime dependency
+    _REDIS_ERRORS = ()
+
+# Redis command failures: connection/timeout errors (subclassed by redis-py) plus RedisError.
+# ImportError guards the optional `import redis` inside the task body.
+_REDIS_OP_ERRORS = (ImportError, ConnectionError, OSError, TimeoutError, *_REDIS_ERRORS)
+
 logger = logging.getLogger(__name__)
 
 
-@shared_task
+@shared_task(ignore_result=True)
 def update_queue_metrics():
     """
     Update queue depth metrics.
@@ -72,12 +83,12 @@ def update_queue_metrics():
             "total_depth": total_depth,
         }
 
-    except Exception as e:
+    except _REDIS_OP_ERRORS as e:
         logger.warning(f"Failed to update queue metrics: {e}")
         return {"status": "error", "error": str(e)}
 
 
-@shared_task
+@shared_task(ignore_result=True)
 def check_task_health():
     """
     Check for stale or failing tasks.
@@ -132,7 +143,7 @@ def check_task_health():
                 },
                 room="topic_stats",
             )
-        except Exception:
+        except Exception:  # broad: socketio emit boundary — health broadcast must never break the check
             pass
 
     if failing_tasks:
@@ -207,7 +218,7 @@ def collect_worker_stats():
             "total_reserved": total_reserved,
         }
 
-    except Exception as e:
+    except Exception as e:  # broad: Celery inspect/broker failure modes are unknowable
         logger.warning(f"Failed to collect worker stats: {e}")
         return {"status": "error", "error": str(e)}
 

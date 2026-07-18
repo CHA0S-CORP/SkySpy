@@ -1,0 +1,151 @@
+/**
+ * v2 design tokens — lifted verbatim from design_handoff_skyspy_ui/designs/*.dc.html.
+ * Token names are disjoint from the legacy set (base.css --bg-dark etc.) so both
+ * coexist during the incremental migration. Themes switch via [data-theme] on <html>.
+ */
+:root {
+  --bg0: #080b11;
+  --bg1: #0d131b;
+  --bg2: #141d28;
+  --bg3: #1a2531;
+  --bord: #1b2531;
+  --bord2: #28343f;
+  --txt: #e8eff6;
+  --dim: #8b98a7;
+  --dim2: #586472;
+  --accent: #3ddc84;
+  --accent2: #4cc9f0;
+  --warn: #f5b544;
+  --danger: #f2585d;
+  --mil: #b39dff;
+  --purple: #b39dff; /* Statistics mock alias for --mil */
+  --sel: #ffffff;
+  --font-sans: 'IBM Plex Sans', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+}
+
+[data-theme='slate'] {
+  --bg0: #0a111e;
+  --bg1: #101a2b;
+  --bg2: #182437;
+  --bg3: #1f2d43;
+  --bord: #1e2c40;
+  --bord2: #2b3c54;
+  --txt: #eaf1f9;
+  --dim: #93a1b5;
+  --dim2: #5a6a80;
+  --accent: #4cc9f0;
+  --accent2: #5eead4;
+  --warn: #fbbf24;
+  --danger: #f87171;
+}
+
+[data-theme='amber'] {
+  --bg0: #0c0a06;
+  --bg1: #15110a;
+  --bg2: #1f1810;
+  --bg3: #291f13;
+  --bord: #2a2113;
+  --bord2: #3a2e1c;
+  --txt: #f4ead6;
+  --dim: #b39c78;
+  --dim2: #7a6a4d;
+  --accent: #f5b544;
+  --accent2: #ffd479;
+  --warn: #ffcf6b;
+  --danger: #f2585d;
+  --mil: #e0a3ff;
+}
+
+@keyframes v2-sweep {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes v2-ringpulse {
+  0%,
+  100% {
+    opacity: 0.9;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.35;
+    transform: scale(1.14);
+  }
+}
+@keyframes v2-safeping {
+  0% {
+    transform: translate(-50%, -50%) scale(0.72);
+    opacity: 0.85;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1.95);
+    opacity: 0;
+  }
+}
+@keyframes v2-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+@keyframes v2-toast-in {
+  from {
+    transform: translateY(8px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.v2-app {
+  font-family: var(--font-sans);
+  background: var(--bg0);
+  color: var(--txt);
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+}
+
+.v2-app ::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+.v2-app ::-webkit-scrollbar-track {
+  background: transparent;
+}
+.v2-app ::-webkit-scrollbar-thumb {
+  background: var(--bord2);
+  border-radius: 6px;
+  border: 2px solid var(--bg1);
+}
+.v2-app ::-webkit-scrollbar-thumb:hover {
+  background: var(--dim2);
+}
+
+.v2-mono {
+  font-family: var(--font-mono);
+}
+
+/* Section eyebrow: 10–11px, tracked, uppercase (README typography spec) */
+.v2-eyebrow {
+  font-size: 10px;
+  letter-spacing: 1.2px;
+  font-weight: 600;
+  color: var(--dim);
+  text-transform: uppercase;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .v2-app *,
+  .v2-app *::before,
+  .v2-app *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

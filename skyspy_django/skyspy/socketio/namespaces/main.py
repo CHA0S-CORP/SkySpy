@@ -19,7 +19,9 @@ import json
 import logging
 
 import socketio
+from asgiref.sync import sync_to_async
 from django.conf import settings
+from django.db import close_old_connections
 from django.utils import timezone
 
 from skyspy.socketio.middleware.auth import authenticate_socket
@@ -38,6 +40,22 @@ from skyspy.socketio.utils.rate_limiter import DEFAULT_RATE_LIMITS, RateLimiter
 from skyspy.socketio.utils.snapshot_cache import snapshot_cache
 
 logger = logging.getLogger(__name__)
+
+
+@sync_to_async
+def _recycle_db_connections():
+    """Recycle stale DB connections before ORM access in a socket handler.
+
+    Socket.IO handlers run outside Django's request/response cycle, so the
+    ``close_old_connections()`` that Django normally fires per request never
+    runs here. The shared thread-sensitive executor keeps one persistent
+    connection, and the DB server (or PgBouncer) reaps it while idle — the
+    next query then raises ``OperationalError: the connection is closed``.
+    This runs in the same thread-sensitive executor as the handlers, so it
+    recycles the very connection they are about to use. Requires
+    ``CONN_HEALTH_CHECKS`` to detect connections closed before CONN_MAX_AGE.
+    """
+    close_old_connections()
 
 
 class MainNamespace(
@@ -163,7 +181,15 @@ class MainNamespace(
 
     def __init__(self, namespace: str = "/"):
         super().__init__(namespace)
-        # Per-session state is stored via sio.save_session/get_session
+        # Per-session state is stored via sio.save_session/get_session.
+        # Event handlers run as concurrent tasks (async_handlers=True), so
+        # get_session -> save_session read-modify-write sequences must be
+        # serialized per sid or overlapping subscribes/unsubscribes lose updates.
+        self._session_locks: dict[str, asyncio.Lock] = {}
+
+    def _session_lock(self, sid: str) -> asyncio.Lock:
+        """Get (or create) the per-sid lock guarding subscription session state."""
+        return self._session_locks.setdefault(sid, asyncio.Lock())
 
     # =========================================================================
     # Socket.IO Event Handlers
@@ -218,6 +244,7 @@ class MainNamespace(
 
     async def on_disconnect(self, sid: str):
         """Handle client disconnection."""
+        self._session_locks.pop(sid, None)
         try:
             session = await sio.get_session(sid)
             # Convert to set since JSON serialization returns lists
@@ -240,7 +267,7 @@ class MainNamespace(
             logger.info(f"Socket.IO disconnected: {sid}")
         except asyncio.CancelledError:
             logger.debug(f"Disconnect cleanup cancelled for {sid}")
-        except Exception as e:
+        except Exception as e:  # broad: disconnect cleanup boundary must never raise, whatever the session state
             logger.warning(f"Error during disconnect cleanup for {sid}: {e}")
 
     async def on_subscribe(self, sid: str, data: dict | None):
@@ -271,37 +298,38 @@ class MainNamespace(
                 topics = list(self.SUPPORTED_TOPICS)
                 logger.info(f"[on_subscribe] Expanded 'all' to: {topics}")
 
-            session = await sio.get_session(sid)
-            user = session.get("user")
-            # Use list instead of set for JSON serialization compatibility
-            subscribed = list(session.get("subscribed_topics", []))
+            async with self._session_lock(sid):
+                session = await sio.get_session(sid)
+                user = session.get("user")
+                # Use list instead of set for JSON serialization compatibility
+                subscribed = list(session.get("subscribed_topics", []))
 
-            joined = []
-            denied = []
+                joined = []
+                denied = []
 
-            for topic in topics:
-                # Validate topic
-                if topic not in self.SUPPORTED_TOPICS:
-                    logger.warning(f"Unknown topic requested by {sid}: {topic}")
-                    continue
+                for topic in topics:
+                    # Validate topic
+                    if topic not in self.SUPPORTED_TOPICS:
+                        logger.warning(f"Unknown topic requested by {sid}: {topic}")
+                        continue
 
-                # Check permission
-                if not await check_topic_permission(user, topic):
-                    logger.warning(f"Permission denied for {sid} to subscribe to {topic}")
-                    denied.append(topic)
-                    continue
+                    # Check permission
+                    if not await check_topic_permission(user, topic):
+                        logger.warning(f"Permission denied for {sid} to subscribe to {topic}")
+                        denied.append(topic)
+                        continue
 
-                # Join room
-                room = f"topic_{topic}"
-                await sio.enter_room(sid, room)
-                if topic not in subscribed:
-                    subscribed.append(topic)
-                joined.append(topic)
-                logger.info(f"{sid} is entering room {room} [{self.namespace}]")
+                    # Join room
+                    room = f"topic_{topic}"
+                    await sio.enter_room(sid, room)
+                    if topic not in subscribed:
+                        subscribed.append(topic)
+                    joined.append(topic)
+                    logger.info(f"{sid} is entering room {room} [{self.namespace}]")
 
-            # Update session (using list for JSON serialization)
-            session["subscribed_topics"] = subscribed
-            await sio.save_session(sid, session)
+                # Update session (using list for JSON serialization)
+                session["subscribed_topics"] = subscribed
+                await sio.save_session(sid, session)
 
             # Send response
             await sio.emit(
@@ -336,21 +364,22 @@ class MainNamespace(
         if isinstance(topics, str):
             topics = [topics]
 
-        session = await sio.get_session(sid)
-        subscribed = set(session.get("subscribed_topics", []))
+        async with self._session_lock(sid):
+            session = await sio.get_session(sid)
+            subscribed = set(session.get("subscribed_topics", []))
 
-        left = []
+            left = []
 
-        for topic in topics:
-            if topic in subscribed:
-                room = f"topic_{topic}"
-                await sio.leave_room(sid, room)
-                subscribed.discard(topic)
-                left.append(topic)
-                logger.debug(f"{sid} unsubscribed from {topic}")
+            for topic in topics:
+                if topic in subscribed:
+                    room = f"topic_{topic}"
+                    await sio.leave_room(sid, room)
+                    subscribed.discard(topic)
+                    left.append(topic)
+                    logger.debug(f"{sid} unsubscribed from {topic}")
 
-        session["subscribed_topics"] = list(subscribed)
-        await sio.save_session(sid, session)
+            session["subscribed_topics"] = list(subscribed)
+            await sio.save_session(sid, session)
 
         await sio.emit(
             "unsubscribed",
@@ -380,22 +409,33 @@ class MainNamespace(
         if not isinstance(params, dict):
             params = {}
 
-        if not request_type:
+        if not request_type or not isinstance(request_type, str):
             await self._emit_error(sid, request_id, "Missing request type")
             return
 
-        # Enforce per-session request rate limiting
-        session = await sio.get_session(sid)
-        rate_limiter = session.get("rate_limiter")
-        if rate_limiter and not rate_limiter.can_send("request"):
-            await self._emit_error(sid, request_id, "Rate limit exceeded, please slow down")
-            return
-
-        if not await self._check_request_permission(sid, request_type):
-            await self._emit_error(sid, request_id, "Permission denied")
-            return
-
         try:
+            # Pre-dispatch (session fetch, rate limit, permission) must run
+            # inside the guard too - an escape here would leave the client
+            # hanging with no response until its timeout.
+            session = await sio.get_session(sid)
+            rate_limiter = session.get("rate_limiter")
+            if rate_limiter and not rate_limiter.can_send("request"):
+                await self._emit_error(sid, request_id, "Rate limit exceeded, please slow down")
+                return
+
+            if not await self._check_request_permission(sid, request_type):
+                await self._emit_error(sid, request_id, "Permission denied")
+                return
+
+            # Inject the authenticated session user so handlers can owner-scope
+            # their queries/mutations. Set server-side AFTER reading client params
+            # so a client cannot spoof "_user" to impersonate another account.
+            params["_user"] = session.get("user")
+
+            # Drop any DB connection reaped while the socket was idle, so the
+            # handler's ORM query does not hit "the connection is closed".
+            await _recycle_db_connections()
+
             handler = getattr(self, f"_handle_{request_type.replace('-', '_')}", None)
             if handler:
                 result = await handler(params)
@@ -408,7 +448,9 @@ class MainNamespace(
                     await self._emit_error(sid, request_id, f"Unknown request type: {request_type}")
         except asyncio.CancelledError:
             logger.debug(f"Request {request_type} cancelled for {sid} (client disconnected)")
-        except Exception as e:
+        except (
+            Exception
+        ) as e:  # broad: top-level dispatch guard over all mixin handlers; must degrade to error response
             logger.exception(f"Error handling request {request_type} for {sid}: {e}")
             await self._emit_error(sid, request_id, "Internal server error")
 
@@ -422,19 +464,20 @@ class MainNamespace(
 
     async def _join_default_rooms(self, sid: str, user):
         """Join default rooms based on user permissions."""
-        session = await sio.get_session(sid)
-        subscribed = set(session.get("subscribed_topics", []))
+        async with self._session_lock(sid):
+            session = await sio.get_session(sid)
+            subscribed = set(session.get("subscribed_topics", []))
 
-        if await check_topic_permission(user, "aircraft"):
-            await sio.enter_room(sid, "topic_aircraft")
-            subscribed.add("aircraft")
+            if await check_topic_permission(user, "aircraft"):
+                await sio.enter_room(sid, "topic_aircraft")
+                subscribed.add("aircraft")
 
-        if await check_topic_permission(user, "stats"):
-            await sio.enter_room(sid, "topic_stats")
-            subscribed.add("stats")
+            if await check_topic_permission(user, "stats"):
+                await sio.enter_room(sid, "topic_stats")
+                subscribed.add("stats")
 
-        session["subscribed_topics"] = list(subscribed)
-        await sio.save_session(sid, session)
+            session["subscribed_topics"] = list(subscribed)
+            await sio.save_session(sid, session)
 
     async def _send_initial_state(self, sid: str):
         """Send initial snapshots on connect for all subscribed data types."""
@@ -449,14 +492,16 @@ class MainNamespace(
         if await check_topic_permission(user, "aircraft"):
             try:
                 await self._emit_cached_snapshot(sid, "aircraft")
-            except Exception as e:
+            except Exception as e:  # broad: snapshot boundary must not abort connect; emit spans many mixins/cache
                 logger.error(f"Failed to send aircraft snapshot to {sid}: {e}", exc_info=True)
 
         for topic in ("safety", "alerts", "acars", "notams"):
             if topic in subscribed or "all" in subscribed:
                 try:
                     await self._emit_cached_snapshot(sid, topic)
-                except Exception as e:
+                except (
+                    Exception
+                ) as e:  # broad: per-topic snapshot boundary must not abort connect; emit spans mixins/cache
                     logger.error(f"Failed to send {topic} snapshot to {sid}: {e}", exc_info=True)
 
     async def _send_topic_snapshots(self, sid: str, topics: list):
@@ -464,7 +509,9 @@ class MainNamespace(
         for topic in topics:
             try:
                 await self._emit_cached_snapshot(sid, topic)
-            except Exception as e:
+            except (
+                Exception
+            ) as e:  # broad: per-topic snapshot boundary must not abort subscribe; emit spans mixins/cache
                 logger.error(f"Failed to send {topic} snapshot to {sid}: {e}", exc_info=True)
 
     # Topics whose snapshot event name differs from "{topic}:snapshot"
@@ -505,6 +552,10 @@ class MainNamespace(
     async def _generate_topic_snapshot(self, topic: str) -> dict | None:
         """Generate a fresh snapshot for a topic."""
         timestamp = timezone.now().isoformat()
+
+        # Connect/subscribe snapshots also run outside the request cycle; recycle
+        # a possibly-dead connection before the ORM query behind each snapshot.
+        await _recycle_db_connections()
 
         if topic == "notams":
             return await self._get_notam_snapshot({"active_only": True, "limit": 100})

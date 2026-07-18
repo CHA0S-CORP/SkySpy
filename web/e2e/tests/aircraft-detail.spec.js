@@ -558,6 +558,137 @@ test.describe('Aircraft Detail Page', () => {
     });
   });
 
+  test.describe('Ownership Analysis & Summary', () => {
+    // The airframe detail endpoint is fetched as `/api/v1/airframes/{HEX}/`
+    // (uppercase, trailing slash + query). The shared mockApi glob
+    // (`**${path}*`) does not match that trailing-slash form under Playwright's
+    // glob engine, so register the airframe route explicitly here with a
+    // trailing-`/**` glob. Registered last, this route takes precedence over
+    // the plainer record wired up in the outer beforeEach.
+    async function mockAirframe(page, body) {
+      await page.route(`**/api/v1/airframes/${testIcao}/**`, async (route) => {
+        // Only fulfill the base record request; let sub-resources
+        // (/photo, /history, /photos/fetch) fall through to their own mocks.
+        const url = route.request().url();
+        if (/\/airframes\/[^/]+\/(photo|history|photos)/.test(url)) {
+          return route.fallback();
+        }
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify(body),
+        });
+      });
+    }
+
+    // Airframe record enriched with the RAG dossier text + shell-company
+    // ownership heuristics.
+    const enrichedAirframe = {
+      icao_hex: testIcao,
+      registration: testAircraft.registration || 'N12345',
+      type_code: testAircraft.type || 'B738',
+      type_description: 'Boeing 737-800',
+      manufacturer: 'Boeing',
+      model: 'B737-800',
+      operator: 'Aero Holdings LLC',
+      owner: 'Aero Holdings LLC',
+      country: 'United States',
+      built_year: 2015,
+      dossier_text:
+        'This Boeing 737-800 is registered to a Delaware limited-liability company with no ' +
+        'public operating history. The registrant address matches a known registered-agent ' +
+        'service used by multiple single-aircraft entities.',
+      owner_type: 'llc',
+      is_shell_suspected: true,
+      shell_score: 0.82,
+      ownership_flags: {
+        factors: ['registered_agent_address', 'single_aircraft_entity', 'no_operating_history'],
+      },
+    };
+
+    test('summary card renders the dossier prose', async ({ page }) => {
+      await mockAirframe(page, enrichedAirframe);
+
+      await page.goto(`/#airframe?icao=${testIcao}`);
+      await page.waitForLoadState('domcontentloaded');
+      await expect(page.getByTestId('v2-detail')).toBeVisible({ timeout: 15000 });
+
+      const summary = page.getByTestId('v2-detail-summary');
+      await expect(summary).toBeVisible({ timeout: 10000 });
+
+      const summaryText = page.getByTestId('v2-detail-summary-text');
+      await expect(summaryText).toContainText('Delaware limited-liability company');
+    });
+
+    test('ownership analysis card shows shell flag, score, and factors', async ({ page }) => {
+      await mockAirframe(page, enrichedAirframe);
+
+      await page.goto(`/#airframe?icao=${testIcao}`);
+      await page.waitForLoadState('domcontentloaded');
+      await expect(page.getByTestId('v2-detail')).toBeVisible({ timeout: 15000 });
+
+      const ownership = page.getByTestId('v2-detail-ownership');
+      await expect(ownership).toBeVisible({ timeout: 10000 });
+
+      // owner_type label (llc -> "LLC")
+      await expect(page.getByTestId('v2-detail-ownership-type')).toHaveText('LLC');
+
+      // is_shell_suspected headline flag
+      const shellFlag = page.getByTestId('v2-detail-shell-flag');
+      await expect(shellFlag).toContainText('Shell company suspected');
+
+      // shell_score 0.82 -> 82%
+      const shellScore = page.getByTestId('v2-detail-shell-score');
+      await expect(shellScore).toContainText('82%');
+
+      // ownership_flags factors (underscores rendered as spaces)
+      const factors = page.getByTestId('v2-detail-ownership-factors');
+      await expect(factors).toBeVisible();
+      await expect(factors).toContainText('registered agent address');
+      await expect(factors).toContainText('single aircraft entity');
+    });
+
+    test('ownership card shows the clear state when not suspected', async ({ page }) => {
+      await mockAirframe(page, {
+        ...enrichedAirframe,
+        is_shell_suspected: false,
+        shell_score: 0.05,
+        ownership_flags: { factors: [] },
+      });
+
+      await page.goto(`/#airframe?icao=${testIcao}`);
+      await page.waitForLoadState('domcontentloaded');
+      await expect(page.getByTestId('v2-detail')).toBeVisible({ timeout: 15000 });
+
+      const shellFlag = page.getByTestId('v2-detail-shell-flag');
+      await expect(shellFlag).toBeVisible({ timeout: 10000 });
+      await expect(shellFlag).toContainText('No shell-company indicators');
+      await expect(page.getByTestId('v2-detail-shell-score')).toContainText('5%');
+    });
+
+    test('ownership + summary cards are omitted when the fields are absent', async ({ page }) => {
+      // A populated airframe with none of the ownership/dossier fields.
+      await mockAirframe(page, {
+        icao_hex: testIcao,
+        registration: testAircraft.registration || 'N12345',
+        type_code: testAircraft.type || 'B738',
+        manufacturer: 'Boeing',
+        model: 'B737-800',
+        operator: 'United Airlines',
+        country: 'United States',
+      });
+
+      await page.goto(`/#airframe?icao=${testIcao}`);
+      await page.waitForLoadState('domcontentloaded');
+      // Aircraft Info card still renders, so the detail screen loaded.
+      await expect(page.getByTestId('v2-detail')).toBeVisible({ timeout: 15000 });
+      await page.waitForTimeout(500);
+
+      await expect(page.getByTestId('v2-detail-summary')).toHaveCount(0);
+      await expect(page.getByTestId('v2-detail-ownership')).toHaveCount(0);
+    });
+  });
+
   test.describe('Error Handling', () => {
     test('handles invalid ICAO gracefully', async ({ page, mockApi }) => {
       // Mock 404 response

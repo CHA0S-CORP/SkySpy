@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ConditionBuilder } from './ConditionBuilder';
-import { CONDITION_TYPES, DEFAULT_GROUP } from './RuleFormConstants';
+import { CONDITION_TYPES } from './RuleFormConstants';
 
 // Mock lucide-react icons
 vi.mock('lucide-react', () => ({
@@ -243,7 +243,7 @@ describe('ConditionBuilder', () => {
       );
 
       const operatorSelect = screen.getByLabelText('Operator');
-      const options = within(operatorSelect).getAllByRole('option');
+      within(operatorSelect).getAllByRole('option');
 
       // String operators
       expect(within(operatorSelect).getByText('equals')).toBeInTheDocument();

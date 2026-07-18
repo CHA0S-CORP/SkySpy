@@ -9,10 +9,13 @@ from datetime import datetime
 
 from celery import shared_task
 
+from skyspy.tasks.locks import singleton_task
+
 logger = logging.getLogger(__name__)
 
 
 @shared_task(bind=True, max_retries=3)
+@singleton_task(timeout=3600)
 def refresh_openaip_data(self):
     """
     Refresh OpenAIP airspace data by prefetching for common regions.
@@ -75,7 +78,7 @@ def refresh_openaip_data(self):
                 logger.debug(
                     f"Prefetched region ({lat}, {lon}): {len(airspaces)} airspaces, {len(airports)} airports, {len(navaids)} navaids"
                 )
-            except Exception as e:
+            except Exception as e:  # broad: per-region loop must continue on any error (tested)
                 logger.warning(f"Failed to prefetch region ({lat}, {lon}): {e}")
                 continue
 
@@ -96,7 +99,7 @@ def refresh_openaip_data(self):
                 },
                 room="topic_aircraft",
             )
-        except Exception as e:
+        except Exception as e:  # broad: broadcast/notification must never break the task
             logger.warning(f"Failed to broadcast OpenAIP refresh: {e}")
 
         return {
@@ -106,7 +109,7 @@ def refresh_openaip_data(self):
             "navaids": total_navaids,
         }
 
-    except Exception as e:
+    except Exception as e:  # broad: Celery task top-level guard; retries on any failure
         logger.error(f"Failed to refresh OpenAIP data: {e}")
         raise self.retry(exc=e, countdown=300)
 
@@ -137,7 +140,7 @@ def prefetch_openaip_airspaces(lat: float, lon: float, radius_nm: float = 200):
             "count": len(airspaces),
         }
 
-    except Exception as e:
+    except Exception as e:  # broad: Celery task top-level guard; reports error without crashing worker
         logger.error(f"Failed to prefetch OpenAIP airspaces: {e}")
         return {"status": "error", "error": str(e)}
 
@@ -152,6 +155,6 @@ def get_openaip_stats():
 
         return openaip.get_api_status()
 
-    except Exception as e:
+    except Exception as e:  # broad: Celery task top-level guard; reports error without crashing worker
         logger.error(f"Error getting OpenAIP stats: {e}")
         return {"error": str(e)}

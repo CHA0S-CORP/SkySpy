@@ -1,4 +1,4 @@
-.PHONY: test test-docker test-local test-verbose clean build help test-common test-python lint lint-python lint-go lint-frontend
+.PHONY: test test-docker test-local test-verbose clean build help test-common test-python lint lint-python lint-go lint-frontend docs docs-openapi docs-storybook docs-go docs-socketio docs-screenshots
 
 # Default target
 help:
@@ -16,6 +16,8 @@ help:
 	@echo "  make build         - Build Docker images only"
 	@echo "  make clean         - Clean up containers and volumes"
 	@echo "  make logs          - Show test container logs"
+	@echo "  make docs          - Generate OpenAPI schema, Go CLI + Socket.IO docs"
+	@echo "  make docs-storybook- Build the Storybook static site"
 	@echo ""
 
 # Run tests in Docker
@@ -77,6 +79,37 @@ clean:
 # Show logs
 logs:
 	docker compose --env-file ./.env.test -f ./docker-compose.test.yaml --profile test logs -f test
+
+# =============================================================================
+# Documentation
+# =============================================================================
+
+# Validate + export the drf-spectacular OpenAPI schema
+docs-openapi:
+	cd skyspy_django && bash scripts/check_schema.sh --out openapi.json
+
+# Build the Storybook static site into web/storybook-static/
+docs-storybook:
+	cd web && npm run build-storybook
+
+# Generate the Go CLI Markdown reference into docs/cli/
+docs-go:
+	cd skyspy-go && $(MAKE) docs
+
+# Generate the Socket.IO event reference from the namespace/mixin source
+# (pure stdlib AST introspection — no Django import, so python3 is fine)
+docs-socketio:
+	cd skyspy_django && python3 scripts/gen_socketio_events.py
+
+# Regenerate the doc screenshot/animation assets (slow; excluded from `docs`)
+docs-screenshots:
+	cd web && npm run docs:generate
+
+# Generate all committed docs artifacts (schema, CLI ref, Socket.IO ref).
+# Storybook + screenshots are omitted here because they are heavy; run them
+# explicitly (docs-storybook / docs-screenshots) when needed.
+docs: docs-openapi docs-go docs-socketio
+	@echo "Generated OpenAPI schema, Go CLI reference, and Socket.IO event reference."
 
 # =============================================================================
 # Python Package Tests

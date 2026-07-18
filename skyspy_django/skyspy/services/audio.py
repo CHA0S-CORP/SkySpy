@@ -694,7 +694,7 @@ def extract_callsigns_from_transcript(
                 resolve_ambiguous=True,
                 deduplicate=True,
             )
-        except Exception as e:
+        except Exception as e:  # broad: third-party LLM call, unknowable failures; fall back to regex-only
             logger.warning(f"LLM enhancement failed, using regex-only results: {e}")
 
     return callsigns
@@ -800,7 +800,7 @@ def get_audio_duration(audio_data: bytes) -> float | None:
 
         return None
 
-    except Exception as e:
+    except (ValueError, IndexError, TypeError, KeyError, OSError) as e:
         logger.warning(f"Error calculating audio duration: {e}")
         return None
 
@@ -837,7 +837,7 @@ def _parse_wav_duration(audio_data: bytes) -> float | None:
 
             pos += 8 + chunk_size
         return None
-    except Exception:
+    except (ValueError, IndexError, ZeroDivisionError):
         return None
 
 
@@ -884,7 +884,7 @@ def detect_static_audio(audio_data: bytes) -> tuple[bool, str]:
         # For non-WAV, try pydub if available
         try:
             return _detect_static_pydub(audio_data)
-        except Exception:
+        except Exception:  # broad: pydub/decoder failures unknowable; can't analyze, assume valid
             return False, "ok"  # Can't analyze, assume valid
 
     return _calculate_wav_rms(audio_data)
@@ -969,7 +969,7 @@ def _calculate_wav_rms(audio_data: bytes) -> tuple[bool, str]:
 
         return False, "ok"
 
-    except Exception as e:
+    except (ValueError, IndexError, ZeroDivisionError) as e:
         logger.debug(f"RMS calculation error: {e}")
         return False, "ok"
 
@@ -1004,7 +1004,7 @@ def _detect_static_pydub(audio_data: bytes) -> tuple[bool, str]:
 
     except ImportError:
         return False, "ok"
-    except Exception as e:
+    except Exception as e:  # broad: pydub decodes arbitrary formats with unknowable failure modes
         logger.debug(f"Pydub analysis error: {e}")
         return False, "ok"
 
@@ -1196,7 +1196,7 @@ def process_transcription(transmission: AudioTransmission) -> bool:
 
         return True
 
-    except Exception as e:
+    except Exception as e:  # broad: top-level job guard; any failure must mark transmission failed
         transmission.transcription_status = "failed"
         transmission.transcription_error = str(e)
         transmission.save()
@@ -1504,7 +1504,7 @@ def _broadcast_transcription_event(transmission: AudioTransmission, status: str,
 
         logger.debug(f"Broadcast transcription event: {status} for {transmission.id}")
 
-    except Exception as e:
+    except Exception as e:  # broad: WebSocket broadcast must never raise into the caller
         logger.warning(f"Failed to broadcast transcription event: {e}")
 
 
@@ -1530,5 +1530,5 @@ def broadcast_new_transmission(transmission: AudioTransmission):
 
         sync_emit("audio:transmission", event_data, room="audio_transmissions", namespace="/audio")
 
-    except Exception as e:
+    except Exception as e:  # broad: WebSocket broadcast must never raise into the caller
         logger.warning(f"Failed to broadcast new transmission: {e}")

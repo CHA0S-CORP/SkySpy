@@ -32,6 +32,7 @@ export function useAviationData(
   const [error, setError] = useState(null);
   const lastFetchRef = useRef(0);
   const fetchAviationDataRef = useRef(null);
+  const gotDataRef = useRef(false);
 
   // Helper to normalize airport fields
   const normalizeAirport = useCallback(
@@ -95,44 +96,50 @@ export function useAviationData(
       const AVIATION_TIMEOUT = 20000;
       const promises = [];
 
-      // NAVAIDs
-      promises.push(
-        makeRequest(
-          'navaids',
-          { ...baseParams, radius: Math.round(radarRange * 1.5) },
-          AVIATION_TIMEOUT
-        )
-          .then((data) => ({ type: 'navaids', data: extractData(data) }))
-          .catch((err) => ({ type: 'navaids', error: err.message }))
-      );
+      // NAVAIDs (only if overlay enabled)
+      if (overlays?.navaids) {
+        promises.push(
+          makeRequest(
+            'navaids',
+            { ...baseParams, radius: Math.round(radarRange * 1.5) },
+            AVIATION_TIMEOUT
+          )
+            .then((data) => ({ type: 'navaids', data: extractData(data) }))
+            .catch((err) => ({ type: 'navaids', error: err.message }))
+        );
+      }
 
-      // Airports
-      promises.push(
-        makeRequest(
-          'airports',
-          { ...baseParams, radius: Math.round(radarRange * 1.2), limit: 50 },
-          AVIATION_TIMEOUT
-        )
-          .then((data) => ({ type: 'airports', data: extractData(data).map(normalizeAirport) }))
-          .catch((err) => ({ type: 'airports', error: err.message }))
-      );
+      // Airports (only if overlay enabled)
+      if (overlays?.airports) {
+        promises.push(
+          makeRequest(
+            'airports',
+            { ...baseParams, radius: Math.round(radarRange * 1.2), limit: 50 },
+            AVIATION_TIMEOUT
+          )
+            .then((data) => ({ type: 'airports', data: extractData(data).map(normalizeAirport) }))
+            .catch((err) => ({ type: 'airports', error: err.message }))
+        );
+      }
 
-      // Airspace boundaries (static) - from database
-      promises.push(
-        makeRequest('airspace-boundaries', { ...baseParams, radius: Math.round(radarRange * 1.5) })
-          .then((data) => ({ type: 'airspace', data: extractData(data) }))
-          .catch((err) => ({ type: 'airspace', error: err.message }))
-      );
-
-      // Airspace advisories (G-AIRMETs) - from database
-      promises.push(
-        makeRequest('airspaces', baseParams)
-          .then((data) => ({
-            type: 'airspaceAdvisories',
-            data: data?.advisories || extractData(data),
-          }))
-          .catch((err) => ({ type: 'airspaceAdvisories', error: err.message }))
-      );
+      // Airspace boundaries + advisories (only if overlay enabled). The boundary
+      // payload is large (full polygons); fetching it unconditionally on every
+      // connect chokes the socket transport, so gate it behind the overlay flag.
+      if (overlays?.airspace) {
+        promises.push(
+          makeRequest('airspace-boundaries', { ...baseParams, radius: Math.round(radarRange) })
+            .then((data) => ({ type: 'airspace', data: extractData(data) }))
+            .catch((err) => ({ type: 'airspace', error: err.message }))
+        );
+        promises.push(
+          makeRequest('airspaces', baseParams)
+            .then((data) => ({
+              type: 'airspaceAdvisories',
+              data: data?.advisories || extractData(data),
+            }))
+            .catch((err) => ({ type: 'airspaceAdvisories', error: err.message }))
+        );
+      }
 
       // METARs (only if overlay enabled)
       if (overlays?.metars) {
@@ -170,10 +177,24 @@ export function useAviationData(
         return updated;
       });
 
+      // Mark success once the fetch completes with at least one non-error
+      // result (stops the startup retry loop). Using non-error rather than
+      // non-empty so legitimately-empty layers (no navaids/airspace in range)
+      // don't keep the retry loop hammering the socket.
+      if (results.some((r) => !r.error)) {
+        gotDataRef.current = true;
+      }
+
       // Check for errors
       const errors = results.filter((r) => r.error);
       if (errors.length > 0) {
         console.warn('Some aviation data requests failed:', errors);
+        // A transient disconnect (e.g. reconnect, StrictMode remount) rejects the
+        // in-flight requests. Clear the debounce so the next connect refetches
+        // immediately instead of blackholing aviation data until the 5-min timer.
+        if (errors.some((e) => /disconnect/i.test(e.error || ''))) {
+          lastFetchRef.current = 0;
+        }
       }
     } catch (err) {
       console.error('Aviation data fetch error:', err);
@@ -187,6 +208,9 @@ export function useAviationData(
     feederLat,
     feederLon,
     radarRange,
+    overlays?.navaids,
+    overlays?.airports,
+    overlays?.airspace,
     overlays?.metars,
     overlays?.pireps,
     extractData,
@@ -202,12 +226,36 @@ export function useAviationData(
       return;
     }
 
-    // Fetch with small delay after connection
+    // Fetch with small delay after connection. This effect also re-runs when
+    // an overlay is toggled (fetchAviationData identity changes) - reset the
+    // debounce window so the toggle isn't silently dropped when another fetch
+    // ran within the last 5s (the layer would stay empty for 5 minutes).
+    gotDataRef.current = false;
+    lastFetchRef.current = 0;
     const timeout = setTimeout(() => {
       fetchAviationData();
     }, 500);
     return () => clearTimeout(timeout);
   }, [wsConnected, wsRequest, feederLat, feederLon, radarRange, fetchAviationData]);
+
+  // Bounded startup retry: the socket transport can flap during startup
+  // (StrictMode remount / WS upgrade → polling fallback) and reject the one-shot
+  // fetch while `wsConnected` stays true, which would otherwise blackhole
+  // aviation data until the 5-min refresh. Retry a few times until data lands.
+  useEffect(() => {
+    if (!wsConnected || !wsRequest) return undefined;
+    let tries = 0;
+    const id = setInterval(() => {
+      tries += 1;
+      if (gotDataRef.current || tries > 3) {
+        clearInterval(id);
+        return;
+      }
+      lastFetchRef.current = 0; // bypass debounce
+      fetchAviationDataRef.current?.();
+    }, 6000);
+    return () => clearInterval(id);
+  }, [wsConnected, wsRequest, feederLat, feederLon]);
 
   // Refresh weather data periodically (every 5 minutes)
   // Use ref to avoid resetting interval when fetchAviationData changes

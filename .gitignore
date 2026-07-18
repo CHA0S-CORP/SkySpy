@@ -17,3 +17,14 @@ coverage/
 test-results/
 .venv/
 venv/
+
+# SkySpy Go TUI export artifacts (screenshot/CSV/JSON writes default to cwd)
+skyspy_aircraft_*.csv
+skyspy_aircraft_*.json
+skyspy_acars_*.csv
+skyspy_acars_*.json
+skyspy_screenshot_*.html
+skyspy_screenshot_*.txt
+
+# Local env backups
+.env.test.bak.*

@@ -9,17 +9,32 @@ import hashlib
 import json
 import logging
 import re
+import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from threading import Lock
 from typing import Any
 
 from django.conf import settings
+from django.db import DatabaseError
 from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
+
+# Redis client error base for narrowing cache-op exception handlers. Guarded so
+# the module still imports if the redis library is unavailable.
+try:
+    from redis.exceptions import RedisError
+except ImportError:  # pragma: no cover - redis is a core dependency
+    RedisError = ()
+
+# Exception types raised by Redis operations (connection loss, timeouts, protocol
+# errors) and by from_url() on a missing/malformed REDIS_URL (ValueError — e.g.
+# when REDIS_URL is empty, as in tests), which the connection bootstrap must
+# treat as "Redis unavailable" and fall back to in-memory.
+REDIS_ERRORS = (ConnectionError, OSError, TimeoutError, ValueError, RedisError)
 
 # Maximum allowed regex pattern length to prevent ReDoS attacks
 MAX_REGEX_PATTERN_LENGTH = 500
@@ -51,6 +66,10 @@ class CompiledRule:
     # Scheduling
     starts_at: datetime | None
     expires_at: datetime | None
+
+    # Suppression windows (list of {"day","start","end"} dicts). Carried through
+    # the cache so the alert service can evaluate them without a DB fetch.
+    suppression_windows: list | None = None
 
     # Pre-computed optimization hints
     requires_military: bool = False
@@ -184,6 +203,7 @@ class CompiledRule:
             is_system=is_system,
             starts_at=rule.starts_at,
             expires_at=rule.expires_at,
+            suppression_windows=getattr(rule, "suppression_windows", None),
             requires_military=flags["military"],
             requires_position=flags["position"],
             requires_altitude=flags["altitude"],
@@ -233,6 +253,7 @@ class AlertRuleCache:
     def __init__(self):
         self._local_rules: list[CompiledRule] = []
         self._local_version: str = ""
+        self._local_refreshed_at: float = 0.0
         self._lock = Lock()
         self._redis = None
         self._initialized = False
@@ -253,13 +274,25 @@ class AlertRuleCache:
                 redis_url = getattr(settings, "REDIS_URL", "redis://redis:6379/0")
                 self._redis = redis.from_url(redis_url, decode_responses=True)
                 self._redis.ping()
-            except Exception as e:
+            except (ImportError, *REDIS_ERRORS) as e:
                 logger.warning(f"Redis not available for rule cache: {e}")
                 self._redis = False
         return self._redis if self._redis else None
 
     # Sentinel value indicating no version is set (cannot match legitimate versions)
     _NO_VERSION_SENTINEL = "__NO_VERSION__"
+
+    # Without Redis there is no cross-process version to compare, so refresh
+    # on a short local TTL instead - rule changes in other processes (or via
+    # signals whose on_commit hasn't fired) still land within this window.
+    NO_REDIS_TTL = 30.0
+
+    def _needs_refresh(self, current_version: str) -> bool:
+        if self._local_version != current_version or not self._local_rules:
+            return True
+        return current_version == self._NO_VERSION_SENTINEL and (
+            time.time() - self._local_refreshed_at > self.NO_REDIS_TTL
+        )
 
     def _get_current_version(self) -> str:
         """Get current cache version from Redis or return sentinel value."""
@@ -268,7 +301,7 @@ class AlertRuleCache:
                 version = self.redis.get(self.VERSION_KEY)
                 if version:
                     return version
-            except Exception as e:
+            except REDIS_ERRORS as e:
                 logger.debug(f"Could not get cache version from Redis: {e}")
         return self._NO_VERSION_SENTINEL
 
@@ -295,7 +328,7 @@ class AlertRuleCache:
             # Check if local cache is valid
             current_version = self._get_current_version()
 
-            if self._local_version != current_version or not self._local_rules:
+            if self._needs_refresh(current_version):
                 # Refresh from database
                 self._refresh_cache()
 
@@ -339,17 +372,24 @@ class AlertRuleCache:
                     new_version = self._generate_version()
                     self.redis.set(self.VERSION_KEY, new_version)
                     self._local_version = new_version
-                except Exception as e:
+                except (*REDIS_ERRORS, TypeError, ValueError) as e:
                     logger.warning(f"Failed to store rules in Redis: {e}")
+                    # Match the sentinel _get_current_version returns when
+                    # Redis is unavailable, or every lookup re-refreshes
+                    self._local_version = self._NO_VERSION_SENTINEL
             else:
-                self._local_version = self._generate_version()
+                # No Redis: _get_current_version always returns the sentinel,
+                # so the local version must match it - a random version here
+                # forced a full DB reload + regex recompile per aircraft.
+                self._local_version = self._NO_VERSION_SENTINEL
 
+            self._local_refreshed_at = time.time()
             logger.debug(f"Refreshed rule cache with {len(self._local_rules)} rules")
 
             # Build segmented indexes for O(1) lookup
             self._build_segmented_indexes()
 
-        except Exception as e:
+        except (DatabaseError, *REDIS_ERRORS, ValueError, KeyError, TypeError, AttributeError) as e:
             logger.error(f"Failed to refresh rule cache: {e}")
             # Keep existing cache on error
             if not self._local_rules:
@@ -372,6 +412,7 @@ class AlertRuleCache:
             "is_system": rule.is_system,
             "starts_at": rule.starts_at.isoformat() if rule.starts_at else None,
             "expires_at": rule.expires_at.isoformat() if rule.expires_at else None,
+            "suppression_windows": rule.suppression_windows,
             "requires_military": rule.requires_military,
             "requires_position": rule.requires_position,
             "requires_altitude": rule.requires_altitude,
@@ -426,6 +467,7 @@ class AlertRuleCache:
             is_system=data.get("is_system", False),
             starts_at=starts_at,
             expires_at=expires_at,
+            suppression_windows=data.get("suppression_windows"),
             requires_military=data.get("requires_military", False),
             requires_position=data.get("requires_position", False),
             requires_altitude=data.get("requires_altitude", False),
@@ -496,7 +538,7 @@ class AlertRuleCache:
         with self._lock:
             # Ensure cache is valid before accessing indexes
             current_version = self._get_current_version()
-            if self._local_version != current_version or not self._local_rules:
+            if self._needs_refresh(current_version):
                 self._refresh_cache()
 
             rules: list[CompiledRule] = []
@@ -528,6 +570,7 @@ class AlertRuleCache:
         """
         with self._lock:
             self._local_version = ""
+            self._local_refreshed_at = 0.0
             self._local_rules = []
             # Clear segmented indexes
             self._rules_by_icao = {}
@@ -540,7 +583,7 @@ class AlertRuleCache:
                 self.redis.delete(self.REDIS_KEY)
                 new_version = self._generate_version()
                 self.redis.set(self.VERSION_KEY, new_version)
-            except Exception as e:
+            except REDIS_ERRORS as e:
                 logger.warning(f"Failed to invalidate Redis cache: {e}")
 
         logger.debug("Alert rule cache invalidated")

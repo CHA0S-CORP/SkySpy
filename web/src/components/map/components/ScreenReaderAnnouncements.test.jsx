@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { ScreenReaderAnnouncements } from './ScreenReaderAnnouncements';
 
 describe('ScreenReaderAnnouncements', () => {

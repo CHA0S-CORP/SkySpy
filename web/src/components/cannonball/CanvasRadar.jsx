@@ -129,16 +129,6 @@ export const CanvasRadar = memo(function CanvasRadar({
 
       // Radar sweep effect
       if (sweepEnabled) {
-        const sweepGradient = ctx.createConicalGradient(
-          centerX,
-          centerY,
-          ((sweepAngle - 90) * Math.PI) / 180
-        );
-        sweepGradient.addColorStop(0, 'rgba(34, 197, 94, 0.3)');
-        sweepGradient.addColorStop(0.1, 'rgba(34, 197, 94, 0.1)');
-        sweepGradient.addColorStop(0.2, 'rgba(34, 197, 94, 0)');
-
-        // Fallback if conic gradient not supported
         ctx.fillStyle = 'rgba(34, 197, 94, 0.1)';
         ctx.beginPath();
         ctx.moveTo(centerX, centerY);

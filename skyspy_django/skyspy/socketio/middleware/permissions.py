@@ -10,9 +10,15 @@ import logging
 from asgiref.sync import sync_to_async
 from django.conf import settings
 from django.contrib.auth.models import AnonymousUser, User
+from django.db import DatabaseError
 
 logger = logging.getLogger(__name__)
 
+
+# Permission actions that mutate state. Anonymous access to these is gated
+# on FeatureAccess.write_access rather than read_access (mirroring the REST
+# FeatureBasedPermission, which uses write_access for non-safe methods).
+WRITE_ACTIONS = frozenset({"manage", "create", "edit", "update", "delete", "acknowledge", "upload"})
 
 # Map WebSocket/Socket.IO topics to feature permissions
 TOPIC_PERMISSIONS = {
@@ -151,15 +157,18 @@ def _is_feature_public(permission: str) -> bool:
     """
     from skyspy.models.auth import FeatureAccess
 
-    # Extract feature from permission (e.g., 'aircraft.view' -> 'aircraft')
-    feature = permission.split(".")[0]
+    # Extract feature and action (e.g., 'alerts.manage' -> 'alerts', 'manage')
+    feature, _, action = permission.partition(".")
 
     try:
         config = FeatureAccess.objects.get(feature=feature)
-        return config.read_access == "public"
     except FeatureAccess.DoesNotExist:
         # Default to not public if no config exists
         return False
+
+    # Mutating permissions require public write access, not just read access
+    access = config.write_access if action in WRITE_ACTIONS else config.read_access
+    return access == "public"
 
 
 @sync_to_async
@@ -177,7 +186,7 @@ def _check_user_permission(user: User, permission: str) -> bool:
     try:
         profile = user.skyspy_profile
         return profile.has_permission(permission)
-    except Exception as e:
+    except (AttributeError, TypeError, KeyError, DatabaseError) as e:
         logger.debug(f"Error checking user permission: {e}")
         return False
 

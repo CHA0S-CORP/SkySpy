@@ -201,6 +201,7 @@ export function AircraftDetailPage({
             <OverviewTab
               info={info}
               hex={hex}
+              apiUrl={apiUrl}
               photoInfo={photoInfo}
               aircraft={aircraft}
               trackHistory={trackHistory}
@@ -309,6 +310,7 @@ export function AircraftDetailPage({
             <OverviewTab
               info={info}
               hex={hex}
+              apiUrl={apiUrl}
               photoInfo={photoInfo}
               aircraft={aircraft}
               trackHistory={trackHistory}

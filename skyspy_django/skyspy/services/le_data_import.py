@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import requests
-from django.db import transaction
+from django.db import DatabaseError, transaction
 from django.utils import timezone
 
 from skyspy.models import CannonballKnownAircraft, LEDataSource
@@ -201,7 +201,7 @@ class LEDataImportService:
             result.errors.append(error_msg)
             data_source.record_fetch_error(str(e))
 
-        except Exception as e:
+        except Exception as e:  # broad: top-level import guard over fetch/parse/DB with unknowable failure modes
             error_msg = f"Error importing {source_name}: {e}"
             logger.exception(error_msg)
             result.errors.append(error_msg)
@@ -302,7 +302,7 @@ class LEDataImportService:
                         )
                         imported += 1
 
-                except Exception as e:
+                except (DatabaseError, ValueError, KeyError, TypeError, AttributeError) as e:
                     errors.append(f"Error importing {record.get('icao_hex', 'unknown')}: {e}")
                     logger.warning(f"Error importing record: {e}")
 
@@ -442,7 +442,7 @@ class LEDataImportService:
                         CannonballKnownAircraft.objects.filter(id__in=to_delete).delete()
                         stats["merged"] += len(to_delete)
 
-                    except Exception as e:
+                    except (DatabaseError, ValueError, TypeError, AttributeError) as e:
                         logger.error(f"Error merging duplicates for {registration}: {e}")
                         stats["errors"] += 1
 

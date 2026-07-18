@@ -1,0 +1,380 @@
+/**
+ * v2 app shell: 60px global header + 214px left nav (design handoff "Shared chrome").
+ * Values lifted from designs/SkySpy.dc.html header/nav markup.
+ */
+
+.v2-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  background: var(--bg0);
+  color: var(--txt);
+}
+
+/* ---- Header ---- */
+.v2-header {
+  display: flex;
+  align-items: center;
+  height: 60px;
+  flex: 0 0 60px;
+  background: var(--bg1);
+  border-bottom: 1px solid var(--bord);
+  padding: 0 18px;
+}
+.v2-header__brand {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 214px;
+  flex: 0 0 214px;
+}
+.v2-header__glyph {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: radial-gradient(circle at 30% 30%, var(--accent), transparent 70%), var(--bg3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--bord2);
+  color: var(--accent);
+}
+.v2-header__wordmark {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.4px;
+}
+.v2-header__wordmark em {
+  font-style: normal;
+  color: var(--accent);
+}
+.v2-header__stats {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  padding-left: 8px;
+  min-width: 0;
+}
+.v2-header__stat {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+.v2-header__stat-value {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 600;
+}
+.v2-header__stat-value--count {
+  font-size: 17px;
+  color: var(--accent);
+}
+.v2-header__stat-value--coord {
+  color: var(--accent2);
+}
+.v2-header__stat-label {
+  font-size: 10px;
+  letter-spacing: 1.2px;
+  color: var(--dim);
+  font-weight: 600;
+}
+.v2-header__divider {
+  width: 1px;
+  height: 22px;
+  background: var(--bord2);
+  flex: 0 0 auto;
+}
+.v2-header__spacer {
+  flex: 1;
+}
+
+/* theme switcher */
+.v2-themeswitch {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid var(--bord);
+  border-radius: 9px;
+  background: var(--bg0);
+  margin-right: 14px;
+}
+.v2-themeswitch__btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--dim);
+  background: transparent;
+}
+.v2-themeswitch__btn--active {
+  color: var(--txt);
+  background: var(--bg2);
+}
+.v2-themeswitch__dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--v2-theme-dot);
+  box-shadow: 0 0 6px var(--v2-theme-dot);
+}
+
+.v2-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.v2-header__iconbtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--dim);
+  cursor: pointer;
+}
+.v2-header__iconbtn:hover {
+  background: var(--bg2);
+  color: var(--txt);
+}
+.v2-header__clock {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 6px 0 12px;
+  border-left: 1px solid var(--bord2);
+  margin-left: 6px;
+  color: var(--dim);
+}
+.v2-header__clock-time {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 500;
+}
+.v2-header__clock-utc {
+  font-size: 10px;
+  color: var(--dim2);
+  font-weight: 600;
+}
+
+/* ---- Body ---- */
+.v2-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+/* ---- Left nav ---- */
+.v2-nav {
+  width: 214px;
+  flex: 0 0 214px;
+  background: var(--bg1);
+  border-right: 1px solid var(--bord);
+  display: flex;
+  flex-direction: column;
+  padding: 14px 12px;
+  overflow-y: auto;
+}
+.v2-nav__eyebrow {
+  font-size: 10px;
+  letter-spacing: 1.4px;
+  color: var(--dim2);
+  font-weight: 600;
+  padding: 2px 10px 10px;
+}
+.v2-nav__item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 9px;
+  color: var(--dim);
+  margin-top: 2px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  width: 100%;
+  text-align: left;
+  text-decoration: none;
+}
+.v2-nav__item:hover {
+  background: var(--bg2);
+  color: var(--txt);
+}
+.v2-nav__item--active {
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--accent) 16%, transparent),
+    transparent
+  );
+  color: var(--accent);
+  font-weight: 600;
+  border-left: 2px solid var(--accent);
+  padding-left: 10px;
+}
+.v2-nav__item--active:hover {
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--accent) 16%, transparent),
+    transparent
+  );
+  color: var(--accent);
+}
+.v2-nav__badge {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  background: color-mix(in srgb, var(--warn) 20%, transparent);
+  color: var(--warn);
+  padding: 2px 6px;
+  border-radius: 20px;
+}
+.v2-nav__item--cannonball {
+  margin-top: 8px;
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent);
+  font-weight: 600;
+}
+.v2-nav__item--cannonball:hover {
+  background: color-mix(in srgb, var(--danger) 20%, transparent);
+  color: var(--danger);
+}
+.v2-nav__section {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--bord);
+}
+.v2-nav__chevron {
+  margin-left: auto;
+  transition: transform 0.15s;
+}
+.v2-nav__chevron--open {
+  transform: rotate(180deg);
+}
+.v2-nav__sub {
+  display: flex;
+  flex-direction: column;
+}
+.v2-nav__sub .v2-nav__item {
+  padding-left: 41px;
+  font-size: 12px;
+}
+.v2-nav__spacer {
+  flex: 1;
+}
+.v2-nav__live {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+}
+.v2-nav__live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent);
+  animation: v2-blink 2s infinite;
+}
+.v2-nav__live--offline .v2-nav__live-dot {
+  background: var(--danger);
+  box-shadow: 0 0 8px var(--danger);
+  animation: none;
+}
+.v2-nav__live-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  color: var(--accent);
+}
+.v2-nav__live--offline .v2-nav__live-label {
+  color: var(--danger);
+}
+.v2-nav__version {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--dim2);
+}
+.v2-nav__copyright {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--dim2);
+  padding: 0 12px;
+}
+
+/* ---- Content ---- */
+.v2-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+/* Routed content pane. Scrolls by default so tall document-flow screens
+   (System, Stats, Detail) are never clipped. v2 screens supply their own
+   padding; full-bleed screens (map, cannonball) opt into flush. */
+.v2-content {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+.v2-content--flush {
+  overflow: hidden;
+  padding: 0 !important;
+}
+
+/* ---- Mobile / narrow ---- */
+.v2-shell__menubtn {
+  display: none;
+}
+@media (max-width: 1200px) {
+  .v2-header__brand {
+    width: auto;
+    flex: 0 1 auto;
+  }
+  .v2-header__stats {
+    display: none;
+  }
+  .v2-shell__menubtn {
+    display: flex;
+  }
+  .v2-nav {
+    position: fixed;
+    top: 60px;
+    left: 0;
+    bottom: 0;
+    z-index: 40;
+    transform: translateX(-100%);
+    transition: transform 0.2s ease-out;
+    box-shadow: 0 0 40px rgba(0, 0, 0, 0.5);
+  }
+  .v2-nav--open {
+    transform: translateX(0);
+  }
+  .v2-nav-overlay {
+    position: fixed;
+    inset: 60px 0 0 0;
+    background: rgba(4, 6, 10, 0.55);
+    z-index: 39;
+    border: none;
+  }
+}

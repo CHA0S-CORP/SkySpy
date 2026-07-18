@@ -27,9 +27,10 @@ from threading import Lock
 import httpx
 from django.conf import settings
 from django.db import DatabaseError, transaction
-from tenacity import retry, stop_after_attempt, wait_exponential
+from tenacity import RetryError, retry, stop_after_attempt, wait_exponential
 
 from skyspy.models import AircraftInfo, AirframeSourceData
+from skyspy.services import http_client
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +46,10 @@ DATA_DIR = Path(os.environ.get("EXTERNAL_DB_DIR", "/data/external_db"))
 _adsbx_db: dict[str, dict] = {}
 _tar1090_db: dict[str, dict] = {}
 _faa_db: dict[str, dict] = {}
+# FAA ACFTREF.txt reference table: MFR MDL CODE -> {manufacturer, model}. Joined
+# into _faa_db during load so US regs carry manufacturer/model (MASTER.txt has
+# neither — only the code that points here).
+_faa_acftref: dict[str, dict] = {}
 _opensky_db: dict[str, dict] = {}
 
 # Database locks for thread safety
@@ -90,6 +95,59 @@ OPENSKY_DOWNLOAD_PATH = Path("/data/opensky/aircraft-database.csv")
 # adsb.im API for routes
 ADSB_IM_ROUTE_API = "https://adsb.im/api/0/routeset"
 ADSB_LOL_API_BASE = "https://api.adsb.lol"
+
+# FAA MASTER "TYPE REGISTRANT" code -> authoritative owner type. This is the
+# registry's own entity classification and beats regex-guessing LLC/trust from
+# the name. (6 is unused by the FAA.)
+FAA_REGISTRANT_TYPES = {
+    "1": "individual",
+    "2": "partnership",
+    "3": "corporation",
+    "4": "co_owned",
+    "5": "government",
+    "7": "llc",
+    "8": "non_citizen_corp",
+    "9": "non_citizen_co_owned",
+}
+
+# Keyless community hex-lookup pool (readsb schema). Enrichment round-robins
+# across these to spread per-IP rate limits; a source that 429s or errors is put
+# on an exponential-backoff cooldown and skipped until it expires.
+_HEX_SOURCE_BASES = {
+    "adsb.lol": "https://api.adsb.lol/v2/hex/{hex}",
+    "adsb.fi": "https://opendata.adsb.fi/api/v2/hex/{hex}",
+    "airplanes.live": "https://api.airplanes.live/v2/hex/{hex}",
+}
+_HEX_COOLDOWN_BASE = 15.0  # seconds; doubles per consecutive failure
+_HEX_COOLDOWN_MAX = 300.0
+_hex_lock = Lock()
+_hex_counter = 0
+_hex_cooldown_until: dict[str, float] = {}
+_hex_fail_streak: dict[str, int] = {}
+
+
+def _enrichment_sources() -> list[tuple[str, str]]:
+    """Ordered [(name, hex_url_template), ...] from AIRCRAFT_STREAM_FREE_SOURCES."""
+    names = getattr(settings, "AIRCRAFT_STREAM_FREE_SOURCES", "") or ""
+    ordered = [n.strip() for n in names.split(",") if n.strip() in _HEX_SOURCE_BASES]
+    if not ordered:
+        ordered = list(_HEX_SOURCE_BASES)
+    return [(n, _HEX_SOURCE_BASES[n]) for n in ordered]
+
+
+def _note_hex_success(name: str) -> None:
+    with _hex_lock:
+        _hex_fail_streak.pop(name, None)
+        _hex_cooldown_until.pop(name, None)
+
+
+def _note_hex_failure(name: str) -> None:
+    with _hex_lock:
+        streak = _hex_fail_streak.get(name, 0) + 1
+        _hex_fail_streak[name] = streak
+        cooldown = min(_HEX_COOLDOWN_BASE * (2 ** (streak - 1)), _HEX_COOLDOWN_MAX)
+        _hex_cooldown_until[name] = time.monotonic() + cooldown
+
 
 UPDATE_INTERVAL_HOURS = 24
 
@@ -167,7 +225,7 @@ REGISTRATION_PREFIXES = {
 # =============================================================================
 
 
-@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=30))
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=30), reraise=True)
 def fetch_with_retry(url: str, timeout: float = 60, stream: bool = False, **kwargs) -> httpx.Response:
     """
     Fetch a URL with retry logic for resilience.
@@ -190,7 +248,7 @@ def fetch_with_retry(url: str, timeout: float = 60, stream: bool = False, **kwar
         return response
 
 
-@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=30))
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=30), reraise=True)
 def stream_with_retry(
     url: str, target_path: Path, timeout: float = 60, chunk_size: int = 8192 * 1024, **kwargs
 ) -> Path:
@@ -270,6 +328,10 @@ def _get_faa_path() -> Path:
     return DATA_DIR / "faa-master.csv"
 
 
+def _get_faa_acftref_path() -> Path:
+    return DATA_DIR / "faa-acftref.csv"
+
+
 def _get_opensky_path() -> Path | None:
     """Find the OpenSky database file."""
     env_path = getattr(settings, "OPENSKY_DB_PATH", None)
@@ -308,7 +370,7 @@ def download_adsbx_database() -> Path | None:
         logger.info(f"Downloaded ADS-B Exchange database: {file_size / 1024 / 1024:.1f}MB in {duration:.1f}s")
         return target_path
 
-    except (httpx.HTTPError, ConnectionError, OSError) as e:
+    except (httpx.HTTPError, ConnectionError, OSError, RetryError) as e:
         logger.error(f"Failed to download ADS-B Exchange database: {type(e).__name__}: {e}")
         return None
 
@@ -416,7 +478,7 @@ def download_tar1090_database() -> Path | None:
         logger.info(f"Downloaded tar1090-db: {file_size / 1024 / 1024:.1f}MB in {duration:.1f}s")
         return target_path
 
-    except (httpx.HTTPError, ConnectionError, OSError) as e:
+    except (httpx.HTTPError, ConnectionError, OSError, RetryError) as e:
         logger.error(f"Failed to download tar1090-db: {type(e).__name__}: {e}")
         return None
 
@@ -521,10 +583,13 @@ def download_faa_database() -> Path | None:
 
         with zipfile.ZipFile(zip_path, "r") as zf:
             master_file = None
+            acftref_file = None
             for name in zf.namelist():
-                if name.upper().endswith("MASTER.TXT"):
+                upper = name.upper()
+                if upper.endswith("MASTER.TXT"):
                     master_file = name
-                    break
+                elif upper.endswith("ACFTREF.TXT"):
+                    acftref_file = name
 
             if master_file:
                 with zf.open(master_file) as src:
@@ -537,12 +602,56 @@ def download_faa_database() -> Path | None:
                 logger.error("MASTER.txt not found in FAA zip")
                 return None
 
+            # ACFTREF.txt supplies manufacturer/model (joined by MFR MDL CODE).
+            # Non-fatal if absent — the registry still yields reg/owner/year.
+            if acftref_file:
+                with zf.open(acftref_file) as src:
+                    _get_faa_acftref_path().write_bytes(src.read())
+                logger.info("Extracted FAA ACFTREF (manufacturer/model reference)")
+            else:
+                logger.warning("ACFTREF.txt not found in FAA zip; manufacturer/model will be blank")
+
         zip_path.unlink()
         return target_path
 
-    except (httpx.HTTPError, ConnectionError, OSError, zipfile.BadZipFile) as e:
+    except (httpx.HTTPError, ConnectionError, OSError, zipfile.BadZipFile, RetryError) as e:
         logger.error(f"Failed to download FAA Registry: {type(e).__name__}: {e}")
         return None
+
+
+def _load_faa_acftref(path: Path) -> int:
+    """Load FAA ACFTREF.txt (aircraft reference) into ``_faa_acftref``.
+
+    Keyed by the ``CODE`` column (the ``MFR MDL CODE`` that MASTER.txt rows point
+    at) -> {manufacturer, model}. Best-effort: a missing/garbled file just leaves
+    the table empty and manufacturer/model stay blank.
+    """
+    global _faa_acftref
+
+    _faa_acftref.clear()
+    try:
+        with open(path, encoding="utf-8-sig", errors="replace") as f:
+            reader = csv.DictReader(f)
+            reader.fieldnames = [name.strip() for name in reader.fieldnames]
+
+            code_col = next((c for c in reader.fieldnames if c.strip().upper() == "CODE"), None)
+            if not code_col:
+                logger.error("Could not find 'CODE' column in FAA ACFTREF headers")
+                return 0
+
+            for row in reader:
+                code = row.get(code_col, "").strip()
+                if not code:
+                    continue
+                manufacturer = row.get("MFR", "").strip() or None
+                model = row.get("MODEL", "").strip() or None
+                if manufacturer or model:
+                    _faa_acftref[code] = {"manufacturer": manufacturer, "model": model}
+    except (csv.Error, ValueError, OSError) as e:
+        logger.error(f"Error parsing FAA ACFTREF: {type(e).__name__}: {e}")
+        return 0
+
+    return len(_faa_acftref)
 
 
 def _load_faa_master(path: Path) -> int:
@@ -571,11 +680,34 @@ def _load_faa_master(path: Path) -> int:
 
                     n_number = row.get("N-NUMBER", "").strip()
 
+                    # Street + Street2 -> single owner address (drives the
+                    # registered-agent / PO-box shell heuristics, previously blind
+                    # because only city/state were captured).
+                    street = row.get("STREET", "").strip()
+                    street2 = row.get("STREET2", "").strip()
+                    owner_address = ", ".join(p for p in (street, street2) if p) or None
+                    reg_type = FAA_REGISTRANT_TYPES.get(row.get("TYPE REGISTRANT", "").strip())
+                    fractional = row.get("FRACT OWNER", "").strip().upper() == "Y"
+                    # FAA "TYPE AIRCRAFT": 6=Rotorcraft, 9=Gyroplane -> helicopter-ish.
+                    # Lets us classify police/public-safety helos without an ICAO type.
+                    faa_rotorcraft = row.get("TYPE AIRCRAFT", "").strip() in ("6", "9")
+
+                    # Join ACFTREF by MFR MDL CODE for manufacturer/model (MASTER
+                    # has neither — only this code). Empty when ACFTREF is absent.
+                    ref = _faa_acftref.get(row.get("MFR MDL CODE", "").strip())
+
                     _faa_db[mode_s_hex] = {
                         "registration": f"N{n_number}" if n_number else None,
                         "serial_number": row.get("SERIAL NUMBER", "").strip() or None,
                         "year_built": _safe_int(row.get("YEAR MFR", "").strip()),
+                        "manufacturer": ref.get("manufacturer") if ref else None,
+                        "model": ref.get("model") if ref else None,
                         "owner": row.get("NAME", "").strip(),
+                        "owner_address": owner_address,
+                        "owner_zip": row.get("ZIP CODE", "").strip() or None,
+                        "faa_registrant_type": reg_type,
+                        "fractional_owner": fractional or None,
+                        "faa_is_rotorcraft": faa_rotorcraft or None,
                         "city": row.get("CITY", "").strip() or None,
                         "state": row.get("STATE", "").strip() or None,
                         "country": "United States",
@@ -592,19 +724,26 @@ def _load_faa_master(path: Path) -> int:
 def load_faa_database(auto_download: bool = True) -> bool:
     """Load FAA database into memory."""
     path = _get_faa_path()
+    acftref_path = _get_faa_acftref_path()
 
-    if not path.exists():
+    # Re-download when MASTER is missing OR when the ACFTREF reference (added
+    # later) hasn't been extracted yet — otherwise installs with an old cached
+    # MASTER would never gain manufacturer/model.
+    if not path.exists() or not acftref_path.exists():
         if auto_download:
             path = download_faa_database()
             if not path:
                 return False
-        else:
+        elif not path.exists():
             return False
 
     start_time = time.time()
     try:
         logger.info("Loading FAA Registry...")
+        with _faa_lock:
+            ref_count = _load_faa_acftref(acftref_path) if acftref_path.exists() else 0
         count = _load_faa_master(path)
+        logger.info(f"Loaded {ref_count:,} FAA ACFTREF manufacturer/model entries")
 
         duration = time.time() - start_time
         _db_metadata["faa"]["loaded"] = True
@@ -655,7 +794,7 @@ def download_opensky_database() -> Path | None:
         logger.info(f"Downloaded OpenSky database: {file_size / 1024 / 1024:.1f}MB in {duration:.1f}s")
         return target_path
 
-    except (httpx.HTTPError, ConnectionError, OSError) as e:
+    except (httpx.HTTPError, ConnectionError, OSError, RetryError) as e:
         logger.error(f"Failed to download OpenSky database: {type(e).__name__}: {e}")
         if target_path.exists():
             try:
@@ -806,8 +945,55 @@ def lookup_opensky(icao_hex: str) -> dict | None:
 # =============================================================================
 
 
+def _airport_brief(ap: dict) -> dict:
+    """Condense an adsb.im airport entry to the fields the UI consumes."""
+    return {
+        "iata": ap.get("iata"),
+        "icao": ap.get("icao"),
+        "name": ap.get("name"),
+        "city": ap.get("location"),
+        "country": ap.get("countryiso2"),
+        "lat": ap.get("lat"),
+        "lon": ap.get("lon"),
+    }
+
+
+def _parse_route_response(payload, callsign: str) -> dict | None:
+    """Normalize the adsb.im routeset response into an origin/destination dict.
+
+    adsb.im returns a *list* of matches; each entry carries ``_airports``
+    (origin first, destination last) plus ``airport_codes``/``airline_code``.
+    We collapse it to a stable shape so callers never depend on the upstream
+    payload structure.
+    """
+    if not isinstance(payload, list):
+        return None
+
+    # Prefer the entry whose callsign matches; fall back to the first dict.
+    entry = next(
+        (r for r in payload if isinstance(r, dict) and (r.get("callsign") or "").upper() == callsign),
+        None,
+    ) or next((r for r in payload if isinstance(r, dict)), None)
+    if not entry:
+        return None
+
+    airports = [a for a in (entry.get("_airports") or []) if isinstance(a, dict)]
+    if len(airports) < 2:
+        return None
+
+    return {
+        "callsign": entry.get("callsign") or callsign,
+        "airline_code": entry.get("airline_code"),
+        "flight_number": entry.get("number"),
+        "airport_codes": entry.get("airport_codes"),
+        "plausible": entry.get("plausible"),
+        "origin": _airport_brief(airports[0]),
+        "destination": _airport_brief(airports[-1]),
+    }
+
+
 def fetch_route(callsign: str) -> dict | None:
-    """Fetch route info from adsb.im API. Cached for 1 hour."""
+    """Fetch route info from the adsb.im routeset API. Cached for 1 hour."""
     callsign = callsign.upper().strip()
     if not callsign:
         return None
@@ -818,29 +1004,78 @@ def fetch_route(callsign: str) -> dict | None:
         if callsign in _route_cache and _route_cache_ttl.get(callsign, 0) > now:
             return _route_cache[callsign]
 
-    try:
-        with httpx.Client(timeout=10.0) as client:
-            response = client.post(
-                ADSB_IM_ROUTE_API, json={"callsigns": [callsign]}, headers={"User-Agent": "SkySpyAPI/2.6"}
-            )
+    # adsb.im expects a ``planes`` array (position is optional and only affects
+    # the plausibility score) and replies with a JSON list. The shared client
+    # adds retry + a circuit breaker that the old single-shot POST lacked.
+    payload = http_client.post_json(
+        ADSB_IM_ROUTE_API,
+        {"planes": [{"callsign": callsign}]},
+        source="adsb.im",
+        headers={"User-Agent": "SkySpyAPI/2.6"},
+        timeout=10.0,
+    )
+    route_data = _parse_route_response(payload, callsign) if payload is not None else None
 
-            if response.status_code == 200:
-                data = response.json()
-                route_data = data.get(callsign)
+    # Fall back to ADSBdb (free, keyless) when adsb.im has no match. Lazy import
+    # keeps the dependency one-directional (adsbdb imports http_client only).
+    if not route_data:
+        from skyspy.services import adsbdb
 
-                if route_data:
-                    with _route_lock:
-                        # Cleanup if cache is too large
-                        if len(_route_cache) > MAX_ROUTE_CACHE_SIZE:
-                            _cleanup_route_cache(now)
-                        _route_cache[callsign] = route_data
-                        _route_cache_ttl[callsign] = now + 3600
-                    return route_data
+        route_data = adsbdb.get_route_by_callsign(callsign)
 
-    except (httpx.HTTPError, ConnectionError, OSError, ValueError) as e:
-        logger.debug(f"Route lookup failed for {callsign}: {type(e).__name__}: {e}")
+    # Last resort: hexdb callsign-route (keyless). Returns a plain-text
+    # "ICAO-ICAO[-ICAO...]" leg string — codes only, no names/coords — so it is
+    # strictly a lower-fidelity fallback after the two rich sources above.
+    if not route_data:
+        route_data = _fetch_route_hexdb(callsign)
+
+    if route_data:
+        with _route_lock:
+            # Cleanup if cache is too large
+            if len(_route_cache) > MAX_ROUTE_CACHE_SIZE:
+                _cleanup_route_cache(now)
+            _route_cache[callsign] = route_data
+            _route_cache_ttl[callsign] = now + 3600
+        return route_data
 
     return None
+
+
+def _fetch_route_hexdb(callsign: str) -> dict | None:
+    """Fetch a codes-only route from hexdb's callsign-route endpoint.
+
+    hexdb returns a bare "EGLL-KLAX" (or multi-leg "EGLL-EGCC-KLAX") text body.
+    We take the first leg as origin and the last as destination and fill only
+    the icao codes; names/coords are unknown from this source. Returns the
+    shared route shape so it is a drop-in fallback, or None.
+    """
+    from urllib.parse import quote
+
+    # get_text swallows network/circuit/rate errors and returns None itself.
+    text = http_client.get_text(
+        f"https://hexdb.io/callsign-route?callsign={quote(callsign)}",
+        source="hexdb",
+        timeout=8.0,
+    )
+    if not text or not isinstance(text, str):
+        return None
+    legs = [seg.strip().upper() for seg in text.strip().split("-") if seg.strip()]
+    # Guard against error/HTML bodies: legs must look like 3-4 char ICAO idents.
+    if len(legs) < 2 or not all(3 <= len(seg) <= 4 and seg.isalnum() for seg in legs):
+        return None
+
+    def _brief(icao: str) -> dict:
+        return {"iata": None, "icao": icao, "name": None, "city": None, "country": None, "lat": None, "lon": None}
+
+    return {
+        "callsign": callsign,
+        "airline_code": None,
+        "flight_number": None,
+        "airport_codes": "-".join(legs),
+        "plausible": None,
+        "origin": _brief(legs[0]),
+        "destination": _brief(legs[-1]),
+    }
 
 
 def _cleanup_route_cache(now: float):
@@ -859,21 +1094,66 @@ def _cleanup_route_cache(now: float):
             _route_cache_ttl.pop(k, None)
 
 
-def fetch_aircraft_from_adsb_lol(icao_hex: str) -> dict | None:
-    """Fetch live aircraft data from adsb.lol API."""
-    icao_hex = icao_hex.upper().strip()
-
+def _fetch_hex_from_source(name: str, template: str, icao_hex: str) -> tuple[dict | None, bool]:
+    """Query one community source. Returns (record_or_None, ok) where ok=False means
+    the source failed (429/network/parse) and should be put on cooldown."""
     try:
         with httpx.Client(timeout=10.0) as client:
-            response = client.get(f"{ADSB_LOL_API_BASE}/v2/hex/{icao_hex}", headers={"User-Agent": "SkySpyAPI/2.6"})
-
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("ac"):
-                    return data["ac"][0] if data["ac"] else None
-
+            response = client.get(template.format(hex=icao_hex), headers={"User-Agent": "SkySpyAPI/2.6"})
+        if response.status_code == 429:
+            logger.debug(f"{name} hex lookup rate-limited (429) for {icao_hex}, backing off")
+            return None, False
+        if response.status_code == 200:
+            ac = response.json().get("ac")
+            return (ac[0] if ac else None), True
+        logger.debug(f"{name} hex lookup HTTP {response.status_code} for {icao_hex}")
+        return None, False
     except (httpx.HTTPError, ConnectionError, OSError, ValueError) as e:
-        logger.debug(f"adsb.lol lookup failed for {icao_hex}: {type(e).__name__}: {e}")
+        logger.debug(f"{name} lookup failed for {icao_hex}: {type(e).__name__}: {e}")
+        return None, False
+
+
+def fetch_aircraft_from_adsb_lol(icao_hex: str) -> dict | None:
+    """Fetch live aircraft data from the keyless community hex-lookup pool.
+
+    Round-robins across adsb.lol / adsb.fi / airplanes.live to spread the per-IP
+    rate limit, with per-source exponential backoff: a source that 429s or errors
+    is skipped until its cooldown expires. If every source is cooled down, one
+    best-effort attempt is still made so enrichment never goes fully dark.
+    (Name kept for callers; no longer adsb.lol-specific.)
+    """
+    icao_hex = icao_hex.upper().strip()
+    sources = _enrichment_sources()
+    count = len(sources)
+
+    global _hex_counter
+    with _hex_lock:
+        start = _hex_counter % count
+        _hex_counter += 1
+
+    now = time.monotonic()
+    attempted = False
+    for offset in range(count):
+        name, template = sources[(start + offset) % count]
+        with _hex_lock:
+            if _hex_cooldown_until.get(name, 0.0) > now:
+                continue  # source is backing off, skip it
+        attempted = True
+        record, ok = _fetch_hex_from_source(name, template, icao_hex)
+        if ok:
+            _note_hex_success(name)
+            return record
+        _note_hex_failure(name)
+
+    # All sources cooled down: make one forced attempt on the rotation head so
+    # enrichment degrades gracefully rather than returning nothing.
+    if not attempted:
+        name, template = sources[start]
+        record, ok = _fetch_hex_from_source(name, template, icao_hex)
+        if ok:
+            _note_hex_success(name)
+            return record
+        _note_hex_failure(name)
 
     return None
 
@@ -881,6 +1161,22 @@ def fetch_aircraft_from_adsb_lol(icao_hex: str) -> dict | None:
 # =============================================================================
 # Aggregated Lookup
 # =============================================================================
+
+# Boolean identity flags merged with OR semantics: any source reporting True wins.
+# Fill-if-empty merging would let an earlier source's explicit False (e.g. adsbx
+# "mil" absent -> False) mask a later source's True (e.g. tar1090 dbFlags bit 1).
+_OR_MERGED_FLAGS = frozenset({"is_military", "is_interesting", "is_pia", "is_ladd"})
+
+
+def _merge_source_record(merged: dict, data: dict) -> None:
+    """Merge one source's record into the aggregate (fill-if-empty; OR for boolean flags)."""
+    for k, v in data.items():
+        if v is None:
+            continue
+        if k in _OR_MERGED_FLAGS:
+            merged[k] = bool(merged.get(k)) or bool(v)
+        elif k not in merged or merged[k] is None:
+            merged[k] = v
 
 
 def lookup_all(icao_hex: str) -> dict | None:
@@ -897,39 +1193,38 @@ def lookup_all(icao_hex: str) -> dict | None:
 
     merged = {}
     sources = []
+    field_sources: dict[str, str] = {}
 
-    # FAA first (authoritative for US)
-    faa_data = lookup_faa(icao_hex)
-    if faa_data:
-        merged.update({k: v for k, v in faa_data.items() if v is not None})
-        sources.append("faa")
+    # Meta keys that live alongside real airframe fields but aren't provenance-worthy.
+    _PROVENANCE_SKIP = {"source", "sources", "field_sources"}
 
-    # ADSBX
-    adsbx_data = lookup_adsbx(icao_hex)
-    if adsbx_data:
-        for k, v in adsbx_data.items():
-            if v is not None and (k not in merged or merged[k] is None):
-                merged[k] = v
-        sources.append("adsbx")
+    def _apply(data: dict | None, source: str, first: bool = False) -> None:
+        """Merge a source and attribute any newly-filled fields to it."""
+        if not data:
+            return
+        before = {k: merged.get(k) for k in data}
+        if first:
+            merged.update({k: v for k, v in data.items() if v is not None})
+        else:
+            _merge_source_record(merged, data)
+        for k in data:
+            # A field's provenance is the first source that gave it a value.
+            # Skip meta keys that aren't real airframe fields.
+            if k in _PROVENANCE_SKIP:
+                continue
+            if not before.get(k) and merged.get(k) and k not in field_sources:
+                field_sources[k] = source
+        sources.append(source)
 
-    # tar1090-db
-    tar1090_data = lookup_tar1090(icao_hex)
-    if tar1090_data:
-        for k, v in tar1090_data.items():
-            if v is not None and (k not in merged or merged[k] is None):
-                merged[k] = v
-        sources.append("tar1090")
-
-    # OpenSky Network
-    opensky_data = lookup_opensky(icao_hex)
-    if opensky_data:
-        for k, v in opensky_data.items():
-            if v is not None and (k not in merged or merged[k] is None):
-                merged[k] = v
-        sources.append("opensky")
+    # Priority order (higher first): FAA is authoritative for US registrations.
+    _apply(lookup_faa(icao_hex), "faa", first=True)
+    _apply(lookup_adsbx(icao_hex), "adsbx")
+    _apply(lookup_tar1090(icao_hex), "tar1090")
+    _apply(lookup_opensky(icao_hex), "opensky")
 
     if merged:
         merged["sources"] = sources
+        merged["field_sources"] = field_sources
         return merged
 
     return None
@@ -1010,6 +1305,8 @@ def init_databases(auto_download: bool = True):
 
 def update_databases_if_stale():
     """Check and update databases if older than UPDATE_INTERVAL_HOURS."""
+    global _opensky_loaded
+
     now = datetime.utcnow()
     updated_any = False
 
@@ -1034,6 +1331,9 @@ def update_databases_if_stale():
                 updated_any = True
             elif db_name == "opensky":
                 download_opensky_database()
+                # load_opensky_database short-circuits when already loaded -
+                # reset the flag so the freshly downloaded CSV is re-parsed
+                _opensky_loaded = False
                 load_opensky_database(auto_download=False)
                 updated_any = True
 

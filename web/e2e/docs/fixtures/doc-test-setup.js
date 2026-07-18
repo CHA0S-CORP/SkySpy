@@ -570,6 +570,205 @@ export const docMockData = {
   },
 
   /**
+   * Generate curated NOTAMs for the History → NOTAMs / Archive tabs
+   * (`/api/v1/notams/`). Shape mirrors the backend NOTAM serializer.
+   */
+  generateCuratedNotams() {
+    const baseTime = Date.now();
+    return [
+      {
+        id: 1,
+        notam_id: 'KLAX-A0842/25',
+        notam_type: 'D',
+        location: 'KLAX',
+        text: 'RWY 07L/25R CLSD FOR MAINT. TWY B BTN TWY C AND TWY D CLSD.',
+        latitude: 33.9425,
+        longitude: -118.4081,
+        radius_nm: 5,
+        floor_ft: 0,
+        ceiling_ft: 0,
+        is_permanent: false,
+        is_active: true,
+        effective_start: new Date(baseTime - 2 * 86400000).toISOString(),
+        effective_end: new Date(baseTime + 5 * 86400000).toISOString(),
+      },
+      {
+        id: 2,
+        notam_id: 'FDC 5/1234',
+        notam_type: 'FDC',
+        location: 'KVNY',
+        text: 'IAP VAN NUYS, VAN NUYS, CA. RNAV (GPS) RWY 16R, AMDT 1B... MINIMA NA.',
+        latitude: 34.2098,
+        longitude: -118.4899,
+        radius_nm: 3,
+        floor_ft: 0,
+        ceiling_ft: 5000,
+        is_permanent: false,
+        is_active: true,
+        effective_start: new Date(baseTime - 6 * 86400000).toISOString(),
+        effective_end: new Date(baseTime + 12 * 86400000).toISOString(),
+      },
+      {
+        id: 3,
+        notam_id: 'GPS 12/045',
+        notam_type: 'GPS',
+        location: 'KBUR',
+        text: 'GPS RAIM OUTAGE PREDICTED WI 20NM RADIUS OF BUR.',
+        latitude: 34.2007,
+        longitude: -118.359,
+        radius_nm: 20,
+        floor_ft: 0,
+        ceiling_ft: 18000,
+        is_permanent: false,
+        is_active: true,
+        effective_start: new Date(baseTime - 1 * 86400000).toISOString(),
+        effective_end: new Date(baseTime + 3 * 86400000).toISOString(),
+      },
+      {
+        id: 4,
+        notam_id: 'KLAX-A0901/25',
+        notam_type: 'MIL',
+        location: 'KLAX',
+        text: 'MIL OPS WI 15NM RADIUS OF LAX SFC-8000FT. CTC ATC.',
+        latitude: 33.9416,
+        longitude: -118.4085,
+        radius_nm: 15,
+        floor_ft: 0,
+        ceiling_ft: 8000,
+        is_permanent: false,
+        is_active: true,
+        effective_start: new Date(baseTime - 3 * 86400000).toISOString(),
+        effective_end: new Date(baseTime + 8 * 86400000).toISOString(),
+      },
+    ];
+  },
+
+  /**
+   * Generate curated national TFRs for the History → NOTAMs / Archive tabs
+   * (`/api/v1/notams/tfrs/`).
+   */
+  generateCuratedTfrs() {
+    const baseTime = Date.now();
+    return [
+      {
+        id: 'tfr-1',
+        notam_id: 'TFR 5/2871',
+        notam_type: 'TFR',
+        is_tfr: true,
+        location: 'KLAX',
+        text: 'AIRSPACE SPECIAL SECURITY INSTRUCTIONS WI AN AREA DEFINED AS 10NM RADIUS OF LAX SFC-4000FT.',
+        latitude: 33.9416,
+        longitude: -118.4085,
+        radius_nm: 10,
+        floor_ft: 0,
+        ceiling_ft: 4000,
+        is_permanent: false,
+        is_active: true,
+        effective_start: new Date(baseTime - 1 * 86400000).toISOString(),
+        effective_end: new Date(baseTime + 2 * 86400000).toISOString(),
+      },
+    ];
+  },
+
+  /**
+   * Generate curated PIREPs for the History → PIREPs / Archive tabs
+   * (`/api/v1/aviation/pireps/`, payload keyed under `data`).
+   */
+  generateCuratedPireps() {
+    const baseTime = Date.now();
+    return [
+      {
+        pirep_id: 'PIREP-1001',
+        report_type: 'UUA',
+        location: 'KLAX',
+        observation_time: new Date(baseTime - 2 * 3600000).toISOString(),
+        aircraft_type: 'B738',
+        altitude_ft: 12000,
+        flight_level: 120,
+        sky_cover: 'BKN',
+        visibility_sm: 6,
+        weather: 'RA',
+        temperature_c: 4,
+        wind_dir: 250,
+        wind_speed_kt: 35,
+        turbulence_type: 'CHOP',
+        turbulence_freq: 'OCNL',
+        turbulence_intensity: 'MOD',
+        turbulence_base_ft: 10000,
+        turbulence_top_ft: 14000,
+        icing_type: 'RIME',
+        icing_intensity: 'LGT',
+        icing_base_ft: 11000,
+        icing_top_ft: 13000,
+        raw_text: 'LAX UUA /OV LAX180010/TM 1830/FL120/TP B738/TB MOD/IC LGT RIME/RM DURGC',
+      },
+      {
+        pirep_id: 'PIREP-1002',
+        report_type: 'UA',
+        location: 'KVNY',
+        observation_time: new Date(baseTime - 5 * 3600000).toISOString(),
+        aircraft_type: 'C172',
+        altitude_ft: 6500,
+        flight_level: null,
+        sky_cover: 'SCT',
+        visibility_sm: 10,
+        weather: null,
+        temperature_c: 12,
+        wind_dir: 270,
+        wind_speed_kt: 15,
+        turbulence_type: null,
+        turbulence_freq: null,
+        turbulence_intensity: 'SMTH',
+        turbulence_base_ft: null,
+        turbulence_top_ft: null,
+        icing_type: null,
+        icing_intensity: 'NEG',
+        icing_base_ft: null,
+        icing_top_ft: null,
+        raw_text: 'VNY UA /OV VNY/TM 1530/FL065/TP C172/SK SCT/TA 12/WV 27015/TB SMTH',
+      },
+      {
+        pirep_id: 'PIREP-1003',
+        report_type: 'UUA',
+        location: 'KBUR',
+        observation_time: new Date(baseTime - 8 * 3600000).toISOString(),
+        aircraft_type: 'A320',
+        altitude_ft: 34000,
+        flight_level: 340,
+        sky_cover: 'CLR',
+        visibility_sm: null,
+        weather: null,
+        temperature_c: -48,
+        wind_dir: 290,
+        wind_speed_kt: 95,
+        turbulence_type: 'CAT',
+        turbulence_freq: 'CONS',
+        turbulence_intensity: 'SEV',
+        turbulence_base_ft: 33000,
+        turbulence_top_ft: 35000,
+        icing_type: null,
+        icing_intensity: 'NEG',
+        icing_base_ft: null,
+        icing_top_ft: null,
+        raw_text: 'BUR UUA /OV BUR/TM 1200/FL340/TP A320/TB SEV CAT/RM DURGC',
+      },
+    ];
+  },
+
+  /**
+   * Generate curated NOTAM summary stats for the History → Archive tab
+   * (`/api/v1/notams/stats/`; shape consumed by ArchiveTab.adaptNotamStats).
+   */
+  generateCuratedNotamStats() {
+    return {
+      active_notams: 214,
+      active_tfrs: 6,
+      last_refresh: new Date().toISOString(),
+      by_type: { D: 118, FDC: 52, TFR: 6, GPS: 21, MIL: 14, POINTER: 3 },
+    };
+  },
+
+  /**
    * Generate curated stats for dashboard
    */
   generateCuratedStats() {
@@ -748,6 +947,234 @@ export const docMockData = {
       },
     ];
   },
+
+  /**
+   * Curated payloads for the Advanced Analytics screen (scatter explorer,
+   * correlation matrix, cross-domain rollup, geographic + flight-pattern panels).
+   * Shapes mirror the backend endpoints consumed by useAnalyticsData.js.
+   */
+  generateCuratedAnalytics() {
+    const fields = [
+      { key: 'altitude_baro', label: 'Altitude', unit: 'ft' },
+      { key: 'ground_speed', label: 'Ground Speed', unit: 'kts' },
+      { key: 'distance_nm', label: 'Distance', unit: 'nm' },
+      { key: 'rssi', label: 'Signal (RSSI)', unit: 'dBFS' },
+      { key: 'vertical_rate', label: 'Vertical Rate', unit: 'ft/min' },
+      { key: 'hour', label: 'Hour of Day', unit: 'h' },
+    ];
+    // Deterministic scatter cloud with a mild positive altitude→speed trend
+    const points = Array.from({ length: 120 }, (_, i) => {
+      const x = 5000 + ((i * 37) % 350) * 100;
+      const y = 180 + ((i * 53) % 300) + x / 400;
+      return { x, y };
+    });
+    const matrix = [
+      [1, 0.62, -0.31, 0.18, 0.05, -0.12],
+      [0.62, 1, -0.44, 0.27, 0.11, -0.08],
+      [-0.31, -0.44, 1, -0.52, -0.07, 0.21],
+      [0.18, 0.27, -0.52, 1, 0.03, -0.15],
+      [0.05, 0.11, -0.07, 0.03, 1, 0.44],
+      [-0.12, -0.08, 0.21, -0.15, 0.44, 1],
+    ];
+    return {
+      fields: { fields },
+      scatter: { points, slope: 0.0042, intercept: 165, r: 0.62, n: points.length, sampled: false },
+      matrix: { fields, matrix },
+      crossDomain: {
+        aircraft: [
+          { registration: 'N90123', icao_hex: 'A90123', alerts: 3, safety_events: 1, acars: 12 },
+          { registration: 'RCH123', icao_hex: 'AE1234', alerts: 5, safety_events: 0, acars: 4 },
+          { registration: 'G-XWBA', icao_hex: 'A45678', alerts: 1, safety_events: 0, acars: 21 },
+          { registration: 'N7NEWS', icao_hex: 'A89012', alerts: 2, safety_events: 0, acars: 0 },
+          { registration: 'SAM38', icao_hex: 'ADFDF8', alerts: 8, safety_events: 2, acars: 6 },
+        ],
+      },
+      correlation: {
+        // The screen maps these as arrays of banded averages.
+        altitude_vs_speed: [
+          { altitude_band: '0–10k', avg_speed: 240 },
+          { altitude_band: '10–20k', avg_speed: 320 },
+          { altitude_band: '20–30k', avg_speed: 420 },
+          { altitude_band: '30–40k', avg_speed: 470 },
+          { altitude_band: '40k+', avg_speed: 500 },
+        ],
+        distance_vs_altitude: [
+          { distance_band: '0–25nm', avg_altitude: 6000 },
+          { distance_band: '25–50nm', avg_altitude: 14000 },
+          { distance_band: '50–100nm', avg_altitude: 26000 },
+          { distance_band: '100–150nm', avg_altitude: 34000 },
+          { distance_band: '150nm+', avg_altitude: 39000 },
+        ],
+      },
+      countries: {
+        countries: [
+          { country: 'United States', count: 1245 },
+          { country: 'Canada', count: 210 },
+          { country: 'United Kingdom', count: 142 },
+          { country: 'Germany', count: 118 },
+          { country: 'France', count: 96 },
+          { country: 'Japan', count: 74 },
+          { country: 'Mexico', count: 61 },
+          { country: 'Ireland', count: 38 },
+        ],
+      },
+      operators: {
+        operators: [
+          { operator: 'United Airlines', count: 342 },
+          { operator: 'Delta Air Lines', count: 288 },
+          { operator: 'American Airlines', count: 254 },
+          { operator: 'Southwest Airlines', count: 201 },
+          { operator: 'SkyWest Airlines', count: 143 },
+          { operator: 'FedEx', count: 98 },
+          { operator: 'Alaska Airlines', count: 87 },
+          { operator: 'NetJets', count: 52 },
+        ],
+      },
+      busiestHours: {
+        busiest_hours: Array.from({ length: 24 }, (_, h) => ({
+          hour: h,
+          position_count: Math.round(200 + 800 * Math.sin(((h - 6) / 24) * Math.PI) ** 2),
+          unique_aircraft: 20 + ((h * 7) % 40),
+        })),
+      },
+      routes: {
+        total_routes: 148,
+        routes: [
+          { route_key: 'SFO-JFK', origin: 'SFO', destination: 'JFK', count: 62, sample_callsigns: ['UAL1234', 'AAL22'] },
+          { route_key: 'LAX-SFO', origin: 'LAX', destination: 'SFO', count: 54, sample_callsigns: ['DAL567'] },
+          { route_key: 'LHR-SFO', origin: 'LHR', destination: 'SFO', count: 33, sample_callsigns: ['BAW286'] },
+          { route_key: 'SEA-SFO', origin: 'SEA', destination: 'SFO', count: 29, sample_callsigns: ['ASA411'] },
+          { route_key: 'ORD-SFO', origin: 'ORD', destination: 'SFO', count: 24, sample_callsigns: ['UAL88'] },
+        ],
+      },
+      aircraftTypes: {
+        total_types: 96,
+        aircraft_types: [
+          { type_code: 'B738', type_name: 'Boeing 737-800', manufacturer: 'Boeing', session_count: 412, unique_aircraft: 210, military_pct: 0 },
+          { type_code: 'A320', type_name: 'Airbus A320', manufacturer: 'Airbus', session_count: 356, unique_aircraft: 188, military_pct: 0 },
+          { type_code: 'A321', type_name: 'Airbus A321', manufacturer: 'Airbus', session_count: 233, unique_aircraft: 121, military_pct: 0 },
+          { type_code: 'E175', type_name: 'Embraer 175', manufacturer: 'Embraer', session_count: 189, unique_aircraft: 96, military_pct: 0 },
+          { type_code: 'C17', type_name: 'Boeing C-17', manufacturer: 'Boeing', session_count: 41, unique_aircraft: 12, military_pct: 100 },
+        ],
+      },
+      militaryBreakdown: {
+        military_breakdown: [
+          { country: 'United States', military_count: 96, civilian_count: 1149, total: 1245, military_pct: 7.7 },
+          { country: 'United Kingdom', military_count: 14, civilian_count: 128, total: 142, military_pct: 9.9 },
+          { country: 'Canada', military_count: 9, civilian_count: 201, total: 210, military_pct: 4.3 },
+          { country: 'Germany', military_count: 6, civilian_count: 112, total: 118, military_pct: 5.1 },
+        ],
+      },
+    };
+  },
+
+  /**
+   * Curated payloads for the System screen — status/health/info/databases plus
+   * safety-monitor, ACARS and notifications status. Shapes mirror the endpoints
+   * consumed by useSystemData.js + systemModel.js derivations.
+   */
+  generateCuratedSystem() {
+    return {
+      status: {
+        status: 'healthy',
+        uptime: 864000,
+        version: '2.5.0',
+        cpu_percent: 34,
+        memory_percent: 58,
+        memory_used_gb: 4.6,
+        memory_total_gb: 8,
+        load_average: 0.82,
+        sdr_temp: 48,
+        sdr_gain: 42,
+        receiver_online: true,
+        adsb_online: true,
+        redis_enabled: true,
+        celery_running: true,
+        websocket_connections: 7,
+        antenna: { max_range_nm: 214.6, avg_range_nm: 128.3, coverage_percentage: 78 },
+        libacars: { available: true, stats: { decoded: 1284, errors: 3 }, error: null },
+        receivers: {
+          adsb: { connected: true, messages_per_second: 185 },
+          acars: { connected: true, messages_per_second: 8 },
+        },
+        database: { connected: true, size_mb: 2048 },
+      },
+      health: {
+        status: 'healthy',
+        services: {
+          adsb: { status: 'up', uptime: '10d', latency_ms: 4, last_check: '14:30:00' },
+          database: { status: 'up', uptime: '10d', latency_ms: 2, last_check: '14:30:00' },
+          cache: { status: 'up', uptime: '10d', latency_ms: 1, last_check: '14:30:00' },
+          celery: { status: 'up', uptime: '10d', last_check: '14:30:00' },
+          websocket: { status: 'up', uptime: '10d', last_check: '14:30:00' },
+          api: { status: 'up', uptime: '10d', latency_ms: 12, last_check: '14:30:00' },
+          libacars: { status: 'up', issues: [] },
+        },
+      },
+      info: { version: '2.5.0', cpu_percent: 34, memory_percent: 58, python: '3.12', platform: 'linux' },
+      databases: {
+        databases: [
+          { name: 'PostgreSQL', connected: true, size_mb: 2048, tables: 84 },
+          { name: 'Redis (cache)', connected: true, size_mb: 64, keys: 1820 },
+        ],
+      },
+      safetyStatus: { enabled: true, running: true, monitored_aircraft: 42, events_today: 3 },
+      acarsStats: { total: 156, last_hour: 8, decoded: 152, errors: 4 },
+      acarsStatus: { connected: true, mode: 'VHF', messages_per_second: 8 },
+      notifConfig: {
+        channels: [
+          { name: 'Discord', enabled: true },
+          { name: 'Email', enabled: true },
+          { name: 'Push', enabled: false },
+        ],
+      },
+    };
+  },
+
+  /**
+   * Curated runtime configuration for the Admin Config screen. Shape mirrors
+   * GET /api/v1/admin/config/ ({ categories: [{ name, configs: [...] }] }) plus
+   * a small audit log.
+   */
+  generateCuratedAdminConfig() {
+    return {
+      config: {
+        categories: [
+          {
+            name: 'General',
+            description: 'Site identity and defaults',
+            configs: [
+              { key: 'SITE_NAME', value: 'SkySpy', data_type: 'str', description: 'Public site name' },
+              { key: 'FEEDER_LAT', value: '37.7749', data_type: 'float', description: 'Antenna latitude' },
+              { key: 'FEEDER_LON', value: '-122.4194', data_type: 'float', description: 'Antenna longitude' },
+            ],
+          },
+          {
+            name: 'Authentication',
+            description: 'Access control',
+            configs: [
+              { key: 'AUTH_MODE', value: 'public', data_type: 'str', description: 'public | private | hybrid' },
+              { key: 'OIDC_ENABLED', value: 'false', data_type: 'bool', description: 'Enable OIDC/SSO' },
+            ],
+          },
+          {
+            name: 'Safety Monitoring',
+            description: 'Emergency + proximity detection',
+            configs: [
+              { key: 'SAFETY_MONITORING_ENABLED', value: 'true', data_type: 'bool', description: 'Master safety toggle' },
+              { key: 'PROXIMITY_NM', value: '3.0', data_type: 'float', description: 'Proximity alert radius (nm)' },
+            ],
+          },
+        ],
+      },
+      auditLog: {
+        results: [
+          { id: 1, key: 'SITE_NAME', old_value: 'ADS-B', new_value: 'SkySpy', user: 'admin', timestamp: '2024-02-15T14:12:00Z' },
+          { id: 2, key: 'PROXIMITY_NM', old_value: '5.0', new_value: '3.0', user: 'admin', timestamp: '2024-02-15T13:48:00Z' },
+        ],
+      },
+    };
+  },
 };
 
 /**
@@ -803,17 +1230,9 @@ export const test = base.extend({
           oidc_enabled: false,
         });
 
-        // System status
-        await this.mock('/system/status', {
-          status: 'healthy',
-          uptime: 864000,
-          version: '2.5.0',
-          receivers: {
-            adsb: { connected: true, messages_per_second: 185 },
-            acars: { connected: true, messages_per_second: 8 },
-          },
-          database: { connected: true, size_mb: 2048 },
-        });
+        // System status (rich shape drives the System screen gauges + services)
+        const system = docMockData.generateCuratedSystem();
+        await this.mock('/system/status', system.status);
 
         // Aircraft
         await this.mock('/aircraft', {
@@ -838,6 +1257,14 @@ export const test = base.extend({
         await this.mock('/history/sessions', {
           sessions: docMockData.generateCuratedHistorySessions(),
         });
+
+        // History → NOTAMs / PIREPs / Archive tabs. Register the /notams/stats/
+        // sub-path AFTER the base /notams/ so it wins under Playwright's
+        // most-recent-route-first matching.
+        await this.mock('/notams/', { notams: docMockData.generateCuratedNotams() });
+        await this.mock('/notams/tfrs/', { tfrs: docMockData.generateCuratedTfrs() });
+        await this.mock('/notams/stats/', docMockData.generateCuratedNotamStats());
+        await this.mock('/aviation/pireps/', { data: docMockData.generateCuratedPireps() });
 
         // Safety events
         await this.mock('/safety/events', {
@@ -874,6 +1301,37 @@ export const test = base.extend({
           aircraft: mockData.generateCannonballKnownAircraft(),
           count: 3,
         });
+
+        // System screen (remaining endpoints; /system/status set above)
+        await this.mock('/system/health', system.health);
+        await this.mock('/system/info', system.info);
+        await this.mock('/system/databases', system.databases);
+        await this.mock('/safety/events/monitor/status', system.safetyStatus);
+        await this.mock('/acars/stats', system.acarsStats);
+        await this.mock('/acars/status', system.acarsStatus);
+        await this.mock('/notifications/config', system.notifConfig);
+
+        // Advanced Analytics screen. Register the generic /analytics/ (fields)
+        // FIRST so the specific sub-paths registered after it win in Playwright's
+        // most-recent-route-first matching.
+        const analytics = docMockData.generateCuratedAnalytics();
+        await this.mock('/analytics/', analytics.fields);
+        await this.mock('/analytics/scatter/', analytics.scatter);
+        await this.mock('/analytics/matrix/', analytics.matrix);
+        await this.mock('/analytics/cross-domain/', analytics.crossDomain);
+        await this.mock('/history/analytics/correlation/', analytics.correlation);
+        await this.mock('/stats/geographic/countries/', analytics.countries);
+        await this.mock('/stats/geographic/operators/', analytics.operators);
+        await this.mock('/stats/geographic/military-breakdown/', analytics.militaryBreakdown);
+        await this.mock('/stats/flight-patterns/busiest-hours/', analytics.busiestHours);
+        await this.mock('/stats/flight-patterns/routes/', analytics.routes);
+        await this.mock('/stats/flight-patterns/aircraft-types/', analytics.aircraftTypes);
+
+        // Admin Config screen. Register the audit-log sub-path AFTER the base
+        // /admin/config/ so it wins under most-recent-route-first matching.
+        const admin = docMockData.generateCuratedAdminConfig();
+        await this.mock('/admin/config/', admin.config);
+        await this.mock('/admin/config/audit_log/', admin.auditLog);
       },
 
       /**
@@ -908,6 +1366,9 @@ export const test = base.extend({
   screenshotHelper: async ({ page }, use) => {
     const { ScreenshotManager } = await import('../utils/screenshot-manager.js');
     const manager = new ScreenshotManager(page);
+    // Route captures into the per-viewport output dir (desktop/tablet/mobile).
+    // test.info() returns the current TestInfo inside a fixture.
+    manager.viewport = base.info().project.name || 'desktop';
     await use(manager);
   },
 });

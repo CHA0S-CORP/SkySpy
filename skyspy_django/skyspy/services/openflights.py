@@ -13,11 +13,11 @@ import logging
 from datetime import datetime
 from typing import Any
 
-import httpx
 from django.db import transaction
 from django.db.models import Max
 
 from skyspy.models.notams import CachedAircraftType, CachedAirline
+from skyspy.services import http_client
 
 logger = logging.getLogger(__name__)
 
@@ -40,19 +40,18 @@ def _fetch_csv_data(url: str) -> list[list[str]] | None:
     Returns:
         List of rows (each row is a list of strings) or None if failed
     """
-    try:
-        with httpx.Client(timeout=60) as client:
-            response = client.get(url, headers={"User-Agent": "SkySpyAPI/2.6 (aircraft-tracker)"})
-            response.raise_for_status()
-
-            # Parse CSV
-            reader = csv.reader(io.StringIO(response.text))
-            rows = list(reader)
-            return rows
-
-    except Exception as e:
-        logger.error(f"Failed to fetch CSV from {url}: {e}")
+    text = http_client.get_text(
+        url,
+        source="openflights",
+        headers={"User-Agent": "SkySpyAPI/2.6 (aircraft-tracker)"},
+        timeout=60,
+    )
+    if text is None:
+        logger.error(f"Failed to fetch CSV from {url}")
         return None
+
+    reader = csv.reader(io.StringIO(text))
+    return list(reader)
 
 
 @transaction.atomic
@@ -115,7 +114,7 @@ def refresh_airlines() -> int:
                 )
             )
 
-        except Exception as e:
+        except (ValueError, KeyError, TypeError, IndexError, AttributeError) as e:
             logger.warning(f"Failed to parse airline row: {e}")
             continue
 
@@ -210,7 +209,7 @@ def refresh_aircraft_types() -> int:
                 )
             )
 
-        except Exception as e:
+        except (ValueError, KeyError, TypeError, IndexError, AttributeError) as e:
             logger.warning(f"Failed to parse aircraft type row: {e}")
             continue
 

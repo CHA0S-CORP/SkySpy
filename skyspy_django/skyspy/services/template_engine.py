@@ -107,7 +107,7 @@ class TemplateEngine:
 
         try:
             return self.VARIABLE_PATTERN.sub(replace_var, template)
-        except Exception as e:
+        except (AttributeError, TypeError, KeyError, ValueError) as e:
             logger.warning(f"Template rendering error: {e}")
             return template
 

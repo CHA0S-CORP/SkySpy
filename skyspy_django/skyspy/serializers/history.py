@@ -31,6 +31,8 @@ class SightingSerializer(serializers.ModelSerializer):
             "vr",
             "distance_nm",
             "is_military",
+            "is_emergency",
+            "track",
             "squawk",
             "aircraft_type",
         ]
@@ -73,6 +75,7 @@ class SessionSerializer(serializers.ModelSerializer):
             "min_rssi",
             "max_rssi",
             "is_military",
+            "category",
             "type",
             "safety_event_count",
         ]

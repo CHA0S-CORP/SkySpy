@@ -569,6 +569,47 @@ class TestAircraftSerializers:
         expected_age = current_year - 2010
         assert data["age_years"] == expected_age
 
+    def test_aircraft_info_serializer_ownership_fields(self):
+        """AircraftInfoSerializer exposes ownership analysis fields."""
+        from skyspy.serializers.aircraft import AircraftInfoSerializer
+
+        aircraft = AircraftInfoFactory(
+            owner_type="llc",
+            is_shell_suspected=True,
+            shell_score=0.87,
+            ownership_flags={"factors": ["po_box", "registered_agent"]},
+        )
+        data = AircraftInfoSerializer(aircraft).data
+
+        assert data["owner_type"] == "llc"
+        assert data["is_shell_suspected"] is True
+        assert data["shell_score"] == 0.87
+        assert data["ownership_flags"] == {"factors": ["po_box", "registered_agent"]}
+
+    def test_aircraft_info_serializer_dossier_text_present(self):
+        """dossier_text returns AirframeDocument.content when a document exists."""
+        from skyspy.models import AirframeDocument
+        from skyspy.serializers.aircraft import AircraftInfoSerializer
+
+        aircraft = AircraftInfoFactory()
+        AirframeDocument.objects.create(
+            icao_hex=aircraft.icao_hex,
+            content="Test dossier body.",
+            content_hash="abc123",
+        )
+        data = AircraftInfoSerializer(aircraft).data
+
+        assert data["dossier_text"] == "Test dossier body."
+
+    def test_aircraft_info_serializer_dossier_text_missing(self):
+        """dossier_text is None (no exception) when no AirframeDocument exists."""
+        from skyspy.serializers.aircraft import AircraftInfoSerializer
+
+        aircraft = AircraftInfoFactory()
+        data = AircraftInfoSerializer(aircraft).data
+
+        assert data["dossier_text"] is None
+
     def test_aircraft_photo_serializer(self):
         """Test AircraftPhotoSerializer."""
         from skyspy.serializers.aircraft import AircraftPhotoSerializer
@@ -1083,6 +1124,16 @@ class TestHistorySerializers:
         assert data["icao_hex"] == sighting.icao_hex
         assert data["lat"] == sighting.latitude
         assert data["lon"] == sighting.longitude
+
+    def test_sighting_serializer_emergency_and_track(self, db):
+        """SightingSerializer exposes is_emergency and track fields."""
+        from skyspy.serializers.history import SightingSerializer
+
+        sighting = AircraftSightingFactory(is_emergency=True, track=142.5)
+        data = SightingSerializer(sighting).data
+
+        assert data["is_emergency"] is True
+        assert data["track"] == 142.5
 
     def test_session_serializer_serialization(self, db):
         """Test SessionSerializer model serialization."""

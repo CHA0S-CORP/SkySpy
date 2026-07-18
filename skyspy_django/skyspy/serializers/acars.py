@@ -32,6 +32,15 @@ class AcarsMessageSerializer(serializers.ModelSerializer):
     label_info = AcarsLabelInfoSerializer(required=False, allow_null=True, help_text="Decoded label information")
     decoded_text = serializers.JSONField(required=False, allow_null=True, help_text="Decoded message text fields")
     formatted_text = serializers.CharField(required=False, allow_null=True, help_text="Human-readable formatted text")
+    route = serializers.SerializerMethodField(
+        help_text="Geographic route resolved from decoded origin/waypoints/destination/position"
+    )
+
+    def get_route(self, obj):
+        """Resolve the decoded flight-plan/position data to mappable geo points."""
+        from skyspy.services.acars_route import build_acars_route
+
+        return build_acars_route(obj.decoded)
 
     class Meta:
         model = AcarsMessage
@@ -58,6 +67,7 @@ class AcarsMessageSerializer(serializers.ModelSerializer):
             "station_id",
             "airline",
             "label_info",
+            "route",
         ]
 
 

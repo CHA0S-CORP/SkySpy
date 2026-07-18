@@ -7,6 +7,7 @@ Provides feature-based and granular permission checking for REST API views.
 import logging
 
 from django.conf import settings
+from django.db import DatabaseError
 from rest_framework import permissions
 
 logger = logging.getLogger(__name__)
@@ -68,6 +69,7 @@ class FeatureBasedPermission(permissions.BasePermission):
         "NotificationViewSet": "alerts",
         # Safety
         "SafetyEventViewSet": "safety",
+        "ActiveSafetyEventAcknowledgeView": "safety",
         # Audio
         "AudioViewSet": "audio",
         "AudioTransmissionViewSet": "audio",
@@ -269,7 +271,7 @@ class FeatureBasedPermission(permissions.BasePermission):
             return profile.has_permission(permission)
         except AttributeError:
             return False
-        except Exception as e:
+        except DatabaseError as e:
             logger.warning(f"Unexpected error checking permission '{permission}': {e}")
             return False
 
@@ -385,7 +387,7 @@ class HasPermission(permissions.BasePermission):
             return profile.has_all_permissions(required)
         except AttributeError:
             return False
-        except Exception as e:
+        except DatabaseError as e:
             logger.warning(f"Unexpected error checking permissions: {e}")
             return False
 
@@ -445,7 +447,7 @@ class HasAnyPermission(permissions.BasePermission):
             return profile.has_any_permission(required)
         except AttributeError:
             return False
-        except Exception as e:
+        except DatabaseError as e:
             logger.warning(f"Unexpected error checking permissions: {e}")
             return False
 
@@ -470,7 +472,7 @@ class IsAdminUser(permissions.BasePermission):
             return profile.has_any_permission(admin_perms)
         except AttributeError:
             return False
-        except Exception as e:
+        except DatabaseError as e:
             logger.warning(f"Unexpected error checking admin permissions: {e}")
             return False
 
@@ -494,7 +496,7 @@ class IsSuperAdmin(permissions.BasePermission):
             return profile.has_all_permissions(["users.create", "users.delete", "roles.create", "roles.delete"])
         except AttributeError:
             return False
-        except Exception as e:
+        except DatabaseError as e:
             logger.warning(f"Unexpected error checking superadmin permissions: {e}")
             return False
 
@@ -532,7 +534,7 @@ class IsOwnerOrAdmin(permissions.BasePermission):
                 return profile.has_permission(f"{feature}.manage_all")
         except AttributeError:
             pass
-        except Exception as e:
+        except DatabaseError as e:
             logger.warning(f"Unexpected error checking owner/admin permission: {e}")
 
         return False
@@ -559,7 +561,7 @@ class HasSystemManagePermission(permissions.BasePermission):
             return profile.has_permission("system.manage")
         except AttributeError:
             return False
-        except Exception as e:
+        except DatabaseError as e:
             logger.warning(f"Unexpected error checking system.manage permission: {e}")
             return False
 
@@ -576,6 +578,23 @@ class CanAccessAlert(permissions.BasePermission):
     """
 
     def has_permission(self, request, view):
+        # Scoped API keys must carry an alerts.* scope regardless of the
+        # owning user's role permissions (empty scopes = all user perms).
+        api_key_scopes = getattr(request, "api_key_scopes", None)
+        if api_key_scopes:
+            required = (
+                "alerts.view"
+                if request.method in permissions.SAFE_METHODS
+                else {
+                    "POST": "alerts.create",
+                    "PUT": "alerts.edit",
+                    "PATCH": "alerts.edit",
+                    "DELETE": "alerts.delete",
+                }.get(request.method)
+            )
+            if required and required not in api_key_scopes:
+                return False
+
         auth_mode = getattr(settings, "AUTH_MODE", "hybrid")
         if auth_mode == "public":
             return True
@@ -629,6 +648,6 @@ class CanAccessAlert(permissions.BasePermission):
             return user.skyspy_profile.has_permission(permission)
         except AttributeError:
             return False
-        except Exception as e:
+        except DatabaseError as e:
             logger.warning(f"Unexpected error checking alert permission '{permission}': {e}")
             return False

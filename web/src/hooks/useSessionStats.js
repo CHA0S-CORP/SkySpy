@@ -36,6 +36,10 @@ const CATEGORY_NAMES = {
   C3: 'Cluster Obstacle',
 };
 
+// How often the fallback interval counts position updates when the aircraft
+// array reference is not changing (e.g. paused/static data sources)
+const FALLBACK_COUNT_INTERVAL_MS = 2000;
+
 /**
  * Track session statistics
  * @param {Array} aircraft - Current aircraft array from socket/API
@@ -61,6 +65,9 @@ export function useSessionStats(aircraft = [], options = {}) {
   const peakCountRef = useRef({ count: 0, time: null });
   const maxRangeRef = useRef({ range: 0, hex: null });
   const positionUpdatesRef = useRef(0);
+  // Timestamp of the last array-change-driven position count, so the interval
+  // fallback doesn't double-count the same aircraft set
+  const lastArrayCountAtRef = useRef(0);
   const lastAircraftCountRef = useRef(0);
   const lastStatsSnapshotRef = useRef(null);
 
@@ -138,6 +145,7 @@ export function useSessionStats(aircraft = [], options = {}) {
       // Count position updates (each aircraft with position is an update)
       const aircraftWithPosition = aircraft.filter((ac) => ac.lat && ac.lon);
       positionUpdatesRef.current += aircraftWithPosition.length;
+      lastArrayCountAtRef.current = Date.now();
 
       // Track unique aircraft
       aircraft.forEach((ac) => {
@@ -190,7 +198,13 @@ export function useSessionStats(aircraft = [], options = {}) {
       const currentAircraft = aircraftRef.current;
       if (currentAircraft && currentAircraft.length > 0) {
         const aircraftWithPosition = currentAircraft.filter((ac) => ac.lat && ac.lon);
-        positionUpdatesRef.current += aircraftWithPosition.length;
+
+        // Only count here if the array-change effect hasn't already counted
+        // this aircraft set within the current interval window — otherwise
+        // both paths add the same positions and double the total
+        if (Date.now() - lastArrayCountAtRef.current >= FALLBACK_COUNT_INTERVAL_MS) {
+          positionUpdatesRef.current += aircraftWithPosition.length;
+        }
 
         // Update peak count
         const currentCount = aircraftWithPosition.length;
@@ -199,7 +213,7 @@ export function useSessionStats(aircraft = [], options = {}) {
         }
       }
       computeAndSetStats();
-    }, 2000);
+    }, FALLBACK_COUNT_INTERVAL_MS);
 
     return () => clearInterval(interval);
   }, [enabled, computeAndSetStats]);
@@ -233,6 +247,7 @@ export function useSessionStats(aircraft = [], options = {}) {
     peakCountRef.current = { count: 0, time: null };
     maxRangeRef.current = { range: 0, hex: null };
     positionUpdatesRef.current = 0;
+    lastArrayCountAtRef.current = 0;
     lastAircraftCountRef.current = 0;
     lastStatsSnapshotRef.current = null;
     setSessionDuration(0);

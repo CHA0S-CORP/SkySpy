@@ -30,31 +30,19 @@ export function useMapAcarsData({
   const [acarsStatus, setAcarsStatus] = useState(null);
   const [callsignHexCache, setCallsignHexCache] = useState({});
 
-  // Fetch ACARS status via WebSocket (with HTTP fallback)
+  // Fetch ACARS listener status. There is no WS 'acars-status' request type
+  // (backend exposes GET /api/v1/acars/status), so use HTTP; the previous WS
+  // attempt rejected and returned early, and the HTTP path was gated on
+  // !wsConnected, so status never loaded while the socket was connected.
   useEffect(() => {
     const fetchAcarsStatus = async () => {
-      if (wsRequest && wsConnected) {
-        try {
-          const data = await wsRequest('acars-status', {});
-          if (data && !data.error) {
-            setAcarsStatus(data);
-            return;
-          }
-        } catch (err) {
-          console.debug('ACARS status WS request failed:', err.message);
-          return;
-        }
-      }
-
-      if (!wsConnected) {
-        const baseUrl = config.apiBaseUrl || '';
-        try {
-          const statusRes = await fetch(`${baseUrl}/api/v1/acars/status`);
-          const statusData = await safeJson(statusRes);
-          if (statusData) setAcarsStatus(statusData);
-        } catch (err) {
-          // Silently fail - ACARS may not be available
-        }
+      const baseUrl = config.apiBaseUrl || '';
+      try {
+        const statusRes = await fetch(`${baseUrl}/api/v1/acars/status`);
+        const statusData = await safeJson(statusRes);
+        if (statusData) setAcarsStatus(statusData);
+      } catch (err) {
+        // Silently fail - ACARS may not be available
       }
     };
 
@@ -62,7 +50,7 @@ export function useMapAcarsData({
     const pollInterval = wsConnected ? 30000 : 10000;
     const interval = setInterval(fetchAcarsStatus, pollInterval);
     return () => clearInterval(interval);
-  }, [config.apiBaseUrl, wsRequest, wsConnected]);
+  }, [config.apiBaseUrl, wsConnected]);
 
   // Use real-time ACARS messages from socket when connected
   useEffect(() => {

@@ -274,7 +274,7 @@ def broadcast_advisory_update(advisories: list[dict]):
             },
             room="topic_airspace",
         )
-    except Exception as e:
+    except Exception as e:  # broad: broadcast must never break the caller; sync_emit failure modes unknowable
         logger.warning(f"Failed to broadcast advisory update: {e}")
 
 
@@ -293,7 +293,7 @@ def broadcast_boundary_update(boundaries: list[dict]):
             },
             room="topic_airspace",
         )
-    except Exception as e:
+    except Exception as e:  # broad: broadcast must never break the caller; sync_emit failure modes unknowable
         logger.warning(f"Failed to broadcast boundary update: {e}")
 
 
@@ -312,7 +312,7 @@ def broadcast_advisory_expired(advisory_ids: list[str]):
             },
             room="topic_airspace",
         )
-    except Exception as e:
+    except Exception as e:  # broad: broadcast must never break the caller; sync_emit failure modes unknowable
         logger.warning(f"Failed to broadcast advisory expiration: {e}")
 
 

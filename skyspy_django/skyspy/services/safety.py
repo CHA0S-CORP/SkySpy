@@ -14,9 +14,11 @@ import math
 import threading
 import time
 import uuid
+from dataclasses import dataclass
+from datetime import timedelta
 
 from django.conf import settings
-from django.db import DatabaseError
+from django.db import DatabaseError, InterfaceError
 from django.utils import timezone
 
 from skyspy.models import SafetyEvent
@@ -30,55 +32,178 @@ EMERGENCY_SQUAWKS = {
     "7700": {"type": "emergency", "label": "EMERGENCY", "severity": "critical"},
 }
 
+
+@dataclass(frozen=True)
+class SafetyProfile:
+    """Per-aircraft-class safety sensitivity.
+
+    What is a genuine TCAS/collision indicator for an airliner is routine for a
+    fighter (aerobatics), a helicopter (hover/maneuver), a glider (thermalling)
+    or a UAV (loiter). Each class gets a profile that tunes the TCAS-style
+    vertical checks; physical loss-of-separation (proximity, emergency squawks)
+    always applies regardless of profile.
+
+    Fields:
+      extreme_vs_floor: minimum |VS| (fpm) to raise an extreme-VS event for this
+        class. The effective floor is max(configured SAFETY_VS_EXTREME_THRESHOLD,
+        this) so an operator raising the global threshold is still honored.
+      vs_reversal: emit the regular (sub-TCAS) vertical-speed reversal event.
+      tcas_ra: emit a suspected TCAS RA on a high-magnitude reversal.
+      formation: this class routinely flies intentional close formation
+        (fighters, helicopters, tankers) — suppress NON-critical proximity when
+        both aircraft in a pair share a formation-capable profile. A genuine
+        <0.25nm/<300ft loss of separation still alerts.
+      proximity_scale: multiplier on the proximity distance/altitude alert gates.
+        Light GA, gliders, helicopters and UAVs legally operate close together
+        under VFR see-and-avoid (practice areas, patterns, sightseeing), so a
+        0.4–0.5nm pass is routine, not a conflict — a smaller scale requires a
+        much tighter approach before alerting. A mixed pair uses the MORE
+        sensitive of the two (max), so light-vs-airliner keeps airliner range.
+    """
+
+    label: str
+    description: str
+    extreme_vs_floor: int = 0
+    vs_reversal: bool = True
+    tcas_ra: bool = True
+    formation: bool = False
+    proximity_scale: float = 1.0
+
+
+# Registry of safety profiles keyed by aircraft class. "unknown" is the default
+# (full sensitivity) so aircraft we can't classify are never under-monitored.
+SAFETY_PROFILES: dict[str, SafetyProfile] = {
+    "airliner": SafetyProfile(
+        label="Airliner / Transport",
+        description="Large/heavy transport (ADS-B A3–A5). Full TCAS sensitivity.",
+    ),
+    "military_transport": SafetyProfile(
+        label="Military Transport",
+        description="Tanker, airlifter, AWACS, bomber, recon, VIP. Airliner-like flight, "
+        "but flies intentional formation (air-to-air refueling, MARSA).",
+        formation=True,
+    ),
+    "fighter": SafetyProfile(
+        label="Fighter / High-Performance",
+        description="Fast jet (ADS-B A6 or mil fighter/strike role). Aerobatic vertical "
+        "maneuvering is normal; formation flight is routine.",
+        extreme_vs_floor=15000,
+        vs_reversal=False,
+        tcas_ra=False,
+        formation=True,
+    ),
+    "rotorcraft": SafetyProfile(
+        label="Rotorcraft",
+        description="Helicopter / tiltrotor (ADS-B A7). Hover and low-speed maneuvering "
+        "reverse VS constantly; formation/section ops are common.",
+        vs_reversal=False,
+        tcas_ra=False,
+        formation=True,
+        proximity_scale=0.4,
+    ),
+    "light_ga": SafetyProfile(
+        label="Light GA",
+        description="Light general aviation (ADS-B A1–A2, balloons, ultralights). "
+        "Pattern/practice-area airwork reverses VS; no TCAS fitted; VFR see-and-avoid "
+        "traffic routinely passes within 0.5nm.",
+        vs_reversal=False,
+        tcas_ra=False,
+        proximity_scale=0.4,
+    ),
+    "glider": SafetyProfile(
+        label="Glider",
+        description="Sailplane (ADS-B B1). Thermalling reverses VS continuously; gaggles "
+        "share a thermal at close range.",
+        vs_reversal=False,
+        tcas_ra=False,
+        proximity_scale=0.4,
+    ),
+    "uav": SafetyProfile(
+        label="UAV / Drone",
+        description="Unmanned (ADS-B B6 or mil UAV role). Loiter/orbit maneuvering; no TCAS response semantics.",
+        vs_reversal=False,
+        tcas_ra=False,
+        proximity_scale=0.4,
+    ),
+    "unknown": SafetyProfile(
+        label="Unknown",
+        description="Unclassified — default to full sensitivity so nothing is under-monitored.",
+    ),
+}
+
+
+def get_safety_profile(ac_class: str | None) -> SafetyProfile:
+    """Return the safety profile for a class key, defaulting to 'unknown'."""
+    return SAFETY_PROFILES.get(ac_class or "unknown", SAFETY_PROFILES["unknown"])
+
+
 # Major airport locations for takeoff/landing filtering (Class B and C)
-# Format: (icao, lat, lon)
+# Format: (icao, lat, lon, field_elevation_ft) — elevation is needed to gate
+# the takeoff/landing suppression on height above ground, not MSL.
 MAJOR_AIRPORTS = [
     # Class B
-    ("KATL", 33.6367, -84.4281),
-    ("KBOS", 42.3656, -71.0096),
-    ("KORD", 41.9742, -87.9073),
-    ("KDFW", 32.8998, -97.0403),
-    ("KDEN", 39.8561, -104.6737),
-    ("KDTW", 42.2124, -83.3534),
-    ("KEWR", 40.6895, -74.1745),
-    ("KIAH", 29.9902, -95.3368),
-    ("KJFK", 40.6413, -73.7781),
-    ("KLAS", 36.0840, -115.1537),
-    ("KLAX", 33.9416, -118.4085),
-    ("KMCO", 28.4312, -81.3081),
-    ("KMIA", 25.7959, -80.2870),
-    ("KMSP", 44.8848, -93.2223),
-    ("KPHL", 39.8729, -75.2437),
-    ("KPHX", 33.4373, -112.0078),
-    ("KSEA", 47.4502, -122.3088),
-    ("KSFO", 37.6213, -122.3790),
-    ("KSLC", 40.7899, -111.9791),
-    ("KTPA", 27.9755, -82.5332),
+    ("KATL", 33.6367, -84.4281, 1026),
+    ("KBOS", 42.3656, -71.0096, 20),
+    ("KORD", 41.9742, -87.9073, 672),
+    ("KDFW", 32.8998, -97.0403, 607),
+    ("KDEN", 39.8561, -104.6737, 5434),
+    ("KDTW", 42.2124, -83.3534, 645),
+    ("KEWR", 40.6895, -74.1745, 18),
+    ("KIAH", 29.9902, -95.3368, 97),
+    ("KJFK", 40.6413, -73.7781, 13),
+    ("KLAS", 36.0840, -115.1537, 2181),
+    ("KLAX", 33.9416, -118.4085, 128),
+    ("KMCO", 28.4312, -81.3081, 96),
+    ("KMIA", 25.7959, -80.2870, 8),
+    ("KMSP", 44.8848, -93.2223, 841),
+    ("KPHL", 39.8729, -75.2437, 36),
+    ("KPHX", 33.4373, -112.0078, 1135),
+    ("KSEA", 47.4502, -122.3088, 433),
+    ("KSFO", 37.6213, -122.3790, 13),
+    ("KSLC", 40.7899, -111.9791, 4227),
+    ("KTPA", 27.9755, -82.5332, 26),
     # Class C (sample)
-    ("KAUS", 30.1975, -97.6664),
-    ("KBNA", 36.1245, -86.6782),
-    ("KBUF", 42.9405, -78.7322),
-    ("KCLE", 41.4117, -81.8498),
-    ("KCLT", 35.2140, -80.9431),
-    ("KCVG", 39.0488, -84.6678),
-    ("KHOU", 29.6454, -95.2789),
-    ("KIND", 39.7173, -86.2944),
-    ("KMCI", 39.2976, -94.7139),
-    ("KMEM", 35.0424, -89.9767),
-    ("KMKE", 42.9472, -87.8966),
-    ("KMSY", 29.9934, -90.2580),
-    ("KOAK", 37.7213, -122.2208),
-    ("KOMA", 41.3032, -95.8941),
-    ("KONT", 34.0560, -117.6012),
-    ("KPDX", 45.5898, -122.5951),
-    ("KPIT", 40.4915, -80.2329),
-    ("KRDU", 35.8776, -78.7875),
-    ("KSAN", 32.7336, -117.1897),
-    ("KSAT", 29.5337, -98.4698),
-    ("KSJC", 37.3626, -121.9291),
-    ("KSMF", 38.6954, -121.5908),
-    ("KSTL", 38.7487, -90.3700),
+    ("KAUS", 30.1975, -97.6664, 542),
+    ("KBNA", 36.1245, -86.6782, 599),
+    ("KBUF", 42.9405, -78.7322, 728),
+    ("KCLE", 41.4117, -81.8498, 791),
+    ("KCLT", 35.2140, -80.9431, 748),
+    ("KCVG", 39.0488, -84.6678, 896),
+    ("KHOU", 29.6454, -95.2789, 46),
+    ("KIND", 39.7173, -86.2944, 797),
+    ("KMCI", 39.2976, -94.7139, 1026),
+    ("KMEM", 35.0424, -89.9767, 341),
+    ("KMKE", 42.9472, -87.8966, 723),
+    ("KMSY", 29.9934, -90.2580, 4),
+    ("KOAK", 37.7213, -122.2208, 9),
+    ("KOMA", 41.3032, -95.8941, 984),
+    ("KONT", 34.0560, -117.6012, 944),
+    ("KPDX", 45.5898, -122.5951, 31),
+    ("KPIT", 40.4915, -80.2329, 1203),
+    ("KRDU", 35.8776, -78.7875, 435),
+    ("KSAN", 32.7336, -117.1897, 17),
+    ("KSAT", 29.5337, -98.4698, 809),
+    ("KSJC", 37.3626, -121.9291, 62),
+    ("KSMF", 38.6954, -121.5908, 27),
+    ("KSTL", 38.7487, -90.3700, 618),
 ]
+
+# Severity ordering used for escalation checks ("info" is a legacy value)
+SEVERITY_RANK = {"info": 0, "low": 0, "warning": 1, "critical": 2}
+
+
+def first_present(*values):
+    """Return the first value that is not None. Unlike `a or b`, a valid 0
+    (e.g. baro_rate=0 fpm in level flight) is NOT treated as missing."""
+    for v in values:
+        if v is not None:
+            return v
+    return None
+
+
+def wrap_lon_diff(dlon: float) -> float:
+    """Normalize a longitude difference to [-180, 180] (antimeridian wrap)."""
+    return (dlon + 180.0) % 360.0 - 180.0
 
 
 def calculate_distance_nm(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -128,12 +253,94 @@ class SafetyMonitor:
 
     EVENT_COOLDOWN = 60  # seconds
     HISTORY_RETENTION = 30  # seconds
-    EVENT_EXPIRY = 300  # 5 minutes - events expire if not refreshed
+    EVENT_EXPIRY = 300  # 5 minutes - persistent events (emergency squawks) expire if not refreshed
+    # Transient geometric events (proximity, TCAS RA, VS reversal, extreme VS)
+    # describe a momentary situation, not a sustained condition. Once the pair
+    # passes / the maneuver ends they must clear quickly instead of lingering for
+    # the full 5 minutes and piling up as stale conflict badges. A few cycles of
+    # grace avoids flapping on a single missed detection.
+    TRANSIENT_EVENT_EXPIRY = 45
+    POSITION_STALE_SEC = 15  # ignore positions not updated within this window
+    # Minimum groundspeed (kt) to treat a >500ft target as airborne conflicting
+    # traffic. Below this it's a parked aircraft / ground vehicle / clutter with a
+    # spurious altitude — the source of "conflicts" against near-stationary junk.
+    MIN_AIRBORNE_GS_KT = 40
+    # Rotorcraft can legitimately fly slowly, so they get a much lower floor —
+    # but a hovering/on-station helicopter (helipad, medevac, ENG orbit) below
+    # this is effectively a fixed point that would otherwise raise a fresh
+    # "conflict" against every aircraft that passes it, forever. Excluded.
+    ROTOR_HOVER_GS_KT = 5
+    # Relative speed (kt) below which two formation-capable aircraft are treated as
+    # station-keeping (matched velocity) rather than in conflict. Formation flight
+    # holds a near-constant separation; a real conflict has meaningful closure.
+    FORMATION_STATION_KEEP_KT = 30
+    CONFIG_REFRESH_SEC = 30  # how often to re-read runtime (SystemConfig) settings
+    # Absolute proximity floor (nm) below which a conflict always alerts, regardless
+    # of divergence — too close to ever suppress on a closure/track heuristic. Kept
+    # independent of the configurable SAFETY_PROXIMITY_NM by design, and well BELOW
+    # it: if this floor equals proximity_nm the closure/CPA/divergence gate (which
+    # only runs beyond the floor) becomes unreachable dead code and separating
+    # traffic keeps alerting. 0.15nm (~900ft) co-altitude is a genuine near-miss
+    # (covers the departure/arrival airport case); beyond it, separating/parallel
+    # traffic is filtered by the closure/CPA gate even at "critical" geometry.
+    ALWAYS_ALERT_RADIUS_NM = 0.15
+    # Extra altitude tolerance (ft) applied to the separation skip gate when the two
+    # aircraft report altitudes from different references (baro vs geom), which can
+    # legitimately disagree by hundreds of feet. Widening errs toward NOT missing a
+    # real conflict rather than silencing one on a reference mismatch.
+    MIXED_ALT_SOURCE_MARGIN_FT = 250
+    # Proximity conflicts beyond ALWAYS_ALERT_RADIUS_NM must be actively converging
+    # to alert: when a CPA is computable, it has to arrive within this horizon AND
+    # close to under the configured proximity radius. A co-altitude snapshot of VFR
+    # traffic that never actually converges (parallel/offset tracks) is the dominant
+    # false-positive source in dense terminal airspace. When CPA can't be computed
+    # (missing gs/track) we fall back to the closure/track heuristic instead.
+    # Predictive look-ahead horizon (s). A converging pair is flagged when its
+    # closest point of approach falls within this window — TCAS-TA-like imminence.
+    # Kept short so alerts are actionable, not premature (a pair 50s+ / several nm
+    # out reads as junk even when technically converging).
+    CPA_TIME_HORIZON_SEC = 35
+    # Predictive look-ahead radius (nm) for the candidate bounding box. Wider than
+    # proximity_nm so a pair still ~1nm apart but converging fast is caught BEFORE
+    # it closes, not after — but bounded so the whole basin isn't one big alert.
+    # The per-pair CPA (horizontal) + vertical-speed projection then decide whether
+    # the protected volume is actually penetrated within the horizon.
+    PREDICT_RADIUS_NM = 1.0
+    # A "low"-severity proximity conflict (loose geometry, ~0.35–0.5nm / 400–500ft)
+    # is not an actionable loss of separation — it's the normal state of busy
+    # terminal airspace. Only warning/critical geometry is surfaced as an alert.
+    # (tcas_ra and emergency squawks are always critical, so this never suppresses
+    # them.)
+    SUPPRESS_LOW_SEVERITY = True
+    # A bare vertical-speed reversal is only a collision-avoidance indicator when
+    # there is conflicting traffic nearby. A lone aircraft maneuvering (pattern
+    # work, level-off, practice-area airwork) reverses VS constantly and is not a
+    # TCAS response. Require another aircraft within this horizontal/vertical window
+    # before emitting a (non-TCAS) vs_reversal. High-magnitude TCAS RAs bypass this.
+    VS_REVERSAL_TRAFFIC_NM = 3.0
+    VS_REVERSAL_TRAFFIC_FT = 1000
+    # Type-aware tuning. Each aircraft is mapped to a class key whose SafetyProfile
+    # (see SAFETY_PROFILES) tunes the TCAS-style vertical checks. Classification
+    # uses the ADS-B emitter category (present in the hot data, no lookup) plus a
+    # military hex/type/role check. Physical loss-of-separation (proximity,
+    # emergency squawks) applies to every class regardless of profile.
+    _CATEGORY_CLASS = {
+        "A3": "airliner",
+        "A4": "airliner",
+        "A5": "airliner",
+        "A1": "light_ga",
+        "A2": "light_ga",
+        "B2": "light_ga",  # balloon/blimp
+        "B3": "light_ga",  # parachutist (rare on ADS-B, treat as light)
+        "B4": "light_ga",  # ultralight
+        "B1": "glider",
+        "B6": "uav",
+    }
 
     def __init__(self):
         # Thresholds from settings
         self.vs_change_threshold = getattr(settings, "SAFETY_VS_CHANGE_THRESHOLD", 3000)
-        self.vs_extreme_threshold = getattr(settings, "SAFETY_VS_EXTREME_THRESHOLD", 6000)
+        self.vs_extreme_threshold = getattr(settings, "SAFETY_VS_EXTREME_THRESHOLD", 9000)
         self.proximity_nm = getattr(settings, "SAFETY_PROXIMITY_NM", 1.0)
         self.altitude_diff_ft = getattr(settings, "SAFETY_ALTITUDE_DIFF_FT", 1000)
         self.closure_rate_kt = getattr(settings, "SAFETY_CLOSURE_RATE_KT", 100)
@@ -147,6 +354,11 @@ class SafetyMonitor:
         self._events_lock = threading.Lock()  # Lock for _active_events and _acknowledged_events
         self._enabled = getattr(settings, "SAFETY_MONITORING_ENABLED", True)
         self._last_cleanup = 0.0
+        self._rehydrated = False
+        # First runtime-config refresh happens CONFIG_REFRESH_SEC after startup:
+        # settings/env (already read above) win for short-lived instances (tests),
+        # the admin SystemConfig values take over for the long-lived worker.
+        self._last_config_refresh = time.time()
 
     @property
     def enabled(self) -> bool:
@@ -166,11 +378,11 @@ class SafetyMonitor:
             "flight": (ac.get("flight") or "").strip(),
             "lat": ac.get("lat"),
             "lon": ac.get("lon"),
-            "alt_baro": ac.get("alt_baro") or ac.get("alt"),
+            "alt_baro": first_present(ac.get("alt_baro"), ac.get("alt")),
             "alt_geom": ac.get("alt_geom"),
             "gs": ac.get("gs"),
             "track": ac.get("track"),
-            "baro_rate": ac.get("baro_rate") or ac.get("vr"),
+            "baro_rate": first_present(ac.get("baro_rate"), ac.get("vr")),
             "geom_rate": ac.get("geom_rate"),
             "squawk": ac.get("squawk"),
             "category": ac.get("category"),
@@ -205,6 +417,30 @@ class SafetyMonitor:
         key = self._get_cooldown_key(event_type, icao, icao_2)
         self._event_cooldown[key] = time.time()
 
+    def _is_severity_escalation(self, event_type: str, icao: str, icao_2: str | None, new_severity: str) -> bool:
+        """True if an active event of this key exists with lower severity.
+
+        Used to bypass the trigger cooldown: a worsening situation (e.g. a
+        proximity conflict converging from 'low' to 'critical') must not be
+        silenced by the cooldown from its own initial detection.
+        """
+        event_id = self._generate_event_id(event_type, icao, icao_2)
+        with self._events_lock:
+            existing = self._active_events.get(event_id)
+            if not existing:
+                return False
+            return SEVERITY_RANK.get(new_severity, 0) > SEVERITY_RANK.get(existing.get("severity"), 0)
+
+    def _event_expiry_for(self, event_type: str) -> int:
+        """Seconds an unrefreshed event stays active before it resolves.
+
+        Persistent conditions (emergency squawks) hold for EVENT_EXPIRY; transient
+        geometric events clear quickly once no longer detected.
+        """
+        if event_type.startswith("squawk_"):
+            return self.EVENT_EXPIRY
+        return self.TRANSIENT_EVENT_EXPIRY
+
     def _cleanup_old_state(self):
         """Remove state older than retention period and expired events."""
         now = time.time()
@@ -216,7 +452,6 @@ class SafetyMonitor:
 
         cutoff = now - self.HISTORY_RETENTION
         cooldown_cutoff = now - self.EVENT_COOLDOWN
-        event_cutoff = now - self.EVENT_EXPIRY
 
         # Clean up old aircraft state
         to_remove = [icao for icao, state in self._aircraft_state.items() if state.get("last_update", 0) < cutoff]
@@ -229,10 +464,18 @@ class SafetyMonitor:
         for k in old_cooldowns:
             del self._event_cooldown[k]
 
-        # Clean up expired events (with lock for thread safety)
+        # Pick up acknowledgments written to the DB by the web process (the
+        # REST/socket ack paths run in a different container than detection)
+        self._sync_acks_from_db()
+
+        # Clean up expired events (with lock for thread safety). Transient
+        # geometric events use a much shorter timeout than persistent emergency
+        # squawks so passed conflicts resolve promptly instead of accumulating.
         with self._events_lock:
             expired_events = [
-                (eid, event) for eid, event in self._active_events.items() if event.get("last_seen", 0) < event_cutoff
+                (eid, event)
+                for eid, event in self._active_events.items()
+                if event.get("last_seen", 0) < now - self._event_expiry_for(event.get("event_type", ""))
             ]
             for eid, _event in expired_events:
                 del self._active_events[eid]
@@ -241,6 +484,107 @@ class SafetyMonitor:
         # Broadcast event resolution for expired events (outside lock to avoid deadlock)
         for _eid, event in expired_events:
             self.broadcast_event_resolved(event)
+
+        # Publish monitor stats for the web process (API/socket status endpoints
+        # run in a different container whose monitor never tracks aircraft)
+        try:
+            from django.core.cache import cache
+
+            cache.set("safety:monitor_stats", self.get_stats(), 60)
+        except Exception:  # broad: stats publishing must never crash the safety loop
+            logger.debug("Failed to publish safety monitor stats to cache", exc_info=True)
+
+    def _sync_acks_from_db(self):
+        """Apply DB-side acknowledgments to in-memory active events.
+
+        One-way (DB acked -> memory acked) on purpose: memory-only acks for
+        events without a db_id would otherwise be reverted every cycle.
+        """
+        with self._events_lock:
+            id_map = {
+                e["db_id"]: eid
+                for eid, e in self._active_events.items()
+                if e.get("db_id") and not e.get("acknowledged")
+            }
+        if not id_map:
+            return
+        try:
+            acked_ids = list(
+                SafetyEvent.objects.filter(id__in=id_map.keys(), acknowledged=True).values_list("id", flat=True)
+            )
+        except (DatabaseError, InterfaceError) as e:
+            logger.warning(f"Failed to sync safety acks from DB: {type(e).__name__}: {e}")
+            return
+        with self._events_lock:
+            for db_id in acked_ids:
+                eid = id_map.get(db_id)
+                event = self._active_events.get(eid)
+                if event is not None:
+                    event["acknowledged"] = True
+                    self._acknowledged_events.add(eid)
+
+    def _refresh_runtime_config(self, now: float):
+        """Re-read runtime-editable settings (admin SystemConfig) periodically.
+
+        get_db_config keeps env-var precedence, so environment configuration
+        still wins; this makes admin UI changes take effect without a restart.
+        """
+        if now - self._last_config_refresh < self.CONFIG_REFRESH_SEC:
+            return
+        self._last_config_refresh = now
+        from skyspy.settings import get_db_config
+
+        self._enabled = get_db_config("safety.monitoring_enabled", self._enabled, bool)
+        self.vs_change_threshold = get_db_config("safety.vs_change_threshold", self.vs_change_threshold, int)
+        self.vs_extreme_threshold = get_db_config("safety.vs_extreme_threshold", self.vs_extreme_threshold, int)
+        self.proximity_nm = get_db_config("safety.proximity_nm", self.proximity_nm, float)
+        self.altitude_diff_ft = get_db_config("safety.altitude_diff_ft", self.altitude_diff_ft, int)
+        self.closure_rate_kt = get_db_config("safety.closure_rate_kt", self.closure_rate_kt, float)
+        self.tcas_vs_threshold = get_db_config("safety.tcas_vs_threshold", self.tcas_vs_threshold, int)
+
+    def _rehydrate_active_events(self):
+        """Reload recent events from the DB into the active set after a restart.
+
+        Without this, a worker restart mid-emergency forgets all active events:
+        ongoing conditions get re-detected as duplicate DB rows/broadcasts and
+        already-ended ones never emit safety:event_resolved.
+        """
+        if self._rehydrated:
+            return
+        self._rehydrated = True
+        try:
+            cutoff = timezone.now() - timedelta(seconds=self.EVENT_EXPIRY)
+            rows = list(SafetyEvent.objects.filter(timestamp__gte=cutoff))
+        except (DatabaseError, InterfaceError) as e:
+            logger.warning(f"Failed to rehydrate safety events: {type(e).__name__}: {e}")
+            return
+        with self._events_lock:
+            for row in rows:
+                event_id = self._generate_event_id(row.event_type, row.icao_hex, row.icao_hex_2 or None)
+                if event_id in self._active_events:
+                    continue
+                ts = row.timestamp.timestamp()
+                self._active_events[event_id] = {
+                    "id": event_id,
+                    "db_id": row.id,
+                    "event_type": row.event_type,
+                    "severity": row.severity,
+                    "icao": row.icao_hex,
+                    "icao_hex": row.icao_hex,
+                    "icao_2": row.icao_hex_2,
+                    "icao_hex_2": row.icao_hex_2,
+                    "callsign": row.callsign,
+                    "callsign_2": row.callsign_2,
+                    "message": row.message,
+                    "details": row.details,
+                    "created_at": ts,
+                    "last_seen": ts,
+                    "acknowledged": row.acknowledged,
+                }
+                if row.acknowledged:
+                    self._acknowledged_events.add(event_id)
+        if rows:
+            logger.info(f"Rehydrated {len(rows)} recent safety events from DB")
 
     def _generate_event_id(self, event_type: str, icao: str, icao_2: str | None = None) -> str:
         """Generate a stable event ID for deduplication."""
@@ -268,11 +612,18 @@ class SafetyMonitor:
             if event_id in self._active_events:
                 # Update existing event
                 existing = self._active_events[event_id]
+                old_severity = existing.get("severity")
+                old_message = existing.get("message")
                 existing.update(event)
                 existing["id"] = event_id
                 existing["last_seen"] = now
                 existing["acknowledged"] = event_id in self._acknowledged_events
-                return existing.copy(), False  # Return copy to avoid race conditions
+                result = existing.copy()  # Return copy to avoid race conditions
+                # Flag material changes so the caller can re-broadcast/persist.
+                # Squawk events re-detect identically every cycle — comparing
+                # severity+message keeps those from spamming updates.
+                result["_changed"] = old_severity != existing.get("severity") or old_message != existing.get("message")
+                return result, False
             else:
                 # New event
                 event["id"] = event_id
@@ -394,13 +745,20 @@ class SafetyMonitor:
             self._active_events.clear()
             self._acknowledged_events.clear()
 
+    def _nearest_major_airport(self, lat: float, lon: float, radius_nm: float = 5.0) -> tuple | None:
+        """Return the closest MAJOR_AIRPORTS entry within radius, or None."""
+        best = None
+        best_dist = radius_nm
+        for airport in MAJOR_AIRPORTS:
+            dist = calculate_distance_nm(lat, lon, airport[1], airport[2])
+            if dist <= best_dist:
+                best = airport
+                best_dist = dist
+        return best
+
     def _is_near_major_airport(self, lat: float, lon: float, radius_nm: float = 5.0) -> bool:
         """Check if a position is within radius of a major airport."""
-        for _icao, apt_lat, apt_lon in MAJOR_AIRPORTS:
-            dist = calculate_distance_nm(lat, lon, apt_lat, apt_lon)
-            if dist <= radius_nm:
-                return True
-        return False
+        return self._nearest_major_airport(lat, lon, radius_nm) is not None
 
     def _is_takeoff_landing_pair(self, pos1: dict, pos2: dict) -> bool:
         """
@@ -408,11 +766,19 @@ class SafetyMonitor:
 
         Returns True if:
         - Both are near a major airport (within 5nm)
-        - Both are at low altitude (<3000ft)
+        - Both are at low height above the field (<3000ft AGL)
         - One is climbing (positive VS) and one is descending (negative VS)
         """
-        # Both must be at low altitude
-        if pos1["alt"] > 3000 or pos2["alt"] > 3000:
+        # Both must be near a major airport
+        apt1 = self._nearest_major_airport(pos1["lat"], pos1["lon"])
+        apt2 = self._nearest_major_airport(pos2["lat"], pos2["lon"])
+        if apt1 is None or apt2 is None:
+            return False
+
+        # Both must be low above the field. Altitudes are barometric MSL, so
+        # compare against field elevation — a fixed MSL gate would never match
+        # at high-elevation airports (KDEN 5,434ft, KSLC 4,227ft).
+        if (pos1["alt"] - apt1[3]) > 3000 or (pos2["alt"] - apt2[3]) > 3000:
             return False
 
         # Need vertical rate data for both
@@ -426,14 +792,7 @@ class SafetyMonitor:
             return False
 
         # At least one should have significant vertical rate
-        if abs(vr1) < 300 and abs(vr2) < 300:
-            return False
-
-        # Both must be near a major airport
-        near_airport_1 = self._is_near_major_airport(pos1["lat"], pos1["lon"])
-        near_airport_2 = self._is_near_major_airport(pos2["lat"], pos2["lon"])
-
-        return near_airport_1 and near_airport_2
+        return abs(vr1) >= 300 or abs(vr2) >= 300
 
     def _calculate_closure_rate(self, pos1: dict, pos2: dict) -> float | None:
         """Calculate closure rate between two aircraft in knots."""
@@ -443,7 +802,7 @@ class SafetyMonitor:
             return None
 
         lat_diff = (pos2["lat"] - pos1["lat"]) * 60
-        lon_diff = (pos2["lon"] - pos1["lon"]) * 60 * math.cos(math.radians(pos1["lat"]))
+        lon_diff = wrap_lon_diff(pos2["lon"] - pos1["lon"]) * 60 * math.cos(math.radians(pos1["lat"]))
 
         dist = math.sqrt(lat_diff**2 + lon_diff**2)
         if dist < 0.001:
@@ -482,7 +841,7 @@ class SafetyMonitor:
 
         # Relative position in nautical miles
         avg_lat = (pos1["lat"] + pos2["lat"]) / 2
-        dx = (pos2["lon"] - pos1["lon"]) * 60 * math.cos(math.radians(avg_lat))
+        dx = wrap_lon_diff(pos2["lon"] - pos1["lon"]) * 60 * math.cos(math.radians(avg_lat))
         dy = (pos2["lat"] - pos1["lat"]) * 60
 
         # Velocity components in nm/hour (East/North)
@@ -531,7 +890,7 @@ class SafetyMonitor:
         cpa2_lon = pos2["lon"] + (v2x * t_cpa_hours) / (60 * math.cos(math.radians(pos2["lat"])))
 
         # Distance at CPA
-        cpa_dx = (cpa2_lon - cpa1_lon) * 60 * math.cos(math.radians((cpa1_lat + cpa2_lat) / 2))
+        cpa_dx = wrap_lon_diff(cpa2_lon - cpa1_lon) * 60 * math.cos(math.radians((cpa1_lat + cpa2_lat) / 2))
         cpa_dy = (cpa2_lat - cpa1_lat) * 60
         cpa_distance = math.sqrt(cpa_dx * cpa_dx + cpa_dy * cpa_dy)
 
@@ -545,6 +904,86 @@ class SafetyMonitor:
             "cpa_lat": round(cpa_lat, 6),
             "cpa_lon": round(cpa_lon, 6),
         }
+
+    @staticmethod
+    def _military_role_to_class(role: str) -> str:
+        """Map a military type role string to a safety class key."""
+        r = role.lower()
+        if "helicopter" in r or "tiltrotor" in r:
+            return "rotorcraft"
+        if "uav" in r or "drone" in r:
+            return "uav"
+        if any(k in r for k in ("fighter", "strike", "air superiority", "interceptor", "stealth")):
+            return "fighter"
+        # Tanker, airlifter, AWACS, bomber, recon, VIP, maritime patrol, etc.
+        return "military_transport"
+
+    def _classify_aircraft(self, ac: dict) -> str:
+        """Map an aircraft to a safety class key (see SAFETY_PROFILES).
+
+        Physical ADS-B emitter category wins at the extremes (rotorcraft A7,
+        high-performance A6). Otherwise a military hex/type/role check refines the
+        class (so a mil fast jet reporting a benign category is still a fighter,
+        and a tanker/airlifter is 'military_transport'). Falls back to the civilian
+        emitter-category map, then 'unknown' (full sensitivity).
+        """
+        category = (ac.get("category") or "").upper()
+        type_code = (ac.get("t") or "").upper()
+        hex_id = (ac.get("hex") or "").upper()
+
+        # Authoritative physical extremes from the emitter category
+        if category == "A7":
+            return "rotorcraft"
+        if category == "A6":
+            return "fighter"
+
+        # Military refinement (role is the most specific signal we have)
+        from skyspy.services.military_db import get_military_aircraft_type, identify_military_by_hex
+
+        is_mil_hex = bool(identify_military_by_hex(hex_id))
+        type_info = get_military_aircraft_type(type_code) if type_code else None
+        if type_info and type_info.get("role"):
+            return self._military_role_to_class(type_info["role"])
+
+        # Civilian emitter-category map
+        mapped = self._CATEGORY_CLASS.get(category)
+        if mapped:
+            return mapped
+
+        # Known-military by hex but no role/category detail: assume a fast jet
+        # (the conservative choice for a mil aircraft of unknown type is to
+        # suppress the maneuvering-driven vertical alerts).
+        if is_mil_hex:
+            return "fighter"
+        return "unknown"
+
+    def _has_nearby_traffic(
+        self,
+        icao: str,
+        lat: float | None,
+        lon: float | None,
+        alt: int | None,
+        positions: dict[str, dict],
+        radius_nm: float | None = None,
+        alt_ft: int | None = None,
+    ) -> bool:
+        """True if another airborne aircraft is within the conflict window.
+
+        Used to gate vs_reversal events: a vertical-speed reversal is only a
+        collision-avoidance indicator when there is traffic to avoid.
+        """
+        if not is_valid_position(lat, lon) or alt is None:
+            return False
+        radius_nm = self.VS_REVERSAL_TRAFFIC_NM if radius_nm is None else radius_nm
+        alt_ft = self.VS_REVERSAL_TRAFFIC_FT if alt_ft is None else alt_ft
+        for other, p in positions.items():
+            if other == icao:
+                continue
+            if p["alt"] is None or abs(p["alt"] - alt) > alt_ft:
+                continue
+            if calculate_distance_nm(lat, lon, p["lat"], p["lon"]) <= radius_nm:
+                return True
+        return False
 
     def _update_state(
         self,
@@ -581,14 +1020,23 @@ class SafetyMonitor:
 
     def update_aircraft(self, aircraft_list: list[dict]) -> list[dict]:
         """Process aircraft list and detect safety events."""
+        now = time.time()
+        # Refresh runtime config before the enabled check so an admin can
+        # re-enable monitoring at runtime (a disabled monitor must still poll it)
+        self._refresh_runtime_config(now)
         if not self.enabled:
             return []
 
+        self._rehydrate_active_events()
         self._cleanup_old_state()
         events = []
-        now = time.time()
 
         current_positions = {}
+        # Parsed telemetry per aircraft, collected in pass 1. Pass 2 runs the
+        # per-aircraft event checks — vs_reversal gating needs the COMPLETE
+        # position set (to look for nearby conflicting traffic), so it can't run
+        # until every aircraft in this batch has been parsed.
+        parsed_aircraft = []
 
         for ac in aircraft_list:
             icao = ac.get("hex", "").upper()
@@ -597,39 +1045,89 @@ class SafetyMonitor:
 
             lat = ac.get("lat")
             lon = ac.get("lon")
-            raw_alt = ac.get("alt_baro") or ac.get("alt")
+            raw_alt = first_present(ac.get("alt_baro"), ac.get("alt"))
             # "ground" means explicitly on-ground: don't fall through to geometric
             # altitude (MSL), which would put taxiing aircraft at high-elevation
             # airports into the airborne proximity checks.
             on_ground = isinstance(raw_alt, str) and raw_alt.lower() == "ground"
             alt = safe_int_altitude(raw_alt)
+            # Track which altitude reference this value came from. Barometric and
+            # geometric altitudes can differ by hundreds of feet, so a pair mixing
+            # the two needs a wider separation tolerance (see _check_proximity_conflicts).
+            alt_source = "baro"
             if alt is None:
                 alt = safe_int_altitude(ac.get("alt_geom"))
-            vr = ac.get("baro_rate") or ac.get("geom_rate") or ac.get("vr")
+                alt_source = "geom"
+            # first_present: baro_rate=0 (level flight) is a valid reading and must
+            # not fall through to the noisier geom_rate
+            vr = first_present(ac.get("baro_rate"), ac.get("geom_rate"), ac.get("vr"))
             gs = ac.get("gs")
             track = ac.get("track")
             callsign = (ac.get("flight") or "").strip()
             squawk = ac.get("squawk", "")
 
+            # Ignore stale positions: readsb keeps last-known positions for tens
+            # of seconds; comparing a frozen ghost against live traffic produces
+            # false proximity conflicts (and misses real ones near it)
+            seen_pos = first_present(ac.get("seen_pos"), ac.get("seen"))
+            stale = isinstance(seen_pos, (int, float)) and seen_pos > self.POSITION_STALE_SEC
+
+            # Coarse class (fighter / rotorcraft / light / transport / unknown)
+            # used to tune vertical-speed sensitivity per aircraft type.
+            ac_class = self._classify_aircraft(ac)
+
+            # Non-ICAO address (leading '~'): TIS-B / ADS-R rebroadcast or an
+            # anonymized track. These are low-confidence and routinely SHADOW a
+            # real ADS-B aircraft (the ground station bounces your own traffic
+            # picture back), producing ghost "self-conflicts". Keep them out of
+            # the proximity/nearby-traffic set.
+            is_non_icao = icao.startswith("~")
+
+            # Near-stationary target: a parked aircraft, a ground vehicle, or
+            # clutter reporting a spurious >500ft altitude. Nothing airborne flies
+            # sustained below ~40kt (a C172 stalls near 48kt). Rotorcraft get a much
+            # lower floor since they fly slowly, but a genuinely HOVERING helicopter
+            # (below ROTOR_HOVER_GS_KT) is a fixed point that would raise a fresh
+            # conflict against every aircraft that passes it — excluded. Such targets
+            # also pollute the closure/CPA math with a ~zero velocity vector.
+            if isinstance(gs, (int, float)):
+                gs_floor = self.ROTOR_HOVER_GS_KT if ac_class == "rotorcraft" else self.MIN_AIRBORNE_GS_KT
+                too_slow = gs < gs_floor
+            else:
+                too_slow = False
+
             # Only include in proximity check if airborne (>500ft) with valid position
-            if not on_ground and is_valid_position(lat, lon) and alt is not None and alt >= 500:
+            if (
+                not on_ground
+                and not stale
+                and not is_non_icao
+                and not too_slow
+                and is_valid_position(lat, lon)
+                and alt is not None
+                and alt >= 500
+            ):
                 current_positions[icao] = {
                     "lat": lat,
                     "lon": lon,
                     "alt": alt,
+                    "alt_source": alt_source,
                     "vr": vr,
                     "gs": gs,
                     "track": track,
                     "callsign": callsign,
+                    "ac_class": ac_class,
                     "raw": ac,
                 }
 
+            parsed_aircraft.append((icao, callsign, vr, alt, lat, lon, gs, track, squawk, ac_class, ac))
+
+        for icao, callsign, vr, alt, lat, lon, gs, track, squawk, ac_class, ac in parsed_aircraft:
             # Check for emergency squawks
             emergency_events = self._check_emergency_squawk(icao, callsign, squawk, ac)
             events.extend(emergency_events)
 
-            # Check for VS-related events
-            vs_events = self._check_vertical_speed_events(icao, callsign, vr, alt, ac, now)
+            # Check for VS-related events (nearby-traffic gate needs full positions)
+            vs_events = self._check_vertical_speed_events(icao, callsign, vr, alt, ac, now, current_positions, ac_class)
             events.extend(vs_events)
 
             self._update_state(icao, vr, alt, lat, lon, gs, track, now)
@@ -640,23 +1138,57 @@ class SafetyMonitor:
 
         # Store all events and return with IDs.
         # Persistent events (e.g. emergency squawks) are re-detected every cycle;
-        # only persist/broadcast them once when the condition starts.
+        # persist/broadcast them once when the condition starts, and push an
+        # update (plus DB severity refresh) when a live event materially changes
+        # (e.g. a proximity conflict escalating from 'low' to 'critical').
         stored_events = []
         for e in events:
             stored, created = self._store_event(e)
+            changed = stored.pop("_changed", False)
             stored_events.append(stored)
             if created:
                 self._store_and_broadcast_event(e)
+            elif changed:
+                self._update_db_event(stored)
+                self.broadcast_event_updated(stored)
 
         return stored_events
+
+    def _update_db_event(self, event: dict):
+        """Refresh the persisted row for an active event whose severity/message changed."""
+        db_id = event.get("db_id")
+        if not db_id:
+            return
+        try:
+            SafetyEvent.objects.filter(id=db_id).update(
+                severity=event.get("severity"),
+                message=event.get("message"),
+                details=event.get("details"),
+                cpa_distance_nm=event.get("cpa_distance_nm"),
+                cpa_time_seconds=event.get("cpa_time_seconds"),
+                cpa_lat=event.get("cpa_lat"),
+                cpa_lon=event.get("cpa_lon"),
+            )
+        except (DatabaseError, InterfaceError) as e:
+            logger.error(f"Failed to update safety event {db_id}: {type(e).__name__}: {e}")
 
     def _check_emergency_squawk(self, icao: str, callsign: str, squawk: str, ac: dict) -> list[dict]:
         """Check for emergency squawk codes."""
         events = []
 
+        # Resolve any active squawk event whose code the aircraft no longer
+        # transmits — otherwise a plane back on 1200 keeps its HIJACK/RADIO
+        # FAILURE banner for the full EVENT_EXPIRY window.
+        self._resolve_cleared_squawk_events(icao, squawk)
+
         if not squawk or squawk not in EMERGENCY_SQUAWKS:
             return events
 
+        # Alert on the FIRST sighting. A transponder dialing through 75xx/76xx/
+        # 77xx is a real false-positive source, but a debounce means an aircraft
+        # decoded on a single cycle (edge of coverage, intermittent reception)
+        # never alerts at all — a missed real emergency is strictly worse than a
+        # brief false alarm, which self-resolves when the code changes.
         squawk_info = EMERGENCY_SQUAWKS[squawk]
         display_name = callsign or icao
 
@@ -675,12 +1207,12 @@ class SafetyMonitor:
                     "squawk": squawk,
                     "squawk_type": squawk_info["type"],
                     "squawk_label": squawk_info["label"],
-                    "altitude": ac.get("alt_baro") or ac.get("alt_geom") or ac.get("alt"),
+                    "altitude": first_present(ac.get("alt_baro"), ac.get("alt_geom"), ac.get("alt")),
                     "lat": ac.get("lat"),
                     "lon": ac.get("lon"),
                     "gs": ac.get("gs"),
                     "track": ac.get("track"),
-                    "vr": ac.get("baro_rate") or ac.get("geom_rate") or ac.get("vr"),
+                    "vr": first_present(ac.get("baro_rate"), ac.get("geom_rate"), ac.get("vr")),
                 },
                 "aircraft_snapshot": self._build_aircraft_snapshot(ac),
             }
@@ -688,8 +1220,29 @@ class SafetyMonitor:
 
         return events
 
+    def _resolve_cleared_squawk_events(self, icao: str, current_squawk: str | None):
+        """Resolve active emergency-squawk events for codes no longer transmitted. Thread-safe."""
+        cleared = []
+        with self._events_lock:
+            for info in EMERGENCY_SQUAWKS.values():
+                event_id = f"squawk_{info['type']}:{icao}"
+                event = self._active_events.get(event_id)
+                if event is not None and event.get("squawk") != current_squawk:
+                    cleared.append(self._active_events.pop(event_id))
+                    self._acknowledged_events.discard(event_id)
+        for event in cleared:
+            self.broadcast_event_resolved(event)
+
     def _check_vertical_speed_events(
-        self, icao: str, callsign: str, current_vs: int | None, alt: int | None, ac: dict, now: float
+        self,
+        icao: str,
+        callsign: str,
+        current_vs: int | None,
+        alt: int | None,
+        ac: dict,
+        now: float,
+        positions: dict[str, dict] | None = None,
+        ac_class: str = "unknown",
     ) -> list[dict]:
         """Check for VS-related safety events."""
         events = []
@@ -699,18 +1252,30 @@ class SafetyMonitor:
 
         abs_vs = abs(current_vs)
         display_name = callsign or icao
+        profile = get_safety_profile(ac_class)
 
-        # Extreme vertical speed (threshold is 6000 fpm)
-        if abs_vs >= self.vs_extreme_threshold and self._can_trigger_event("extreme_vs", icao):
+        # Extreme vertical speed (default threshold 9000 fpm — jets routinely
+        # sustain 6000+ fpm on normal descents, so a lower floor floods on them).
+        # Each profile can raise the floor (fighters zoom-climb/dive far past it).
+        extreme_threshold = max(self.vs_extreme_threshold, profile.extreme_vs_floor)
+        if abs_vs >= extreme_threshold:
             direction = "climbing" if current_vs > 0 else "descending"
 
-            if abs_vs >= 8000:
+            if abs_vs >= 12000:
                 severity = "critical"
-            elif abs_vs >= 7000:
+            elif abs_vs >= 10500:
                 severity = "warning"
             else:
                 severity = "low"
+        else:
+            severity = None
 
+        # Escalation bypasses the cooldown: a dive that worsens from 'low' to
+        # 'critical' inside the 60s window must still re-alert
+        if severity is not None and (
+            self._can_trigger_event("extreme_vs", icao)
+            or self._is_severity_escalation("extreme_vs", icao, None, severity)
+        ):
             events.append(
                 {
                     "event_type": "extreme_vs",
@@ -723,7 +1288,8 @@ class SafetyMonitor:
                     "details": {
                         "vertical_rate": current_vs,
                         "altitude": alt,
-                        "threshold": self.vs_extreme_threshold,
+                        "threshold": extreme_threshold,
+                        "ac_class": ac_class,
                         "lat": ac.get("lat"),
                         "lon": ac.get("lon"),
                         "gs": ac.get("gs"),
@@ -734,21 +1300,35 @@ class SafetyMonitor:
             )
             self._mark_event_triggered("extreme_vs", icao)
 
-        # VS reversal detection (potential TCAS RA)
+        # VS reversal detection (potential TCAS RA). Gated per profile: fighters,
+        # rotorcraft, gliders, light GA and UAVs reverse vertical speed as normal
+        # maneuvering, not collision avoidance, so their profiles disable it.
         state = self._aircraft_state.get(icao)
-        if state and len(state.get("vs_history", [])) >= 2:
+        if (profile.vs_reversal or profile.tcas_ra) and state and len(state.get("vs_history", [])) >= 2:
             vs_history = state["vs_history"]
 
-            # Look for VS from ~4 seconds ago
+            # Look for VS from ~4 seconds ago, bounded by the history retention
+            # window: after a data gap (level flight without VS, coverage loss)
+            # a minutes-old climb sample must not be compared against the
+            # current VS as if it were 4 seconds ago.
+            # NOTE: _update_state runs after this check, so vs_history holds
+            # only past samples — the most recent entry is the previous frame.
             target_time = now - 4
+            oldest_valid = now - self.HISTORY_RETENTION
             prev_vs = None
-            for t, v in reversed(vs_history[:-1]):
+            for t, v in reversed(vs_history):
                 if t <= target_time:
-                    prev_vs = v
+                    if t >= oldest_valid:
+                        prev_vs = v
                     break
 
-            if prev_vs is None and len(vs_history) >= 2:
-                prev_vs = vs_history[-2][1]
+            if prev_vs is None:
+                # Fallback for poll cadences under 4s: most recent sample that
+                # is at least 2s old and still within retention
+                for t, v in reversed(vs_history):
+                    if now - 2 >= t >= oldest_valid:
+                        prev_vs = v
+                        break
 
             if prev_vs is not None:
                 # Check for sign change (reversal)
@@ -757,15 +1337,22 @@ class SafetyMonitor:
                 if is_sign_change:
                     abs_change = abs(current_vs - prev_vs)
 
-                    # Skip VS reversals during takeoff
-                    is_takeoff = alt is not None and alt < 3000 and current_vs > 0
+                    # Skip VS reversals during takeoff/go-around. Use height above
+                    # the field when near a listed airport (MSL would make this
+                    # gate dead at high-elevation fields and over-broad at sea level).
+                    alt_agl = alt
+                    if alt is not None and is_valid_position(ac.get("lat"), ac.get("lon")):
+                        apt = self._nearest_major_airport(ac.get("lat"), ac.get("lon"))
+                        if apt is not None:
+                            alt_agl = alt - apt[3]
+                    is_takeoff = alt_agl is not None and alt_agl < 3000 and current_vs > 0
 
                     # TCAS RA: High magnitude reversal
                     is_tcas_ra = not is_takeoff and (
                         abs(prev_vs) >= self.tcas_vs_threshold and abs(current_vs) >= self.tcas_vs_threshold
                     )
 
-                    if is_tcas_ra and self._can_trigger_event("tcas_ra", icao):
+                    if is_tcas_ra and profile.tcas_ra and self._can_trigger_event("tcas_ra", icao):
                         msg = f"TCAS RA suspected: {display_name} VS reversed from {prev_vs:+d} to {current_vs:+d} fpm"
                         events.append(
                             {
@@ -793,10 +1380,21 @@ class SafetyMonitor:
                         self._mark_event_triggered("tcas_ra", icao)
 
                     elif not is_takeoff and abs_change >= self.vs_change_threshold:
-                        # Regular VS reversal
+                        # Regular VS reversal. Two noise gates (the high-magnitude
+                        # TCAS RA above bypasses both):
+                        #  1. Require conflicting traffic nearby — a lone aircraft
+                        #     maneuvering (level-off, pattern/practice-area airwork)
+                        #     reverses VS constantly and is not a TCAS response.
+                        #  2. Suppress "low"-magnitude reversals as non-actionable.
                         severity = "warning" if abs_change >= 4000 else "low"
+                        has_traffic = self._has_nearby_traffic(icao, ac.get("lat"), ac.get("lon"), alt, positions or {})
 
-                        if self._can_trigger_event("vs_reversal", icao):
+                        if (
+                            profile.vs_reversal
+                            and has_traffic
+                            and not (self.SUPPRESS_LOW_SEVERITY and severity == "low")
+                            and self._can_trigger_event("vs_reversal", icao)
+                        ):
                             msg = f"VS reversal: {display_name} {prev_vs:+d} → {current_vs:+d} fpm"
                             events.append(
                                 {
@@ -825,13 +1423,36 @@ class SafetyMonitor:
 
         return events
 
+    @staticmethod
+    def _project_altitude(alt: int, vr: int | None, t_sec: float) -> float:
+        """Altitude (ft) projected t_sec into the future at vertical rate vr (fpm)."""
+        return alt + (vr or 0) * (t_sec / 60.0)
+
+    def _vertical_sep_at(self, pos1: dict, pos2: dict, t_sec: float) -> float:
+        """Predicted vertical separation (ft) between the pair at time t_sec.
+
+        Uses each aircraft's vertical speed so a climbing/descending pair is
+        assessed at where they WILL be, not where they are now.
+        """
+        a1 = self._project_altitude(pos1["alt"], pos1.get("vr"), t_sec)
+        a2 = self._project_altitude(pos2["alt"], pos2.get("vr"), t_sec)
+        return abs(a1 - a2)
+
     def _check_proximity_conflicts(self, positions: dict[str, dict]) -> list[dict]:
-        """Check for proximity conflicts between aircraft pairs."""
+        """Check for proximity conflicts between aircraft pairs.
+
+        Predictive: projects each pair forward along track + groundspeed
+        (horizontal CPA) and along vertical speed (vertical separation at that
+        time), so a conflict is judged on where the aircraft are HEADING, not
+        only where they are now.
+        """
         events = []
         icao_list = list(positions.keys())
 
-        # Pre-calculate bounding box threshold in degrees
-        deg_threshold = (self.proximity_nm / 60.0) * 2.0
+        # Bounding box sized to the predictive look-ahead radius so converging
+        # traffic that is still farther than proximity_nm is admitted for the CPA
+        # projection below (unscaled — the per-pair scale only tightens the gate).
+        deg_threshold = (max(self.proximity_nm, self.PREDICT_RADIUS_NM) / 60.0) * 2.0
 
         for i, icao1 in enumerate(icao_list):
             pos1 = positions[icao1]
@@ -843,48 +1464,131 @@ class SafetyMonitor:
                 if lat_diff > deg_threshold:
                     continue
                 lon_diff = abs(pos1["lon"] - pos2["lon"])
-                if lon_diff > deg_threshold:
+                if lon_diff > 180:
+                    lon_diff = 360 - lon_diff  # Wrap across the antimeridian
+                # One degree of longitude spans 60*cos(lat) nm — without the
+                # cos scaling, genuinely close pairs above ~60° latitude would
+                # be discarded before the haversine check
+                lat_scale = max(0.05, math.cos(math.radians(pos1["lat"])))
+                if lon_diff > deg_threshold / lat_scale:
                     continue
 
                 dist_nm = calculate_distance_nm(pos1["lat"], pos1["lon"], pos2["lat"], pos2["lon"])
 
-                if dist_nm > self.proximity_nm:
-                    continue
+                # Type-aware sensitivity: light GA / rotorcraft / gliders / UAVs
+                # legally pass within 0.5nm under VFR see-and-avoid, so their gates
+                # are tightened by proximity_scale. A mixed pair uses the MORE
+                # sensitive class (max scale) so light-vs-airliner keeps full range.
+                scale = max(
+                    get_safety_profile(pos1.get("ac_class")).proximity_scale,
+                    get_safety_profile(pos2.get("ac_class")).proximity_scale,
+                )
+                prox_gate = self.proximity_nm * scale
 
                 alt_diff = abs(pos1["alt"] - pos2["alt"])
-                if alt_diff > self.altitude_diff_ft:
-                    continue
+                # Widen the skip gate when the pair mixes baro/geom altitude sources —
+                # a reference mismatch shouldn't silence a genuine loss of separation.
+                alt_gate = self.altitude_diff_ft * scale
+                if pos1.get("alt_source") != pos2.get("alt_source"):
+                    alt_gate += self.MIXED_ALT_SOURCE_MARGIN_FT
 
-                # Skip takeoff/landing pairs at major airports
-                if self._is_takeoff_landing_pair(pos1, pos2):
-                    continue
-
+                # --- Predictive 3D projection ---
+                # Horizontal closest point of approach from track + groundspeed,
+                # then the VERTICAL separation AT that time from each aircraft's
+                # climb/descent rate. This judges the pair on where they are
+                # HEADING: a pair 900ft apart now but converging to co-altitude at
+                # the CPA is a conflict; a pair co-altitude now but with one climbing
+                # away (vertically resolved by the CPA) is not.
                 closure_rate = self._calculate_closure_rate(pos1, pos2)
-
-                # Calculate CPA (Closest Point of Approach)
                 cpa = self._calculate_cpa(pos1, pos2)
+                has_kinematics = (
+                    pos1["gs"] is not None
+                    and pos2["gs"] is not None
+                    and pos1["track"] is not None
+                    and pos2["track"] is not None
+                )
+                converging = False
+                horiz_cpa = vert_cpa = None
+                t_conflict = 0.0
+                if cpa is not None and 0 <= cpa["cpa_time_seconds"] <= self.CPA_TIME_HORIZON_SEC:
+                    horiz_cpa = cpa["cpa_distance_nm"]
+                    vert_cpa = self._vertical_sep_at(pos1, pos2, cpa["cpa_time_seconds"])
+                    if horiz_cpa <= dist_nm:  # actually getting closer horizontally
+                        converging = True
+                        t_conflict = cpa["cpa_time_seconds"]
 
-                # Skip if aircraft are diverging
-                if dist_nm > 0.5 and closure_rate is not None and closure_rate <= 0:
+                # Horizontal gate: protected radius penetrated now OR at a
+                # converging CPA within the look-ahead horizon.
+                if dist_nm > prox_gate and not (converging and horiz_cpa <= prox_gate):
                     continue
 
-                # Check track difference for passed aircraft
-                if dist_nm > 0.5 and pos1["track"] is not None and pos2["track"] is not None:
-                    track_diff = abs(pos1["track"] - pos2["track"])
-                    if track_diff > 180:
-                        track_diff = 360 - track_diff
-                    if track_diff > 150:
-                        continue
+                # Divergence filter: beyond the near-miss floor, only actively
+                # converging pairs alert (a 0.2nm co-altitude pair that is
+                # separating is not a conflict). Pairs without kinematics
+                # (missing gs/track) can't be assessed, so they fall through on
+                # current geometry.
+                if dist_nm > self.ALWAYS_ALERT_RADIUS_NM and has_kinematics and not converging:
+                    continue
 
-                if self._can_trigger_event("proximity_conflict", icao1, icao2):
-                    # Severity levels
-                    if dist_nm < 0.25 and alt_diff < 300:
-                        severity = "critical"
-                    elif dist_nm < 0.35 or alt_diff < 400:
-                        severity = "warning"
-                    else:
-                        severity = "low"
+                # Assess at the predicted closest approach when converging,
+                # otherwise on current geometry.
+                if converging:
+                    assess_dist, assess_alt = horiz_cpa, vert_cpa
+                else:
+                    assess_dist, assess_alt = dist_nm, alt_diff
 
+                # Vertical gate (predictive): if the pair never comes within the
+                # altitude window at the conflict point, it isn't a conflict.
+                if assess_alt > alt_gate or assess_dist > prox_gate:
+                    continue
+
+                # Severity from the assessed (current or predicted) geometry. Tiers
+                # scale with the class so severity tracks the alert envelope.
+                if assess_dist < 0.25 * scale and assess_alt < 300 * scale:
+                    severity = "critical"
+                elif assess_dist < 0.35 * scale or assess_alt < 400 * scale:
+                    severity = "warning"
+                else:
+                    severity = "low"
+
+                # Loose "low" geometry is the normal state of busy terminal
+                # airspace, not an actionable loss of separation — suppress it.
+                if self.SUPPRESS_LOW_SEVERITY and severity == "low":
+                    continue
+
+                # Two formation-capable aircraft (fighters, rotorcraft, tankers)
+                # this close are almost certainly intentional formation flight, not
+                # a conflict. Suppress when EITHER the geometry is non-critical, OR
+                # they are station-keeping — matched velocity (near-zero closure,
+                # not converging), the defining signature of formation. A pair that
+                # is actively CONVERGING into critical geometry still alerts (a real
+                # overtake / formation breakdown), and a pair with no kinematics is
+                # never assumed to be formation (can't confirm station-keeping).
+                both_formation = (
+                    get_safety_profile(pos1.get("ac_class")).formation
+                    and get_safety_profile(pos2.get("ac_class")).formation
+                )
+                station_keeping = (
+                    has_kinematics
+                    and not converging
+                    and closure_rate is not None
+                    and abs(closure_rate) < self.FORMATION_STATION_KEEP_KT
+                )
+                if both_formation and (severity != "critical" or station_keeping):
+                    continue
+
+                # Skip takeoff/landing pairs at major airports — but never
+                # suppress critical geometry: a departure/arrival pair at
+                # <0.25nm/<300ft is a genuine loss of separation, exactly the
+                # scenario this filter must not silence
+                if severity != "critical" and self._is_takeoff_landing_pair(pos1, pos2):
+                    continue
+
+                # Escalation bypasses the cooldown: a conflict that worsens
+                # within the 60s window must still re-alert
+                if self._can_trigger_event("proximity_conflict", icao1, icao2) or self._is_severity_escalation(
+                    "proximity_conflict", icao1, icao2, severity
+                ):
                     display1 = pos1["callsign"] or icao1
                     display2 = pos2["callsign"] or icao2
                     msg = (
@@ -893,7 +1597,10 @@ class SafetyMonitor:
                         f"{alt_diff}ft altitude separation"
                     )
 
-                    if closure_rate is not None and closure_rate > 0:
+                    if converging:
+                        # Predicted closest approach from track/gs + vertical speed
+                        msg += f", converging to {horiz_cpa:.2f}nm / {int(round(vert_cpa))}ft in {t_conflict:.0f}s"
+                    elif closure_rate is not None and closure_rate > 0:
                         msg += f", closure rate {closure_rate:.0f}kt"
 
                     events.append(
@@ -916,6 +1623,13 @@ class SafetyMonitor:
                                 "horizontal_nm": round(dist_nm, 3),
                                 "vertical_ft": alt_diff,
                                 "cpa": cpa,  # May be None if CPA can't be calculated
+                                # Predictive 3D closest approach (track/gs + vertical speed)
+                                "predicted": {
+                                    "converging": converging,
+                                    "seconds_to_cpa": round(t_conflict, 1) if converging else None,
+                                    "cpa_horizontal_nm": round(horiz_cpa, 3) if horiz_cpa is not None else None,
+                                    "cpa_vertical_ft": int(round(vert_cpa)) if vert_cpa is not None else None,
+                                },
                                 "aircraft_1": {
                                     "icao": icao1,
                                     "callsign": display1,
@@ -961,10 +1675,27 @@ class SafetyMonitor:
         }
         socket_event = event_name_map.get(event_type, "safety:event")
 
+        # Emit the DB id as the shared `id` so live pushes match snapshot-loaded
+        # events (the snapshot uses str(SafetyEvent.id)). Preserve the internal
+        # string id (the _active_events key) as `internal_id` for debugging.
+        # Only new-event broadcasts stamp `timestamp` (the occurrence time):
+        # clients merge update/resolve payloads over their stored event
+        # ({...event, ...update}), so stamping those would overwrite the
+        # original occurrence time with the ack/update time on every client.
+        now_iso = timezone.now().isoformat().replace("+00:00", "Z")
+        payload = {**event, "event_action": event_type, "updated_at": now_iso}
+        if event_type == "safety_event":
+            payload["timestamp"] = now_iso
+        internal_id = payload.get("id")
+        db_id = payload.get("db_id")
+        if db_id is not None:
+            payload["id"] = str(db_id)
+            payload["internal_id"] = internal_id
+
         try:
             sync_emit(
                 socket_event,
-                {**event, "event_action": event_type, "timestamp": timezone.now().isoformat().replace("+00:00", "Z")},
+                payload,
                 room="topic_safety",
             )
         except (ConnectionError, OSError, RuntimeError) as e:
@@ -990,17 +1721,31 @@ class SafetyMonitor:
                 cpa_lat=event.get("cpa_lat"),
                 cpa_lon=event.get("cpa_lon"),
             )
-            # Store DB ID back in active event (with lock)
+            # Store DB ID back in active event (with lock) and on the local dict
+            # so the broadcast below carries it as the shared `id`.
+            event["db_id"] = db_event.id
             event_id = event.get("id")
             if event_id:
                 with self._events_lock:
                     if event_id in self._active_events:
                         self._active_events[event_id]["db_id"] = db_event.id
-        except DatabaseError as e:
+        except (DatabaseError, InterfaceError) as e:
+            # InterfaceError is a sibling of DatabaseError (not a subclass): a
+            # stale/broken connection mid-emergency must not skip the broadcast
             logger.error(f"Failed to store safety event: {type(e).__name__}: {e}")
 
         # Broadcast new event to WebSocket clients
         self._broadcast_event("safety_event", event)
+
+        # Route to the notification pipeline (Discord/Slack/ntfy/... via
+        # Apprise) — this is the only path that produces push notifications
+        # for emergency squawks, TCAS RAs, and proximity conflicts.
+        try:
+            from skyspy.services.notification_dispatcher import notification_dispatcher
+
+            notification_dispatcher.dispatch_safety_event(event)
+        except Exception:  # broad: notification fan-out must never break safety event storage/broadcast
+            logger.exception("Failed to dispatch safety event notifications")
 
     def broadcast_event_updated(self, event: dict):
         """Broadcast an event update (e.g., acknowledgment change)."""
@@ -1044,6 +1789,29 @@ class SafetyMonitor:
             "altitude_diff_ft": self.altitude_diff_ft,
             "tcas_vs_threshold": self.tcas_vs_threshold,
             "closure_rate_kt": self.closure_rate_kt,
+            "type_profiles": self.get_type_profiles(),
+        }
+
+    def get_type_profiles(self) -> dict:
+        """Per-aircraft-class safety profiles and their effective thresholds.
+
+        Exposes the type-aware tuning so the UI/admin can see why an aircraft of
+        a given class is (or isn't) monitored for each check.
+        """
+        return {
+            key: {
+                "label": p.label,
+                "description": p.description,
+                # Effective extreme-VS floor honours the configured global threshold
+                "extreme_vs_floor": max(self.vs_extreme_threshold, p.extreme_vs_floor),
+                "vs_reversal": p.vs_reversal,
+                "tcas_ra": p.tcas_ra,
+                "formation_suppression": p.formation,
+                "proximity_scale": p.proximity_scale,
+                # Effective alert radius for a same-class pair
+                "proximity_alert_nm": round(self.proximity_nm * p.proximity_scale, 3),
+            }
+            for key, p in SAFETY_PROFILES.items()
         }
 
     def get_state(self) -> dict:
@@ -1253,16 +2021,22 @@ class SafetyMonitor:
             }
         )
 
-        # Add all test events to active events (with lock for thread safety)
-        with self._events_lock:
-            for event in test_events:
-                event_id = f"test_{event['event_type']}:{event['icao']}:{uuid.uuid4().hex[:8]}"
-                event["id"] = event_id
-                event["created_at"] = now
-                event["last_seen"] = now
-                event["acknowledged"] = False
-                event["is_test"] = True
-                self._active_events[event_id] = event
+        # Broadcast each test event so dashboards receive them live. Test
+        # events are deliberately NOT persisted to the DB and NOT routed to the
+        # notification pipeline: a fake "Squawk 7500 (Hijack)" must never page
+        # real channels or pollute SafetyEvent history / worker rehydration.
+        # Deliberately NOT added to _active_events either: this runs in the web
+        # process, whose monitor never runs update_aircraft/_cleanup_old_state,
+        # so entries there would be invisible to clients and leak forever.
+        for event in test_events:
+            event_id = f"test_{event['event_type']}:{event['icao']}:{uuid.uuid4().hex[:8]}"
+            event["id"] = event_id
+            event["created_at"] = now
+            event["last_seen"] = now
+            event["acknowledged"] = False
+            event["is_test"] = True
+            event.setdefault("details", {})["is_test"] = True
+            self._broadcast_event("safety_event", event)
 
         logger.info(f"Generated {len(test_events)} test safety events")
         return test_events

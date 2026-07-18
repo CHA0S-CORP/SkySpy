@@ -7,7 +7,9 @@ import api from '../../lib/api';
 // Mock the api module
 vi.mock('../../lib/api', () => ({
   default: {
-    get: vi.fn(),
+    getStats: vi.fn(),
+    getStatsSession: vi.fn(),
+    getStatsRecords: vi.fn(),
   },
 }));
 
@@ -57,7 +59,7 @@ describe('useStatsQueries', () => {
         last_update: '2024-01-01T12:00:00Z',
       };
 
-      api.get.mockResolvedValue(mockStats);
+      api.getStats.mockResolvedValue(mockStats);
 
       const { result } = renderHook(() => useStats(), {
         wrapper: createWrapper(),
@@ -70,12 +72,12 @@ describe('useStatsQueries', () => {
       });
 
       expect(result.current.data).toEqual(mockStats);
-      expect(api.get).toHaveBeenCalledWith('/stats/current/');
+      expect(api.getStats).toHaveBeenCalledTimes(1);
     });
 
     it('should handle fetch error', async () => {
       const mockError = new Error('Failed to fetch stats');
-      api.get.mockRejectedValue(mockError);
+      api.getStats.mockRejectedValue(mockError);
 
       const { result } = renderHook(() => useStats(), {
         wrapper: createWrapper(),
@@ -89,7 +91,7 @@ describe('useStatsQueries', () => {
     });
 
     it('should accept custom options', async () => {
-      api.get.mockResolvedValue({});
+      api.getStats.mockResolvedValue({});
 
       const { result } = renderHook(() => useStats({ enabled: false }), {
         wrapper: createWrapper(),
@@ -97,11 +99,11 @@ describe('useStatsQueries', () => {
 
       expect(result.current.isLoading).toBe(false);
       expect(result.current.isFetched).toBe(false);
-      expect(api.get).not.toHaveBeenCalled();
+      expect(api.getStats).not.toHaveBeenCalled();
     });
 
     it('should have correct stale time', async () => {
-      api.get.mockResolvedValue({ aircraft_count: 10 });
+      api.getStats.mockResolvedValue({ aircraft_count: 10 });
 
       const { result } = renderHook(() => useStats(), {
         wrapper: createWrapper(),
@@ -116,7 +118,7 @@ describe('useStatsQueries', () => {
     });
 
     it('should return zero counts on empty response', async () => {
-      api.get.mockResolvedValue({
+      api.getStats.mockResolvedValue({
         aircraft_count: 0,
         positions_per_second: 0,
         unique_aircraft_24h: 0,
@@ -147,7 +149,7 @@ describe('useStatsQueries', () => {
         peak_time: '2024-01-01T10:30:00Z',
       };
 
-      api.get.mockResolvedValue(mockSessionStats);
+      api.getStatsSession.mockResolvedValue(mockSessionStats);
 
       const { result } = renderHook(() => useSessionStats(), {
         wrapper: createWrapper(),
@@ -158,12 +160,12 @@ describe('useStatsQueries', () => {
       });
 
       expect(result.current.data).toEqual(mockSessionStats);
-      expect(api.get).toHaveBeenCalledWith('/stats/session/');
+      expect(api.getStatsSession).toHaveBeenCalledTimes(1);
     });
 
     it('should handle fetch error', async () => {
       const mockError = new Error('Failed to fetch session stats');
-      api.get.mockRejectedValue(mockError);
+      api.getStatsSession.mockRejectedValue(mockError);
 
       const { result } = renderHook(() => useSessionStats(), {
         wrapper: createWrapper(),
@@ -177,7 +179,7 @@ describe('useStatsQueries', () => {
     });
 
     it('should accept custom options', async () => {
-      api.get.mockResolvedValue({});
+      api.getStatsSession.mockResolvedValue({});
 
       const { result } = renderHook(() => useSessionStats({ enabled: false }), {
         wrapper: createWrapper(),
@@ -185,11 +187,11 @@ describe('useStatsQueries', () => {
 
       expect(result.current.isLoading).toBe(false);
       expect(result.current.isFetched).toBe(false);
-      expect(api.get).not.toHaveBeenCalled();
+      expect(api.getStatsSession).not.toHaveBeenCalled();
     });
 
     it('should handle no active session', async () => {
-      api.get.mockResolvedValue({
+      api.getStatsSession.mockResolvedValue({
         session_id: null,
         started_at: null,
         message: 'No active session',
@@ -240,7 +242,7 @@ describe('useStatsQueries', () => {
         },
       };
 
-      api.get.mockResolvedValue(mockRecords);
+      api.getStatsRecords.mockResolvedValue(mockRecords);
 
       const { result } = renderHook(() => useRecordStats(), {
         wrapper: createWrapper(),
@@ -251,12 +253,12 @@ describe('useStatsQueries', () => {
       });
 
       expect(result.current.data).toEqual(mockRecords);
-      expect(api.get).toHaveBeenCalledWith('/stats/records/');
+      expect(api.getStatsRecords).toHaveBeenCalledTimes(1);
     });
 
     it('should handle fetch error', async () => {
       const mockError = new Error('Failed to fetch record stats');
-      api.get.mockRejectedValue(mockError);
+      api.getStatsRecords.mockRejectedValue(mockError);
 
       const { result } = renderHook(() => useRecordStats(), {
         wrapper: createWrapper(),
@@ -270,7 +272,7 @@ describe('useStatsQueries', () => {
     });
 
     it('should accept custom options', async () => {
-      api.get.mockResolvedValue({});
+      api.getStatsRecords.mockResolvedValue({});
 
       const { result } = renderHook(() => useRecordStats({ enabled: false }), {
         wrapper: createWrapper(),
@@ -278,11 +280,11 @@ describe('useStatsQueries', () => {
 
       expect(result.current.isLoading).toBe(false);
       expect(result.current.isFetched).toBe(false);
-      expect(api.get).not.toHaveBeenCalled();
+      expect(api.getStatsRecords).not.toHaveBeenCalled();
     });
 
     it('should return empty records when no data', async () => {
-      api.get.mockResolvedValue({
+      api.getStatsRecords.mockResolvedValue({
         most_aircraft: null,
         longest_track: null,
         highest_altitude: null,
@@ -303,7 +305,7 @@ describe('useStatsQueries', () => {
     });
 
     it('should handle partial record data', async () => {
-      api.get.mockResolvedValue({
+      api.getStatsRecords.mockResolvedValue({
         most_aircraft: { count: 50 },
         longest_track: null,
         highest_altitude: { altitude_ft: 45000 },
@@ -329,10 +331,9 @@ describe('useStatsQueries', () => {
       const mockSession = { session_id: 'sess_123' };
       const mockRecords = { most_aircraft: { count: 100 } };
 
-      api.get
-        .mockResolvedValueOnce(mockCurrent)
-        .mockResolvedValueOnce(mockSession)
-        .mockResolvedValueOnce(mockRecords);
+      api.getStats.mockResolvedValueOnce(mockCurrent);
+      api.getStatsSession.mockResolvedValueOnce(mockSession);
+      api.getStatsRecords.mockResolvedValueOnce(mockRecords);
 
       const wrapper = createWrapper();
 

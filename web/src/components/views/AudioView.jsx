@@ -86,7 +86,10 @@ export function AudioView({ apiBase, onSelectAircraft }) {
 
   // Data fetching
   const { data, loading, refetch } = useSocketApi(endpoint, null, apiBase, {});
-  const { data: statsData } = useSocketApi('/api/v1/audio?stats=true', null, apiBase, {});
+  // Use the dedicated stats action, not a ?stats=true query param (which the
+  // list endpoint ignores — it returned the transmission list, so the stats bar
+  // read undefined totals and showed 0).
+  const { data: statsData } = useSocketApi('/api/v1/audio/stats/', null, apiBase, {});
   const { data: statusData } = useSocketApi('/api/v1/system/status', null, apiBase, {});
 
   // Extract unique channels from stats
@@ -116,13 +119,17 @@ export function AudioView({ apiBase, onSelectAircraft }) {
     };
   }, [timeRange, statusFilter, channelFilter, refetch]);
 
-  // Merge realtime transmissions with API data
+  // Merge realtime transmissions with API data.
+  // The audio list endpoint returns { transmissions: [...] } when unpaginated
+  // but DRF's paginated shape { count, results: [...] } once a limit/page param
+  // is sent (the view always requests ?limit=100), so accept both keys — reading
+  // only `transmissions` made the Radio view show nothing.
+  const apiTransmissions = data?.transmissions || data?.results || [];
   const mergedTransmissions = useMemo(() => {
-    const apiTransmissions = data?.transmissions || [];
     const apiIds = new Set(apiTransmissions.map((t) => t.id));
     const newFromSocket = realtimeTransmissions.filter((t) => !apiIds.has(t.id));
     return [...newFromSocket, ...apiTransmissions];
-  }, [data?.transmissions, realtimeTransmissions]);
+  }, [apiTransmissions, realtimeTransmissions]);
 
   // Extract unique airlines
   const availableAirlines = useMemo(() => {

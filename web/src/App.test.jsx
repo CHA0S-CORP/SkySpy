@@ -4,24 +4,61 @@ import App from './App';
 
 // Mock all heavy dependencies
 vi.mock('./components/layout', () => ({
-  Sidebar: ({ activeTab, setActiveTab, connected, collapsed, setCollapsed, stats }) => (
-    <div data-testid="sidebar" data-active-tab={activeTab} data-connected={connected}>
-      <button onClick={() => setActiveTab('map')}>Map</button>
-      <button onClick={() => setActiveTab('aircraft')}>Aircraft</button>
-      <button onClick={() => setActiveTab('alerts')}>Alerts</button>
-      <button onClick={() => setCollapsed(!collapsed)}>Toggle</button>
-    </div>
-  ),
-  Header: ({ stats, onlineUsers, setShowSettings }) => (
-    <header data-testid="header">
-      <span data-testid="aircraft-count">{stats?.count || 0}</span>
-      <span data-testid="online-users">{onlineUsers}</span>
-      <button onClick={() => setShowSettings(true)}>Settings</button>
-    </header>
-  ),
   SettingsModal: ({ onClose }) => (
     <div data-testid="settings-modal">
       <button onClick={onClose}>Close</button>
+    </div>
+  ),
+}));
+
+// Shell is unit-tested separately; App tests only exercise routing/wiring
+vi.mock('./components/v2/shell', () => ({
+  AppShell: ({
+    activeTab,
+    onNavigate,
+    connected,
+    aircraftCount,
+    onlineUsers,
+    onOpenSettings,
+    children,
+  }) => (
+    <div
+      data-testid="v2-app"
+      className={`v2-app v2-shell view-${activeTab}`}
+      data-active-tab={activeTab}
+      data-connected={connected}
+    >
+      <button onClick={() => onNavigate('map')}>Map</button>
+      <button onClick={() => onNavigate('aircraft')}>Aircraft</button>
+      <button onClick={() => onNavigate('alerts')}>Alerts</button>
+      <span data-testid="aircraft-count">{aircraftCount}</span>
+      <span data-testid="online-users">{onlineUsers}</span>
+      <button onClick={onOpenSettings}>Settings</button>
+      {children}
+    </div>
+  ),
+}));
+
+vi.mock('./components/v2/screens/system/SystemScreen', () => ({
+  SystemScreen: () => <div data-testid="v2-system">System Screen</div>,
+}));
+
+vi.mock('./components/v2/screens/alerts/AlertsScreen', () => ({
+  AlertsScreen: () => <div data-testid="v2-alerts">Alerts Screen</div>,
+}));
+
+vi.mock('./components/v2/screens/radio/RadioScreen', () => ({
+  RadioScreen: () => <div data-testid="v2-radio">Radio Screen</div>,
+}));
+
+vi.mock('./components/v2/screens/stats/StatsScreen', () => ({
+  StatsScreen: () => <div data-testid="v2-stats">Stats Screen</div>,
+}));
+
+vi.mock('./components/v2/screens/history/HistoryScreen', () => ({
+  HistoryScreen: ({ hashParams }) => (
+    <div data-testid="v2-history" data-tab={hashParams?.data || 'sessions'}>
+      History Screen
     </div>
   ),
 }));
@@ -44,8 +81,16 @@ vi.mock('./components/map', () => ({
   MapView: () => <div data-testid="map-view">Map View</div>,
 }));
 
-vi.mock('./components/aircraft/AircraftDetailPage', () => ({
-  AircraftDetailPage: ({ hex }) => <div data-testid="aircraft-detail">Aircraft {hex}</div>,
+vi.mock('./components/livemap/LiveMapView', () => ({
+  LiveMapView: () => <div data-testid="live-map-view">Live Map View</div>,
+}));
+
+vi.mock('./components/v2/screens/detail/DetailScreen', () => ({
+  DetailScreen: ({ hex }) => <div data-testid="v2-detail">Aircraft {hex}</div>,
+}));
+
+vi.mock('./components/v2/screens/cannonball/CannonballScreen', () => ({
+  CannonballScreen: () => <div data-testid="v2-cannonball">Cannonball Screen</div>,
 }));
 
 vi.mock('./components/auth', () => ({
@@ -130,11 +175,11 @@ describe('App', () => {
   });
 
   describe('initialization', () => {
-    it('should render the app', async () => {
+    it('should render the app shell', async () => {
       await act(async () => {
         render(<App />);
       });
-      expect(document.querySelector('.app')).toBeInTheDocument();
+      expect(screen.getByTestId('v2-app')).toBeInTheDocument();
     });
 
     it('should render within error boundary', async () => {
@@ -144,18 +189,11 @@ describe('App', () => {
       expect(screen.getByTestId('error-boundary')).toBeInTheDocument();
     });
 
-    it('should render sidebar', async () => {
+    it('should pass aircraft count to the shell', async () => {
       await act(async () => {
         render(<App />);
       });
-      expect(screen.getByTestId('sidebar')).toBeInTheDocument();
-    });
-
-    it('should render header', async () => {
-      await act(async () => {
-        render(<App />);
-      });
-      expect(screen.getByTestId('header')).toBeInTheDocument();
+      expect(screen.getByTestId('aircraft-count')).toHaveTextContent('10');
     });
 
     it('should set default hash to #map if empty', async () => {
@@ -173,7 +211,7 @@ describe('App', () => {
       await act(async () => {
         render(<App />);
       });
-      expect(screen.getByTestId('map-view')).toBeInTheDocument();
+      expect(screen.getByTestId('live-map-view')).toBeInTheDocument();
     });
 
     it('should render aircraft list for #aircraft', async () => {
@@ -181,7 +219,7 @@ describe('App', () => {
       await act(async () => {
         render(<App />);
       });
-      expect(screen.getByTestId('aircraft-list')).toBeInTheDocument();
+      expect(screen.getByTestId('v2-aircraft-list')).toBeInTheDocument();
     });
 
     it('should render alerts view for #alerts', async () => {
@@ -189,7 +227,7 @@ describe('App', () => {
       await act(async () => {
         render(<App />);
       });
-      expect(screen.getByTestId('alerts-view')).toBeInTheDocument();
+      expect(screen.getByTestId('v2-alerts')).toBeInTheDocument();
     });
 
     it('should render stats view for #stats', async () => {
@@ -197,7 +235,7 @@ describe('App', () => {
       await act(async () => {
         render(<App />);
       });
-      expect(screen.getByTestId('stats-view')).toBeInTheDocument();
+      expect(screen.getByTestId('v2-stats')).toBeInTheDocument();
     });
 
     it('should render history view for #history', async () => {
@@ -205,7 +243,7 @@ describe('App', () => {
       await act(async () => {
         render(<App />);
       });
-      expect(screen.getByTestId('history-view')).toBeInTheDocument();
+      expect(screen.getByTestId('v2-history')).toBeInTheDocument();
     });
 
     it('should render audio view for #audio', async () => {
@@ -213,7 +251,7 @@ describe('App', () => {
       await act(async () => {
         render(<App />);
       });
-      expect(screen.getByTestId('audio-view')).toBeInTheDocument();
+      expect(screen.getByTestId('v2-radio')).toBeInTheDocument();
     });
 
     it('should render system view for #system', async () => {
@@ -221,7 +259,7 @@ describe('App', () => {
       await act(async () => {
         render(<App />);
       });
-      expect(screen.getByTestId('system-view')).toBeInTheDocument();
+      expect(screen.getByTestId('v2-system')).toBeInTheDocument();
     });
 
     it('should render history view for #notams (notams is now part of history)', async () => {
@@ -229,8 +267,10 @@ describe('App', () => {
       await act(async () => {
         render(<App />);
       });
-      // NOTAMs are now integrated into HistoryView
-      expect(screen.getByTestId('history-view')).toBeInTheDocument();
+      // NOTAMs are folded into the History screen's tabs
+      const history = screen.getByTestId('v2-history');
+      expect(history).toBeInTheDocument();
+      expect(history).toHaveAttribute('data-tab', 'notams');
     });
 
     it('should render history view for #archive (archive is now part of history)', async () => {
@@ -238,8 +278,10 @@ describe('App', () => {
       await act(async () => {
         render(<App />);
       });
-      // Archive is now integrated into HistoryView
-      expect(screen.getByTestId('history-view')).toBeInTheDocument();
+      // Archive is folded into the History screen's tabs
+      const history = screen.getByTestId('v2-history');
+      expect(history).toBeInTheDocument();
+      expect(history).toHaveAttribute('data-tab', 'archive');
     });
 
     it('should render admin config for #admin', async () => {
@@ -250,23 +292,33 @@ describe('App', () => {
       expect(screen.getByTestId('admin-config-view')).toBeInTheDocument();
     });
 
+    it('should render cannonball full-screen for #cannonball', async () => {
+      window.location.hash = '#cannonball';
+      await act(async () => {
+        render(<App />);
+      });
+      expect(screen.getByTestId('v2-cannonball')).toBeInTheDocument();
+      // full-screen mode renders outside the shell
+      expect(screen.queryByTestId('v2-app')).not.toBeInTheDocument();
+    });
+
     it('should fallback to map for invalid hash', async () => {
       window.location.hash = '#invalid';
       await act(async () => {
         render(<App />);
       });
-      expect(screen.getByTestId('map-view')).toBeInTheDocument();
+      expect(screen.getByTestId('live-map-view')).toBeInTheDocument();
     });
   });
 
-  describe('navigation via sidebar', () => {
-    it('should update view when sidebar navigation is clicked', async () => {
+  describe('navigation via shell', () => {
+    it('should update hash when nav is clicked', async () => {
       window.location.hash = '#map';
       await act(async () => {
         render(<App />);
       });
 
-      expect(screen.getByTestId('map-view')).toBeInTheDocument();
+      expect(screen.getByTestId('live-map-view')).toBeInTheDocument();
 
       await act(async () => {
         fireEvent.click(screen.getByText('Aircraft'));
@@ -392,68 +444,13 @@ describe('App', () => {
     });
   });
 
-  describe('mobile menu', () => {
-    it('should render mobile menu toggle button', async () => {
-      window.location.hash = '#map';
-      await act(async () => {
-        render(<App />);
-      });
-
-      const toggleButton = screen.getByRole('button', { name: /toggle menu/i });
-      expect(toggleButton).toBeInTheDocument();
-    });
-
-    it('should toggle mobile menu class on app', async () => {
-      window.location.hash = '#map';
-      await act(async () => {
-        render(<App />);
-      });
-
-      const app = document.querySelector('.app');
-      expect(app).not.toHaveClass('mobile-menu-open');
-
-      const toggleButton = screen.getByRole('button', { name: /toggle menu/i });
-      await act(async () => {
-        fireEvent.click(toggleButton);
-      });
-
-      expect(document.querySelector('.app')).toHaveClass('mobile-menu-open');
-    });
-  });
-
-  describe('sidebar collapse', () => {
-    it('should toggle sidebar collapsed class', async () => {
-      // Sidebar auto-collapses below 1200px, so ensure window is wide enough
-      const originalInnerWidth = window.innerWidth;
-      Object.defineProperty(window, 'innerWidth', { value: 1400, writable: true });
-
-      window.location.hash = '#map';
-      await act(async () => {
-        render(<App />);
-      });
-
-      const app = document.querySelector('.app');
-      expect(app).not.toHaveClass('sidebar-collapsed');
-
-      const toggleButton = screen.getByText('Toggle');
-      await act(async () => {
-        fireEvent.click(toggleButton);
-      });
-
-      expect(document.querySelector('.app')).toHaveClass('sidebar-collapsed');
-
-      // Restore original value
-      Object.defineProperty(window, 'innerWidth', { value: originalInnerWidth, writable: true });
-    });
-  });
-
-  describe('view class on app', () => {
+  describe('view class on shell', () => {
     it('should add view-map class for map view', async () => {
       window.location.hash = '#map';
       await act(async () => {
         render(<App />);
       });
-      expect(document.querySelector('.app')).toHaveClass('view-map');
+      expect(screen.getByTestId('v2-app')).toHaveClass('view-map');
     });
 
     it('should add view-aircraft class for aircraft view', async () => {
@@ -461,7 +458,7 @@ describe('App', () => {
       await act(async () => {
         render(<App />);
       });
-      expect(document.querySelector('.app')).toHaveClass('view-aircraft');
+      expect(screen.getByTestId('v2-app')).toHaveClass('view-aircraft');
     });
 
     it('should add view-alerts class for alerts view', async () => {
@@ -469,7 +466,7 @@ describe('App', () => {
       await act(async () => {
         render(<App />);
       });
-      expect(document.querySelector('.app')).toHaveClass('view-alerts');
+      expect(screen.getByTestId('v2-app')).toHaveClass('view-alerts');
     });
   });
 
@@ -481,7 +478,7 @@ describe('App', () => {
       });
       // Should attempt to render aircraft detail
       // Note: may show "not found" since aircraft array is empty
-      expect(document.querySelector('.app')).toBeInTheDocument();
+      expect(screen.getByTestId('v2-app')).toBeInTheDocument();
     });
 
     it('should parse event id parameter', async () => {
@@ -491,16 +488,53 @@ describe('App', () => {
       });
       expect(screen.getByTestId('safety-event-page')).toBeInTheDocument();
     });
+
+    it('should resolve tail to hex via the airframe registration endpoint', async () => {
+      global.fetch = vi.fn((url) => {
+        if (String(url).includes('/api/v1/airframes/registration/')) {
+          return Promise.resolve({
+            ok: true,
+            headers: new Headers({ 'content-type': 'application/json' }),
+            json: () => Promise.resolve({ icao_hex: 'ABC123', registration: 'N12345' }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          headers: new Headers({ 'content-type': 'application/json' }),
+          json: () => Promise.resolve({}),
+        });
+      });
+
+      window.location.hash = '#airframe?tail=N12345';
+      await act(async () => {
+        render(<App />);
+      });
+
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalledWith('/api/v1/airframes/registration/N12345/');
+      });
+
+      // Must NOT use the sightings API - it has no registration filter and
+      // would silently return an arbitrary aircraft's sighting
+      const sightingsCalls = global.fetch.mock.calls.filter(([url]) =>
+        String(url).includes('/api/v1/sightings')
+      );
+      expect(sightingsCalls).toHaveLength(0);
+
+      // The resolved hex should be passed through to the detail page
+      await waitFor(() => {
+        expect(screen.getByTestId('v2-detail')).toHaveTextContent('Aircraft ABC123');
+      });
+    });
   });
 
   describe('connection status', () => {
-    it('should pass connected status to sidebar', async () => {
+    it('should pass connected status to the shell', async () => {
       window.location.hash = '#map';
       await act(async () => {
         render(<App />);
       });
-      const sidebar = screen.getByTestId('sidebar');
-      expect(sidebar).toHaveAttribute('data-connected', 'true');
+      expect(screen.getByTestId('v2-app')).toHaveAttribute('data-connected', 'true');
     });
 
     it('should show disconnected when socket is not connected', async () => {
@@ -524,8 +558,7 @@ describe('App', () => {
         render(<App />);
       });
 
-      const sidebar = screen.getByTestId('sidebar');
-      expect(sidebar).toHaveAttribute('data-connected', 'false');
+      expect(screen.getByTestId('v2-app')).toHaveAttribute('data-connected', 'false');
     });
   });
 });

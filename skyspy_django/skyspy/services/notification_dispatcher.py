@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from django.contrib.auth.models import User
+from django.db import DatabaseError
 
 from skyspy.services.notification_router import RoutedNotification, notification_router
 from skyspy.services.rich_formatters import rich_formatter
@@ -231,7 +232,7 @@ class NotificationDispatcher:
                     rich_payload=payload.rich_payload,
                     context=payload.context,
                 )
-            except Exception as e:
+            except Exception as e:  # broad: Celery/broker failure modes unknowable; falls back to sync delivery
                 logger.warning(f"Failed to queue notification: {e}")
                 # Fall back to sync delivery
                 self._send_payload_sync(payload)
@@ -271,7 +272,7 @@ class NotificationDispatcher:
 
         except ImportError:
             logger.debug("Apprise not installed, skipping notification")
-        except Exception as e:
+        except Exception as e:  # broad: third-party apprise delivery has unknowable failure modes
             logger.error(f"Failed to send notification: {e}")
             self._log_notification(payload, status="failed", error=str(e))
 
@@ -296,7 +297,7 @@ class NotificationDispatcher:
                 status=status,
                 last_error=error,
             )
-        except Exception as e:
+        except (DatabaseError, ConnectionError, OSError) as e:
             logger.warning(f"Failed to log notification: {e}")
 
 

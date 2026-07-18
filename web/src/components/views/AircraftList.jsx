@@ -26,6 +26,12 @@ import {
   AIRCRAFT_CATEGORIES,
 } from '../aircraft-list/aircraftListConstants';
 
+// Normalize altitude for range filtering: 'ground' -> 0, numbers kept, unknown -> null
+const normalizeFilterAltitude = (alt) => {
+  if (alt === 'ground') return 0;
+  return typeof alt === 'number' && !Number.isNaN(alt) ? alt : null;
+};
+
 export function AircraftList({ aircraft, onSelectAircraft }) {
   const [sortField, setSortField] = useState('distance_nm');
   const [sortAsc, setSortAsc] = useState(true);
@@ -172,17 +178,23 @@ export function AircraftList({ aircraft, onSelectAircraft }) {
       filtered = filtered.filter((ac) => ac.rssi !== undefined && ac.rssi < -25);
     }
 
-    // Altitude range
+    // Altitude range (aircraft with unknown altitude are excluded from explicit range filters)
     if (filters.minAltitude) {
       const min = parseInt(filters.minAltitude, 10);
       if (!isNaN(min)) {
-        filtered = filtered.filter((ac) => (ac.alt || 0) >= min);
+        filtered = filtered.filter((ac) => {
+          const alt = normalizeFilterAltitude(ac.alt);
+          return alt !== null && alt >= min;
+        });
       }
     }
     if (filters.maxAltitude) {
       const max = parseInt(filters.maxAltitude, 10);
       if (!isNaN(max)) {
-        filtered = filtered.filter((ac) => (ac.alt || 0) <= max);
+        filtered = filtered.filter((ac) => {
+          const alt = normalizeFilterAltitude(ac.alt);
+          return alt !== null && alt <= max;
+        });
       }
     }
 

@@ -73,15 +73,7 @@ function getSeverityColors(severity, flashOn) {
  *   sweepAngleRef, perfMode, getAircraftHighlight
  */
 export function drawAllAircraft(ctx, geo, data) {
-  const {
-    width,
-    height,
-    isPro,
-    radarRange,
-    themeColors,
-    latLonToScreen,
-    frameCount,
-  } = geo;
+  const { width, height, isPro, radarRange, themeColors, latLonToScreen, frameCount } = geo;
 
   const {
     sortedAircraft,
@@ -194,17 +186,13 @@ export function drawAllAircraft(ctx, geo, data) {
         // Calculate local density penalty (nearby aircraft within 80px)
         const nearbyCount = aircraftWithScreenPos.filter(
           (other) =>
-            other.ac.hex !== ac.hex &&
-            Math.abs(other.x - x) < 80 &&
-            Math.abs(other.y - y) < 50
+            other.ac.hex !== ac.hex && Math.abs(other.x - x) < 80 && Math.abs(other.y - y) < 50
         ).length;
         // Penalize aircraft in crowded areas (less likely to show label)
         score -= nearbyCount * 30;
 
         // Prefer aircraft closer to center of screen
-        const centerDist = Math.sqrt(
-          Math.pow(x - width / 2, 2) + Math.pow(y - height / 2, 2)
-        );
+        const centerDist = Math.sqrt(Math.pow(x - width / 2, 2) + Math.pow(y - height / 2, 2));
         score += Math.max(0, 200 - centerDist / 3);
 
         // Prefer faster aircraft (more interesting)
@@ -282,8 +270,7 @@ export function drawAllAircraft(ctx, geo, data) {
     const flashBrightness = flashOn ? 1 : 0.3;
 
     // Proximity conflict flash speed based on severity
-    const flashDivisor =
-      alertSeverity === 'critical' ? 4 : alertSeverity === 'warning' ? 8 : 12;
+    const flashDivisor = alertSeverity === 'critical' ? 4 : alertSeverity === 'warning' ? 8 : 12;
     const proximityFlashOn = hasSafetyAlert
       ? Math.floor(frameCount / flashDivisor) % 2 === 0
       : false;
@@ -354,9 +341,7 @@ export function drawAllAircraft(ctx, geo, data) {
         textColor = isPro ? 'rgba(255, 255, 150, 0.9)' : `rgba(255, 255, 150, ${brightness})`;
       } else if (speed < 150) {
         // Slow (< 150 kts): Blue
-        primaryColor = isPro
-          ? 'rgba(100, 180, 255, 0.9)'
-          : `rgba(100, 180, 255, ${brightness})`;
+        primaryColor = isPro ? 'rgba(100, 180, 255, 0.9)' : `rgba(100, 180, 255, ${brightness})`;
         textColor = isPro ? 'rgba(150, 200, 255, 0.9)' : `rgba(150, 200, 255, ${brightness})`;
       } else {
         // Medium (150-300 kts): Cyan (default)
@@ -455,8 +440,7 @@ export function drawAllAircraft(ctx, geo, data) {
     // Draw aircraft symbol (chevron pointing in direction of travel)
     const track = ((ac.track || 0) * Math.PI) / 180;
     // Phase 5.4: Level of Detail (LOD) - adjust symbol size based on range
-    const lodFactor =
-      radarRange <= 25 ? 1.2 : radarRange <= 75 ? 1 : radarRange <= 150 ? 0.9 : 0.8;
+    const lodFactor = radarRange <= 25 ? 1.2 : radarRange <= 75 ? 1 : radarRange <= 150 ? 0.9 : 0.8;
     const symSize = Math.round((isPro ? 10 : 9) * lodFactor);
 
     ctx.save();
@@ -803,8 +787,7 @@ export function drawAllAircraft(ctx, geo, data) {
         if (dataBlockConfig.showSpeed) compactParts.push(`${speed}kts`);
         if (dataBlockConfig.showAltitude) compactParts.push(`FL${altitude}`);
         if (dataBlockConfig.showHeading) compactParts.push(heading);
-        if (dataBlockConfig.showVerticalSpeed && verticalSpeed)
-          compactParts.push(verticalSpeed);
+        if (dataBlockConfig.showVerticalSpeed && verticalSpeed) compactParts.push(verticalSpeed);
         if (dataBlockConfig.showAircraftType && aircraftType) compactParts.push(aircraftType);
         if (dataBlockConfig.showWakeCategory && wakeCategory)
           compactParts.push(`[${wakeCategory}]`);

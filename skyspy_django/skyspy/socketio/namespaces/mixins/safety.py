@@ -89,10 +89,18 @@ class SafetyHandlerMixin:
                     "id": str(e.id),
                     "event_type": e.event_type,
                     "severity": e.severity,
+                    # Frontend consumer (useSafetyEvents) keys off icao/icao_2/details;
+                    # keep icao_hex/icao_hex_2 for back-compat. Matches the live
+                    # safety:event push shape (services/safety.py).
+                    "icao": e.icao_hex,
                     "icao_hex": e.icao_hex,
+                    "icao_2": e.icao_hex_2,
+                    "icao_hex_2": e.icao_hex_2,
                     "callsign": e.callsign,
+                    "callsign_2": e.callsign_2,
                     "timestamp": e.timestamp.isoformat() if e.timestamp else None,
                     "message": e.message,
+                    "details": e.details or {},
                     "acknowledged": e.acknowledged,
                 }
             )
@@ -105,11 +113,16 @@ class SafetyHandlerMixin:
         tracked_aircraft = 0
 
         try:
+            # Detection runs in the celery worker, which publishes its stats to
+            # the shared cache; this process's monitor never tracks aircraft.
+            from django.core.cache import cache
+
             from skyspy.services.safety import safety_monitor
 
-            stats = safety_monitor.get_stats()
+            stats = cache.get("safety:monitor_stats") or safety_monitor.get_stats()
             tracked_aircraft = stats.get("tracked_aircraft", 0)
-        except Exception:
+            enabled = stats.get("monitoring_enabled", enabled)
+        except (ImportError, AttributeError, TypeError, KeyError):
             pass
 
         return {
@@ -157,6 +170,11 @@ class SafetyHandlerMixin:
             event.acknowledged = True
             event.acknowledged_at = timezone.now()
             event.save(update_fields=["acknowledged", "acknowledged_at"])
+            # Broadcast so every other connected client sees the ack; the
+            # worker's monitor picks the DB flag up via its periodic ack sync.
+            from skyspy.services.safety import safety_monitor
+
+            safety_monitor.broadcast_event_updated({"id": str(event.id), "db_id": event.id, "acknowledged": True})
             return {
                 "success": True,
                 "id": str(event.id),

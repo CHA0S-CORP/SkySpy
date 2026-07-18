@@ -272,11 +272,10 @@ function deriveSocketEvent(endpoint) {
     '/api/v1/safety/events': 'safety-events',
     '/api/v1/safety/events/monitor/status': 'safety-status',
 
-    // Alerts endpoints (Django ViewSets with nested routes)
-    '/api/v1/alerts/rules': 'alerts-rules',
-    '/api/v1/alerts/rules/metrics': 'alerts-metrics',
-    '/api/v1/alerts/history': 'alerts-history',
-    '/api/v1/alerts/subscriptions': 'alerts-subscriptions',
+    // Alerts endpoints intentionally unmapped so they use HTTP: the socket
+    // 'alert-rules' handler serves ALL users' rules with no owner scoping,
+    // while the REST endpoint filters by owner/visibility. Do not remap
+    // until the socket handler is owner-scoped.
 
     // Audio endpoints
     '/api/v1/audio/stats': 'audio-stats',

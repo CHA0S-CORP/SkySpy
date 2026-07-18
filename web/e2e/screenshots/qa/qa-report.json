@@ -1,0 +1,222 @@
+{
+  "base": "http://localhost:3000",
+  "ts": "2026-07-17T19:29:39.182Z",
+  "routes": {
+    "map": {
+      "name": "map",
+      "screenshot": "e2e/screenshots/qa/map.png",
+      "diagnostics": {
+        "viewport": {
+          "vw": 1600,
+          "vh": 1000
+        },
+        "pane": {
+          "clips": false,
+          "scrollable": false,
+          "scrollHeight": 940,
+          "clientHeight": 940
+        },
+        "unscrollableClip": false,
+        "hScroll": false,
+        "overflowCount": 0,
+        "overflowSample": [],
+        "labelOverlaps": 0,
+        "errorBoundary": false
+      },
+      "problems": [],
+      "ok": true
+    },
+    "aircraft": {
+      "name": "aircraft-list",
+      "screenshot": "e2e/screenshots/qa/aircraft-list.png",
+      "diagnostics": {
+        "viewport": {
+          "vw": 1600,
+          "vh": 1000
+        },
+        "pane": {
+          "clips": false,
+          "scrollable": true,
+          "scrollHeight": 940,
+          "clientHeight": 940
+        },
+        "unscrollableClip": false,
+        "hScroll": false,
+        "overflowCount": 0,
+        "overflowSample": [],
+        "labelOverlaps": 0,
+        "errorBoundary": false
+      },
+      "problems": [],
+      "ok": true
+    },
+    "stats": {
+      "name": "statistics",
+      "screenshot": "e2e/screenshots/qa/statistics.png",
+      "diagnostics": {
+        "viewport": {
+          "vw": 1600,
+          "vh": 1000
+        },
+        "pane": {
+          "clips": true,
+          "scrollable": true,
+          "scrollHeight": 2268,
+          "clientHeight": 940
+        },
+        "unscrollableClip": false,
+        "hScroll": false,
+        "overflowCount": 0,
+        "overflowSample": [],
+        "labelOverlaps": 0,
+        "errorBoundary": false
+      },
+      "problems": [],
+      "ok": true
+    },
+    "history": {
+      "name": "history",
+      "screenshot": "e2e/screenshots/qa/history.png",
+      "diagnostics": {
+        "viewport": {
+          "vw": 1600,
+          "vh": 1000
+        },
+        "pane": {
+          "clips": false,
+          "scrollable": true,
+          "scrollHeight": 940,
+          "clientHeight": 940
+        },
+        "unscrollableClip": false,
+        "hScroll": false,
+        "overflowCount": 0,
+        "overflowSample": [],
+        "labelOverlaps": 0,
+        "errorBoundary": false
+      },
+      "problems": [],
+      "ok": true
+    },
+    "audio": {
+      "name": "radio",
+      "screenshot": "e2e/screenshots/qa/radio.png",
+      "diagnostics": {
+        "viewport": {
+          "vw": 1600,
+          "vh": 1000
+        },
+        "pane": {
+          "clips": false,
+          "scrollable": true,
+          "scrollHeight": 940,
+          "clientHeight": 940
+        },
+        "unscrollableClip": false,
+        "hScroll": false,
+        "overflowCount": 0,
+        "overflowSample": [],
+        "labelOverlaps": 0,
+        "errorBoundary": false
+      },
+      "problems": [],
+      "ok": true
+    },
+    "alerts": {
+      "name": "alerts",
+      "screenshot": "e2e/screenshots/qa/alerts.png",
+      "diagnostics": {
+        "viewport": {
+          "vw": 1600,
+          "vh": 1000
+        },
+        "pane": {
+          "clips": false,
+          "scrollable": true,
+          "scrollHeight": 940,
+          "clientHeight": 940
+        },
+        "unscrollableClip": false,
+        "hScroll": false,
+        "overflowCount": 0,
+        "overflowSample": [],
+        "labelOverlaps": 0,
+        "errorBoundary": false
+      },
+      "problems": [],
+      "ok": true
+    },
+    "system": {
+      "name": "system",
+      "screenshot": "e2e/screenshots/qa/system.png",
+      "diagnostics": {
+        "viewport": {
+          "vw": 1600,
+          "vh": 1000
+        },
+        "pane": {
+          "clips": true,
+          "scrollable": true,
+          "scrollHeight": 1265,
+          "clientHeight": 940
+        },
+        "unscrollableClip": false,
+        "hScroll": false,
+        "overflowCount": 0,
+        "overflowSample": [],
+        "labelOverlaps": 0,
+        "errorBoundary": false
+      },
+      "problems": [],
+      "ok": true
+    },
+    "cannonball": {
+      "name": "cannonball",
+      "screenshot": "e2e/screenshots/qa/cannonball.png",
+      "diagnostics": {
+        "viewport": {
+          "vw": 1600,
+          "vh": 1000
+        },
+        "pane": {
+          "clips": false,
+          "scrollable": false,
+          "scrollHeight": 1000,
+          "clientHeight": 1000
+        },
+        "unscrollableClip": false,
+        "hScroll": false,
+        "overflowCount": 0,
+        "overflowSample": [],
+        "labelOverlaps": 0,
+        "errorBoundary": false
+      },
+      "problems": [],
+      "ok": true
+    },
+    "airframe?icao=C82B0B": {
+      "name": "airframe",
+      "screenshot": "e2e/screenshots/qa/airframe.png",
+      "diagnostics": {
+        "viewport": {
+          "vw": 1600,
+          "vh": 1000
+        },
+        "pane": {
+          "clips": true,
+          "scrollable": true,
+          "scrollHeight": 1472,
+          "clientHeight": 940
+        },
+        "unscrollableClip": false,
+        "hScroll": false,
+        "overflowCount": 0,
+        "overflowSample": [],
+        "labelOverlaps": 0,
+        "errorBoundary": false
+      },
+      "problems": [],
+      "ok": true
+    }
+  }
+}

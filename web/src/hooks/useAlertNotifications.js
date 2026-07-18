@@ -114,11 +114,12 @@ export function useAlertNotifications(options = {}) {
     lastFetchRef.current = fetchId;
 
     try {
+      // The alert-history list endpoint reports the total matching count
+      // (unpaginated {count} / paginated count). There is no WS 'alert-count'
+      // request type and no /alerts/count route, so always use REST here.
       let data;
-      if (wsRequest && wsConnected) {
-        data = await wsRequest('alert-count', { acknowledged: false });
-      } else if (apiBase) {
-        const res = await fetch(`${apiBase}/api/v1/alerts/count?acknowledged=false`);
+      if (apiBase) {
+        const res = await fetch(`${apiBase}/api/v1/alerts/history/?acknowledged=false&hours=720`);
         data = await safeJson(res);
       }
 
@@ -302,11 +303,11 @@ export function useAlertNotifications(options = {}) {
         });
         setUnacknowledgedCount((prev) => Math.max(0, prev - 1));
 
-        // Send to server if connected
-        if (wsRequest && wsConnected) {
-          await wsRequest('acknowledge-alert', { id: alertId });
-        } else if (apiBase) {
-          await fetch(`${apiBase}/api/v1/alerts/history/${alertId}/acknowledge`, {
+        // Persist to server. There is no WS 'acknowledge-alert' request type,
+        // so always POST the acknowledge action (otherwise the ack was only
+        // ever local and the alert reappeared unacknowledged after reload).
+        if (apiBase) {
+          await fetch(`${apiBase}/api/v1/alerts/history/${alertId}/acknowledge/`, {
             method: 'POST',
           });
         }
@@ -314,7 +315,7 @@ export function useAlertNotifications(options = {}) {
         console.error('Failed to acknowledge alert:', err);
       }
     },
-    [apiBase, wsRequest, wsConnected]
+    [apiBase]
   );
 
   /**
@@ -327,18 +328,17 @@ export function useAlertNotifications(options = {}) {
       setUnacknowledgedCount(0);
       localStorage.removeItem(UNACKED_ALERTS_KEY);
 
-      // Send to server
-      if (wsRequest && wsConnected) {
-        await wsRequest('acknowledge-all-alerts', {});
-      } else if (apiBase) {
-        await fetch(`${apiBase}/api/v1/alerts/history/acknowledge-all`, {
+      // Persist to server. There is no WS 'acknowledge-all-alerts' request
+      // type, so always POST the acknowledge-all action.
+      if (apiBase) {
+        await fetch(`${apiBase}/api/v1/alerts/history/acknowledge-all/`, {
           method: 'POST',
         });
       }
     } catch (err) {
       console.error('Failed to acknowledge all alerts:', err);
     }
-  }, [apiBase, wsRequest, wsConnected]);
+  }, [apiBase]);
 
   /**
    * Request browser notification permission

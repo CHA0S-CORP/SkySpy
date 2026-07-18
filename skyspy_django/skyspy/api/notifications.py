@@ -158,6 +158,8 @@ class NotificationChannelViewSet(viewsets.ModelViewSet):
     """
 
     queryset = NotificationChannel.objects.all()
+    authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
+    permission_classes = [FeatureBasedPermission]
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ["channel_type", "enabled", "is_global", "verified"]
 
@@ -321,7 +323,7 @@ class NotificationChannelViewSet(viewsets.ModelViewSet):
                 {"success": False, "message": "apprise library not installed", "servers_notified": 0},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
-        except Exception as e:
+        except Exception as e:  # broad: apprise notify spans dozens of backends with unknowable failure modes
             logger.error(f"Failed to send test notification to {channel.name}: {e}")
             channel.last_failure = timezone.now()
             channel.last_error = str(e)
@@ -431,7 +433,7 @@ class NotificationViewSet(viewsets.ViewSet):
                 {"success": False, "message": "apprise library not installed", "servers_notified": 0},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
-        except Exception as e:
+        except Exception as e:  # broad: apprise notify spans dozens of backends with unknowable failure modes
             logger.error(f"Failed to send test notification: {e}")
             return Response(
                 {"success": False, "message": str(e), "servers_notified": 0},
@@ -471,7 +473,10 @@ class NotificationViewSet(viewsets.ViewSet):
         queryset = NotificationLog.objects.order_by("-timestamp")
 
         if channel_id:
-            queryset = queryset.filter(channel_id=channel_id)
+            try:
+                queryset = queryset.filter(channel_id=int(channel_id))
+            except (ValueError, TypeError):
+                return Response({"error": "Invalid channel_id"}, status=status.HTTP_400_BAD_REQUEST)
         if status_filter:
             queryset = queryset.filter(status=status_filter)
 

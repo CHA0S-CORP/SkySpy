@@ -10,10 +10,15 @@ Provides Celery tasks for:
 import logging
 from datetime import datetime
 
+import httpx
 from celery import shared_task
 from django.conf import settings
+from django.db import DatabaseError
+from kombu.exceptions import OperationalError as KombuOperationalError
 
+from skyspy.services import http_client
 from skyspy.socketio.utils import sync_emit
+from skyspy.tasks.locks import singleton_task
 
 logger = logging.getLogger(__name__)
 
@@ -38,11 +43,83 @@ def broadcast_airframe_error(
             },
             room="topic_aircraft",
         )
-    except Exception as e:
+    except Exception as e:  # broad: error-broadcast helper must never raise into callers
         logger.warning(f"Failed to broadcast airframe error: {e}")
 
 
+def _aircraft_info_defaults(icao: str, data: dict) -> dict:
+    """
+    Build the AircraftInfo.update_or_create defaults from a merged lookup.
+
+    Includes field-level provenance (``field_sources``) and ownership analysis
+    (owner_type / shell-company signals) derived from the owner/city/state.
+    """
+    from skyspy.services import law_enforcement_db, registration_analysis
+
+    ownership = registration_analysis.analyze_ownership(
+        icao_hex=icao,
+        owner_name=data.get("owner"),
+        registration=data.get("registration"),
+        owner_city=data.get("city"),
+        owner_state=data.get("state"),
+        owner_address=data.get("owner_address"),
+        registrant_type=data.get("faa_registrant_type"),
+        fractional_owner=data.get("fractional_owner"),
+    )
+
+    # Flag law-enforcement / public-safety aircraft by owner (e.g. a police or
+    # sheriff helo, or "CITY OF SAN DIEGO" on a helicopter). Marks is_interesting
+    # and records the classification in ownership_flags.law_enforcement.
+    le = law_enforcement_db.identify_law_enforcement(
+        hex_code=icao,
+        operator=data.get("operator_icao"),
+        registration=data.get("registration"),
+        category=data.get("category"),
+        type_code=data.get("type_code"),
+        owner=data.get("owner"),
+        is_helicopter_hint=bool(data.get("faa_is_rotorcraft")),
+    )
+    is_le = le["is_law_enforcement"] or "owner" in le["identifiers"]
+    flags = ownership["ownership_flags"]
+    if is_le:
+        flags = flags or {}
+        flags["law_enforcement"] = {
+            "category": le["category"],
+            "description": le["description"],
+            "confidence": le["confidence"],
+            "identifiers": le["identifiers"],
+        }
+
+    return {
+        "registration": data.get("registration"),
+        "type_code": data.get("type_code"),
+        "manufacturer": data.get("manufacturer"),
+        "model": data.get("model"),
+        "operator": data.get("operator"),
+        "operator_icao": data.get("operator_icao"),
+        "owner": data.get("owner"),
+        "year_built": data.get("year_built"),
+        "serial_number": data.get("serial_number"),
+        "country": data.get("country"),
+        "category": data.get("category"),
+        "is_military": data.get("is_military", False),
+        "is_interesting": data.get("is_interesting", False) or is_le,
+        "is_pia": data.get("is_pia", False),
+        "is_ladd": data.get("is_ladd", False),
+        "city": data.get("city"),
+        "state": data.get("state"),
+        "source": ",".join(data.get("sources", [])),
+        "field_sources": data.get("field_sources"),
+        "owner_type": ownership["owner_type"],
+        "is_shell_suspected": ownership["is_shell_suspected"],
+        "shell_score": ownership["shell_score"],
+        "ownership_flags": flags,
+        "fetch_failed": False,
+    }
+
+
 @shared_task(bind=True, max_retries=3)
+@singleton_task(timeout=3600)
 def sync_external_databases(self):
     """
     Sync aircraft databases from external sources.
@@ -72,12 +149,13 @@ def sync_external_databases(self):
 
         return stats
 
-    except Exception as e:
+    except Exception as e:  # broad: Celery task top-level guard, retries on any failure
         logger.error(f"Failed to sync external databases: {e}")
         raise self.retry(exc=e, countdown=300)
 
 
 @shared_task(bind=True, max_retries=3)
+@singleton_task(timeout=3600)
 def update_stale_databases(self):
     """
     Check and update databases if older than 24 hours.
@@ -93,12 +171,13 @@ def update_stale_databases(self):
 
         return external_db.get_database_stats()
 
-    except Exception as e:
+    except Exception as e:  # broad: Celery task top-level guard, retries on any failure
         logger.error(f"Failed to update stale databases: {e}")
         raise self.retry(exc=e, countdown=300)
 
 
 @shared_task
+@singleton_task(timeout=3600)
 def load_opensky_database():
     """
     Load the OpenSky Network aircraft database.
@@ -120,9 +199,32 @@ def load_opensky_database():
 
         return result
 
-    except Exception as e:
+    except Exception as e:  # broad: Celery task top-level guard, must not crash the worker
         logger.error(f"Failed to load OpenSky database: {e}")
         return False
+
+
+@shared_task(ignore_result=True)
+@singleton_task(timeout=1800)
+def load_cached_databases():
+    """Load external aircraft DBs from cached files on disk (no download).
+
+    Bootstraps a freshly-started worker so on-demand lookups (fetch_aircraft_info)
+    immediately have owner/manufacturer/LE data, instead of waiting for the daily
+    4 AM sync. ``auto_download=False`` keeps it fast and network-free; missing
+    files are a no-op (the scheduled sync downloads them). Enqueued from the
+    worker_ready signal — see skyspy/celery.py.
+    """
+    try:
+        from skyspy.services import external_db
+
+        external_db.init_databases(auto_download=False)
+        stats = external_db.get_database_stats()
+        logger.info(f"Loaded cached external databases on startup: {stats}")
+        return stats
+    except Exception as e:  # broad: Celery task top-level guard, must not crash the worker
+        logger.error(f"Failed to load cached databases: {e}")
+        return None
 
 
 @shared_task(bind=True, max_retries=2, ignore_result=True)
@@ -161,27 +263,7 @@ def fetch_aircraft_info_batch(self, icao_list: list):
             if data:
                 AircraftInfo.objects.update_or_create(
                     icao_hex=icao,
-                    defaults={
-                        "registration": data.get("registration"),
-                        "type_code": data.get("type_code"),
-                        "manufacturer": data.get("manufacturer"),
-                        "model": data.get("model"),
-                        "operator": data.get("operator"),
-                        "operator_icao": data.get("operator_icao"),
-                        "owner": data.get("owner"),
-                        "year_built": data.get("year_built"),
-                        "serial_number": data.get("serial_number"),
-                        "country": data.get("country"),
-                        "category": data.get("category"),
-                        "is_military": data.get("is_military", False),
-                        "is_interesting": data.get("is_interesting", False),
-                        "is_pia": data.get("is_pia", False),
-                        "is_ladd": data.get("is_ladd", False),
-                        "city": data.get("city"),
-                        "state": data.get("state"),
-                        "source": ",".join(data.get("sources", [])),
-                        "fetch_failed": False,
-                    },
+                    defaults=_aircraft_info_defaults(icao, data),
                 )
                 processed += 1
                 _trigger_photo_fetch_if_enabled(icao)
@@ -195,7 +277,7 @@ def fetch_aircraft_info_batch(self, icao_list: list):
                     },
                 )
 
-        except Exception as e:
+        except (DatabaseError, httpx.HTTPError, ValueError, KeyError, TypeError, AttributeError, OSError) as e:
             logger.debug(f"Batch lookup failed for {icao}: {e}")
 
     logger.debug(f"Batch processed {processed} aircraft info lookups")
@@ -219,98 +301,69 @@ def fetch_aircraft_info(icao_hex: str):
 
     try:
         from skyspy.models import AircraftInfo
+        from skyspy.services import aircraft_info as aircraft_info_service
         from skyspy.services import external_db
 
-        # Check if already cached in database
+        # Skip only when the row is fully enriched: identity present AND the
+        # ownership/LE analysis has run (owner_type set, or no owner to analyze).
+        # A partial row (e.g. saved by the bulk/map path without analysis) falls
+        # through and gets re-resolved so the LE badge fills in.
         try:
             existing = AircraftInfo.objects.get(icao_hex=icao)
-            if not existing.fetch_failed:
-                # Still try to fetch photos if not cached
+            fully_enriched = (
+                not existing.fetch_failed
+                and existing.manufacturer
+                and existing.model
+                and (existing.owner_type or not existing.owner)
+            )
+            if fully_enriched:
                 if not existing.photo_url:
                     _trigger_photo_fetch_if_enabled(icao)
-                return  # Already have valid data
+                return
         except AircraftInfo.DoesNotExist:
             pass
 
-        # Try in-memory databases first
+        # In-memory databases first (FAA now carries manufacturer/model via the
+        # ACFTREF join). This path runs the full ownership/LE analysis in
+        # _aircraft_info_defaults using FAA's owner/city/state + rotorcraft hint.
         data = external_db.lookup_all(icao)
 
         if data:
+            # FAA can still lack manufacturer/model (non-US, or an ACFTREF gap).
+            # Gap-fill ONLY the aircraft-type identity from the external-API path
+            # (HexDB etc.) — never owner/operator, which FAA owns authoritatively.
+            if not data.get("manufacturer") or not data.get("model"):
+                ext = aircraft_info_service._fetch_from_external_apis(icao)
+                if ext:
+                    for field in ("manufacturer", "model", "type_code", "type_name"):
+                        if not data.get(field) and ext.get(field):
+                            data[field] = ext[field]
+                    sources = list(data.get("sources") or [])
+                    for src in ext.get("sources", []):
+                        if src not in sources:
+                            sources.append(src)
+                    data["sources"] = sources
+
             AircraftInfo.objects.update_or_create(
                 icao_hex=icao,
-                defaults={
-                    "registration": data.get("registration"),
-                    "type_code": data.get("type_code"),
-                    "manufacturer": data.get("manufacturer"),
-                    "model": data.get("model"),
-                    "operator": data.get("operator"),
-                    "operator_icao": data.get("operator_icao"),
-                    "owner": data.get("owner"),
-                    "year_built": data.get("year_built"),
-                    "serial_number": data.get("serial_number"),
-                    "country": data.get("country"),
-                    "category": data.get("category"),
-                    "is_military": data.get("is_military", False),
-                    "is_interesting": data.get("is_interesting", False),
-                    "is_pia": data.get("is_pia", False),
-                    "is_ladd": data.get("is_ladd", False),
-                    "city": data.get("city"),
-                    "state": data.get("state"),
-                    "source": ",".join(data.get("sources", [])),
-                    "fetch_failed": False,
-                },
+                defaults=_aircraft_info_defaults(icao, data),
             )
             logger.debug(f"Got info for {icao} from in-memory databases: {data.get('sources', [])}")
             _trigger_photo_fetch_if_enabled(icao)
             return
 
-        # Try HexDB API
-        import httpx
-
-        try:
-            url = f"https://hexdb.io/api/v1/aircraft/{icao}"
-            response = httpx.get(url, timeout=10.0)
-
-            if response.status_code == 200:
-                hexdb_data = response.json()
-
-                AircraftInfo.objects.update_or_create(
-                    icao_hex=icao,
-                    defaults={
-                        "registration": hexdb_data.get("Registration"),
-                        "type_code": hexdb_data.get("ICAOTypeCode"),
-                        "manufacturer": hexdb_data.get("Manufacturer"),
-                        "model": hexdb_data.get("Type"),
-                        "operator": hexdb_data.get("RegisteredOwners"),
-                        "source": "hexdb",
-                        "fetch_failed": False,
-                    },
-                )
-                logger.debug(f"Got info for {icao} from HexDB")
-                _trigger_photo_fetch_if_enabled(icao)
-                return
-
-        except Exception as e:
-            logger.debug(f"HexDB lookup failed for {icao}: {e}")
-
-        # Try adsb.lol API
-        try:
-            lol_data = external_db.fetch_aircraft_from_adsb_lol(icao)
-            if lol_data:
-                AircraftInfo.objects.update_or_create(
-                    icao_hex=icao,
-                    defaults={
-                        "registration": lol_data.get("r"),
-                        "type_code": lol_data.get("t"),
-                        "source": "adsb.lol",
-                        "fetch_failed": False,
-                    },
-                )
-                logger.debug(f"Got info for {icao} from adsb.lol")
-                _trigger_photo_fetch_if_enabled(icao)
-                return
-        except Exception as e:
-            logger.debug(f"adsb.lol lookup failed for {icao}: {e}")
+        # No local record at all (e.g. a non-US hex with no FAA/OpenSky entry):
+        # fall back to the external-API sources, still routed through
+        # _aircraft_info_defaults so the ownership/LE analysis runs on it too.
+        ext = aircraft_info_service._fetch_from_external_apis(icao)
+        if ext:
+            AircraftInfo.objects.update_or_create(
+                icao_hex=icao,
+                defaults=_aircraft_info_defaults(icao, ext),
+            )
+            logger.debug(f"Got info for {icao} from external APIs: {ext.get('sources', [])}")
+            _trigger_photo_fetch_if_enabled(icao)
+            return
 
         # Mark as failed if all sources failed
         AircraftInfo.objects.update_or_create(
@@ -327,7 +380,7 @@ def fetch_aircraft_info(icao_hex: str):
         )
         logger.debug(f"All sources failed for {icao}")
 
-    except Exception as e:
+    except Exception as e:  # broad: Celery task top-level guard, reports any failure to clients
         logger.error(f"Error fetching aircraft info for {icao}: {e}")
         broadcast_airframe_error(icao, str(e), sources_tried=["error"])
 
@@ -343,7 +396,7 @@ def _trigger_photo_fetch_if_enabled(icao: str):
     try:
         fetch_aircraft_photos.delay(icao)
         logger.debug(f"Queued photo fetch for {icao}")
-    except Exception as e:
+    except (ConnectionError, OSError, RuntimeError, KombuOperationalError) as e:
         logger.debug(f"Failed to queue photo fetch for {icao}: {e}")
 
 
@@ -361,9 +414,198 @@ def fetch_route_info(callsign: str):
             return route
         return None
 
-    except Exception as e:
+    except Exception as e:  # broad: Celery task top-level guard, returns None on any failure
         logger.error(f"Error fetching route for {callsign}: {e}")
         return None
+
+
+# Refresh a stored route at most this often for an unchanged callsign.
+ROUTE_REFRESH_SECONDS = 6 * 60 * 60
+
+
+@shared_task(ignore_result=True)
+def fetch_route_for_icao(icao_hex: str, callsign: str):
+    """
+    Resolve a callsign's origin/destination route and persist it on AircraftInfo.
+
+    Route is per-flight (keyed by callsign), so we record which callsign the
+    stored route belongs to and skip the network fetch while that callsign is
+    unchanged and fresh. Triggered from the stream cold path where callsign is
+    available (see aircraft_stream.process_new_aircraft_lookups).
+    """
+    try:
+        from django.utils import timezone
+
+        from skyspy.models import AircraftInfo
+        from skyspy.services import external_db
+
+        icao = (icao_hex or "").upper().strip().lstrip("~")
+        cs = (callsign or "").upper().strip()
+        if not icao or not cs:
+            return
+
+        info = AircraftInfo.objects.filter(icao_hex=icao).first()
+        # Skip if we already have a fresh route for this exact callsign.
+        if info and info.route_callsign == cs and info.route_data and info.route_fetched_at:
+            age = (timezone.now() - info.route_fetched_at).total_seconds()
+            if age < ROUTE_REFRESH_SECONDS:
+                return
+
+        route = external_db.fetch_route(cs)
+        if not route:
+            return
+
+        AircraftInfo.objects.update_or_create(
+            icao_hex=icao,
+            defaults={
+                "route_data": route,
+                "route_callsign": cs,
+                "route_fetched_at": timezone.now(),
+            },
+        )
+        logger.debug(
+            f"Stored route for {icao} ({cs}): {route.get('origin', {}).get('icao')} -> "
+            f"{route.get('destination', {}).get('icao')}"
+        )
+
+    except Exception as e:  # broad: Celery task top-level guard, route enrichment is best-effort
+        logger.debug(f"Error storing route for {icao_hex}/{callsign}: {e}")
+
+
+@shared_task
+def _planespotters_photo(icao: str, lookup_url: str) -> tuple[str | None, str | None, str | None]:
+    """
+    Query a single Planespotters photo endpoint (hex- or registration-keyed) and
+    persist the resolved URLs onto the AircraftInfo record.
+
+    Returns ``(photo_url, thumbnail_url, photo_page_link)`` — all ``None`` when no
+    photo is found or the request fails.
+    """
+    from skyspy.models import AircraftInfo
+
+    try:
+        # Planespotters 403s any request whose UA lacks a contact URL/email.
+        ua = getattr(settings, "PHOTO_PLANESPOTTERS_USER_AGENT", "skyspy/2.6 (+https://github.com/skyspy/skyspy)")
+        response = httpx.get(lookup_url, timeout=10.0, headers={"User-Agent": ua})
+        if response.status_code != 200:
+            return None, None, None
+        photos = response.json().get("photos")
+        if not photos:
+            return None, None, None
+        photo = photos[0]
+        # Priority: thumbnail_large (~800px, good quality) > thumbnail for display.
+        large_thumb = photo.get("thumbnail_large", {})
+        small_thumb = photo.get("thumbnail", {})
+        photo_url = large_thumb.get("src") if isinstance(large_thumb, dict) else None
+        thumbnail_url = small_thumb.get("src") if isinstance(small_thumb, dict) else None
+        photo_page_link = photo.get("link")
+        if photo_url:
+            AircraftInfo.objects.filter(icao_hex=icao).update(
+                photo_url=photo_url,
+                photo_thumbnail_url=thumbnail_url,
+                photo_page_link=photo_page_link,
+                photo_source="planespotters.net",
+                photo_photographer=photo.get("photographer"),
+            )
+        return photo_url, thumbnail_url, photo_page_link
+    except (DatabaseError, httpx.HTTPError, ValueError, KeyError, TypeError, OSError) as e:
+        logger.debug(f"Planespotters photo check failed for {icao} ({lookup_url}): {e}")
+        return None, None, None
+
+
+def _airport_data_photo(icao: str, param: str, value: str) -> tuple[str | None, str | None, str | None]:
+    """
+    Query airport-data.com's ac_thumb.json (the community photo DB many ADS-B
+    tools use) by Mode-S hex (``param='m'``) or registration (``param='r'``) and
+    persist the resolved URLs onto the AircraftInfo record.
+
+    Returns ``(photo_url, thumbnail_url, photo_page_link)`` — all ``None`` when no
+    photo is found or the request fails.
+    """
+    from skyspy.models import AircraftInfo
+
+    try:
+        # No www. — the www subdomain serves a cert that doesn't match its host,
+        # so httpx raises an SSL error and the whole fallback silently dies.
+        url = f"https://airport-data.com/api/ac_thumb.json?{param}={value}&n=1"
+        response = httpx.get(url, timeout=10.0, headers={"User-Agent": "skyspy/1.0"})
+        if response.status_code != 200:
+            return None, None, None
+        payload = response.json()
+        rows = payload.get("data") if isinstance(payload, dict) else None
+        if not rows:
+            return None, None, None
+        row = rows[0]
+        thumb = row.get("image")
+        if not thumb:
+            return None, None, None
+        page_link = row.get("link")
+        # The full-size image lives on a DIFFERENT host, keyed by the numeric photo
+        # id from the link (…/aircraft/photo/<ID>): https://image.airport-data.com/
+        # aircraft/<ID>.jpg. Stripping /thumbnails from the thumb path 404s. Fall
+        # back to the thumbnail's own filename when the link is missing.
+        photo_id = page_link.rstrip("/").split("/")[-1] if page_link else ""
+        if not photo_id:
+            photo_id = thumb.rsplit("/", 1)[-1].removesuffix(".jpg")
+        full = f"https://image.airport-data.com/aircraft/{photo_id}.jpg" if photo_id else thumb
+        AircraftInfo.objects.filter(icao_hex=icao).update(
+            photo_url=full,
+            photo_thumbnail_url=thumb,
+            photo_page_link=page_link,
+            photo_source="airport-data.com",
+            photo_photographer=row.get("photographer"),
+        )
+        return full, thumb, page_link
+    except (DatabaseError, httpx.HTTPError, ValueError, KeyError, TypeError, OSError) as e:
+        logger.debug(f"airport-data.com photo check failed for {icao} ({param}={value}): {e}")
+        return None, None, None
+
+
+def _flickr_photo(icao: str, registration: str) -> tuple[str | None, str | None, str | None]:
+    """
+    Last-resort GA fallback: query Flickr's keyless public photo feed by the tail
+    number as a tag. Enthusiasts and owners post small-GA airframes here that the
+    dedicated spotting DBs (Planespotters/airport-data/hexdb) never index.
+
+    This is a *low-trust* source — the feed returns anything a user tagged with
+    the string, so it's gated on a specific-enough registration by the caller and
+    tried only after every curated source misses. ``media.m`` is a 240px thumb;
+    swapping the ``_m`` size suffix for ``_b`` yields the 1024px version.
+
+    Returns ``(photo_url, thumbnail_url, photo_page_link)`` — all ``None`` when no
+    photo is found or the request fails.
+    """
+    from skyspy.models import AircraftInfo
+
+    try:
+        url = "https://www.flickr.com/services/feeds/photos_public.gne"
+        params = {"tags": registration, "format": "json", "nojsoncallback": "1"}
+        response = httpx.get(url, params=params, timeout=10.0, headers={"User-Agent": "skyspy/1.0"})
+        if response.status_code != 200:
+            return None, None, None
+        items = (response.json() or {}).get("items") or []
+        if not items:
+            return None, None, None
+        item = items[0]
+        thumb = (item.get("media") or {}).get("m")
+        if not thumb or not thumb.endswith("_m.jpg"):
+            return None, None, None
+        full = thumb[: -len("_m.jpg")] + "_b.jpg"
+        page_link = item.get("link")
+        # author looks like 'nobody@flickr.com ("Display Name")' — pull the name.
+        author = item.get("author") or ""
+        photographer = author.split('("', 1)[1].rstrip('")') if '("' in author else None
+        AircraftInfo.objects.filter(icao_hex=icao).update(
+            photo_url=full,
+            photo_thumbnail_url=thumb,
+            photo_page_link=page_link,
+            photo_source="flickr",
+            photo_photographer=photographer,
+        )
+        return full, thumb, page_link
+    except (DatabaseError, httpx.HTTPError, ValueError, KeyError, TypeError, IndexError, OSError) as e:
+        logger.debug(f"Flickr photo check failed for {icao} ({registration}): {e}")
+        return None, None, None
 
 
 @shared_task
@@ -391,68 +633,73 @@ def fetch_aircraft_photos(
                 return
 
         # If no URLs provided, try to get them from database or fetch from hexdb
+        registration = None
         if not photo_url:
             try:
                 info = AircraftInfo.objects.get(icao_hex=icao)
                 photo_url = info.photo_url
                 thumbnail_url = info.photo_thumbnail_url or thumbnail_url
                 photo_page_link = info.photo_page_link or photo_page_link
+                registration = (info.registration or "").strip() or None
             except AircraftInfo.DoesNotExist:
                 pass
 
-        # Try planespotters first (higher quality source)
+        # US GA airframes are the ones Planespotters lacks by hex, yet they're
+        # indexed by tail on airport-data.com. If the DB has no registration
+        # (FAA registry not loaded / row not enriched yet), derive the N-number
+        # from the hex — it's a bijective mapping for the US block — so the reg
+        # endpoints still fire instead of silently giving up.
+        if not photo_url and not registration:
+            from skyspy.services.nnumber import icao_to_n
+
+            registration = icao_to_n(icao)
+
+        # Try planespotters first (higher quality source). General-aviation
+        # airframes are frequently absent from the hex index but present under
+        # their registration, so fall back to the reg endpoint before hexdb.
         if not photo_url:
-            import httpx
+            lookup_urls = [f"https://api.planespotters.net/pub/photos/hex/{icao}"]
+            if registration:
+                lookup_urls.append(f"https://api.planespotters.net/pub/photos/reg/{registration}")
+            for lookup_url in lookup_urls:
+                photo_url, thumbnail_url, photo_page_link = _planespotters_photo(icao, lookup_url)
+                if photo_url:
+                    break
 
-            try:
-                ps_url = f"https://api.planespotters.net/pub/photos/hex/{icao}"
-                response = httpx.get(ps_url, timeout=10.0)
-                if response.status_code == 200:
-                    data = response.json()
-                    if data.get("photos"):
-                        photo = data["photos"][0]
-                        # Priority: thumbnail_large > thumbnail for display
-                        # thumbnail_large is usually 800px wide, good quality
-                        large_thumb = photo.get("thumbnail_large", {})
-                        small_thumb = photo.get("thumbnail", {})
-
-                        # Use large thumbnail as main photo (best available via API)
-                        photo_url = large_thumb.get("src") if isinstance(large_thumb, dict) else None
-                        thumbnail_url = small_thumb.get("src") if isinstance(small_thumb, dict) else None
-                        photo_page_link = photo.get("link")
-
-                        # Update database with URLs
-                        if photo_url:
-                            AircraftInfo.objects.filter(icao_hex=icao).update(
-                                photo_url=photo_url,
-                                photo_thumbnail_url=thumbnail_url,
-                                photo_page_link=photo_page_link,
-                                photo_source="planespotters.net",
-                                photo_photographer=photo.get("photographer"),
-                            )
-            except Exception as e:
-                logger.debug(f"Planespotters photo check failed for {icao}: {e}")
+        # airport-data.com — broad community DB; try Mode-S hex then registration.
+        # Covers many airframes (incl. GA) that Planespotters lacks.
+        if not photo_url:
+            attempts = [("m", icao)]
+            if registration:
+                attempts.append(("r", registration))
+            for param, value in attempts:
+                photo_url, thumbnail_url, photo_page_link = _airport_data_photo(icao, param, value)
+                if photo_url:
+                    break
 
         # Fallback to hexdb.io if planespotters didn't work
         if not photo_url:
-            import httpx
-
             try:
                 hex_photo_url = f"https://hexdb.io/hex-image?hex={icao.lower()}"
                 hex_thumb_url = f"https://hexdb.io/hex-image-thumb?hex={icao.lower()}"
 
-                response = httpx.head(hex_photo_url, timeout=10.0, follow_redirects=True)
-                if response.status_code == 200:
-                    content_type = response.headers.get("content-type", "")
-                    if content_type.startswith("image/"):
-                        photo_url = hex_photo_url
-                        thumbnail_url = hex_thumb_url
+                # Shared HEAD adds retry + breaker; only accepts image/* responses.
+                if http_client.head_ok(hex_photo_url, source="hexdb", timeout=10.0, expected_content_type="image/"):
+                    photo_url = hex_photo_url
+                    thumbnail_url = hex_thumb_url
 
-                        AircraftInfo.objects.filter(icao_hex=icao).update(
-                            photo_url=photo_url, photo_thumbnail_url=thumbnail_url, photo_source="hexdb.io"
-                        )
-            except Exception as e:
+                    AircraftInfo.objects.filter(icao_hex=icao).update(
+                        photo_url=photo_url, photo_thumbnail_url=thumbnail_url, photo_source="hexdb.io"
+                    )
+            except (DatabaseError, ValueError, KeyError, TypeError, OSError) as e:
                 logger.debug(f"HexDB photo check failed for {icao}: {e}")
+
+        # Last resort for small GA the curated DBs never index: Flickr's keyless
+        # public feed, keyed on the tail number. Low-trust (fuzzy tag match), so
+        # only fire on a specific-enough registration — short tails like "N44"
+        # would match unrelated photos.
+        if not photo_url and registration and len(registration) >= 5:
+            photo_url, thumbnail_url, photo_page_link = _flickr_photo(icao, registration)
 
         # Download photos if we have URLs
         if photo_url:
@@ -469,7 +716,7 @@ def fetch_aircraft_photos(
         else:
             logger.debug(f"No photo sources found for {icao}")
 
-    except Exception as e:
+    except Exception as e:  # broad: Celery task top-level guard, must not crash the worker
         logger.error(f"Error fetching photos for {icao}: {e}")
 
 
@@ -485,8 +732,6 @@ def upgrade_aircraft_photo(icao_hex: str):
     logger.debug(f"Attempting photo upgrade for {icao}")
 
     try:
-        import httpx
-
         from skyspy.models import AircraftInfo
         from skyspy.services.photo_cache import download_photo, update_photo_paths
 
@@ -510,15 +755,12 @@ def upgrade_aircraft_photo(icao_hex: str):
             hex_photo_url = f"https://hexdb.io/hex-image?hex={icao.lower()}"
             hex_thumb_url = f"https://hexdb.io/hex-image-thumb?hex={icao.lower()}"
 
-            response = httpx.head(hex_photo_url, timeout=10.0)
-            if response.status_code == 200:
-                content_type = response.headers.get("content-type", "")
-                if content_type.startswith("image/"):
-                    new_photo_url = hex_photo_url
-                    new_thumb_url = hex_thumb_url
-                    photo_page_link = None  # hexdb provides direct URLs
-                    logger.info(f"Found hexdb.io photo for {icao}, upgrading")
-        except Exception as e:
+            if http_client.head_ok(hex_photo_url, source="hexdb", timeout=10.0, expected_content_type="image/"):
+                new_photo_url = hex_photo_url
+                new_thumb_url = hex_thumb_url
+                photo_page_link = None  # hexdb provides direct URLs
+                logger.info(f"Found hexdb.io photo for {icao}, upgrading")
+        except (ValueError, KeyError, TypeError, OSError) as e:
             logger.debug(f"HexDB photo check failed for {icao}: {e}")
 
         # If no hexdb photo and we have a planespotters URL without page link, get page link
@@ -530,7 +772,11 @@ def upgrade_aircraft_photo(icao_hex: str):
         ):
             try:
                 ps_url = f"https://api.planespotters.net/pub/photos/hex/{icao}"
-                response = httpx.get(ps_url, timeout=10.0)
+                # Planespotters 403s a UA without a contact URL/email.
+                ps_ua = getattr(
+                    settings, "PHOTO_PLANESPOTTERS_USER_AGENT", "skyspy/2.6 (+https://github.com/skyspy/skyspy)"
+                )
+                response = httpx.get(ps_url, timeout=10.0, headers={"User-Agent": ps_ua})
                 if response.status_code == 200:
                     data = response.json()
                     if data.get("photos"):
@@ -540,7 +786,7 @@ def upgrade_aircraft_photo(icao_hex: str):
                             info.photo_page_link = photo_page_link
                             info.save(update_fields=["photo_page_link"])
                             logger.info(f"Got page link for {icao}: {photo_page_link}")
-            except Exception as e:
+            except (DatabaseError, httpx.HTTPError, ValueError, KeyError, TypeError, OSError) as e:
                 logger.debug(f"Planespotters API failed for {icao}: {e}")
 
         # Update if we found a better URL
@@ -589,7 +835,7 @@ def upgrade_aircraft_photo(icao_hex: str):
                 update_photo_paths(icao, photo_path, thumb_path)
                 logger.info(f"Upgraded photo via scraping for {icao}")
 
-    except Exception as e:
+    except Exception as e:  # broad: Celery task top-level guard, must not crash the worker
         logger.error(f"Error upgrading photo for {icao}: {e}")
 
 
@@ -608,11 +854,12 @@ def batch_fetch_aircraft_photos(icao_list: list):
         try:
             fetch_aircraft_photos.delay(icao)
             time.sleep(0.5)  # Rate limit to avoid hammering APIs
-        except Exception as e:
+        except (ConnectionError, OSError, RuntimeError, KombuOperationalError) as e:
             logger.error(f"Error queuing photo fetch for {icao}: {e}")
 
 
 @shared_task
+@singleton_task(timeout=3600)
 def refresh_stale_aircraft_info(max_age_days: int = 7, batch_size: int = 100):
     """
     Refresh aircraft info records that are older than max_age_days.
@@ -650,7 +897,7 @@ def refresh_stale_aircraft_info(max_age_days: int = 7, batch_size: int = 100):
             try:
                 fetch_aircraft_info.delay(icao)
                 refreshed += 1
-            except Exception as e:
+            except (ConnectionError, OSError, RuntimeError, KombuOperationalError) as e:
                 logger.warning(f"Failed to queue refresh for {icao}: {e}")
 
         # Queue retry for failed records
@@ -660,18 +907,19 @@ def refresh_stale_aircraft_info(max_age_days: int = 7, batch_size: int = 100):
                 AircraftInfo.objects.filter(icao_hex=icao, fetch_failed=True).delete()
                 fetch_aircraft_info.delay(icao)
                 retried += 1
-            except Exception as e:
+            except (DatabaseError, ConnectionError, OSError, RuntimeError, KombuOperationalError) as e:
                 logger.warning(f"Failed to queue retry for {icao}: {e}")
 
         logger.info(f"Queued {refreshed} stale + {retried} retry aircraft info lookups")
         return {"refreshed": refreshed, "retried": retried}
 
-    except Exception as e:
+    except Exception as e:  # broad: Celery task top-level guard, returns error dict on any failure
         logger.error(f"Error refreshing stale aircraft info: {e}")
         return {"error": str(e)}
 
 
 @shared_task
+@singleton_task(timeout=3600)
 def batch_upgrade_aircraft_photos(batch_size: int = 50):
     """
     Batch upgrade photos for aircraft that might have better images available.
@@ -707,18 +955,19 @@ def batch_upgrade_aircraft_photos(batch_size: int = 50):
                 upgrade_aircraft_photo.delay(icao)
                 upgraded += 1
                 time.sleep(0.5)  # Rate limit
-            except Exception as e:
+            except (ConnectionError, OSError, RuntimeError, KombuOperationalError) as e:
                 logger.warning(f"Failed to queue photo upgrade for {icao}: {e}")
 
         logger.info(f"Queued {upgraded} aircraft for photo upgrade")
         return {"queued": upgraded}
 
-    except Exception as e:
+    except Exception as e:  # broad: Celery task top-level guard, returns error dict on any failure
         logger.error(f"Error in batch photo upgrade: {e}")
         return {"error": str(e)}
 
 
 @shared_task
+@singleton_task(timeout=3600)
 def cleanup_orphan_aircraft_info(days_without_sighting: int = 30):
     """
     Clean up AircraftInfo records for aircraft not seen in a long time.
@@ -765,7 +1014,7 @@ def cleanup_orphan_aircraft_info(days_without_sighting: int = 30):
 
         return {"deleted_failed": deleted_failed, "deleted_no_photo": deleted_no_photo, "total_deleted": total_deleted}
 
-    except Exception as e:
+    except Exception as e:  # broad: Celery task top-level guard, returns error dict on any failure
         logger.error(f"Error cleaning up orphan aircraft info: {e}")
         return {"error": str(e)}
 
@@ -789,9 +1038,38 @@ def update_cached_photo_set():
         return {"cached": 0, "enabled": False}
 
     if getattr(settings, "S3_ENABLED", False):
-        # For S3, we rely on the photo_cache service's existing logic
-        # This task is mainly for local filesystem caching
-        return {"cached": 0, "s3_mode": True}
+        # Build the Redis existence set by listing the S3 prefix once, so
+        # per-view existence checks become an O(1) Redis lookup instead of a
+        # live Wasabi HEAD round-trip (~40-260ms each).
+        icaos: set[str] = set()
+        thumbs: set[str] = set()
+        try:
+            from skyspy.services.storage import _get_s3_client
+
+            client = _get_s3_client()
+            if not client:
+                return {"cached": 0, "s3_mode": True, "no_client": True}
+
+            prefix = settings.S3_PREFIX.strip("/") + "/"
+            paginator = client.get_paginator("list_objects_v2")
+            for page in paginator.paginate(Bucket=settings.S3_BUCKET, Prefix=prefix):
+                for obj in page.get("Contents", []):
+                    key = obj.get("Key", "")
+                    if not key.endswith(".jpg") or obj.get("Size", 0) <= 0:
+                        continue
+                    name = key[len(prefix) :].removesuffix(".jpg").upper()
+                    if name.endswith("_THUMB"):
+                        thumbs.add(name.removesuffix("_THUMB"))
+                    else:
+                        icaos.add(name)
+
+            cache.set("cached_photo_icaos", icaos, timeout=600)
+            cache.set("cached_photo_thumb_icaos", thumbs, timeout=600)
+            logger.info(f"Updated S3 cached photo set: {len(icaos)} photos, {len(thumbs)} thumbnails")
+            return {"cached": len(icaos), "thumbnails": len(thumbs), "s3_mode": True}
+        except Exception as e:  # broad: Celery task top-level guard, returns error dict on any failure
+            logger.error(f"Error updating S3 cached photo set: {e}")
+            return {"error": str(e), "s3_mode": True}
 
     cache_dir = Path(getattr(settings, "PHOTO_CACHE_DIR", "/tmp/photo_cache"))  # nosec B108
     if not cache_dir.exists():
@@ -820,7 +1098,7 @@ def update_cached_photo_set():
         logger.info(f"Updated cached photo set: {len(icaos)} photos, {len(thumbs)} thumbnails")
         return {"cached": len(icaos), "thumbnails": len(thumbs)}
 
-    except Exception as e:
+    except Exception as e:  # broad: Celery task top-level guard, returns error dict on any failure
         logger.error(f"Error updating cached photo set: {e}")
         return {"error": str(e)}
 
@@ -871,6 +1149,6 @@ def get_aircraft_info_stats():
             "by_photo_source": by_photo_source,
         }
 
-    except Exception as e:
+    except Exception as e:  # broad: Celery task top-level guard, returns error dict on any failure
         logger.error(f"Error getting aircraft info stats: {e}")
         return {"error": str(e)}

@@ -12,8 +12,11 @@ services:
       - DJANGO_SECRET_KEY=test-secret-key-for-testing-only
       - DEBUG=False
 
-      # Database: Point to pgbouncer instead of postgres
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-adsb}:${POSTGRES_PASSWORD:-adsb}@pgbouncer:5432/${POSTGRES_DB:-adsb}
+      # Database: direct to postgres with a dedicated test DB. Routing through
+      # pgbouncer pointed tests at the dev "adsb" database (test_settings sets
+      # TEST.NAME to the URL's own db name), so live dev-stack data polluted
+      # test runs whenever the dev profile was up.
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-adsb}:${POSTGRES_PASSWORD:-adsb}@postgres:5432/${POSTGRES_TEST_DB:-adsb_test}
 
       # Redis
       - REDIS_URL=redis://redis:6379/0
@@ -55,7 +58,7 @@ services:
       - ./test-results:/app/test-results
       - ./skyspy_django/skyspy:/app/skyspy:ro  # Hot reload Python code
     depends_on:
-      pgbouncer:
+      postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -379,13 +382,14 @@ services:
 
   # PostgreSQL for integration tests
   postgres:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     profiles: ["dev","test"]
     container_name: skyspy_postgres_test
     environment:
       - POSTGRES_USER=${POSTGRES_USER:-adsb}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-adsb}
       - POSTGRES_DB=${POSTGRES_DB:-adsb}
+      - POSTGRES_TEST_DB=${POSTGRES_TEST_DB:-adsb_test}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-adsb} -d ${POSTGRES_DB:-adsb}"]
       interval: 5s
@@ -393,6 +397,8 @@ services:
       retries: 5
     tmpfs:
       - /var/lib/postgresql/data
+    volumes:
+      - ./test/init-db:/docker-entrypoint-initdb.d:ro
     networks:
       - test-network
 
@@ -427,6 +433,8 @@ services:
       # and serves real aircraft through every endpoint/stream
       - DATA_SOURCE=${MOCK_DATA_SOURCE:-simulated}
       - LIVE_SOURCE=${MOCK_LIVE_SOURCE:-adsb_lol}
+      # RapidAPI key, only needed when MOCK_LIVE_SOURCE=adsbexchange (keep in gitignored .env.test)
+      - LIVE_API_KEY=${MOCK_LIVE_API_KEY:-}
       - LIVE_POLL_INTERVAL=${MOCK_LIVE_POLL_INTERVAL:-5}
       - LIVE_RADIUS_NM=${MOCK_LIVE_RADIUS_NM:-150}
       # Center the mock coverage on the configured feeder location
@@ -439,6 +447,10 @@ services:
       # SSE streaming configuration (ADSBexchange compatible)
       - SSE_ENABLED=${SSE_ENABLED:-true}
       - SSE_INTERVAL_MS=${SSE_INTERVAL_MS:-1000}
+      # Live-data refresh cadence (seconds) for the mock ONLY. Sourced from a
+      # dedicated var so it never collides with Django's int CACHE_TTL — the
+      # mock parses this as a float and can go sub-second (e.g. 0.5 = 500ms).
+      - CACHE_TTL=${MOCK_LIVE_REFRESH_SEC:-5}
     networks:
       - test-network
     ports:

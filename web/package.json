@@ -1,6 +1,6 @@
 {
   "name": "adsb-dashboard",
-  "version": "2.5.0",
+  "version": "3.0.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -27,7 +27,8 @@
     "docs:animations": "playwright test --config=e2e/docs/playwright.docs.config.js --grep '.anim.js'",
     "docs:animations:convert": "node e2e/docs/utils/convert-all-videos.js",
     "docs:index": "node e2e/docs/utils/generate-index.js",
-    "docs:generate": "npm run docs:screenshots:all && npm run docs:animations && npm run docs:animations:convert && npm run docs:index",
+    "docs:embed": "node e2e/docs/utils/embed-screenshots.js",
+    "docs:generate": "npm run docs:screenshots:all && npm run docs:animations && npm run docs:animations:convert && npm run docs:index && npm run docs:embed",
     "lint": "eslint src --ext .js,.jsx --report-unused-disable-directives --max-warnings 150",
     "lint:fix": "eslint src --ext .js,.jsx --fix",
     "format": "prettier --write \"src/**/*.{js,jsx,css,json}\"",
@@ -35,9 +36,12 @@
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build",
     "type-check": "tsc --noEmit",
-    "type-check:watch": "tsc --noEmit --watch"
+    "type-check:watch": "tsc --noEmit --watch",
+    "qa:visual": "node scripts/visual-qa-standalone.js"
   },
   "dependencies": {
+    "@fontsource/ibm-plex-mono": "^5.2.7",
+    "@fontsource/ibm-plex-sans": "^5.2.8",
     "@radix-ui/react-accordion": "^1.2.12",
     "@radix-ui/react-alert-dialog": "^1.1.15",
     "@radix-ui/react-collapsible": "^1.1.12",
@@ -57,6 +61,8 @@
     "lucide-react": "^0.263.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "react-markdown": "^9.1.0",
+    "remark-gfm": "^4.0.1",
     "socket.io-client": "^4.8.3",
     "tailwind-merge": "^3.4.0",
     "zod": "^4.3.6"

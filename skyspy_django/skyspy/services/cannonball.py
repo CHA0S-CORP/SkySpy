@@ -277,7 +277,7 @@ class CannonballService:
         threats: list[CannonballThreat] = []
 
         for ac in aircraft_list:
-            if not ac.get("lat") or not ac.get("lon"):
+            if ac.get("lat") is None or ac.get("lon") is None:
                 continue
 
             # Calculate distance

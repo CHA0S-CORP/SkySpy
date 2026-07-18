@@ -86,6 +86,8 @@ func SetupCommands() {
 	rootCmd.AddCommand(radioProCmd)
 	rootCmd.AddCommand(configureCmd)
 	rootCmd.AddCommand(airbandCmd)
+	rootCmd.AddCommand(genDocsCmd)
+	genDocsCmd.Flags().StringVar(&genDocsDir, "dir", "", "Output directory for generated Markdown")
 }
 
 func main() {

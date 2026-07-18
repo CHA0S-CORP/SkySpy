@@ -1,0 +1,769 @@
+/* v2 Live Map (design SkySpy.dc.html) — Leaflet slippy map + dart symbology */
+
+.lm {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  background: var(--bg0);
+  font-family: var(--font-sans);
+  color: var(--txt);
+}
+.lm__center {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+.lm__spacer {
+  flex: 1;
+}
+
+/* toolbar */
+.lm__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: 56px;
+  flex: 0 0 56px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--bord);
+  background: color-mix(in srgb, var(--bg1) 70%, transparent);
+  backdrop-filter: blur(6px);
+  z-index: 5;
+}
+.lm__search {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex: 1;
+  max-width: 440px;
+  height: 38px;
+  padding: 0 13px;
+  background: var(--bg0);
+  border: 1px solid var(--bord);
+  border-radius: 10px;
+  color: var(--dim);
+}
+.lm__search:focus-within {
+  border-color: var(--accent);
+}
+.lm__search input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--txt);
+  font-family: var(--font-sans);
+  font-size: 13px;
+}
+.lm__seg {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 9px;
+  background: var(--bg0);
+  border: 1px solid var(--bord);
+}
+.lm__seg button {
+  border: none;
+  background: transparent;
+  color: var(--dim);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 11px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.lm__seg-on {
+  background: color-mix(in srgb, var(--accent) 14%, transparent) !important;
+  color: var(--accent) !important;
+}
+.lm__kbd {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--dim2);
+  border: 1px solid var(--bord2);
+  border-radius: 5px;
+  padding: 2px 6px;
+}
+.lm__cluster {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+.lm__divider {
+  width: 1px;
+  height: 22px;
+  background: var(--bord2);
+  flex: 0 0 auto;
+}
+.lm__tbtn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  background: var(--bg0);
+  border: 1px solid var(--bord);
+  color: var(--dim);
+  cursor: pointer;
+}
+.lm__tbtn:hover {
+  color: var(--txt);
+  border-color: var(--bord2);
+}
+.lm__tbtn--on {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.lm__tbadge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 15px;
+  height: 15px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--bg0);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 3px;
+}
+.lm__zoom {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 8px;
+  background: var(--bg0);
+  border: 1px solid var(--bord);
+  flex: 0 0 auto;
+}
+.lm__zoom-slider {
+  width: 90px;
+  accent-color: var(--accent);
+}
+.lm__zoom-val {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--txt);
+  min-width: 16px;
+  text-align: center;
+}
+
+/* stage (surface + overlays) */
+.lm__stage {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  display: flex;
+}
+
+/* toolbar popovers */
+.lm__pop {
+  position: absolute;
+  top: 10px;
+  z-index: 500;
+}
+.lm__pop--filters {
+  right: 130px;
+}
+.lm__pop--layers {
+  right: 84px;
+}
+.lm__pop--legend {
+  right: 46px;
+}
+.lm-panel-pop {
+  width: 264px;
+  background: var(--bg1);
+  border: 1px solid var(--bord2);
+  border-radius: 12px;
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.5);
+  padding: 12px 14px;
+  font-size: 13px;
+  color: var(--txt);
+}
+.lm-panel-pop__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+.lm-panel-pop__reset {
+  border: none;
+  background: transparent;
+  color: var(--accent2);
+  font-family: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.lm-panel-pop__group {
+  padding: 8px 0;
+  border-top: 1px solid var(--bord);
+}
+.lm-panel-pop__group-label {
+  font-size: 9px;
+  letter-spacing: 0.8px;
+  color: var(--dim2);
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.lm-panel-pop__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 0;
+  font-size: 12px;
+  color: var(--dim);
+}
+/* per-class airspace sub-toggles (indented under the Airspace row) */
+.lm-panel-pop__subgroup {
+  margin: 2px 0 4px 10px;
+  padding-left: 8px;
+  border-left: 1px solid var(--bord);
+}
+.lm-panel-pop__row--sub {
+  padding: 4px 0;
+  font-size: 11px;
+  color: var(--dim2, var(--dim));
+}
+.lm-panel-pop__row--sub > span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.lm-airspace-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex: none;
+}
+.lm-panel-pop__range {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.lm-panel-pop__range .v2-input {
+  width: 84px;
+  height: 32px;
+}
+.lm-legend__row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 5px 0;
+  font-size: 12px;
+  color: var(--dim);
+}
+.lm-legend__dart {
+  display: inline-flex;
+}
+.lm-legend__ring {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid;
+}
+
+/* coordinate readout */
+.lm__coords {
+  position: absolute;
+  bottom: 14px;
+  left: 14px;
+  padding: 10px 13px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--bg1) 85%, transparent);
+  border: 1px solid var(--bord);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.7;
+  color: var(--dim);
+  backdrop-filter: blur(4px);
+  z-index: 450;
+  pointer-events: none;
+}
+.lm__coords span {
+  color: var(--txt);
+}
+
+/* hover tooltip for PIREP / NOTAM canvas markers */
+.lm__tip {
+  position: absolute;
+  max-width: 320px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--bg1) 92%, transparent);
+  border: 1px solid var(--bord);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--dim);
+  backdrop-filter: blur(4px);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  z-index: 455;
+  pointer-events: none;
+}
+.lm__tip-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 3px;
+}
+.lm__tip-badge {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--txt);
+}
+.lm__tip-badge--tfr {
+  color: var(--danger, #f4506e);
+}
+.lm__tip-alt {
+  color: var(--dim);
+}
+.lm__tip-sub {
+  color: var(--txt);
+  margin-bottom: 2px;
+}
+.lm__tip-haz {
+  color: var(--warn, #f0a23c);
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+.lm__tip-raw {
+  color: var(--dim);
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin-top: 3px;
+}
+
+/* mini compass */
+.lm__compass {
+  position: absolute;
+  bottom: 14px;
+  right: 14px;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  border: 1px solid var(--bord2);
+  background: color-mix(in srgb, var(--bg1) 85%, transparent);
+  z-index: 450;
+  pointer-events: none;
+}
+.lm__compass-n {
+  position: absolute;
+  top: 3px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--dim);
+}
+.lm__compass-needle {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 2px;
+  height: 16px;
+  background: var(--danger);
+  transform: translate(-50%, -100%);
+  transform-origin: bottom center;
+}
+
+/* range rings toggle */
+.leaflet-container.lm--no-rings .leaflet-lm-rings-pane {
+  display: none;
+}
+
+/* map surface */
+.lm__surface {
+  flex: 1;
+  min-height: 0;
+  background: var(--bg0);
+}
+.lm__surface .leaflet-container {
+  background: #080b11;
+  font-family: var(--font-mono);
+}
+
+/* sensor dot */
+.lm-sensor span {
+  display: block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #4cc9f0;
+  box-shadow: 0 0 10px #4cc9f0;
+}
+
+/* ---- aircraft blip (divIcon root; children carry all symbology) ---- */
+.lm-blip {
+  overflow: visible !important;
+}
+.lm-ring {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  pointer-events: none;
+  display: none;
+}
+.lm-ring--sel {
+  width: 44px;
+  height: 44px;
+  border: 1.5px dashed #4cc9f0;
+  animation: v2-ringpulse 2.2s ease-in-out infinite;
+}
+.lm-ring--safety {
+  width: 42px;
+  height: 42px;
+  border: 2px solid var(--warn);
+  animation: v2-ringpulse 1.4s ease-in-out infinite;
+}
+.lm-ping {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 2px solid var(--warn);
+  pointer-events: none;
+  display: none;
+  animation: v2-safeping 1.6s ease-out infinite;
+}
+.lm-lead {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+.lm-lead-stub {
+  position: absolute;
+  left: -1px;
+  top: -20px;
+  width: 2px;
+  height: 20px;
+  border-radius: 1px;
+  background: #4cc9f0;
+}
+.lm-lead-trail {
+  position: absolute;
+  left: -1px;
+  width: 2px;
+  border-radius: 1px;
+  opacity: 0.7;
+  background: repeating-linear-gradient(to top, #4cc9f0 0 4px, transparent 4px 11px);
+}
+.lm-dart {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: center;
+  margin-left: -8.5px;
+  margin-top: -8.5px;
+  z-index: 1;
+  pointer-events: auto;
+  cursor: pointer;
+}
+.lm-label {
+  position: absolute;
+  left: 15px;
+  top: -7px;
+  white-space: nowrap;
+  pointer-events: none;
+  display: none;
+  padding: 3px 7px;
+  border-radius: 6px;
+  background: var(--bg1);
+  border: 1px solid var(--bord);
+  z-index: 2;
+}
+.lm-label--minimal {
+  background: color-mix(in srgb, #05070a 55%, transparent);
+  border: none;
+  padding: 2px 6px;
+}
+.lm-label-cs {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.lm-label--minimal .lm-label-cs {
+  font-size: 14px;
+  text-shadow: 0 1px 3px #000;
+}
+.lm-label-l1,
+.lm-label-l2 {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--dim);
+  line-height: 1.3;
+}
+.lm-label--minimal .lm-label-l1,
+.lm-label--minimal .lm-label-l2 {
+  font-size: 13px;
+  color: #4cc9f0;
+  text-shadow: 0 1px 3px #000;
+}
+.lm-label-badge {
+  display: none;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  padding: 2px 6px;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--warn) 22%, #0d131b);
+  border: 1px solid var(--warn);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+}
+
+/* reopen tab */
+.lm__reopen {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 26px;
+  height: 60px;
+  border-radius: 8px 0 0 8px;
+  background: var(--bg1);
+  border: 1px solid var(--bord);
+  border-right: none;
+  color: var(--dim);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 6;
+}
+
+/* ---- detail panel (392px) ---- */
+.lm-panel {
+  width: 392px;
+  flex: 0 0 392px;
+  border-left: 1px solid var(--bord);
+  background: var(--bg1);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+.lm-panel--empty {
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--dim2);
+  font-size: 13px;
+  text-align: center;
+  padding: 40px;
+}
+.lm-panel__banner {
+  position: relative;
+  height: 150px;
+  background: repeating-linear-gradient(
+      45deg,
+      var(--bg2),
+      var(--bg2) 12px,
+      var(--bg1) 12px,
+      var(--bg1) 24px
+    )
+    center / cover;
+  background-size: cover;
+  background-position: center;
+  flex: 0 0 auto;
+}
+.lm-panel__banner-scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(transparent 40%, var(--bg1));
+}
+.lm-panel__close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--bg0) 55%, transparent);
+  border: 1px solid var(--bord2);
+  color: var(--txt);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+}
+.lm-panel__banner-id {
+  position: absolute;
+  left: 16px;
+  bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  z-index: 2;
+}
+.lm-panel__cs {
+  font-family: var(--font-mono);
+  font-size: 20px;
+  font-weight: 700;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.7);
+}
+.lm-panel__cat {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  padding: 3px 8px;
+  border-radius: 20px;
+}
+.lm-panel__body {
+  padding: 14px 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.lm-panel__status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.lm-panel__status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+.lm-panel__chips {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.lm-panel__chip {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 11px;
+  border-radius: 9px;
+  background: var(--bg2);
+  border: 1px solid var(--bord);
+}
+.lm-panel__chip-label {
+  font-size: 9px;
+  letter-spacing: 0.8px;
+  color: var(--dim2);
+  font-weight: 600;
+}
+.lm-panel__chip-val {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+}
+.lm-panel__airline-badge {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 11px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--dim);
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg2));
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--bord));
+}
+.lm-panel__stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.lm-panel__stat {
+  padding: 10px 12px;
+  border-radius: 11px;
+  background: var(--bg2);
+  border: 1px solid var(--bord);
+}
+.lm-panel__stat-label {
+  font-size: 9px;
+  letter-spacing: 0.8px;
+  color: var(--dim);
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.lm-panel__stat-val {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  font-weight: 600;
+}
+.lm-panel__stat-val span {
+  font-size: 11px;
+  color: var(--dim);
+  font-family: var(--font-sans);
+}
+.lm-panel__eyebrow {
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: var(--dim2);
+  font-weight: 600;
+  margin-top: 4px;
+}
+.lm-panel__kv {
+  display: flex;
+  justify-content: space-between;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--bord);
+  font-size: 12px;
+  color: var(--dim);
+}
+.lm-panel__kv .v2-mono {
+  color: var(--txt);
+  font-weight: 600;
+}
+.lm-panel__spark-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.lm-panel__spark {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 11px;
+  background: var(--bg2);
+  border: 1px solid var(--bord);
+  font-size: 11px;
+  color: var(--dim);
+}
+.lm-panel__full {
+  margin-top: 6px;
+  width: 100%;
+}
+
+@media (max-width: 1100px) {
+  .lm-panel {
+    width: 320px;
+    flex-basis: 320px;
+  }
+}
