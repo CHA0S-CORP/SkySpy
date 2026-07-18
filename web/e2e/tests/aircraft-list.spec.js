@@ -5,6 +5,11 @@
  */
 
 import { test, expect, mockData } from '../fixtures/test-setup.js';
+import {
+  seedAircraftViaSocket,
+  makeSeedAircraft,
+  makeBulkResponse,
+} from '../fixtures/socketMock.js';
 
 test.describe('Aircraft List View', () => {
   const mockAircraft = mockData.generateAircraft(20);
@@ -277,6 +282,214 @@ test.describe('Aircraft List View', () => {
       const hasAltitude = pageContent.includes('ft') || pageContent.includes('FL') ||
                          /\d{4,5}/.test(pageContent);
       expect(typeof hasAltitude).toBe('boolean');
+    });
+  });
+
+  test.describe('Row Enrichment (operator / full type / year)', () => {
+    // The list is fully socket-driven from the live backend (the `io` client is
+    // imported as an ES module, so window.io interception and the REST
+    // mockAircraftList do not seed it — see realtime.spec.js). The enrichment
+    // fields (ownOp -> operator line, desc -> full type, year -> build year) are
+    // therefore only present when the backend supplies them. These tests assert
+    // the new secondary lines render *when* present, and are well-formed,
+    // without hard-failing on a feed that lacks the enrichment.
+
+    async function firstRowHex(page) {
+      const row = page.locator('[data-testid^="v2-list-row-"]').first();
+      if (!(await row.isVisible({ timeout: 5000 }).catch(() => false))) return null;
+      const testId = await row.getAttribute('data-testid');
+      return testId ? testId.replace('v2-list-row-', '') : null;
+    }
+
+    test('operator secondary line renders under the callsign when present', async ({ page }) => {
+      await page.goto('/#aircraft');
+      await page.waitForLoadState('domcontentloaded');
+      await expect(page.getByTestId('v2-aircraft-list')).toBeVisible({ timeout: 15000 });
+      await page.waitForTimeout(1000);
+
+      const hex = await firstRowHex(page);
+      if (!hex) return; // no live rows in this environment
+
+      const operator = page.getByTestId(`v2-list-operator-${hex}`);
+      if (await operator.isVisible({ timeout: 2000 }).catch(() => false)) {
+        // Operator line should carry non-empty text and a matching title tooltip.
+        const text = (await operator.textContent())?.trim() || '';
+        expect(text.length).toBeGreaterThan(0);
+        const title = await operator.getAttribute('title');
+        expect(title).toBe(text);
+      }
+    });
+
+    test('full type name renders as the type-column tooltip when present', async ({ page }) => {
+      await page.goto('/#aircraft');
+      await page.waitForLoadState('domcontentloaded');
+      await expect(page.getByTestId('v2-aircraft-list')).toBeVisible({ timeout: 15000 });
+      await page.waitForTimeout(1000);
+
+      const hex = await firstRowHex(page);
+      if (!hex) return;
+
+      const typeCell = page.getByTestId(`v2-list-type-${hex}`);
+      await expect(typeCell).toBeVisible();
+
+      const typeFull = page.getByTestId(`v2-list-type-full-${hex}`);
+      if (await typeFull.isVisible({ timeout: 2000 }).catch(() => false)) {
+        const fullText = (await typeFull.textContent())?.trim() || '';
+        expect(fullText.length).toBeGreaterThan(0);
+        // The full name is mirrored into the type cell's title tooltip.
+        const title = await typeCell.getAttribute('title');
+        expect(title && title.length).toBeGreaterThan(0);
+      }
+    });
+
+    test('build year renders on the type column when present', async ({ page }) => {
+      await page.goto('/#aircraft');
+      await page.waitForLoadState('domcontentloaded');
+      await expect(page.getByTestId('v2-aircraft-list')).toBeVisible({ timeout: 15000 });
+      await page.waitForTimeout(1000);
+
+      const hex = await firstRowHex(page);
+      if (!hex) return;
+
+      const year = page.getByTestId(`v2-list-year-${hex}`);
+      if (await year.isVisible({ timeout: 2000 }).catch(() => false)) {
+        const yearText = (await year.textContent())?.trim() || '';
+        // A 4-digit year should appear somewhere in the rendered label.
+        expect(/\d{4}/.test(yearText)).toBe(true);
+      }
+    });
+  });
+
+  test.describe('Seeded socket stream (deterministic)', () => {
+    // Unlike the tolerant "Row Enrichment" block above, these tests SEED the
+    // Socket.IO stream directly (page.routeWebSocket) so rows are guaranteed to
+    // render, then mock the cache-only bulk airframe endpoint so the photo +
+    // privacy/interest badges render. Assertions are HARD — the data is fully
+    // deterministic. See web/e2e/fixtures/socketMock.js for the protocol mock.
+
+    const seeded = makeSeedAircraft();
+    // Wire hexes are lowercase; the normalizer upper-cases them, so row +
+    // enrichment test ids use the UPPERCASE hex.
+    const HEX_UAL = 'A7E198'; // United 737-900, 2018
+    const HEX_DAL = 'AC82F1'; // Delta A321neo, 2021 — carries PIA flag
+    const HEX_MIL = 'AE1234'; // USAF C-17, 2008 — carries LADD + INT flags
+
+    // Per-hex enrichment flags returned by the mocked bulk endpoint.
+    const bulkBody = makeBulkResponse(seeded, {
+      [HEX_UAL]: { photo: 'https://cdn.example.test/UAL.jpg' },
+      [HEX_DAL]: { photo: 'https://cdn.example.test/DAL.jpg', pia: true },
+      [HEX_MIL]: { photo: 'https://cdn.example.test/MIL.jpg', ladd: true, interesting: true },
+    });
+
+    test.beforeEach(async ({ page }) => {
+      // Seed the socket BEFORE navigation so the route is live when the app connects.
+      await seedAircraftViaSocket(page, seeded);
+      // Mock the cache-only bulk airframe enrichment endpoint.
+      await page.route('**/api/v1/airframes/bulk*', async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify(bulkBody),
+        });
+      });
+    });
+
+    test('seeded aircraft rows render from the socket snapshot', async ({ page }) => {
+      await page.goto('/#aircraft');
+      await page.waitForLoadState('domcontentloaded');
+      await expect(page.getByTestId('v2-aircraft-list')).toBeVisible({ timeout: 15000 });
+
+      // All three seeded rows must appear (hard assertion — deterministic data).
+      await expect(page.getByTestId(`v2-list-row-${HEX_UAL}`)).toBeVisible({ timeout: 10000 });
+      await expect(page.getByTestId(`v2-list-row-${HEX_DAL}`)).toBeVisible();
+      await expect(page.getByTestId(`v2-list-row-${HEX_MIL}`)).toBeVisible();
+    });
+
+    test('operator / full-type / year enrichment renders for seeded rows', async ({ page }) => {
+      await page.goto('/#aircraft');
+      await page.waitForLoadState('domcontentloaded');
+      await expect(page.getByTestId(`v2-list-row-${HEX_UAL}`)).toBeVisible({ timeout: 15000 });
+
+      // Operator (ownOp) secondary line, with matching title tooltip.
+      const operator = page.getByTestId(`v2-list-operator-${HEX_UAL}`);
+      await expect(operator).toBeVisible();
+      await expect(operator).toHaveText('United Airlines');
+      await expect(operator).toHaveAttribute('title', 'United Airlines');
+
+      // Full type name (desc) renders and is mirrored into the type-cell tooltip.
+      const typeFull = page.getByTestId(`v2-list-type-full-${HEX_UAL}`);
+      await expect(typeFull).toBeVisible();
+      await expect(typeFull).toContainText('Boeing 737-900');
+      await expect(page.getByTestId(`v2-list-type-${HEX_UAL}`)).toHaveAttribute(
+        'title',
+        'Boeing 737-900'
+      );
+
+      // Build year (year) renders a 4-digit label.
+      const year = page.getByTestId(`v2-list-year-${HEX_UAL}`);
+      await expect(year).toBeVisible();
+      await expect(year).toContainText('2018');
+
+      // A second row's distinct enrichment (Delta A321neo, 2021).
+      await expect(page.getByTestId(`v2-list-operator-${HEX_DAL}`)).toHaveText('Delta Air Lines');
+      await expect(page.getByTestId(`v2-list-type-full-${HEX_DAL}`)).toContainText('Airbus A321neo');
+      await expect(page.getByTestId(`v2-list-year-${HEX_DAL}`)).toContainText('2021');
+    });
+
+    test('bulk enrichment photo + PIA/LADD/INT badges render per row', async ({ page }) => {
+      await page.goto('/#aircraft');
+      await page.waitForLoadState('domcontentloaded');
+      await expect(page.getByTestId(`v2-list-row-${HEX_UAL}`)).toBeVisible({ timeout: 15000 });
+
+      // Photo thumbnails (bulk fetch is debounced 400ms — waitFor rather than
+      // asserting synchronously).
+      const photoUal = page.getByTestId(`v2-list-photo-${HEX_UAL}`);
+      await expect(photoUal).toBeVisible({ timeout: 10000 });
+      await expect(photoUal).toHaveAttribute('src', 'https://cdn.example.test/UAL.jpg');
+      await expect(page.getByTestId(`v2-list-photo-${HEX_DAL}`)).toHaveAttribute(
+        'src',
+        'https://cdn.example.test/DAL.jpg'
+      );
+      await expect(page.getByTestId(`v2-list-photo-${HEX_MIL}`)).toHaveAttribute(
+        'src',
+        'https://cdn.example.test/MIL.jpg'
+      );
+
+      // Flag badges appear only where the OR-aggregated flag is true.
+      // UAL: no flags.
+      await expect(page.getByTestId(`v2-list-flag-pia-${HEX_UAL}`)).toHaveCount(0);
+      await expect(page.getByTestId(`v2-list-flag-ladd-${HEX_UAL}`)).toHaveCount(0);
+      await expect(page.getByTestId(`v2-list-flag-interest-${HEX_UAL}`)).toHaveCount(0);
+
+      // DAL: PIA only.
+      await expect(page.getByTestId(`v2-list-flag-pia-${HEX_DAL}`)).toBeVisible();
+      await expect(page.getByTestId(`v2-list-flag-pia-${HEX_DAL}`)).toHaveText('PIA');
+      await expect(page.getByTestId(`v2-list-flag-ladd-${HEX_DAL}`)).toHaveCount(0);
+      await expect(page.getByTestId(`v2-list-flag-interest-${HEX_DAL}`)).toHaveCount(0);
+
+      // MIL: LADD + INT.
+      await expect(page.getByTestId(`v2-list-flag-ladd-${HEX_MIL}`)).toBeVisible();
+      await expect(page.getByTestId(`v2-list-flag-ladd-${HEX_MIL}`)).toHaveText('LADD');
+      await expect(page.getByTestId(`v2-list-flag-interest-${HEX_MIL}`)).toBeVisible();
+      await expect(page.getByTestId(`v2-list-flag-interest-${HEX_MIL}`)).toHaveText('INT');
+      await expect(page.getByTestId(`v2-list-flag-pia-${HEX_MIL}`)).toHaveCount(0);
+    });
+
+    test('bulk endpoint is requested with the shown row hexes', async ({ page }) => {
+      const bulkReq = page.waitForRequest(
+        (req) => req.url().includes('/api/v1/airframes/bulk') && req.url().includes('icao=')
+      );
+
+      await page.goto('/#aircraft');
+      await page.waitForLoadState('domcontentloaded');
+      await expect(page.getByTestId(`v2-list-row-${HEX_UAL}`)).toBeVisible({ timeout: 15000 });
+
+      const req = await bulkReq;
+      const icao = new URL(req.url()).searchParams.get('icao') || '';
+      // The hook normalizes to sorted UPPERCASE hexes; all three must be present.
+      expect(icao).toContain(HEX_UAL);
+      expect(icao).toContain(HEX_DAL);
+      expect(icao).toContain(HEX_MIL);
     });
   });
 

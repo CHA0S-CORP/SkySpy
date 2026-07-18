@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { Icon, Sparkline } from '../../v2/primitives';
 import { useDetailData } from '../../v2/screens/detail/useDetailData';
 import { flightStatus } from '../../v2/screens/detail/detailModel';
+import { FlightRoute, hasRoute, parseRoute } from '../../v2/screens/detail/FlightRoute';
 import { altitudeOf, CATEGORY_COLORS, categoryOf } from '../../v2/screens/list/listModel';
 
 /**
@@ -18,8 +19,10 @@ import { altitudeOf, CATEGORY_COLORS, categoryOf } from '../../v2/screens/list/l
 export function DetailPanel({ apiBase, aircraft, track = [], onClose, onOpenFull }) {
   const hex = aircraft?.hex;
   const callsign = (aircraft?.flight || '').trim();
-  const { info } = useDetailData(apiBase, hex, callsign);
+  const { info, route } = useDetailData(apiBase, hex, callsign);
   const airframe = info.data || {};
+  const routeInfo = parseRoute(route.data);
+  const { origin, destination } = routeInfo;
 
   const status = flightStatus(aircraft);
   const cat = aircraft ? categoryOf(aircraft) : 'commercial';
@@ -96,7 +99,23 @@ export function DetailPanel({ apiBase, aircraft, track = [], onClose, onOpenFull
         </div>
 
         {(airframe.operator || airframe.owner) && (
-          <div className="lm-panel__operator">{airframe.operator || airframe.owner}</div>
+          <span className="lm-panel__airline-badge" data-testid="lm-panel-airline">
+            {airframe.operator || airframe.owner}
+          </span>
+        )}
+
+        {hasRoute(origin, destination) && (
+          <>
+            <div className="lm-panel__eyebrow">ROUTE</div>
+            <FlightRoute
+              origin={origin}
+              destination={destination}
+              position={aircraft}
+              flightNumber={routeInfo.flightNumber}
+              airline={routeInfo.airline}
+              callsign={callsign}
+            />
+          </>
         )}
 
         <div className="lm-panel__stats">

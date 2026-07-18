@@ -1,6 +1,6 @@
 import React from 'react';
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { AircraftListScreen } from './AircraftListScreen';
 import {
   altitudeOf,
@@ -23,6 +23,10 @@ const FLEET = [
     distance_nm: 5.1,
     rssi: -8,
     squawk: '6745',
+    r: 'N901DL',
+    ownOp: 'Delta Air Lines',
+    desc: 'Airbus A321neo',
+    year: 2021,
   },
   {
     hex: 'adf2b7',
@@ -119,6 +123,33 @@ describe('listModel', () => {
     const climb = toRow(FLEET[0]);
     expect(climb.vsDisp).toContain('↑');
   });
+
+  it('toRow surfaces registration as tail when distinct from callsign', () => {
+    // Registration present and different from the callsign → shown.
+    expect(toRow({ hex: 'a1', flight: 'DAL709', r: 'N901DL' }).tail).toBe('N901DL');
+    // Registration mirrors the callsign (GA style) → suppressed to avoid noise.
+    expect(toRow({ hex: 'a2', flight: 'N884SD', r: 'N884SD' }).tail).toBeNull();
+    // No registration in payload → null (guarded conditional render).
+    expect(toRow({ hex: 'a3', flight: 'ASA1548' }).tail).toBeNull();
+  });
+
+  it('toRow surfaces operator, full type name, and year when present', () => {
+    const r = toRow(FLEET[0]);
+    expect(r.operator).toBe('Delta Air Lines');
+    expect(r.typeFull).toBe('Airbus A321neo');
+    expect(r.year).toBe('2021');
+  });
+
+  it('toRow guards missing operator/type-name/year as null', () => {
+    const r = toRow({ hex: 'a4', flight: 'ASA1548' });
+    expect(r.operator).toBeNull();
+    expect(r.typeFull).toBeNull();
+    expect(r.year).toBeNull();
+  });
+
+  it('toRow accepts year_built as a fallback for year', () => {
+    expect(toRow({ hex: 'a5', year_built: 1998 }).year).toBe('1998');
+  });
 });
 
 describe('AircraftListScreen', () => {
@@ -127,6 +158,22 @@ describe('AircraftListScreen', () => {
     expect(screen.getByText('DAL709')).toBeInTheDocument();
     expect(screen.getByText('4 of 4')).toBeInTheDocument();
     expect(screen.getByText('1 military')).toBeInTheDocument();
+  });
+
+  it('renders the registration tail line under the callsign', () => {
+    render(<AircraftListScreen aircraft={FLEET} onSelectAircraft={vi.fn()} />);
+    expect(screen.getByText('N901DL')).toBeInTheDocument();
+  });
+
+  it('renders operator, full type name, and year on the enriched row', () => {
+    render(<AircraftListScreen aircraft={FLEET} onSelectAircraft={vi.fn()} />);
+    expect(screen.getByTestId('v2-list-operator-a7e198')).toHaveTextContent('Delta Air Lines');
+    const typeFull = screen.getByTestId('v2-list-type-full-a7e198');
+    expect(typeFull).toHaveTextContent('Airbus A321neo');
+    expect(screen.getByTestId('v2-list-year-a7e198')).toHaveTextContent('2021');
+    // Rows without the enrichment omit the secondary elements entirely.
+    expect(screen.queryByTestId('v2-list-operator-ad10e9')).toBeNull();
+    expect(screen.queryByTestId('v2-list-type-full-ad10e9')).toBeNull();
   });
 
   it('filters via chips and search', () => {
@@ -160,5 +207,67 @@ describe('AircraftListScreen', () => {
     render(<AircraftListScreen aircraft={FLEET} onSelectAircraft={vi.fn()} />);
     fireEvent.change(screen.getByLabelText('Search aircraft'), { target: { value: 'zzzz' } });
     expect(screen.getByText('No aircraft match the current filters')).toBeInTheDocument();
+  });
+});
+
+describe('AircraftListScreen bulk enrichment', () => {
+  beforeEach(() => {
+    vi.useRealTimers();
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const bulkResponse = (aircraft) =>
+    Promise.resolve({
+      ok: true,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: () => Promise.resolve({ requested: 0, found: 0, aircraft }),
+    });
+
+  it('renders photo thumbnail + PIA/LADD/INTEREST badges from the bulk endpoint', async () => {
+    const fetchMock = vi.fn(() =>
+      bulkResponse({
+        A7E198: {
+          photo_thumbnail_url: 'http://x/a7e198.jpg',
+          source_data: [
+            { source: 'faa', is_pia: true, is_ladd: false, is_interesting: false },
+            { source: 'adsbx', is_pia: false, is_ladd: true, is_interesting: true },
+          ],
+        },
+      })
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<AircraftListScreen aircraft={FLEET} onSelectAircraft={vi.fn()} apiBase="" />);
+
+    await waitFor(() => expect(screen.getByTestId('v2-list-photo-a7e198')).toBeInTheDocument());
+    expect(screen.getByTestId('v2-list-photo-a7e198')).toHaveAttribute(
+      'src',
+      'http://x/a7e198.jpg'
+    );
+    expect(screen.getByTestId('v2-list-flag-pia-a7e198')).toBeInTheDocument();
+    expect(screen.getByTestId('v2-list-flag-ladd-a7e198')).toBeInTheDocument();
+    expect(screen.getByTestId('v2-list-flag-interest-a7e198')).toBeInTheDocument();
+
+    // The bulk request targets the cap-100 cache-only endpoint with upper hexes.
+    expect(fetchMock.mock.calls[0][0]).toContain('/api/v1/airframes/bulk?icao=');
+    expect(fetchMock.mock.calls[0][0]).toContain('A7E198');
+
+    // Rows without enrichment render nothing extra.
+    expect(screen.queryByTestId('v2-list-photo-adf2b7')).toBeNull();
+    expect(screen.queryByTestId('v2-list-flag-pia-adf2b7')).toBeNull();
+  });
+
+  it('renders nothing extra when the bulk endpoint fails', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.reject(new Error('network')))
+    );
+    render(<AircraftListScreen aircraft={FLEET} onSelectAircraft={vi.fn()} apiBase="" />);
+    // Base rows still render; no enrichment artifacts appear.
+    expect(screen.getByText('DAL709')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByTestId('v2-list-photo-a7e198')).toBeNull());
+    expect(screen.queryByTestId('v2-list-flag-pia-a7e198')).toBeNull();
   });
 });

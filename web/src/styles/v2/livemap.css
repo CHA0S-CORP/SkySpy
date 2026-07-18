@@ -80,16 +80,6 @@
   background: color-mix(in srgb, var(--accent) 14%, transparent) !important;
   color: var(--accent) !important;
 }
-.lm__count {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-family: var(--font-mono);
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--accent);
-  flex: 0 0 auto;
-}
 .lm__kbd {
   font-family: var(--font-mono);
   font-size: 10px;
@@ -616,9 +606,18 @@
   font-size: 13px;
   font-weight: 600;
 }
-.lm-panel__operator {
-  font-size: 13px;
+.lm-panel__airline-badge {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 11px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
   color: var(--dim);
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg2));
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--bord));
 }
 .lm-panel__stats {
   display: grid;

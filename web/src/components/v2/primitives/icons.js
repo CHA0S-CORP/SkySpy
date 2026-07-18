@@ -112,6 +112,8 @@ export const ICONS = {
   ],
   pause: [['path', { d: 'M6 5h2v14H6zM16 5h2v14h-2z', fill: 'currentColor', stroke: 'none' }]],
   plane: [['path', { d: 'M22 12 15 12 13 21 11 3 9 12 2 12' }]],
+  // solid right-pointing arrowhead used as the flight-route position marker
+  'route-marker': [['path', { d: 'M4 4 20 12 4 20 8 12z', fill: 'currentColor', stroke: 'none' }]],
   play: [['path', { d: 'M7 5v14l11-7z', fill: 'currentColor', stroke: 'none' }]],
   plus: [['path', { d: 'M12 5v14M5 12h14' }]],
   radar: [

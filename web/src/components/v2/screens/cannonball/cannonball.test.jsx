@@ -37,6 +37,48 @@ describe('cannonballModel', () => {
     expect(nearestThreat([])).toBeNull();
   });
 
+  it('nearestThreat surfaces realtime enrichment (agency, urgency, closing, patterns)', () => {
+    const n = nearestThreat([
+      {
+        icao_hex: 'ae1234',
+        callsign: 'LAW23',
+        distance_nm: 1.4,
+        altitude: 900,
+        threat_level: 'critical',
+        is_law_enforcement: true,
+        urgency_score: 87.4,
+        closing_speed: 45,
+        agency_name: 'FBI',
+        agency_type: 'federal',
+        identification_reason: 'Known FBI airframe, orbiting overhead',
+        patterns: [
+          { pattern_type: 'circling', confidence_score: 0.92 },
+          { pattern_type: 'speed_trap', confidence: 71 },
+        ],
+      },
+    ]);
+    expect(n.agency).toBe('FBI');
+    expect(n.agencyType).toBe('FEDERAL');
+    expect(n.urgency).toBe(87);
+    expect(n.closingKts).toBe(45);
+    expect(n.trend).toBe('CLOSING'); // derived from closing_speed
+    expect(n.closing).toBe(true);
+    expect(n.idReason).toMatch(/orbiting/);
+    expect(n.patterns).toEqual([
+      { type: 'circling', label: 'CIRCLING', confidence: 92 },
+      { type: 'speed_trap', label: 'SPEED TRAP', confidence: 71 },
+    ]);
+  });
+
+  it('nearestThreat derives DEPARTING/HOLDING from closing speed sign', () => {
+    expect(nearestThreat([{ callsign: 'X', closing_speed: -30 }]).trend).toBe('DEPARTING');
+    expect(nearestThreat([{ callsign: 'X', closing_speed: 0 }]).trend).toBe('HOLDING');
+    // no closing speed and no trend → unknown, no closingKts
+    const n = nearestThreat([{ callsign: 'X' }]);
+    expect(n.trend).toBe('UNKNOWN');
+    expect(n.closingKts).toBeNull();
+  });
+
   it('blipPosition maps bearing/distance to scope percentages', () => {
     const north = blipPosition({ bearing: 0, distance_nm: 15 }, 15);
     expect(north.x).toBeCloseTo(50);
@@ -95,6 +137,33 @@ describe('CannonballScreen', () => {
     expect(screen.getByText('DRIVE FOCUS')).toBeInTheDocument();
     expect(screen.getByTestId('v2-cannonball-speed')).toBeInTheDocument();
     expect(screen.getByText('N911PD')).toBeInTheDocument();
+  });
+
+  it('renders the threat dossier (agency, urgency, patterns) from backend threats', () => {
+    const threats = [
+      {
+        icao_hex: 'ae1234',
+        callsign: 'LAW23',
+        distance_nm: 1.4,
+        altitude: 900,
+        bearing: 30,
+        threat_level: 'critical',
+        is_law_enforcement: true,
+        urgency_score: 87,
+        closing_speed: 45,
+        agency_name: 'FBI',
+        agency_type: 'federal',
+        identification_reason: 'Known FBI airframe, orbiting overhead',
+        patterns: [{ pattern_type: 'circling', confidence_score: 0.92 }],
+      },
+    ];
+    render(<CannonballScreen aircraft={[]} threats={threats} onExit={vi.fn()} />);
+    expect(screen.getByTestId('v2-cannonball-agency')).toHaveTextContent('FBI');
+    expect(screen.getByTestId('v2-cannonball-urgency')).toHaveTextContent('87');
+    expect(screen.getByTestId('v2-cannonball-patterns')).toHaveTextContent('CIRCLING');
+    expect(screen.getByTestId('v2-cannonball-patterns')).toHaveTextContent('92%');
+    expect(screen.getByText(/orbiting overhead/)).toBeInTheDocument();
+    expect(screen.getByText('CLOSING')).toBeInTheDocument();
   });
 
   it('shows SKY CLEAR with no threats', () => {

@@ -88,6 +88,35 @@
   outline-offset: 2px;
 }
 
+/* ---- LiveIndicator (shared LIVE/OFFLINE badge: pulsing dot + label) ---- */
+.v2-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.v2-live__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent);
+  animation: v2-blink 2s infinite;
+}
+.v2-live--offline .v2-live__dot {
+  background: var(--danger);
+  box-shadow: 0 0 8px var(--danger);
+  animation: none;
+}
+.v2-live__label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  color: var(--accent);
+}
+.v2-live--offline .v2-live__label {
+  color: var(--danger);
+}
+
 /* ---- Segmented control / tabs ---- */
 .v2-seg {
   display: inline-flex;

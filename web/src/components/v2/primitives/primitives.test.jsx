@@ -6,6 +6,7 @@ import { ICONS } from './icons';
 import { Card } from './Card';
 import { Chip } from './Chip';
 import { Switch } from './Switch';
+import { LiveIndicator } from './LiveIndicator';
 import { SegmentedControl } from './SegmentedControl';
 import { Tabs } from './Tabs';
 import { Select } from './Select';
@@ -168,6 +169,27 @@ describe('Gauge', () => {
   it('clamps and exposes progressbar semantics', () => {
     render(<Gauge label="CPU" value={130} />);
     expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('100');
+  });
+});
+
+describe('LiveIndicator', () => {
+  it('shows LIVE when connected and OFFLINE otherwise', () => {
+    const { rerender, container } = render(<LiveIndicator connected />);
+    expect(screen.getByText('LIVE')).toBeInTheDocument();
+    expect(container.querySelector('.v2-live--offline')).toBeNull();
+    rerender(<LiveIndicator connected={false} />);
+    expect(screen.getByText('OFFLINE')).toBeInTheDocument();
+    expect(container.querySelector('.v2-live--offline')).not.toBeNull();
+  });
+
+  it('honors custom labels and can hide the label', () => {
+    const { rerender, container } = render(
+      <LiveIndicator connected={false} offlineLabel="PAUSED" />
+    );
+    expect(screen.getByText('PAUSED')).toBeInTheDocument();
+    rerender(<LiveIndicator connected showLabel={false} />);
+    expect(screen.queryByText('LIVE')).toBeNull();
+    expect(container.querySelector('.v2-live__dot')).not.toBeNull();
   });
 });
 

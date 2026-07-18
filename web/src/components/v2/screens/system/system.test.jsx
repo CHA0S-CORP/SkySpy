@@ -3,7 +3,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SystemScreen } from './SystemScreen';
-import { deriveServices, deriveBanner, deriveGauges, sevColor } from './systemModel';
+import {
+  deriveServices,
+  deriveBanner,
+  deriveGauges,
+  deriveAntenna,
+  deriveLibacars,
+  sevColor,
+} from './systemModel';
 
 const HEALTH_OK = {
   services: {
@@ -14,6 +21,7 @@ const HEALTH_OK = {
   },
 };
 const STATUS_OK = {
+  version: '2.6.0',
   receiver_online: true,
   websocket_connections: 3,
   aircraft_count: 187,
@@ -21,6 +29,17 @@ const STATUS_OK = {
   memory_percent: 61,
   sdr_temp: 52,
   sdr_gain: 42,
+  alert_history_count: 1420,
+  safety_event_count: 88,
+  antenna: {
+    max_range_nm: 214.7,
+    avg_range_nm: 96.3,
+    coverage_percentage: 72,
+  },
+  libacars: {
+    available: true,
+    stats: { messages_decoded: 512, decode_errors: 3 },
+  },
 };
 
 describe('systemModel', () => {
@@ -69,6 +88,33 @@ describe('systemModel', () => {
     expect(sevColor('danger')).toBe('var(--danger)');
     expect(sevColor('info')).toBe('var(--accent2)');
   });
+
+  it('deriveAntenna formats ranges/coverage and returns null when absent', () => {
+    const a = deriveAntenna({ status: STATUS_OK });
+    expect(a.maxRange).toBe('214.7 nm');
+    expect(a.avgRange).toBe('96.3 nm');
+    expect(a.coverage).toBe('72%');
+    expect(a.coveragePct).toBe(72);
+    expect(deriveAntenna({ status: {} })).toBeNull();
+    expect(deriveAntenna({ status: { antenna: {} } })).toBeNull();
+  });
+
+  it('deriveLibacars merges status stats with health issues/errors', () => {
+    const ok = deriveLibacars({ status: STATUS_OK, health: HEALTH_OK });
+    expect(ok.available).toBe(true);
+    expect(ok.stats.messages_decoded).toBe(512);
+    expect(ok.issues).toEqual([]);
+
+    const bad = deriveLibacars({
+      status: { libacars: { available: false, error: 'Could not load libacars' } },
+      health: { services: { libacars: { status: 'error', issues: ['circuit open'] } } },
+    });
+    expect(bad.available).toBe(false);
+    expect(bad.error).toBe('Could not load libacars');
+    expect(bad.issues).toEqual(['circuit open']);
+
+    expect(deriveLibacars({ status: {}, health: {} })).toBeNull();
+  });
 });
 
 describe('SystemScreen', () => {
@@ -84,7 +130,7 @@ describe('SystemScreen', () => {
       if (u.includes('/system/status')) return respond(STATUS_OK);
       if (u.includes('/system/health')) return respond(HEALTH_OK);
       if (u.includes('/system/info'))
-        return respond({ django_version: '5.2', python_version: '3.12' });
+        return respond({ version: '2.6.0', django_version: '5.2', python_version: '3.12' });
       if (u.includes('/notifications/test')) return respond({ success: true });
       return respond({});
     });
@@ -128,5 +174,34 @@ describe('SystemScreen', () => {
     renderScreen();
     await waitFor(() => expect(screen.getByText('32.8000')).toBeInTheDocument());
     expect(screen.getByText('-117.2000')).toBeInTheDocument();
+  });
+
+  it('renders the app version in the footer', async () => {
+    renderScreen();
+    await waitFor(() => expect(screen.getByText('SkySpy v2.6.0')).toBeInTheDocument());
+  });
+
+  it('renders the antenna coverage card from status.antenna', async () => {
+    renderScreen();
+    await waitFor(() => expect(screen.getByText('Antenna')).toBeInTheDocument());
+    expect(screen.getByText('214.7 nm')).toBeInTheDocument();
+    expect(screen.getByText('96.3 nm')).toBeInTheDocument();
+    expect(screen.getAllByText('72%').length).toBeGreaterThan(0);
+  });
+
+  it('surfaces libacars decoder status and stats on the ACARS card', async () => {
+    renderScreen();
+    await waitFor(() => expect(screen.getByText('Decoder (libacars)')).toBeInTheDocument());
+    expect(screen.getByText('AVAILABLE')).toBeInTheDocument();
+    expect(screen.getByText('512')).toBeInTheDocument();
+    expect(screen.getByText('Messages Decoded')).toBeInTheDocument();
+  });
+
+  it('renders historical alert/safety totals', async () => {
+    renderScreen();
+    await waitFor(() => expect(screen.getByText('Alerts Fired')).toBeInTheDocument());
+    expect(screen.getByText('1,420')).toBeInTheDocument();
+    expect(screen.getByText('Total Events')).toBeInTheDocument();
+    expect(screen.getByText('88')).toBeInTheDocument();
   });
 });

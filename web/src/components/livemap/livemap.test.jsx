@@ -2,8 +2,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import L from 'leaflet';
 import {
   CATEGORY_COLORS,
+  altitudeColor,
   altitudeOf,
+  altitudeRGB,
   categoryOf,
+  colorFor,
   labelLines,
   leadLength,
   rectsOverlap,
@@ -42,6 +45,21 @@ describe('symbology', () => {
   it('rectsOverlap detects overlap', () => {
     expect(rectsOverlap({ x: 0, y: 0, w: 10, h: 10 }, { x: 5, y: 5, w: 10, h: 10 })).toBe(true);
     expect(rectsOverlap({ x: 0, y: 0, w: 10, h: 10 }, { x: 20, y: 20, w: 10, h: 10 })).toBe(false);
+  });
+
+  it('altitudeRGB ramps green→yellow→orange→magenta across bands', () => {
+    expect(altitudeRGB(0)).toEqual({ r: 50, g: 255, b: 100 }); // ground green
+    expect(altitudeRGB(10000)).toEqual({ r: 255, g: 255, b: 0 }); // yellow
+    expect(altitudeRGB(45000)).toEqual({ r: 255, g: 0, b: 255 }); // magenta
+    expect(altitudeColor(0)).toBe('rgb(50,255,100)');
+    // non-finite / negative → ground green
+    expect(altitudeRGB(undefined)).toEqual({ r: 50, g: 255, b: 100 });
+  });
+
+  it('colorFor honors selection, altitude mode, and category default', () => {
+    expect(colorFor({ alt: 35000 }, 'altitude', true)).toBe('#ffffff'); // selected wins
+    expect(colorFor({ alt: 0 }, 'altitude', false)).toBe('rgb(50,255,100)');
+    expect(colorFor({ military: true }, 'category', false)).toBe(CATEGORY_COLORS.military);
   });
 });
 
@@ -82,7 +100,15 @@ describe('CanvasAircraftLayer', () => {
     vi.restoreAllMocks();
   });
 
-  const AC = { hex: 'a7e198', flight: 'DAL571', t: 'A21N', lat: 33.0, lon: -117.1, gs: 480, track: 90 };
+  const AC = {
+    hex: 'a7e198',
+    flight: 'DAL571',
+    t: 'A21N',
+    lat: 33.0,
+    lon: -117.1,
+    gs: 480,
+    track: 90,
+  };
   const FAR = { hex: 'ffff01', flight: 'FAR1', lat: 10.0, lon: 10.0, gs: 300, track: 0 };
 
   it('creates a canvas overlay in the map container', () => {
@@ -135,13 +161,53 @@ describe('CanvasAircraftLayer', () => {
     layer.destroy();
   });
 
+  it('draws TFR + PIREP overlays without throwing (polygon and point+radius)', () => {
+    const layer = new CanvasAircraftLayer(map, {});
+    layer.setOverlays({ notams: true, pireps: true });
+    layer.setOverlayData({
+      tfrs: [
+        // polygon-geometry TFR
+        {
+          notam_id: 'T1',
+          polygon: {
+            coordinates: [
+              [
+                [-117.2, 32.7],
+                [-117.1, 32.9],
+                [-117.0, 32.7],
+                [-117.2, 32.7],
+              ],
+            ],
+          },
+        },
+        // point+radius TFR (backend shape)
+        { notam_id: 'T2', latitude: 32.9, longitude: -117.15, radius_nm: 5 },
+      ],
+      pireps: [{ id: 1, lat: 32.9, lon: -117.1, turbulence: 'SEV' }],
+    });
+    layer.setData([AC], { current: {} });
+    expect(() => layer._draw()).not.toThrow();
+    layer.destroy();
+  });
+
+  it('auto label threshold ramps down (more labels) as zoom increases', () => {
+    const layer = new CanvasAircraftLayer(map, {});
+    map.setZoom(6);
+    expect(layer._autoLabelThreshold()).toBe(2);
+    map.setZoom(9);
+    expect(layer._autoLabelThreshold()).toBe(1);
+    map.setZoom(12);
+    expect(layer._autoLabelThreshold()).toBe(0);
+    layer.destroy();
+  });
+
   it('handles 1000 aircraft without throwing', () => {
     const layer = new CanvasAircraftLayer(map, {});
     const fleet = Array.from({ length: 1000 }, (_, i) => ({
       hex: `ac${i.toString(16)}`,
       flight: `T${i}`,
-      lat: 32.8 + (Math.sin(i) * 0.4),
-      lon: -117.2 + (Math.cos(i) * 0.4),
+      lat: 32.8 + Math.sin(i) * 0.4,
+      lon: -117.2 + Math.cos(i) * 0.4,
       gs: 200 + (i % 300),
       track: i % 360,
     }));

@@ -453,5 +453,46 @@ describe('useApi', () => {
         expect(mockFetch).toHaveBeenCalledWith('/api/v1/test2', expect.any(Object));
       });
     });
+
+    it('does not let a slow prior-endpoint response overwrite the new endpoint data', async () => {
+      vi.useRealTimers();
+
+      // test1 resolves slowly; test2 resolves fast. The later-started test2
+      // request must win regardless of resolution order (request-id gating).
+      let resolveSlow;
+      mockFetch.mockImplementation((url) => {
+        if (url === '/api/v1/test1') {
+          return new Promise((res) => {
+            resolveSlow = () =>
+              res({
+                ok: true,
+                headers: new Headers({ 'content-type': 'application/json' }),
+                json: () => Promise.resolve({ data: 'STALE-test1' }),
+              });
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          headers: new Headers({ 'content-type': 'application/json' }),
+          json: () => Promise.resolve({ data: 'FRESH-test2' }),
+        });
+      });
+
+      const { result, rerender } = renderHook(({ endpoint }) => useApi(endpoint), {
+        initialProps: { endpoint: '/api/v1/test1' },
+      });
+
+      // Switch endpoints before test1 resolves
+      rerender({ endpoint: '/api/v1/test2' });
+
+      await waitFor(() => {
+        expect(result.current.data).toEqual({ data: 'FRESH-test2' });
+      });
+
+      // Now let the stale test1 response arrive - it must be dropped
+      resolveSlow();
+      await new Promise((r) => setTimeout(r, 20));
+      expect(result.current.data).toEqual({ data: 'FRESH-test2' });
+    });
   });
 });

@@ -106,8 +106,6 @@ export function LiveMapView({
     });
   }, [aircraft, activeSafetyEvents]);
 
-  const shownCount = useMemo(() => aircraft.filter(filterFn).length, [aircraft, filterFn]);
-
   // init canvas layer once the map exists; wire coordinate readout + zoom sync
   useEffect(() => {
     if (!mapRef.current || layerRef.current) return undefined;
@@ -115,7 +113,7 @@ export function LiveMapView({
     layerRef.current = new CanvasAircraftLayer(map, {
       onSelect: (hex) => {
         setSelectedHex(hex);
-        setPanelOpen(true);
+        if (hex) setPanelOpen(true);
       },
     });
     const onZoomEnd = () => setZoom(map.getZoom());
@@ -160,12 +158,19 @@ export function LiveMapView({
     layer.setFilter(filterFn);
   }, [annotated, positionsRef, selectedHex, safetyHexes, labelMode, labelDensity, filterFn]);
 
-  // push overlay flags + data to the canvas layer
+  // push overlay flags + data + display prefs to the canvas layer
   useEffect(() => {
     const layer = layerRef.current;
     if (!layer) return;
     layer.setOverlays(overlays);
     layer.setOverlayData(overlayData);
+    layer.setDisplay({
+      colorMode: overlays.colorMode,
+      showPredictor: overlays.showPredictor,
+      predictorSeconds: overlays.predictorSeconds,
+      showLeaders: overlays.showLeaders,
+      showCoast: overlays.showCoast,
+    });
   }, [overlays, overlayData]);
 
   // range rings toggle
@@ -201,6 +206,11 @@ export function LiveMapView({
       null,
     [aircraft, selectedHex]
   );
+
+  // Panel only shows when open AND an aircraft is selected; used for both the
+  // render gate and the invalidateSize effect so the map resizes when either
+  // toggles.
+  const panelVisible = panelOpen && !!selected;
 
   const patchFilters = (patch) =>
     setFilters((f) => {
@@ -252,7 +262,7 @@ export function LiveMapView({
       clearTimeout(t);
       document.removeEventListener('fullscreenchange', invalidate);
     };
-  }, [panelOpen, mapRef]);
+  }, [panelVisible, mapRef]);
 
   return (
     <div className="lm" data-testid="lm-live-map">
@@ -274,7 +284,6 @@ export function LiveMapView({
           onZoom={doZoom}
           onRecenter={recenter}
           onFullscreen={fullscreen}
-          count={shownCount}
         />
 
         <div className="lm__stage">
@@ -345,7 +354,7 @@ export function LiveMapView({
         </div>
       </div>
 
-      {panelOpen && (
+      {panelVisible && (
         <DetailPanel
           apiBase={apiBase}
           aircraft={selected}

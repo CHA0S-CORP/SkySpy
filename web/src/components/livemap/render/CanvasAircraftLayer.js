@@ -1,19 +1,24 @@
 import L from 'leaflet';
 import {
-  CATEGORY_COLORS,
   SELECTED_COLOR,
   altitudeOf,
-  categoryOf,
+  colorFor,
   drawAirport,
   drawAirspacePoly,
+  drawCoast,
   drawDart,
   drawLabel,
-  drawLead,
+  drawLeaderLine,
   drawNavaid,
   drawNotam,
+  drawPirep,
+  drawPredictor,
   drawSafetyRing,
   drawSelectionRing,
+  drawTfrDisc,
+  drawTfrPoly,
   drawTrail,
+  pirepColor,
   rectsOverlap,
   severityColor,
 } from './symbology';
@@ -61,8 +66,28 @@ export class CanvasAircraftLayer {
     this.labelMode = 'auto'; // 'auto' | 'all'
     this.labelDensity = 'full'; // 'full' | 'minimal'
     this.filterFn = null; // (a) => boolean, or null for all
-    this.overlays = {}; // { trails, airspace, navaids, airports }
-    this.overlayData = { trails: {}, airspaces: [], navaids: [], airports: [] };
+    this.overlays = {}; // { trails, airspace, navaids, airports, notams, pireps }
+    this.overlayData = {
+      trails: {},
+      airspaces: [],
+      navaids: [],
+      airports: [],
+      notams: [],
+      tfrs: [],
+      pireps: [],
+    };
+    // display prefs (pushed from React via setDisplay)
+    this.display = {
+      colorMode: 'category', // 'category' | 'altitude'
+      showPredictor: true,
+      predictorSeconds: 60,
+      showLeaders: true,
+      showCoast: true,
+    };
+    // per-hex kinematics for the curved predictor + coast detection
+    this._omega = new Map(); // hex → smoothed turn rate (deg/s)
+    this._track = new Map(); // hex → { track, t } last sample
+    this._lastSeen = new Map(); // hex → last time a fresh position was present
 
     this.frame = 0;
     this.screenIndex = []; // [{hex, x, y}] rebuilt each frame for hit-test
@@ -84,6 +109,52 @@ export class CanvasAircraftLayer {
   setData(aircraft, positionsRef) {
     this.aircraft = aircraft || [];
     if (positionsRef) this.positionsRef = positionsRef;
+    this._updateKinematics();
+  }
+
+  /**
+   * Update per-hex turn rate + last-seen from the current aircraft list. Turn
+   * rate feeds the curved predictor; last-seen feeds coast detection. Both are
+   * independent of the trails overlay so they work even when trails are off.
+   * Caches are pruned to the present set to stay bounded.
+   */
+  _updateKinematics() {
+    const now = Date.now();
+    const present = new Set();
+    for (const raw of this.aircraft) {
+      const hex = (raw?.hex || '').toUpperCase();
+      if (!hex) continue;
+      present.add(hex);
+      const live = this.positionsRef?.current?.[hex];
+      const track = Number.isFinite(live?.track) ? live.track : (raw.track ?? raw.hdg);
+      // freshness: a live interpolated position (or a base lat/lon) counts as seen
+      if (live || Number.isFinite(raw.lat)) this._lastSeen.set(hex, now);
+      if (!Number.isFinite(track)) continue;
+      const prev = this._track.get(hex);
+      if (prev && now > prev.t) {
+        const dt = (now - prev.t) / 1000;
+        if (dt > 0.2) {
+          let d = track - prev.track;
+          while (d > 180) d -= 360;
+          while (d < -180) d += 360;
+          const rawOmega = d / dt;
+          const clamped = Math.max(-6, Math.min(6, rawOmega));
+          const smooth = this._omega.get(hex);
+          this._omega.set(hex, smooth == null ? clamped : smooth * 0.7 + clamped * 0.3);
+          this._track.set(hex, { track, t: now });
+        }
+      } else {
+        this._track.set(hex, { track, t: now });
+      }
+    }
+    // prune caches for aircraft no longer present
+    for (const m of [this._omega, this._track, this._lastSeen]) {
+      for (const hex of m.keys()) if (!present.has(hex)) m.delete(hex);
+    }
+  }
+
+  setDisplay(prefs) {
+    this.display = { ...this.display, ...(prefs || {}) };
   }
   setSelected(hex) {
     this.selectedHex = hex ? hex.toUpperCase() : null;
@@ -126,6 +197,41 @@ export class CanvasAircraftLayer {
       return { ...a, lat: p.lat, lon: p.lon, track: Number.isFinite(p.track) ? p.track : a.track };
     }
     return a;
+  }
+
+  /**
+   * Dead-reckon a curved velocity predictor for one aircraft: step forward in
+   * lat/lon from the live position using ground speed + heading, rotating the
+   * heading by the smoothed turn rate each step, then project to screen. Returns
+   * { pts, ticks } or null for slow/invalid traffic. `project(lat,lon)` handles
+   * antimeridian wrap. ~12 samples over predictorSeconds.
+   */
+  _predictorPoints(hex, a, track, project) {
+    const gs = a.gs ?? a.spd;
+    if (!Number.isFinite(gs) || gs <= 50) return null;
+    if (!Number.isFinite(a.lat) || !Number.isFinite(a.lon) || !Number.isFinite(track)) return null;
+    const T = this.display.predictorSeconds || 60;
+    const N = 12;
+    const dt = T / N;
+    const omega = this._omega.get(hex) || 0; // deg/s
+    let lat = a.lat;
+    let lon = a.lon;
+    let hdg = track;
+    const cosLat = Math.cos((a.lat * Math.PI) / 180) || 1e-6;
+    const pts = [project(lat, lon)];
+    const ticks = [];
+    for (let i = 1; i <= N; i++) {
+      const distNm = (gs * dt) / 3600; // nm this step
+      const hr = (hdg * Math.PI) / 180;
+      lat += (distNm / 60) * Math.cos(hr);
+      lon += ((distNm / 60) * Math.sin(hr)) / cosLat;
+      hdg += omega * dt;
+      pts.push(project(lat, lon));
+      // horizon tick each time cumulative time crosses a 30s mark
+      const tSec = i * dt;
+      if (Math.floor(tSec / 30) !== Math.floor((tSec - dt) / 30)) ticks.push(pts.length - 1);
+    }
+    return { pts, ticks };
   }
 
   _loop() {
@@ -177,11 +283,25 @@ export class CanvasAircraftLayer {
 
     // LOD: thin lead/labels when the field is dense
     const dense = visible.length > 600;
+    const now = Date.now();
+    const coastMs = 15000;
+    const disp = this.display;
 
     // priority: normal → safety → hovered → selected (draw important last / on top)
     const rank = (v) =>
-      v.hex === selectedHex ? 3 : v.hex === hoveredHex ? 2 : this.safetyHexes.has(v.hex) || v.a.safety ? 1 : 0;
+      v.hex === selectedHex
+        ? 3
+        : v.hex === hoveredHex
+          ? 2
+          : this.safetyHexes.has(v.hex) || v.a.safety
+            ? 1
+            : 0;
     visible.sort((p, q) => rank(p) - rank(q));
+
+    // Auto-label ramp: at low zoom only high-priority tags show; as the operator
+    // zooms in the priority threshold drops so progressively MORE aircraft label.
+    // 'all' shows everything; 'auto' gates on this per-zoom threshold.
+    const autoThreshold = this._autoLabelThreshold();
 
     // Pass 1: rings + leads + darts for every visible aircraft (bottom→top).
     const labelCandidates = [];
@@ -190,20 +310,27 @@ export class CanvasAircraftLayer {
       const selected = v.hex === selectedHex;
       const hovered = v.hex === hoveredHex;
       const isSafety = this.safetyHexes.has(v.hex) || !!a.safety;
-      const cat = categoryOf(a);
-      const color = selected ? SELECTED_COLOR : CATEGORY_COLORS[cat];
+      const color = colorFor(a, disp.colorMode, selected);
       const track = a.track ?? a.hdg ?? 0;
       const sevColor = severityColor(a, isSafety);
+      const seen = this._lastSeen.get(v.hex);
+      const coasting = disp.showCoast && seen != null && now - seen > coastMs;
 
       if (isSafety && sevColor) drawSafetyRing(ctx, x, y, sevColor, this.frame);
       if (selected) drawSelectionRing(ctx, x, y, this.frame);
-      if (!dense || selected || hovered || isSafety) drawLead(ctx, x, y, track, a.gs ?? a.spd);
-      drawDart(ctx, x, y, track, color);
+      // curved velocity predictor (skip in dense fields unless important)
+      if (disp.showPredictor && (!dense || selected || hovered || isSafety)) {
+        const pred = this._predictorPoints(v.hex, a, track, project);
+        if (pred) drawPredictor(ctx, pred.pts, selected ? SELECTED_COLOR : color);
+      }
+      drawDart(ctx, x, y, track, color, coasting ? 0.4 : 1);
+      if (coasting) drawCoast(ctx, x, y);
 
-      const showLabel = this.labelMode === 'all' || selected || hovered || isSafety;
+      // priority: selected(4) > hovered(3) > safety(2) > interesting(1) > normal(0)
+      const interesting = altitudeOf(a) >= 30000 || !!a.military || !!a.mil;
+      const prio = selected ? 4 : hovered ? 3 : isSafety ? 2 : interesting ? 1 : 0;
+      const showLabel = this.labelMode === 'all' || prio >= autoThreshold;
       if (showLabel) {
-        // priority: selected(3) > hovered(2) > safety(1) > normal(0)
-        const prio = selected ? 3 : hovered ? 2 : isSafety ? 1 : 0;
         labelCandidates.push({ a, x, y, selected, isSafety, sevColor, color, prio });
       }
     }
@@ -214,19 +341,28 @@ export class CanvasAircraftLayer {
     labelCandidates.sort((p, q) => q.prio - p.prio);
     const placedLabels = [];
     for (const c of labelCandidates) {
-      const badge = c.isSafety ? String(c.a.safety?.label || c.a.safety?.severity || 'ALERT').toUpperCase() : null;
+      const badge = c.isSafety
+        ? String(c.a.safety?.label || c.a.safety?.severity || 'ALERT').toUpperCase()
+        : null;
       const rect = probeLabelRect(ctx, c.x, c.y, c.a, this.labelDensity, badge, 0);
       if (placedLabels.some((p) => rectsOverlap(rect, p))) {
         // selected/hovered always win — nudge once, else skip
-        if (c.prio >= 2) {
+        if (c.prio >= 3) {
           const alt = probeLabelRect(ctx, c.x, c.y, c.a, this.labelDensity, badge, -(rect.h + 6));
           if (placedLabels.some((p) => rectsOverlap(alt, p))) continue;
-          drawLabel(ctx, c.x, c.y, c.a, { density: this.labelDensity, color: c.selected ? SELECTED_COLOR : c.sevColor || c.color, badge, offsetY: -(rect.h + 6) });
+          if (disp.showLeaders) drawLeaderLine(ctx, c.x, c.y, alt);
+          drawLabel(ctx, c.x, c.y, c.a, {
+            density: this.labelDensity,
+            color: c.selected ? SELECTED_COLOR : c.sevColor || c.color,
+            badge,
+            offsetY: -(rect.h + 6),
+          });
           placedLabels.push(alt);
           continue;
         }
         continue;
       }
+      if (disp.showLeaders) drawLeaderLine(ctx, c.x, c.y, rect);
       const placed = drawLabel(ctx, c.x, c.y, c.a, {
         density: this.labelDensity,
         color: c.selected ? SELECTED_COLOR : c.sevColor || c.color,
@@ -234,6 +370,21 @@ export class CanvasAircraftLayer {
       });
       placedLabels.push(placed);
     }
+  }
+
+  /**
+   * Auto-label priority threshold for the current Leaflet zoom. A label shows
+   * when its priority (selected 4 / hovered 3 / safety 2 / interesting 1 /
+   * normal 0) is >= this threshold, so zooming IN reveals progressively more
+   * tags: far out only safety+ show, mid-zoom adds high-altitude/military, and
+   * close in everything is eligible (declutter still thins the rest).
+   */
+  _autoLabelThreshold() {
+    const z = typeof this.map?.getZoom === 'function' ? this.map.getZoom() : 9;
+    if (!Number.isFinite(z)) return 2;
+    if (z <= 7) return 2; // only safety / hovered / selected
+    if (z <= 9) return 1; // + high-altitude / military
+    return 0; // everything eligible (subject to declutter)
   }
 
   /** Draw enabled aviation overlays under the aircraft. */
@@ -258,6 +409,9 @@ export class CanvasAircraftLayer {
     if (o.trails && d.trails) {
       // pad once (pad() allocates a bounds + two latlngs - never per point)
       const tb = bounds.pad(0.3);
+      const now = Date.now();
+      const maxAgeMs = (this.overlays.trailSeconds || 300) * 1000;
+      const trailOpts = { mode: this.display.colorMode, maxAgeMs, now, color: '#4cc9f0' };
       // trails accumulate from the UNfiltered aircraft list - hide the trail
       // when the traffic filter hides its aircraft
       let allowed = null;
@@ -279,13 +433,14 @@ export class CanvasAircraftLayer {
             typeof pnt.lon === 'number' &&
             tb.contains(L.latLng(pnt.lat, wrapLon(pnt.lon)));
           if (ok) {
-            run.push(project(pnt.lat, pnt.lon));
+            const p = project(pnt.lat, pnt.lon);
+            run.push({ x: p.x, y: p.y, alt: pnt.alt, t: pnt.time });
           } else if (run.length) {
-            if (run.length >= 2) drawTrail(ctx, run, '#4cc9f0');
+            if (run.length >= 2) drawTrail(ctx, run, trailOpts);
             run = [];
           }
         }
-        if (run.length >= 2) drawTrail(ctx, run, '#4cc9f0');
+        if (run.length >= 2) drawTrail(ctx, run, trailOpts);
       }
     }
     if (o.navaids && d.navaids?.length) {
@@ -318,6 +473,47 @@ export class CanvasAircraftLayer {
         drawNotam(ctx, p.x, p.y, radiusPx, (n.type || '').toUpperCase() === 'TFR');
       }
     }
+    // TFRs share the NOTAMs toggle but render with distinct restriction
+    // symbology. Prefer a polygon ring when present, else fall back to the
+    // point+radius disc the backend supplies (lat/lon + radius_nm).
+    if (o.notams && d.tfrs?.length) {
+      for (const t of d.tfrs) {
+        const geo = t.polygon || t.geometry;
+        const ring =
+          geo?.coordinates?.[0] || (Array.isArray(geo?.points) ? geo.points : null) || null;
+        if (Array.isArray(ring) && ring.length >= 3) {
+          const pts = ring
+            .map((c) => (Array.isArray(c) ? { lat: c[1], lon: c[0] } : c))
+            .filter((c) => typeof c.lat === 'number' && typeof c.lon === 'number')
+            .map((c) => project(c.lat, c.lon));
+          if (pts.length >= 3) {
+            drawTfrPoly(ctx, pts, t.notam_id || t.name || 'TFR');
+            continue;
+          }
+        }
+        const lat = t.latitude ?? t.lat;
+        const lon = t.longitude ?? t.lon ?? t.lng;
+        if (typeof lat !== 'number' || typeof lon !== 'number' || !contains(lat, lon)) continue;
+        const p = project(lat, lon);
+        let radiusPx = 0;
+        const rNm = t.radius_nm ?? t.radius;
+        if (typeof rNm === 'number' && rNm > 0) {
+          const edge = project(lat + rNm / 60, lon);
+          radiusPx = Math.abs(edge.y - p.y);
+        }
+        drawTfrDisc(ctx, p.x, p.y, radiusPx, t.notam_id || t.name || 'TFR');
+      }
+    }
+    // PIREPs: severity-colored dots at the report position (guard missing coords).
+    if (o.pireps && d.pireps?.length) {
+      for (const pr of d.pireps) {
+        const lat = pr.lat ?? pr.latitude;
+        const lon = pr.lon ?? pr.lng ?? pr.longitude;
+        if (typeof lat !== 'number' || typeof lon !== 'number' || !contains(lat, lon)) continue;
+        const p = project(lat, lon);
+        drawPirep(ctx, p.x, p.y, pirepColor(pr));
+      }
+    }
   }
 
   /** Nearest blip within `radius` px of a container point, or null. */
@@ -341,6 +537,9 @@ export class CanvasAircraftLayer {
     if (hex) {
       L.DomEvent.stop(e);
       this.onSelect?.(hex);
+    } else {
+      // Click on empty space deselects.
+      this.onSelect?.(null);
     }
   }
 

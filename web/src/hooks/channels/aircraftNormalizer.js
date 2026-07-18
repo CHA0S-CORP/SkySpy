@@ -85,6 +85,10 @@ export function normalizeAircraft(data, { partial = false } = {}) {
           : false,
     category: data.category || null,
     on_ground: data.on_ground ?? (partial ? null : false),
+    // Ghost = non-ICAO (~) duplicate of a real ICAO track (TIS-B/ADS-R/anon).
+    // Presence-aware so partial/delta merges preserve a prior ghost state.
+    ghost: data.ghost ?? (partial ? null : false),
+    ghost_of: data.ghost_of ?? null,
     // Signal strength
     rssi: data.rssi ?? data.signal ?? null,
     // Additional metadata

@@ -513,6 +513,59 @@
   box-shadow: 0 0 6px currentColor;
 }
 
+/* session quality headline */
+.v2-stats__quality-headline {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.v2-stats__quality-grade {
+  font-size: 18px;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+.v2-stats__quality-sub {
+  font-size: 11px;
+  color: var(--dim2);
+}
+
+/* coverage gap tiles */
+.v2-stats__gap-tiles {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.v2-stats__gap-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 10px 4px;
+  border-radius: 9px;
+  background: var(--bg2);
+  border: 1px solid var(--bord);
+}
+.v2-stats__gap-val {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  font-weight: 700;
+}
+.v2-stats__gap-lbl {
+  font-size: 9px;
+  letter-spacing: 0.5px;
+  color: var(--dim2);
+  text-transform: uppercase;
+}
+
+/* common aircraft type rows */
+.v2-stats__type-mil {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--danger);
+}
+
 @media (max-width: 1400px) {
   .v2-stats__grid {
     grid-template-columns: 210px 1fr;

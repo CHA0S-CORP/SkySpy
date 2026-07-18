@@ -184,6 +184,30 @@
   border-radius: 6px;
 }
 
+/* inline notice (libacars error / issues) */
+.v2-sys__notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 11px;
+  line-height: 1.4;
+}
+.v2-sys__notice svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+.v2-sys__notice--danger {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+}
+.v2-sys__notice--warn {
+  color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 12%, transparent);
+}
+
 /* services */
 .v2-sys__services {
   padding: 6px 8px 10px;

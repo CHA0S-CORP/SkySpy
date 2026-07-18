@@ -409,6 +409,127 @@
   color: var(--cb-dim2);
 }
 
+/* dossier: header row holds label + urgency meter */
+.v2-cb__nearest-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.v2-cb__nearest-top .v2-cb__nearest-label {
+  margin-bottom: 0;
+}
+/* urgency chip — fill scales with --u (0-100) via conic ring */
+.v2-cb__urgency {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px 3px 7px;
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  color: var(--cb-thr);
+  background:
+    conic-gradient(
+      var(--cb-thr) calc(var(--u) * 1%),
+      color-mix(in srgb, var(--cb-thr) 14%, transparent) 0
+    ),
+    var(--cb-bg2);
+  background-clip: padding-box;
+  border: 1px solid color-mix(in srgb, var(--cb-thr) 45%, var(--cb-bord));
+  box-shadow: 0 0 10px color-mix(in srgb, var(--cb-thr) 30%, transparent);
+}
+.v2-cb__urgency-num {
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--cb-txt);
+}
+.v2-cb__urgency-cap {
+  font-size: 9px;
+  letter-spacing: 1.2px;
+  font-weight: 600;
+  color: var(--cb-dim);
+}
+
+/* agency attribution line */
+.v2-cb__agency {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 9px;
+}
+.v2-cb__agency-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--cb-txt);
+}
+.v2-cb__agency-type {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.8px;
+  padding: 1px 6px;
+  border-radius: 5px;
+  color: var(--cb-dim);
+  background: var(--cb-bg2);
+  border: 1px solid var(--cb-bord2);
+}
+
+.v2-cb__nearest-munit {
+  font-size: 11px;
+  font-weight: 600;
+  margin-left: 3px;
+  color: var(--cb-dim);
+}
+
+/* detected-pattern chips */
+.v2-cb__patterns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+.v2-cb__pattern {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  border-radius: 7px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  color: var(--cb-thr);
+  background: color-mix(in srgb, var(--cb-thr) 12%, var(--cb-bg2));
+  border: 1px solid color-mix(in srgb, var(--cb-thr) 35%, var(--cb-bord));
+}
+.v2-cb__pattern-conf {
+  font-size: 10px;
+  font-weight: 700;
+  padding-left: 6px;
+  margin-left: 2px;
+  color: var(--cb-dim);
+  border-left: 1px solid color-mix(in srgb, var(--cb-thr) 30%, var(--cb-bord));
+}
+
+/* why-flagged footnote */
+.v2-cb__nearest-reason {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--cb-bord);
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--cb-dim);
+}
+.v2-cb__nearest-reason svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: var(--cb-dim2);
+}
+
 /* touch controls */
 .v2-cb__controls {
   display: grid;

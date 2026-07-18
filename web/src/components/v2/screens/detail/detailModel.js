@@ -132,6 +132,23 @@ export function externalLinks({ hex, callsign, registration }) {
   ].filter(Boolean);
 }
 
+/**
+ * Convert an ISO 3166-1 alpha-2 country code to its flag emoji by mapping each
+ * ASCII letter to its Unicode regional-indicator symbol (A=0x1F1E6 … Z=0x1F1FF),
+ * e.g. "US" -> "🇺🇸". Case-insensitive. Returns '' unless `code` is exactly two
+ * A–Z letters, so absent/invalid codes render nothing.
+ *
+ * @param {string|null|undefined} code - ISO 3166-1 alpha-2 country code.
+ * @returns {string} the flag emoji, or '' when the code is absent/invalid.
+ */
+export function countryCodeToFlag(code) {
+  if (typeof code !== 'string') return '';
+  const cc = code.trim().toUpperCase();
+  if (!/^[A-Z]{2}$/.test(cc)) return '';
+  const base = 0x1f1e6; // regional indicator symbol letter A
+  return String.fromCodePoint(base + (cc.charCodeAt(0) - 65), base + (cc.charCodeAt(1) - 65));
+}
+
 /** Track °/compass display. */
 export function trackDisplay(track) {
   if (typeof track !== 'number') return { deg: '--', dir: '' };

@@ -131,6 +131,78 @@
   flex: 0 0 auto;
 }
 
+/* history stats summary panel */
+.v2-hist__stats {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 16px;
+  border-radius: 11px;
+  background: var(--bg1);
+  border: 1px solid var(--bord);
+  margin-bottom: 14px;
+}
+.v2-hist__stats-label {
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: var(--dim);
+  font-weight: 600;
+  flex: 0 0 auto;
+}
+.v2-hist__stats-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  gap: 10px;
+}
+.v2-hist__stat-label {
+  font-size: 9px;
+  letter-spacing: 0.8px;
+  color: var(--dim);
+  font-weight: 600;
+  margin-bottom: 3px;
+}
+.v2-hist__stat-value {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.1;
+}
+.v2-hist__stat-unit {
+  font-size: 10px;
+  color: var(--dim);
+  font-family: var(--font-sans);
+}
+
+/* inline pills (report type / severity badges) */
+.v2-hist__pill {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  padding: 1px 6px;
+  border-radius: 10px;
+  margin-left: 7px;
+  vertical-align: middle;
+}
+.v2-hist__pill--dim {
+  color: var(--dim);
+  background: var(--bg3);
+}
+.v2-hist__pill--warn {
+  color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 16%, transparent);
+}
+.v2-hist__pill--danger {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 16%, transparent);
+}
+.v2-hist__row-meta {
+  font-size: 11px;
+  color: var(--dim2);
+  margin-top: 3px;
+}
+
 /* tabs */
 .v2-hist__tabs {
   display: flex;
@@ -492,6 +564,13 @@
 .v2-hist__row--static {
   cursor: default;
 }
+.v2-hist__row--emergency {
+  border-color: color-mix(in srgb, var(--danger) 55%, var(--bord));
+  background: color-mix(in srgb, var(--danger) 9%, var(--bg1));
+}
+.v2-hist__row--emergency:hover {
+  background: color-mix(in srgb, var(--danger) 14%, var(--bg1));
+}
 .v2-hist__row-body {
   flex: 1;
   min-width: 0;
@@ -535,5 +614,160 @@
 @media (max-width: 1300px) {
   .v2-hist__kpis {
     grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Archive tab (searchable NOTAM + PIREP archive)                     */
+/* ------------------------------------------------------------------ */
+.v2-arch {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.v2-arch__search {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.v2-arch__clear {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--bord2);
+  border-radius: 8px;
+  background: var(--panel2, var(--panel));
+  color: var(--dim);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  cursor: pointer;
+}
+.v2-arch__clear:hover {
+  color: var(--fg);
+  border-color: var(--accent);
+}
+
+.v2-arch__section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.v2-arch__section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+
+.v2-arch__note {
+  font-size: 12px;
+  color: var(--dim2);
+}
+
+.v2-arch__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 36px 16px;
+  color: var(--dim2);
+  font-size: 13px;
+  border: 1px dashed var(--bord2);
+  border-radius: 10px;
+}
+
+.v2-arch__tfrs {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 10px;
+}
+
+.v2-arch__notam-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* PIREP archive cards */
+.v2-arch__pirep-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 12px;
+}
+.v2-arch__pirep {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--bord2);
+  border-radius: 10px;
+  background: var(--panel2, var(--panel));
+}
+.v2-arch__pirep-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.v2-arch__pirep-titles {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.v2-arch__pirep-loc {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--fg);
+}
+.v2-arch__pirep-ac {
+  font-size: 11px;
+  color: var(--dim2);
+}
+.v2-arch__pirep-body {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+}
+.v2-arch__pirep-viz {
+  flex: 0 0 auto;
+}
+.v2-arch__pirep-gauges {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.v2-arch__pirep-summary {
+  margin: 0;
+  font-size: 12px;
+  color: var(--dim);
+}
+.v2-arch__pirep-raw {
+  margin: 0;
+  padding: 8px;
+  border-radius: 6px;
+  background: var(--bg, rgba(0, 0, 0, 0.2));
+  border: 1px solid var(--bord2);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--dim);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+@media (max-width: 720px) {
+  .v2-arch__pirep-body {
+    flex-direction: column;
   }
 }

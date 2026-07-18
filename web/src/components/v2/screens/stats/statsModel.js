@@ -279,6 +279,81 @@ export function activityByHour(sessions) {
   });
 }
 
+/**
+ * Session-quality grade rows from the tracking-quality `quality_breakdown`
+ * map ({excellent, good, fair, poor} counts). Returns ordered bar rows with a
+ * grade color, plus the dominant grade + total for a headline. Null when the
+ * breakdown is absent/empty so the panel can conditionally render.
+ * @param {{excellent?: number, good?: number, fair?: number, poor?: number}} [breakdown]
+ */
+export function qualityGradeRows(breakdown) {
+  if (!breakdown) return null;
+  const order = [
+    { key: 'excellent', label: 'Excellent', color: 'var(--accent)' },
+    { key: 'good', label: 'Good', color: 'var(--accent2)' },
+    { key: 'fair', label: 'Fair', color: 'var(--warn)' },
+    { key: 'poor', label: 'Poor', color: 'var(--danger)' },
+  ];
+  const total = order.reduce((sum, g) => sum + (breakdown[g.key] || 0), 0);
+  if (total === 0) return null;
+  const rows = order.map((g) => {
+    const count = breakdown[g.key] || 0;
+    return {
+      label: g.label,
+      key: g.key,
+      count,
+      pct: Math.round((count / total) * 100),
+      color: g.color,
+    };
+  });
+  const dominant = rows.reduce((best, r) => (r.count > best.count ? r : best), rows[0]);
+  return { rows, total, dominant };
+}
+
+/**
+ * Coverage-gap summary tiles from the tracking-quality `gaps` payload.
+ * Returns completeness (100 − sessions-with-gaps %), the gap counts, and a
+ * formatted average gap duration. Null when the payload is absent.
+ * @param {object} [gaps]
+ */
+export function coverageGapSummary(gaps) {
+  if (!gaps || typeof gaps.sessions_analyzed !== 'number') return null;
+  const analyzed = gaps.sessions_analyzed;
+  const withGaps = gaps.sessions_with_gaps ?? 0;
+  const gapPct =
+    gaps.sessions_with_gaps_pct ?? (analyzed > 0 ? Math.round((withGaps / analyzed) * 100) : 0);
+  const avgGap = gaps.avg_gap_seconds;
+  return {
+    analyzed,
+    withGaps,
+    gapPct,
+    completenessPct: Math.max(0, Math.round(100 - gapPct)),
+    totalGaps: gaps.total_gaps_found ?? 0,
+    avgGapDisp: typeof avgGap === 'number' ? `${Math.round(avgGap)}s` : '--',
+  };
+}
+
+/**
+ * Common aircraft-type bars from the flight-patterns `aircraft_types` payload
+ * (each {type_code, type_name?, session_count, military_pct?}). Scaled to the
+ * busiest type. Empty array when absent so the panel can hide.
+ * @param {Array<object>} [types]
+ * @param {number} [topN]
+ */
+export function commonTypeBars(types, topN = 6) {
+  const list = (types || []).filter((t) => t && t.type_code);
+  if (!list.length) return [];
+  const top = list.slice(0, topN);
+  const max = Math.max(...top.map((t) => t.session_count ?? 0), 1);
+  return top.map((t) => ({
+    label: t.type_name ? `${t.type_code} · ${t.type_name}` : t.type_code,
+    count: t.session_count ?? 0,
+    pct: Math.round(((t.session_count ?? 0) / max) * 100),
+    militaryPct: typeof t.military_pct === 'number' ? t.military_pct : null,
+    color: t.military_pct >= 50 ? 'var(--danger)' : 'var(--accent2)',
+  }));
+}
+
 /** Aircraft type counts / avg duration by type from sessions (top 5). */
 export function typeBreakdown(sessions) {
   const counts = new Map();

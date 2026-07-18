@@ -46,12 +46,19 @@ const BENIGN_CONSOLE = [
   /Fix any of the following/,
   /Fix all of the following/,
   /axe-core/,
-  /Failed to load resource.*(airframes|lookup\/aircraft)/,
+  /Failed to load resource.*(airframes|lookup\/aircraft|lookup\/route)/,
   /the server responded with a status of 404/,
   /the server responded with a status of 401/,
   /WebSocket is already in CLOSING or CLOSED state/,
 ];
-const BENIGN_4XX = [/\/api\/v1\/airframes\//, /\/api\/v1\/lookup\/aircraft\//, /\/api\/v1\/audio\/frequencies/];
+// Route lookup 404s are expected: mock aircraft carry synthetic callsigns that
+// adsb.im has never seen, and any real aircraft without a filed route 404s too.
+const BENIGN_4XX = [
+  /\/api\/v1\/airframes\//,
+  /\/api\/v1\/lookup\/aircraft\//,
+  /\/api\/v1\/lookup\/route\//,
+  /\/api\/v1\/audio\/frequencies/,
+];
 const LOCAL_HOSTS = ['localhost', '127.0.0.1'];
 const isLocal = (url) => {
   try {
@@ -72,6 +79,29 @@ const ROUTES = [
   { hash: 'system', name: 'system' },
   { hash: 'cannonball', name: 'cannonball' },
 ];
+
+/**
+ * The airframe (aircraft detail) screen needs a concrete ICAO hex, so resolve a
+ * currently-tracked aircraft from the API (proxied through the dashboard) and
+ * append its detail route. Falls back to a static hex if the list is empty.
+ */
+async function airframeRoute() {
+  try {
+    const res = await fetch(`${BASE}/api/v1/aircraft/`);
+    if (res.ok) {
+      const data = await res.json();
+      const list = data?.aircraft || data?.results || (Array.isArray(data) ? data : []);
+      const withCallsign =
+        list.find((a) => a.hex && (a.flight || '').trim()) || list.find((a) => a.hex);
+      if (withCallsign?.hex) {
+        return { hash: `airframe?icao=${withCallsign.hex}`, name: 'airframe' };
+      }
+    }
+  } catch {
+    /* fall through to static hex */
+  }
+  return { hash: 'airframe?icao=A12345', name: 'airframe' };
+}
 
 function collectErrors(page) {
   const problems = [];
@@ -120,7 +150,10 @@ async function diagnostics(page) {
         if (el.closest('.leaflet-container, .lm__surface, canvas')) continue;
         // element starts on-screen but extends past the right edge
         if (r.left < vw - 4 && r.right > vw + 2) {
-          overflow.push({ cls: (el.className || el.tagName).toString().slice(0, 60), right: Math.round(r.right) });
+          overflow.push({
+            cls: (el.className || el.tagName).toString().slice(0, 60),
+            right: Math.round(r.right),
+          });
         }
       }
     }
@@ -133,14 +166,20 @@ async function diagnostics(page) {
       for (let j = i + 1; j < labels.length; j++) {
         const a = labels[i];
         const b = labels[j];
-        if (a.right > b.left && a.left < b.right && a.bottom > b.top && a.top < b.bottom) labelOverlaps++;
+        if (a.right > b.left && a.left < b.right && a.bottom > b.top && a.top < b.bottom)
+          labelOverlaps++;
       }
     }
 
     const errorBoundary = !!document.body.textContent.match(/Something went wrong|ErrorBoundary/);
     return {
       viewport: { vw, vh },
-      pane: { clips: paneClips, scrollable: paneScrollable, scrollHeight: pane.scrollHeight, clientHeight: pane.clientHeight },
+      pane: {
+        clips: paneClips,
+        scrollable: paneScrollable,
+        scrollHeight: pane.scrollHeight,
+        clientHeight: pane.clientHeight,
+      },
       unscrollableClip: paneClips && !paneScrollable,
       hScroll: hasHScroll,
       overflowCount: overflow.length,
@@ -157,7 +196,9 @@ async function main() {
   const report = { base: BASE, ts: new Date().toISOString(), routes: {} };
   let anyProblem = false;
 
-  for (const route of ROUTES) {
+  const routes = [...ROUTES, await airframeRoute()];
+
+  for (const route of routes) {
     const page = await browser.newPage({ viewport: VIEWPORT, deviceScaleFactor: 1 });
     const problems = collectErrors(page);
     const entry = { name: route.name };
@@ -172,7 +213,11 @@ async function main() {
       entry.diagnostics = diag;
       entry.problems = problems.slice();
       const failed =
-        problems.length > 0 || diag.errorBoundary || diag.unscrollableClip || diag.overflowCount > 0 || diag.labelOverlaps > 0;
+        problems.length > 0 ||
+        diag.errorBoundary ||
+        diag.unscrollableClip ||
+        diag.overflowCount > 0 ||
+        diag.labelOverlaps > 0;
       entry.ok = !failed;
       if (failed) anyProblem = true;
       const flags = [
@@ -182,7 +227,9 @@ async function main() {
         diag.overflowCount && `${diag.overflowCount} overflow`,
         diag.labelOverlaps && `${diag.labelOverlaps} label-overlap`,
       ].filter(Boolean);
-      console.log(`${entry.ok ? '✓' : '✗'} ${route.name}${flags.length ? '  [' + flags.join(', ') + ']' : ''}`);
+      console.log(
+        `${entry.ok ? '✓' : '✗'} ${route.name}${flags.length ? '  [' + flags.join(', ') + ']' : ''}`
+      );
       if (problems.length) problems.slice(0, 6).forEach((p) => console.log(`    ${p}`));
     } catch (err) {
       entry.ok = false;
@@ -197,7 +244,9 @@ async function main() {
 
   await browser.close();
   fs.writeFileSync(REPORT, JSON.stringify(report, null, 2));
-  console.log(`\nReport: ${path.relative(REPO, REPORT)}  |  screenshots: ${path.relative(REPO, OUT_DIR)}/`);
+  console.log(
+    `\nReport: ${path.relative(REPO, REPORT)}  |  screenshots: ${path.relative(REPO, OUT_DIR)}/`
+  );
   process.exit(anyProblem ? 1 : 0);
 }
 

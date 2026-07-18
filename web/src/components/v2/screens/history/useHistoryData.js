@@ -29,8 +29,9 @@ function asList(data, ...keys) {
  * @param {string} apiBase
  * @param {string} range - '1h' | '6h' | '24h' | '48h' | '7d'
  * @param {string} tab
+ * @param {string} [archiveIcao] - optional airport ICAO filter for the Archive tab
  */
-export function useHistoryData(apiBase, range, tab) {
+export function useHistoryData(apiBase, range, tab, archiveIcao = '') {
   const hours = RANGE_HOURS[range] ?? 24;
 
   const sessions = useQuery({
@@ -51,6 +52,11 @@ export function useHistoryData(apiBase, range, tab) {
         'events',
         'results'
       ),
+  });
+
+  const stats = useQuery({
+    queryKey: ['v2-history-stats', apiBase, hours],
+    queryFn: async () => getJson(`${apiBase}/api/v1/history/stats/?hours=${hours}`, {}),
   });
 
   const sightings = useQuery({
@@ -93,5 +99,65 @@ export function useHistoryData(apiBase, range, tab) {
     },
   });
 
-  return { sessions, safety, sightings, acars, notams, pireps };
+  // --- Archive tab (searchable NOTAM + PIREP archive) ---
+  const archiveEnabled = tab === 'archive';
+  const icao = (archiveIcao || '').trim().toUpperCase();
+
+  const notamStats = useQuery({
+    queryKey: ['v2-archive-notam-stats', apiBase],
+    enabled: archiveEnabled,
+    queryFn: async () => getJson(`${apiBase}/api/v1/notams/stats/`, {}),
+  });
+
+  const archiveNotams = useQuery({
+    queryKey: ['v2-archive-notams', apiBase, icao],
+    enabled: archiveEnabled,
+    queryFn: async () => {
+      // When an airport is entered use the dedicated airport endpoint, else the
+      // general NOTAM list (both return { notams: [...] }).
+      const url = icao
+        ? `${apiBase}/api/v1/notams/airport/${encodeURIComponent(icao)}/`
+        : `${apiBase}/api/v1/notams/?limit=200`;
+      const data = await getJson(url, {});
+      return asList(data, 'notams', 'results');
+    },
+  });
+
+  const tfrs = useQuery({
+    queryKey: ['v2-archive-tfrs', apiBase],
+    enabled: archiveEnabled,
+    queryFn: async () => {
+      const data = await getJson(`${apiBase}/api/v1/notams/tfrs/`, {});
+      return asList(data, 'tfrs', 'results');
+    },
+  });
+
+  const archivePireps = useQuery({
+    queryKey: ['v2-archive-pireps', apiBase, icao],
+    enabled: archiveEnabled,
+    queryFn: async () => {
+      // The rich /aviation/pireps/ payload carries the backend `decoded` block
+      // and hazard bands the viz components need; the archive endpoint is the
+      // filterable fallback when an airport is selected.
+      const url = icao
+        ? `${apiBase}/api/v1/archive/pireps/?icao=${encodeURIComponent(icao)}&limit=200`
+        : `${apiBase}/api/v1/aviation/pireps/?limit=200`;
+      const data = await getJson(url, {});
+      return asList(data, 'data', 'pireps', 'results');
+    },
+  });
+
+  return {
+    sessions,
+    safety,
+    stats,
+    sightings,
+    acars,
+    notams,
+    pireps,
+    notamStats,
+    archiveNotams,
+    tfrs,
+    archivePireps,
+  };
 }

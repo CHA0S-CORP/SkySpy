@@ -195,6 +195,102 @@ test.describe('History View', () => {
     });
   });
 
+  test.describe('Sighting Emergency & Speed/Track', () => {
+    // Sighting rows carry gs+track (rendered as "180 kt @ 045°") and an
+    // is_emergency flag (EMERGENCY pill + red row highlight). The Sightings tab
+    // is not the default (Sessions is), so each test clicks into it first.
+    const emergencySightings = [
+      {
+        id: 1,
+        icao_hex: 'ABC123',
+        callsign: 'UAL911',
+        timestamp: new Date(Date.now() - 60000).toISOString(),
+        latitude: 37.7749,
+        longitude: -122.4194,
+        altitude: 12000,
+        gs: 180,
+        track: 45,
+        is_emergency: true,
+      },
+      {
+        id: 2,
+        icao_hex: 'DEF456',
+        callsign: 'DAL222',
+        timestamp: new Date(Date.now() - 120000).toISOString(),
+        latitude: 37.8,
+        longitude: -122.3,
+        altitude: 30000,
+        gs: 420,
+        track: 270,
+        is_emergency: false,
+      },
+    ];
+
+    async function openSightingsTab(page) {
+      await page.goto('/#history');
+      await page.waitForLoadState('domcontentloaded');
+      await expect(page.getByTestId('v2-history')).toBeVisible({ timeout: 15000 });
+
+      const sightingsTab = page
+        .locator('[role="tab"]:has-text("Sightings"), button:has-text("Sightings")')
+        .first();
+      await sightingsTab.click();
+    }
+
+    test('emergency sighting shows the EMERGENCY badge and red row highlight', async ({
+      page,
+      mockApi,
+    }) => {
+      await mockApi.mock('/sightings', { sightings: emergencySightings, count: 2 });
+
+      await openSightingsTab(page);
+
+      const rows = page.getByTestId('v2-hist-sighting');
+      await expect(rows.first()).toBeVisible({ timeout: 10000 });
+
+      // The emergency badge renders and the row carries the highlight class.
+      const badge = page.getByTestId('v2-hist-sighting-emergency');
+      await expect(badge).toBeVisible();
+      await expect(badge).toHaveText('EMERGENCY');
+
+      const emergencyRow = page.locator('.v2-hist__row--emergency');
+      await expect(emergencyRow).toBeVisible();
+      await expect(emergencyRow).toContainText('UAL911');
+    });
+
+    test('sighting row renders speed and padded heading', async ({ page, mockApi }) => {
+      await mockApi.mock('/sightings', { sightings: emergencySightings, count: 2 });
+
+      await openSightingsTab(page);
+
+      const rows = page.getByTestId('v2-hist-sighting');
+      await expect(rows.first()).toBeVisible({ timeout: 10000 });
+
+      // fmtSpeedTrack(180, 45) -> "180 kt @ 045°"
+      await expect(rows.first()).toContainText('180 kt @ 045°');
+      // fmtSpeedTrack(420, 270) -> "420 kt @ 270°"
+      await expect(rows.nth(1)).toContainText('420 kt @ 270°');
+    });
+
+    test('non-emergency sightings render without the badge or highlight', async ({
+      page,
+      mockApi,
+    }) => {
+      await mockApi.mock('/sightings', {
+        sightings: [{ ...emergencySightings[1] }],
+        count: 1,
+      });
+
+      await openSightingsTab(page);
+
+      const rows = page.getByTestId('v2-hist-sighting');
+      await expect(rows.first()).toBeVisible({ timeout: 10000 });
+
+      await expect(page.getByTestId('v2-hist-sighting-emergency')).toHaveCount(0);
+      await expect(page.locator('.v2-hist__row--emergency')).toHaveCount(0);
+    });
+  });
+
   test.describe('Safety Events Display', () => {
     test('safety events tab exists', async ({ page }) => {
       await page.goto('/#history');

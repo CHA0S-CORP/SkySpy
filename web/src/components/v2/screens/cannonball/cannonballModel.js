@@ -37,19 +37,78 @@ export function threatLevelOf(threats) {
   return 'caution';
 }
 
+/**
+ * Human labels for backend `pattern_type` values (services/cannonball detector).
+ * Unknown types fall back to an upper-cased raw value.
+ */
+export const PATTERN_LABELS = {
+  circling: 'CIRCLING',
+  loitering: 'LOITERING',
+  grid_search: 'GRID SEARCH',
+  speed_trap: 'SPEED TRAP',
+  stakeout: 'STAKEOUT',
+  racetrack: 'RACETRACK',
+  highway_tracking: 'HWY TRACK',
+  area_search: 'AREA SEARCH',
+};
+
+/**
+ * Trend from closing speed (kts): + = range decreasing (closing). The realtime
+ * threat cache has no `trend` field, so derive it; fall back to any provided
+ * `trend` string (local-threat path).
+ */
+function trendFrom(t) {
+  const cs = t.closing_speed ?? t.closing_speed_kts;
+  if (typeof cs === 'number') {
+    if (cs > 1) return { trend: 'CLOSING', closing: true };
+    if (cs < -1) return { trend: 'DEPARTING', closing: false };
+    return { trend: 'HOLDING', closing: false };
+  }
+  const raw = (t.trend || '').toLowerCase();
+  return {
+    trend: (t.trend || 'unknown').toUpperCase(),
+    closing: raw === 'closing' || raw === 'approaching',
+  };
+}
+
 /** Nearest (highest-priority) threat display fields. */
 export function nearestThreat(threats) {
   const t = threats?.[0];
   if (!t) return null;
+  const { trend, closing } = trendFrom(t);
+  const closingKts = t.closing_speed ?? t.closing_speed_kts;
+  const patterns = Array.isArray(t.patterns)
+    ? t.patterns
+        .map((p) => {
+          const type = p.pattern_type ?? p.type;
+          const raw = p.confidence_score ?? p.confidence;
+          return {
+            type,
+            label:
+              PATTERN_LABELS[type] ||
+              String(type ?? '')
+                .replace(/_/g, ' ')
+                .toUpperCase(),
+            // confidence may arrive as 0-1 or 0-100; normalize to 0-100
+            confidence: typeof raw === 'number' ? Math.round(raw <= 1 ? raw * 100 : raw) : null,
+          };
+        })
+        .filter((p) => p.type)
+    : [];
   return {
     cs: (t.callsign || t.icao_hex || '').trim().toUpperCase() || '—',
     tag: t.is_law_enforcement ? 'LAW ENFORCEMENT' : (t.threat_level || 'unverified').toUpperCase(),
     dist: typeof t.distance_nm === 'number' ? `${t.distance_nm.toFixed(1)} nm` : '—',
     alt: typeof t.altitude === 'number' ? `${t.altitude.toLocaleString('en-US')} ft` : '—',
-    trend: (t.trend || 'unknown').toUpperCase(),
-    closing:
-      (t.trend || '').toLowerCase() === 'closing' ||
-      (t.trend || '').toLowerCase() === 'approaching',
+    trend,
+    closing,
+    // enrichment surfaced from the realtime threat cache (CannonballThreatSerializer)
+    agency: t.agency_name || null,
+    agencyType: t.agency_type ? String(t.agency_type).toUpperCase() : null,
+    urgency: typeof t.urgency_score === 'number' ? Math.round(t.urgency_score) : null,
+    closingKts: typeof closingKts === 'number' ? Math.round(Math.abs(closingKts)) : null,
+    idReason: t.identification_reason || null,
+    patterns,
   };
 }
 

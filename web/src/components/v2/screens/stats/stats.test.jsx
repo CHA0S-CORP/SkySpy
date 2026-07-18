@@ -7,9 +7,12 @@ import {
   activityByHour,
   altitudeDistribution,
   categoryDistribution,
+  commonTypeBars,
+  coverageGapSummary,
   coveragePolygon,
   historyBars,
   liveFeeds,
+  qualityGradeRows,
   rssiScatter,
   safetySeverityCounts,
   spark,
@@ -113,6 +116,46 @@ describe('statsModel', () => {
     ]);
     expect(types[0]).toEqual({ type: 'A321', count: 2, pct: 100 });
   });
+
+  it('qualityGradeRows orders grades and finds the dominant grade', () => {
+    const q = qualityGradeRows({ excellent: 6, good: 3, fair: 1, poor: 0 });
+    expect(q.total).toBe(10);
+    expect(q.rows.map((r) => r.key)).toEqual(['excellent', 'good', 'fair', 'poor']);
+    expect(q.rows[0].pct).toBe(60);
+    expect(q.dominant.label).toBe('Excellent');
+    expect(qualityGradeRows(null)).toBeNull();
+    expect(qualityGradeRows({ excellent: 0, good: 0, fair: 0, poor: 0 })).toBeNull();
+  });
+
+  it('coverageGapSummary derives completeness and tiles', () => {
+    const s = coverageGapSummary({
+      sessions_analyzed: 20,
+      sessions_with_gaps: 5,
+      sessions_with_gaps_pct: 25,
+      total_gaps_found: 8,
+      avg_gap_seconds: 47.4,
+    });
+    expect(s.completenessPct).toBe(75);
+    expect(s.withGaps).toBe(5);
+    expect(s.totalGaps).toBe(8);
+    expect(s.avgGapDisp).toBe('47s');
+    expect(coverageGapSummary(null)).toBeNull();
+    expect(coverageGapSummary({})).toBeNull();
+  });
+
+  it('commonTypeBars scales session counts and flags military types', () => {
+    const bars = commonTypeBars([
+      { type_code: 'A321', type_name: 'Airbus A321', session_count: 40, military_pct: 0 },
+      { type_code: 'C130', session_count: 10, military_pct: 100 },
+    ]);
+    expect(bars[0].label).toBe('A321 · Airbus A321');
+    expect(bars[0].pct).toBe(100);
+    expect(bars[1].pct).toBe(25);
+    expect(bars[1].color).toBe('var(--danger)');
+    expect(bars[1].militaryPct).toBe(100);
+    expect(commonTypeBars([])).toEqual([]);
+    expect(commonTypeBars(null)).toEqual([]);
+  });
 });
 
 describe('StatsScreen', () => {
@@ -175,5 +218,58 @@ describe('StatsScreen', () => {
   it('shows connection state', async () => {
     renderScreen();
     await waitFor(() => expect(screen.getByText('WebSocket Active')).toBeInTheDocument());
+  });
+
+  it('renders session-quality, coverage-gap and aircraft-type panels from analytics endpoints', async () => {
+    global.fetch = vi.fn((url) => {
+      const json = () => {
+        if (url.includes('/tracking-quality/gaps')) {
+          return Promise.resolve({
+            sessions_analyzed: 20,
+            sessions_with_gaps: 4,
+            sessions_with_gaps_pct: 20,
+            total_gaps_found: 9,
+            avg_gap_seconds: 55,
+          });
+        }
+        if (url.includes('/tracking-quality/')) {
+          return Promise.resolve({
+            quality_breakdown: { excellent: 8, good: 5, fair: 2, poor: 1 },
+          });
+        }
+        if (url.includes('/flight-patterns/aircraft-types')) {
+          return Promise.resolve({
+            aircraft_types: [
+              {
+                type_code: 'B738',
+                type_name: 'Boeing 737-800',
+                session_count: 30,
+                military_pct: 0,
+              },
+              { type_code: 'C130', session_count: 6, military_pct: 100 },
+            ],
+          });
+        }
+        return Promise.resolve({ sessions: [], events: [] });
+      };
+      return Promise.resolve({
+        ok: true,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json,
+      });
+    });
+
+    renderScreen();
+
+    await waitFor(() => expect(screen.getByText('Session Quality')).toBeInTheDocument());
+    // "Excellent" appears in both the headline and the grade bar row.
+    expect(screen.getAllByText('Excellent').length).toBeGreaterThan(0);
+
+    expect(screen.getByText('Coverage Gaps')).toBeInTheDocument();
+    expect(screen.getByTestId('v2-stats-completeness')).toHaveTextContent('80%');
+
+    expect(screen.getByText('Common Aircraft Types')).toBeInTheDocument();
+    expect(screen.getByText(/Boeing 737-800/)).toBeInTheDocument();
+    expect(screen.getByText('100% mil')).toBeInTheDocument();
   });
 });

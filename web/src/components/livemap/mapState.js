@@ -30,7 +30,30 @@ export const DEFAULT_OVERLAYS = {
   navaids: false,
   airports: false,
   notams: false,
+  pireps: false,
+  showGhosts: false, // reveal non-ICAO (~) TIS-B/ADS-R duplicate tracks (hidden by default)
+  // display prefs (persisted alongside overlays)
+  trailSeconds: 300, // trail history window / length
+  colorMode: 'category', // 'category' | 'altitude'
+  showPredictor: true, // curved velocity/turn-rate predictor
+  predictorSeconds: 60, // predictor look-ahead horizon
+  showLeaders: true, // data-block leader lines
+  showCoast: true, // coast markers for stale targets
 };
+
+export const TRAIL_LENGTH_OPTIONS = [
+  { value: 30, label: '30s' },
+  { value: 60, label: '1m' },
+  { value: 120, label: '2m' },
+  { value: 300, label: '5m' },
+  { value: 600, label: '10m' },
+];
+
+export const PREDICTOR_LENGTH_OPTIONS = [
+  { value: 30, label: '30s' },
+  { value: 60, label: '1m' },
+  { value: 120, label: '2m' },
+];
 
 export const QUICK_CHIPS = [
   { key: 'emergency', label: 'Emergency', color: 'var(--danger)' },
@@ -50,6 +73,8 @@ export const OVERLAY_DEFS = [
   { key: 'navaids', label: 'Navaids (VOR/NDB)' },
   { key: 'airports', label: 'Airports' },
   { key: 'notams', label: 'NOTAMs / TFRs' },
+  { key: 'pireps', label: 'PIREPs' },
+  { key: 'showGhosts', label: 'Ghost Tracks (TIS-B/ADS-R)' },
 ];
 
 function load(key, fallback) {

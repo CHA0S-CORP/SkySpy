@@ -24,7 +24,6 @@ export function LiveMapToolbar({
   onZoom,
   onRecenter,
   onFullscreen,
-  count,
 }) {
   return (
     <div className="lm__toolbar">
@@ -43,10 +42,18 @@ export function LiveMapToolbar({
 
       <div className="lm__cluster">
         <div className="lm__seg" role="group" aria-label="Label visibility">
-          <button type="button" className={labelMode === 'auto' ? 'lm__seg-on' : ''} onClick={() => setLabelMode('auto')}>
+          <button
+            type="button"
+            className={labelMode === 'auto' ? 'lm__seg-on' : ''}
+            onClick={() => setLabelMode('auto')}
+          >
             Auto
           </button>
-          <button type="button" className={labelMode === 'all' ? 'lm__seg-on' : ''} onClick={() => setLabelMode('all')}>
+          <button
+            type="button"
+            className={labelMode === 'all' ? 'lm__seg-on' : ''}
+            onClick={() => setLabelMode('all')}
+          >
             All
           </button>
         </div>
@@ -119,11 +126,6 @@ export function LiveMapToolbar({
           <Icon name="fullscreen" size={16} strokeWidth={1.7} />
         </button>
       </div>
-
-      <span className="lm__count">
-        <Icon name="send" size={14} strokeWidth={1.7} style={{ color: 'var(--accent)' }} />
-        {count}
-      </span>
     </div>
   );
 }

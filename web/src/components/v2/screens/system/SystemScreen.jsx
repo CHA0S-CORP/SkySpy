@@ -1,7 +1,15 @@
 import React, { useMemo, useState } from 'react';
 import { Icon, toast } from '../../primitives';
 import { useSystemData, postAction } from './useSystemData';
-import { deriveServices, deriveBanner, deriveGauges, sevColor, clock12 } from './systemModel';
+import {
+  deriveServices,
+  deriveBanner,
+  deriveGauges,
+  deriveAntenna,
+  deriveLibacars,
+  sevColor,
+  clock12,
+} from './systemModel';
 
 function CardHeader({ icon, title, aside }) {
   return (
@@ -54,6 +62,11 @@ export function SystemScreen({ apiBase, wsConnected, feederLocation }) {
   );
   const banner = useMemo(() => deriveBanner(services), [services]);
   const gauges = useMemo(() => deriveGauges({ status: data?.status, info: data?.info }), [data]);
+  const antenna = useMemo(() => deriveAntenna({ status: data?.status }), [data]);
+  const libacars = useMemo(
+    () => deriveLibacars({ status: data?.status, health: data?.health }),
+    [data]
+  );
 
   const addEvent = (msg, sev = 'ok') =>
     setEvents((prev) => [{ msg, sev, t: clock12() }, ...prev].slice(0, 12));
@@ -288,9 +301,15 @@ export function SystemScreen({ apiBase, wsConnected, feederLocation }) {
               </StatusPill>
             </KV>
             <KV label="Servers">{num(notif.server_count ?? notif.servers?.length ?? 0)}</KV>
-            <KV label="Cooldown" last>
+            <KV label="Cooldown" last={status.alert_history_count == null}>
               {notif.cooldown_seconds != null ? `${notif.cooldown_seconds} s` : '--'}
             </KV>
+            {/* alert_history_count is the historical total from /system/status */}
+            {status.alert_history_count != null && (
+              <KV label="Alerts Fired" last>
+                {num(status.alert_history_count)}
+              </KV>
+            )}
             <button type="button" className="v2-btn v2-sys__cardbtn" onClick={onTestNotification}>
               <Icon name="edit" size={14} strokeWidth={1.7} />
               Test Notification
@@ -310,11 +329,17 @@ export function SystemScreen({ apiBase, wsConnected, feederLocation }) {
             <KV label="Tracked Aircraft">
               {num(safety.tracked_aircraft ?? status.aircraft_count)}
             </KV>
-            <KV label="Events Today" last>
+            <KV label="Events Today" last={status.safety_event_count == null}>
               <span style={{ color: 'var(--warn)' }}>
                 {num(safety.events_today ?? safety.active_events)}
               </span>
             </KV>
+            {/* safety_event_count is the historical total from /system/status */}
+            {status.safety_event_count != null && (
+              <KV label="Total Events" last>
+                {num(status.safety_event_count)}
+              </KV>
+            )}
             <button type="button" className="v2-btn v2-sys__cardbtn" onClick={onTestSafety}>
               <Icon name="edit" size={14} strokeWidth={1.7} />
               Test Safety Events
@@ -332,13 +357,79 @@ export function SystemScreen({ apiBase, wsConnected, feederLocation }) {
               </StatusPill>
             </KV>
             <KV label="Last Hour">{num(acars.last_hour ?? 0)}</KV>
-            <KV label="Last 24 h" last>
+            <KV label="Last 24 h" last={!libacars}>
               {num(acars.last_24h ?? 0)}
             </KV>
+            {/* libacars is the CFFI decoder binding (available/stats from
+                /system/status, issues[] from /system/health) - surfaced only
+                when the payload carries it */}
+            {libacars && (
+              <>
+                <KV label="Decoder (libacars)">
+                  <StatusPill
+                    sev={libacars.unknown ? 'warn' : libacars.available ? 'ok' : 'danger'}
+                  >
+                    {libacars.unknown
+                      ? 'UNKNOWN'
+                      : libacars.available
+                        ? 'AVAILABLE'
+                        : 'UNAVAILABLE'}
+                  </StatusPill>
+                </KV>
+                {libacars.stats?.messages_decoded != null && (
+                  <KV label="Messages Decoded">{num(libacars.stats.messages_decoded)}</KV>
+                )}
+                {libacars.stats?.decode_errors != null && (
+                  <KV label="Decode Errors">
+                    <span
+                      style={{
+                        color: libacars.stats.decode_errors > 0 ? 'var(--warn)' : undefined,
+                      }}
+                    >
+                      {num(libacars.stats.decode_errors)}
+                    </span>
+                  </KV>
+                )}
+                {libacars.error && (
+                  <div className="v2-sys__notice v2-sys__notice--danger">
+                    <Icon name="alert-circle" size={13} strokeWidth={1.8} />
+                    <span>{libacars.error}</span>
+                  </div>
+                )}
+                {libacars.issues.map((issue, i) => (
+                  <div key={i} className="v2-sys__notice v2-sys__notice--warn">
+                    <Icon name="alert-triangle" size={13} strokeWidth={1.8} />
+                    <span>{issue}</span>
+                  </div>
+                ))}
+              </>
+            )}
             {/* ACARS runs as its own listener process (docker --profile acars /
                 run_acars) - there is no runtime start endpoint to call */}
           </div>
         </div>
+
+        {/* Antenna coverage (only when the worker has published analytics) */}
+        {antenna && (
+          <div className="v2-sys__card">
+            <CardHeader icon="radar" title="Antenna" aside={antenna.coverage} />
+            <div className="v2-sys__cardbody">
+              <KV label="Max Range">
+                <span style={{ color: 'var(--accent)' }}>{antenna.maxRange}</span>
+              </KV>
+              <KV label="Avg Range">{antenna.avgRange}</KV>
+              <KV label="Coverage" last>
+                {antenna.coverage}
+              </KV>
+              <div className="v2-sys__gauge-track" style={{ marginTop: 12 }}>
+                <div
+                  className="v2-sys__gauge-fill"
+                  style={{ width: `${antenna.coveragePct}%`, background: 'var(--accent)' }}
+                />
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Recent events (span 2) */}
         <div className="v2-sys__card v2-sys__card--wide">
@@ -396,6 +487,9 @@ export function SystemScreen({ apiBase, wsConnected, feederLocation }) {
 
       {/* Footer */}
       <div className="v2-sys__footer">
+        {(status.version ?? info.version) != null && (
+          <span>SkySpy v{status.version ?? info.version}</span>
+        )}
         <span>API {info.api_version ?? 'v1'}</span>
         <span>Django {info.django_version ?? '--'}</span>
         <span>Python {info.python_version ?? '--'}</span>

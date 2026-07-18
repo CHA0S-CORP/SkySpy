@@ -3,6 +3,7 @@ export { ICONS } from './icons';
 export { Card } from './Card';
 export { Chip } from './Chip';
 export { Switch } from './Switch';
+export { LiveIndicator } from './LiveIndicator';
 export { SegmentedControl } from './SegmentedControl';
 export { Tabs } from './Tabs';
 export { Select } from './Select';

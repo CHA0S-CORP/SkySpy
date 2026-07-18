@@ -2,10 +2,14 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Icon } from '../../primitives';
 import { useHistoryData, RANGE_HOURS } from './useHistoryData';
+import { ArchiveTab } from './ArchiveTab';
 import {
   activityBins,
   airlineOf,
+  fmtCoord,
+  fmtSpeedTrack,
   historyKpis,
+  historyStatRows,
   selectSessions,
   toSessionCard,
 } from './historyModel';
@@ -88,13 +92,11 @@ export function HistoryScreen({ apiBase, onSelectAircraft, onViewEvent, hashPara
   const [safe, setSafe] = useState(false);
   const [sortBy, setSortBy] = useState('time');
   const [sortDir, setSortDir] = useState('desc');
+  const [archiveIcao, setArchiveIcao] = useState('');
 
   const queryClient = useQueryClient();
-  const { sessions, safety, sightings, acars, notams, pireps } = useHistoryData(
-    apiBase,
-    range,
-    tab
-  );
+  const historyData = useHistoryData(apiBase, range, tab, archiveIcao);
+  const { sessions, safety, stats, sightings, acars, notams, pireps } = historyData;
 
   const sessionList = sessions.data || [];
   const safetyList = safety.data || [];
@@ -125,6 +127,7 @@ export function HistoryScreen({ apiBase, onSelectAircraft, onViewEvent, hashPara
     () => historyKpis(sessionList, safetyList.length),
     [sessionList, safetyList]
   );
+  const statRows = useMemo(() => historyStatRows(stats.data), [stats.data]);
   const activity = useMemo(
     () => activityBins(sessionList, RANGE_HOURS[range] ?? 24),
     [sessionList, range]
@@ -227,6 +230,24 @@ export function HistoryScreen({ apiBase, onSelectAircraft, onViewEvent, hashPara
           </div>
           <span className="v2-hist__activity-peak">peak {peak} / bin</span>
         </div>
+
+        {/* history stats summary (server-computed over the full window) */}
+        {statRows.length > 0 && (
+          <div className="v2-hist__stats" data-testid="v2-hist-stats">
+            <span className="v2-hist__stats-label">{range.toUpperCase()} STATS</span>
+            <div className="v2-hist__stats-grid">
+              {statRows.map((r) => (
+                <div key={r.label} className="v2-hist__stat">
+                  <div className="v2-hist__stat-label">{r.label}</div>
+                  <div className="v2-hist__stat-value">
+                    {r.value.toLocaleString()}
+                    {r.unit && <span className="v2-hist__stat-unit"> {r.unit}</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* tabs */}
         <div className="v2-hist__tabs" role="tablist">
@@ -408,7 +429,9 @@ export function HistoryScreen({ apiBase, onSelectAircraft, onViewEvent, hashPara
                             <span key={i} style={{ height: b.h, background: b.color }} />
                           ))}
                         </div>
-                        <span className="v2-hist__card-db">{c.db} dB</span>
+                        <span className="v2-hist__card-db">
+                          {c.dbMin != null ? `${c.dbMin} to ${c.db}` : c.db} dB
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -493,7 +516,8 @@ export function HistoryScreen({ apiBase, onSelectAircraft, onViewEvent, hashPara
                 <button
                   key={s.id ?? i}
                   type="button"
-                  className="v2-hist__row"
+                  data-testid="v2-hist-sighting"
+                  className={`v2-hist__row${s.is_emergency ? ' v2-hist__row--emergency' : ''}`}
                   onClick={() => onSelectAircraft((s.icao_hex || '').toLowerCase())}
                 >
                   <Icon
@@ -507,10 +531,19 @@ export function HistoryScreen({ apiBase, onSelectAircraft, onViewEvent, hashPara
                       <span className="v2-mono">
                         {(s.callsign || '').trim() || (s.icao_hex || '').toUpperCase()}
                       </span>
+                      {s.is_emergency && (
+                        <span
+                          data-testid="v2-hist-sighting-emergency"
+                          className="v2-hist__pill v2-hist__pill--danger"
+                        >
+                          EMERGENCY
+                        </span>
+                      )}
                     </div>
                     <div className="v2-hist__row-sub v2-mono">
                       {s.altitude != null ? `${s.altitude} ft` : ''}{' '}
-                      {s.gs != null ? `· ${Math.round(s.gs)} kts` : ''}
+                      {fmtSpeedTrack(s.gs, s.track) ? `· ${fmtSpeedTrack(s.gs, s.track)}` : ''}
+                      {fmtCoord(s.lat, s.lon) ? ` · ${fmtCoord(s.lat, s.lon)}` : ''}
                     </div>
                   </div>
                   <span className="v2-hist__row-time">
@@ -578,26 +611,81 @@ export function HistoryScreen({ apiBase, onSelectAircraft, onViewEvent, hashPara
             <EmptyTab label="PIREP" />
           ) : (
             <div className="v2-hist__rows">
-              {(pireps.data || []).map((p, i) => (
-                <div key={p.id ?? i} className="v2-hist__row v2-hist__row--static">
-                  <Icon
-                    name="message"
-                    size={15}
-                    strokeWidth={1.7}
-                    style={{ color: 'var(--accent2)' }}
-                  />
-                  <div className="v2-hist__row-body">
-                    <div className="v2-hist__row-title v2-mono">
-                      {p.station || p.location || 'PIREP'}
+              {(pireps.data || []).map((p, i) => {
+                const flightLvl =
+                  p.flight_level != null
+                    ? `FL${p.flight_level}`
+                    : p.altitude_ft != null
+                      ? `${p.altitude_ft.toLocaleString()} ft`
+                      : null;
+                const turb =
+                  p.turbulence_type != null
+                    ? `Turb ${p.turbulence_type}${
+                        p.turbulence_base_ft != null || p.turbulence_top_ft != null
+                          ? ` ${p.turbulence_base_ft ?? '?'}–${p.turbulence_top_ft ?? '?'} ft`
+                          : ''
+                      }`
+                    : null;
+                const icing =
+                  p.icing_type != null
+                    ? `Icing ${p.icing_type}${
+                        p.icing_base_ft != null || p.icing_top_ft != null
+                          ? ` ${p.icing_base_ft ?? '?'}–${p.icing_top_ft ?? '?'} ft`
+                          : ''
+                      }`
+                    : null;
+                const meta = [flightLvl, turb, icing].filter(Boolean).join(' · ');
+                const isUrgent = (p.report_type || '').toUpperCase() === 'UUA';
+                return (
+                  <div key={p.id ?? i} className="v2-hist__row v2-hist__row--static">
+                    <Icon
+                      name="message"
+                      size={15}
+                      strokeWidth={1.7}
+                      style={{ color: 'var(--accent2)' }}
+                    />
+                    <div className="v2-hist__row-body">
+                      <div className="v2-hist__row-title">
+                        <span className="v2-mono">
+                          {p.location || p.pirep_id || p.station || 'PIREP'}
+                        </span>
+                        {p.report_type && (
+                          <span
+                            className={`v2-hist__pill ${
+                              isUrgent ? 'v2-hist__pill--danger' : 'v2-hist__pill--dim'
+                            }`}
+                          >
+                            {p.report_type}
+                          </span>
+                        )}
+                        {p.severity && (
+                          <span className="v2-hist__pill v2-hist__pill--warn">{p.severity}</span>
+                        )}
+                      </div>
+                      <div className="v2-hist__row-sub">
+                        {p.human_summary || meta || p.raw_text || p.text || ''}
+                      </div>
+                      {meta && (p.human_summary || p.raw_text || p.text) && (
+                        <div className="v2-hist__row-meta v2-mono">{meta}</div>
+                      )}
                     </div>
-                    <div className="v2-hist__row-sub">{p.raw_text || p.text || p.report || ''}</div>
+                    <span className="v2-hist__row-time">
+                      {p.observation_time ? new Date(p.observation_time).toLocaleTimeString() : ''}
+                    </span>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ))}
 
-        {tab === 'archive' && <EmptyTab label="archive" />}
+        {tab === 'archive' && (
+          <ArchiveTab
+            data={historyData}
+            icao={archiveIcao}
+            onSearch={(v) => setArchiveIcao((v || '').trim().toUpperCase())}
+            onClear={() => setArchiveIcao('')}
+          />
+        )}
       </div>
     </div>
   );

@@ -49,6 +49,35 @@ function fmtClock(iso) {
 }
 
 /**
+ * Format a sighting lat/lon pair as a compact coordinate string, or null when
+ * either value is absent (position is optional on a sighting record).
+ * @param {number|null|undefined} lat
+ * @param {number|null|undefined} lon
+ * @returns {string|null}
+ */
+export function fmtCoord(lat, lon) {
+  if (typeof lat !== 'number' || typeof lon !== 'number') return null;
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  return `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+}
+
+/**
+ * Format ground speed + track heading for a sighting row, e.g. "180 kt @ 045°".
+ * Either half is optional: renders whichever fields are present, null when neither.
+ * @param {number|null|undefined} gs - ground speed in knots
+ * @param {number|null|undefined} track - heading in degrees (0..359.9)
+ * @returns {string|null}
+ */
+export function fmtSpeedTrack(gs, track) {
+  const hasGs = typeof gs === 'number' && Number.isFinite(gs);
+  const hasTrack = typeof track === 'number' && Number.isFinite(track);
+  const speed = hasGs ? `${Math.round(gs)} kt` : '';
+  const heading = hasTrack ? `@ ${String(Math.round(track) % 360).padStart(3, '0')}°` : '';
+  const out = [speed, heading].filter(Boolean).join(' ');
+  return out || null;
+}
+
+/**
  * Derive one session card (mock card shape).
  * @param {object} s session record
  * @param {Map<string, number>} [safetyByHex] - safety event counts per icao_hex
@@ -86,6 +115,7 @@ export function toSessionCard(s, safetyByHex) {
     last: fmtClock(s.last_seen),
     bars,
     db: typeof s.max_rssi === 'number' ? Math.round(s.max_rssi) : '--',
+    dbMin: typeof s.min_rssi === 'number' ? Math.round(s.min_rssi) : null,
     hasSafety: safety > 0,
     safety,
     accent: safety > 0 ? 'var(--warn)' : cc,
@@ -166,6 +196,36 @@ export function historyKpis(sessions, safetyCount) {
     maxRange: Math.round(maxRange),
     safety: safetyCount,
   };
+}
+
+/**
+ * Rows for the History Stats summary panel, derived from the
+ * /api/v1/history/stats response. Only rows whose backing field is present in
+ * the payload are returned (payloads are frequently partial). Each row is
+ * `{ label, value, unit? }` with value pre-formatted for display.
+ *
+ * @param {object|undefined} stats history/stats payload
+ * @returns {Array<{label: string, value: string|number, unit?: string}>}
+ */
+export function historyStatRows(stats) {
+  if (!stats || typeof stats !== 'object') return [];
+  const rows = [];
+  const num = (v) => typeof v === 'number' && Number.isFinite(v);
+  const push = (field, label, unit) => {
+    if (num(stats[field])) rows.push({ label, value: stats[field], unit });
+  };
+  push('total_sightings', 'TOTAL SIGHTINGS');
+  push('total_sessions', 'TOTAL SESSIONS');
+  push('unique_aircraft', 'UNIQUE AIRCRAFT');
+  push('military_sessions', 'MILITARY SESSIONS');
+  push('avg_altitude', 'AVG ALTITUDE', 'ft');
+  push('max_altitude', 'MAX ALTITUDE', 'ft');
+  push('min_altitude', 'MIN ALTITUDE', 'ft');
+  push('avg_distance_nm', 'AVG DISTANCE', 'nm');
+  push('max_distance_nm', 'MAX DISTANCE', 'nm');
+  push('avg_speed', 'AVG SPEED', 'kt');
+  push('max_speed', 'MAX SPEED', 'kt');
+  return rows;
 }
 
 /**

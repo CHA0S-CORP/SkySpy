@@ -5,9 +5,12 @@ import {
   activityByHour,
   altitudeDistribution,
   categoryDistribution,
+  commonTypeBars,
+  coverageGapSummary,
   coveragePolygon,
   historyBars,
   liveFeeds,
+  qualityGradeRows,
   rssiScatter,
   safetySeverityCounts,
   safetyTypeBars,
@@ -101,6 +104,51 @@ export function StatsScreen({
     },
   });
 
+  // Tracking-quality grade distribution (stats/tracking-quality/).
+  const { data: trackingQuality = null } = useQuery({
+    queryKey: ['v2-stats-tracking-quality', apiBase, hours],
+    queryFn: async () => {
+      try {
+        const res = await fetch(`${apiBase}/api/v1/stats/tracking-quality/?hours=${hours}`);
+        if (!res.ok) return null;
+        return await res.json();
+      } catch {
+        return null;
+      }
+    },
+  });
+
+  // Coverage-gap analysis (stats/tracking-quality/gaps/).
+  const { data: coverageGaps = null } = useQuery({
+    queryKey: ['v2-stats-coverage-gaps', apiBase, hours],
+    queryFn: async () => {
+      try {
+        const res = await fetch(`${apiBase}/api/v1/stats/tracking-quality/gaps/?hours=${hours}`);
+        if (!res.ok) return null;
+        return await res.json();
+      } catch {
+        return null;
+      }
+    },
+  });
+
+  // Common aircraft types (stats/flight-patterns/aircraft-types/).
+  const { data: aircraftTypes = [] } = useQuery({
+    queryKey: ['v2-stats-aircraft-types', apiBase, hours],
+    queryFn: async () => {
+      try {
+        const res = await fetch(
+          `${apiBase}/api/v1/stats/flight-patterns/aircraft-types/?hours=${hours}`
+        );
+        if (!res.ok) return [];
+        const data = await res.json();
+        return data.aircraft_types || (Array.isArray(data) ? data : []);
+      } catch {
+        return [];
+      }
+    },
+  });
+
   const fleet = useMemo(
     () => (milOnly ? aircraft.filter((a) => a.military) : aircraft),
     [aircraft, milOnly]
@@ -179,6 +227,13 @@ export function StatsScreen({
 
   const hoursHeat = useMemo(() => activityByHour(sessions), [sessions]);
   const { types, durations } = useMemo(() => typeBreakdown(sessions), [sessions]);
+
+  const quality = useMemo(
+    () => qualityGradeRows(trackingQuality?.quality_breakdown),
+    [trackingQuality]
+  );
+  const gapSummary = useMemo(() => coverageGapSummary(coverageGaps), [coverageGaps]);
+  const commonTypes = useMemo(() => commonTypeBars(aircraftTypes), [aircraftTypes]);
 
   const health = [
     {
@@ -368,6 +423,126 @@ export function StatsScreen({
               <PanelBars items={cats} />
             </div>
           </div>
+
+          {/* session quality + coverage gaps */}
+          {(quality || gapSummary) && (
+            <div className="v2-stats__two-col">
+              {quality && (
+                <div className="v2-stats__panel">
+                  <div className="v2-stats__panel-head">
+                    <Icon
+                      name="activity"
+                      size={14}
+                      strokeWidth={1.7}
+                      style={{ color: 'var(--accent)' }}
+                    />
+                    <span>Session Quality</span>
+                    <span className="v2-stats__badge">{quality.total} sessions</span>
+                  </div>
+                  <div className="v2-stats__quality-headline">
+                    <span
+                      className="v2-stats__quality-grade"
+                      style={{ color: quality.dominant.color }}
+                    >
+                      {quality.dominant.label}
+                    </span>
+                    <span className="v2-stats__quality-sub">
+                      {quality.dominant.pct}% of tracked sessions
+                    </span>
+                  </div>
+                  <PanelBars items={quality.rows} />
+                </div>
+              )}
+              {gapSummary && (
+                <div className="v2-stats__panel">
+                  <div className="v2-stats__panel-head">
+                    <Icon
+                      name="alert-triangle"
+                      size={14}
+                      strokeWidth={1.7}
+                      style={{ color: 'var(--warn)' }}
+                    />
+                    <span>Coverage Gaps</span>
+                    <span className="v2-stats__badge">{gapSummary.analyzed} analyzed</span>
+                  </div>
+                  <div className="v2-stats__gap-tiles">
+                    <div className="v2-stats__gap-tile">
+                      <span
+                        className="v2-stats__gap-val"
+                        style={{ color: 'var(--accent)' }}
+                        data-testid="v2-stats-completeness"
+                      >
+                        {gapSummary.completenessPct}%
+                      </span>
+                      <span className="v2-stats__gap-lbl">Complete</span>
+                    </div>
+                    <div className="v2-stats__gap-tile">
+                      <span className="v2-stats__gap-val" style={{ color: 'var(--warn)' }}>
+                        {gapSummary.withGaps}
+                      </span>
+                      <span className="v2-stats__gap-lbl">With gaps</span>
+                    </div>
+                    <div className="v2-stats__gap-tile">
+                      <span className="v2-stats__gap-val">{gapSummary.totalGaps}</span>
+                      <span className="v2-stats__gap-lbl">Total gaps</span>
+                    </div>
+                    <div className="v2-stats__gap-tile">
+                      <span className="v2-stats__gap-val">{gapSummary.avgGapDisp}</span>
+                      <span className="v2-stats__gap-lbl">Avg gap</span>
+                    </div>
+                  </div>
+                  <div className="v2-stats__dist-row">
+                    <div className="v2-stats__dist-head">
+                      <span className="v2-stats__dist-label">Sessions with gaps</span>
+                      <span>
+                        <strong className="v2-mono">{gapSummary.withGaps}</strong>{' '}
+                        <span className="v2-stats__dist-pct">{gapSummary.gapPct}%</span>
+                      </span>
+                    </div>
+                    <div className="v2-stats__dist-track">
+                      <div
+                        className="v2-stats__dist-fill"
+                        style={{ width: `${gapSummary.gapPct}%`, background: 'var(--warn)' }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* common aircraft types */}
+          {commonTypes.length > 0 && (
+            <div className="v2-stats__panel">
+              <div className="v2-stats__panel-head">
+                <Icon name="send" size={14} strokeWidth={1.7} style={{ color: 'var(--accent2)' }} />
+                <span>Common Aircraft Types</span>
+                <span className="v2-stats__badge">{commonTypes.length} types</span>
+              </div>
+              {commonTypes.map((t) => (
+                <div key={t.label} className="v2-stats__dist-row">
+                  <div className="v2-stats__dist-head">
+                    <span className="v2-stats__dist-label">
+                      {t.label}
+                      {t.militaryPct != null && t.militaryPct > 0 && (
+                        <span className="v2-stats__type-mil"> {t.militaryPct}% mil</span>
+                      )}
+                    </span>
+                    <span>
+                      <strong className="v2-mono">{t.count}</strong>{' '}
+                      <span className="v2-stats__dist-pct">sessions</span>
+                    </span>
+                  </div>
+                  <div className="v2-stats__dist-track">
+                    <div
+                      className="v2-stats__dist-fill"
+                      style={{ width: `${t.pct}%`, background: t.color }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* safety events */}
           <div className="v2-stats__panel">

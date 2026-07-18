@@ -1,7 +1,9 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Icon, toast } from '../../primitives';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { Icon, LiveIndicator, Switch, toast } from '../../primitives';
 import { useDetailData } from './useDetailData';
 import {
+  countryCodeToFlag,
   externalLinks,
   flightStatus,
   miniSeries,
@@ -11,14 +13,19 @@ import {
   trackDisplay,
 } from './detailModel';
 import { altitudeOf, EMERGENCY_SQUAWKS } from '../list/listModel';
+import { DetailTrackMap } from './DetailTrackMap';
+import { FlightRoute, RouteSummary, parseRoute } from './FlightRoute';
 
 const SPEEDS = [0.5, 1, 2, 4];
 
 function KVRow({ label, children, last }) {
+  // Empty strings (blank fields from a partial airframe record) should read as
+  // '--', not render an empty cell - nullish coalescing alone misses ''.
+  const value = children == null || children === '' ? '--' : children;
   return (
     <div className={`v2-det__kv ${last ? 'v2-det__kv--last' : ''}`}>
       <span className="v2-det__kv-label">{label}</span>
-      <span className="v2-det__kv-value">{children ?? '--'}</span>
+      <span className="v2-det__kv-value">{value}</span>
     </div>
   );
 }
@@ -73,6 +80,104 @@ function MiniGraph({ title, series, color, valueLabel, posPct }) {
   );
 }
 
+// Human-readable label for the AircraftInfo.owner_type enum. Falls back to a
+// title-cased version of any unrecognized value so new backend types still show.
+const OWNER_TYPE_LABELS = {
+  llc: 'LLC',
+  trust: 'Trust',
+  corporation: 'Corporation',
+  corp: 'Corporation',
+  individual: 'Individual',
+  partnership: 'Partnership',
+  government: 'Government',
+};
+function ownerTypeLabel(t) {
+  if (t == null || t === '') return null;
+  const key = String(t).toLowerCase();
+  if (OWNER_TYPE_LABELS[key]) return OWNER_TYPE_LABELS[key];
+  return key.charAt(0).toUpperCase() + key.slice(1);
+}
+
+// Human labels for the shell-company evidence signals emitted by
+// registration_analysis.py (both weighted `factors` keys and boolean `details`).
+const OWNERSHIP_FACTOR_LABELS = {
+  llc_no_web_presence: 'LLC — no web presence',
+  no_web_presence: 'No web presence',
+  registered_agent_address: 'Registered-agent address',
+  registered_agent_owner: 'Registered-agent owner',
+  registered_agent_detected: 'Registered agent detected',
+  po_box_address: 'PO box address',
+  po_box_detected: 'PO box detected',
+  multiple_transfers: 'Multiple ownership transfers',
+  rapid_transfers_detected: 'Rapid ownership transfers',
+  trust_ownership: 'Trust ownership',
+  trust_ownership_detected: 'Trust ownership detected',
+  generic_llc_name: 'Generic LLC name',
+  generic_llc_match: 'Generic LLC name matched',
+};
+
+function factorLabel(key) {
+  if (OWNERSHIP_FACTOR_LABELS[key]) return OWNERSHIP_FACTOR_LABELS[key];
+  const s = String(key).replaceAll('_', ' ');
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+/**
+ * Normalize the free-form `ownership_flags` into structured shell-company
+ * evidence. The backend (registration_analysis.py) sends
+ * `{ risk_level, factors: {key: weight}, details: {key: bool} }`, but older/other
+ * shapes (a bare array of factors, or `factors` as a string[]/object[]) are also
+ * tolerated. Returns weighted factors (sorted by contribution) + detected detail
+ * signals, so the UI can show the evidence behind the score.
+ *
+ * @param {*} flags
+ * @returns {{riskLevel: string|null, factors: {key:string,label:string,weight:number|null}[], details: {key:string,label:string}[]}}
+ */
+function ownershipEvidence(flags) {
+  if (flags == null) return { riskLevel: null, factors: [], details: [] };
+  const riskLevel = typeof flags.risk_level === 'string' ? flags.risk_level : null;
+
+  const src = Array.isArray(flags) ? flags : flags.factors;
+  let factors = [];
+  if (Array.isArray(src)) {
+    factors = src
+      .map((f) => {
+        if (f == null) return null;
+        if (typeof f === 'string') return { key: f, label: factorLabel(f), weight: null };
+        if (typeof f === 'object') {
+          const key = f.label || f.name || f.reason || f.factor;
+          return key
+            ? {
+                key,
+                label: factorLabel(key),
+                weight: typeof f.weight === 'number' ? f.weight : null,
+              }
+            : null;
+        }
+        return null;
+      })
+      .filter(Boolean);
+  } else if (src && typeof src === 'object') {
+    factors = Object.entries(src)
+      .filter(([, w]) => w)
+      .map(([key, w]) => ({
+        key,
+        label: factorLabel(key),
+        weight: typeof w === 'number' ? w : null,
+      }))
+      .sort((a, b) => (b.weight ?? 0) - (a.weight ?? 0));
+  }
+
+  let details = [];
+  const d = flags.details;
+  if (d && typeof d === 'object' && !Array.isArray(d)) {
+    details = Object.entries(d)
+      .filter(([, v]) => v === true || (typeof v === 'number' && v) || (typeof v === 'string' && v))
+      .map(([key]) => ({ key, label: factorLabel(key) }));
+  }
+  return { riskLevel, factors, details };
+}
+
 /**
  * v2 Aircraft Detail (designs/Aircraft Detail.dc.html): identity bar, 6-up
  * stat strip, photo hero + lightbox, airframe info, route card, schematic
@@ -83,17 +188,42 @@ function MiniGraph({ title, series, color, valueLabel, posPct }) {
  * @param {string} props.apiBase
  * @param {string} props.hex
  * @param {object|undefined} props.live - live socket aircraft entry (if in view)
+ * @param {string} [props.call] - callsign from the route (used when not live)
  * @param {(hex: string) => void} props.onClose
  * @param {(eventId: string|number) => void} props.onViewEvent
  */
-export function DetailScreen({ apiBase, hex, live, onClose, onViewEvent }) {
+export function DetailScreen({
+  apiBase,
+  hex,
+  live,
+  call,
+  connected = false,
+  onClose,
+  onViewEvent,
+}) {
   const [photoOpen, setPhotoOpen] = useState(false);
+  const [photoFetching, setPhotoFetching] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
   const [pos, setPos] = useState(100);
+  const [liveOn, setLiveOn] = useState(true);
 
-  const callsign = (live?.flight || '').trim();
-  const { info, track, safety, sessions, route } = useDetailData(apiBase, hex, callsign);
+  // The aircraft is streaming a usable position right now (in coverage).
+  const liveAvailable = typeof live?.lat === 'number' && typeof live?.lon === 'number';
+  // Live tracking is actually running: toggled on, socket up, position flowing.
+  const liveActive = liveOn && connected && liveAvailable;
+  const livePoint = liveActive ? { lat: live.lat, lon: live.lon, track: live.track } : null;
+
+  // Prefer the live callsign; fall back to the one passed in the route (e.g.
+  // opened from the radio screen for an aircraft no longer in view) so the
+  // route lookup and callsign row still populate.
+  const callsign = (live?.flight || call || '').trim();
+  const { info, track, safety, sessions, route } = useDetailData(
+    apiBase,
+    hex,
+    callsign,
+    liveActive
+  );
   const airframe = info.data || {};
   const points = track.data || [];
   const safetyEvents = safety.data || [];
@@ -114,6 +244,17 @@ export function DetailScreen({ apiBase, hex, live, onClose, onViewEvent }) {
     return () => clearInterval(id);
   }, [playing, speed]);
 
+  // Close the photo lightbox on Escape from anywhere - the overlay is not
+  // auto-focused, so a listener scoped to the div alone never fires.
+  useEffect(() => {
+    if (!photoOpen) return undefined;
+    const onKey = (e) => {
+      if (e.key === 'Escape') setPhotoOpen(false);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [photoOpen]);
+
   const status = flightStatus(live);
   const alt = live ? altitudeOf(live) : null;
   const vr = live?.vr;
@@ -131,7 +272,22 @@ export function DetailScreen({ apiBase, hex, live, onClose, onViewEvent }) {
   const emerg = live && EMERGENCY_SQUAWKS.includes(live.squawk);
 
   const projection = useMemo(() => projectTrack(points), [points]);
-  const marker = projection?.at(pos / 100);
+
+  // Playback marker position in real coords - drives the replay marker on the
+  // geographic map. `pos` is 0-100 over the sorted track window.
+  const validTrackPoints = useMemo(
+    () => points.filter((p) => typeof p.lat === 'number' && typeof p.lon === 'number'),
+    [points]
+  );
+  const replayPoint = useMemo(() => {
+    if (validTrackPoints.length < 2) return null;
+    const idx = Math.min(
+      validTrackPoints.length - 1,
+      Math.max(0, Math.round((pos / 100) * (validTrackPoints.length - 1)))
+    );
+    const p = validTrackPoints[idx];
+    return p ? { lat: p.lat, lon: p.lon, track: p.track } : null;
+  }, [validTrackPoints, pos]);
   const altSeries = useMemo(() => miniSeries(points, 'altitude'), [points]);
   const spdSeries = useMemo(() => miniSeries(points, 'gs'), [points]);
   const vsSeries = useMemo(() => miniSeries(points, 'vr'), [points]);
@@ -150,13 +306,122 @@ export function DetailScreen({ apiBase, hex, live, onClose, onViewEvent }) {
     return `${fmt(cur)} / ${fmt(totalSec)}`;
   }, [points, pos]);
 
-  const routeData = route.data;
-  const origin = routeData?.origin || routeData?.route?.origin;
-  const destination = routeData?.destination || routeData?.route?.destination;
+  const routeInfo = parseRoute(route.data);
+  const { origin, destination } = routeInfo;
 
   const photoUrl = airframe.photo_url;
-  const displayName = callsign || airframe.registration || (hex || '').toUpperCase();
+  const registration = airframe.registration || live?.r || '';
+  const displayName = callsign || registration || (hex || '').toUpperCase();
   const num = (v) => (typeof v === 'number' ? Math.round(v).toLocaleString('en-US') : '--');
+
+  // Country-flag emoji next to the registration. `country_code` is ISO 3166-1
+  // alpha-2 (may be null); countryCodeToFlag returns '' for absent/invalid.
+  const countryName = airframe.country || airframe.registered_country || '';
+  const regFlag = countryCodeToFlag(airframe.country_code);
+
+  // Privacy/flag badges. The AircraftInfo serializer surfaces these flags only
+  // inside per-source `source_data` rows (not as top-level fields), so OR them
+  // across every source that reported the airframe.
+  const sourceData = Array.isArray(airframe.source_data) ? airframe.source_data : [];
+  const flags = useMemo(() => {
+    const any = (key) => sourceData.some((s) => s?.[key]);
+    return {
+      ladd: any('is_ladd'),
+      pia: any('is_pia'),
+      interesting: any('is_interesting'),
+    };
+    // sourceData is derived fresh each render from airframe; length+identity is
+    // a stable-enough dep for this cheap reduction.
+  }, [sourceData]);
+
+  // Radio transmissions matched to this airframe's callsign (transcript, freq,
+  // duration, extraction confidence). Absent on most records - guard the card.
+  const radioCalls = Array.isArray(airframe.matched_radio_calls)
+    ? airframe.matched_radio_calls
+    : [];
+
+  // Ownership analysis (shell-company heuristics) + dossier prose. All optional
+  // — the cards below render only when their fields are actually present.
+  const dossierText =
+    typeof airframe.dossier_text === 'string' && airframe.dossier_text.trim()
+      ? airframe.dossier_text.trim()
+      : null;
+  const ownerTypeText = ownerTypeLabel(airframe.owner_type);
+  const shellSuspected = airframe.is_shell_suspected === true;
+  const shellScore = typeof airframe.shell_score === 'number' ? airframe.shell_score : null;
+  const shellPct =
+    shellScore != null ? Math.round(Math.max(0, Math.min(1, shellScore)) * 100) : null;
+  const ownership = useMemo(
+    () => ownershipEvidence(airframe.ownership_flags),
+    [airframe.ownership_flags]
+  );
+  // Prefer the weighted factors; fall back to the boolean detail signals so we
+  // never show an empty Evidence section when only one shape is present.
+  const ownEvidence =
+    ownership.factors.length > 0
+      ? ownership.factors
+      : ownership.details.map((d) => ({ ...d, weight: null }));
+  const hasOwnership =
+    airframe.is_shell_suspected != null ||
+    shellScore != null ||
+    ownerTypeText != null ||
+    ownEvidence.length > 0;
+
+  const cachedAt = airframe.cached_at;
+  const fetchFailed = airframe.fetch_failed === true;
+
+  // Clicking the empty photo hero triggers a priority (force) photo fetch on the
+  // backend, then polls the airframe record until the photo_url appears.
+  const queryClient = useQueryClient();
+  const photoPollRef = useRef(null);
+
+  const stopPhotoPoll = useCallback(() => {
+    if (photoPollRef.current) {
+      clearInterval(photoPollRef.current);
+      photoPollRef.current = null;
+    }
+  }, []);
+
+  const requestPhoto = useCallback(async () => {
+    if (photoUrl || photoFetching || !hex) return;
+    const hexUC = (hex || '').toUpperCase();
+    setPhotoFetching(true);
+    toast('Fetching photo…');
+    try {
+      await fetch(`${apiBase}/api/v1/airframes/${hexUC}/photos/fetch/?force=true`, {
+        method: 'POST',
+      });
+    } catch {
+      // Network hiccup on the trigger - poll anyway; the task may still have run.
+    }
+    let attempts = 0;
+    stopPhotoPoll();
+    photoPollRef.current = setInterval(() => {
+      attempts += 1;
+      if (attempts > 8) {
+        stopPhotoPoll();
+        setPhotoFetching(false);
+        toast('No photo found');
+        return;
+      }
+      queryClient.invalidateQueries({ queryKey: ['v2-detail-info', apiBase, hexUC] });
+    }, 3000);
+  }, [photoUrl, photoFetching, hex, apiBase, queryClient, stopPhotoPoll]);
+
+  // Stop polling once the photo lands, and clean up on hex change / unmount.
+  useEffect(() => {
+    if (photoUrl && photoPollRef.current) {
+      stopPhotoPoll();
+      setPhotoFetching(false);
+      toast('Photo loaded');
+    }
+  }, [photoUrl, stopPhotoPoll]);
+
+  useEffect(() => {
+    setPhotoFetching(false);
+    stopPhotoPoll();
+    return stopPhotoPoll;
+  }, [hex, stopPhotoPoll]);
 
   const share = async () => {
     try {
@@ -194,6 +459,22 @@ export function DetailScreen({ apiBase, hex, live, onClose, onViewEvent }) {
           </div>
           <div className="v2-det__id-chips">
             <span className="v2-det__modes">Mode-S {(hex || '').toUpperCase()}</span>
+            {registration && (
+              <span className="v2-det__reg-chip">
+                {regFlag && (
+                  <span
+                    className="v2-det__reg-flag"
+                    data-testid="v2-detail-reg-flag"
+                    role="img"
+                    aria-label={countryName ? `${countryName} flag` : 'Country flag'}
+                    title={countryName || undefined}
+                  >
+                    {regFlag}
+                  </span>
+                )}
+                {registration}
+              </span>
+            )}
             {(airframe.type_code || airframe.aircraft_type || airframe.type || live?.t) && (
               <span className="v2-det__type-chip">
                 {airframe.type_code || airframe.aircraft_type || airframe.type || live?.t}
@@ -202,6 +483,31 @@ export function DetailScreen({ apiBase, hex, live, onClose, onViewEvent }) {
             {(airframe.operator || airframe.owner) && (
               <span className="v2-det__op-chip">{airframe.operator || airframe.owner}</span>
             )}
+            {flags.ladd && (
+              <span
+                className="v2-det__flag v2-det__flag--ladd"
+                title="FAA Limiting Aircraft Data Displayed"
+              >
+                <Icon name="eye" size={11} strokeWidth={1.9} />
+                LADD
+              </span>
+            )}
+            {flags.pia && (
+              <span className="v2-det__flag v2-det__flag--pia" title="Privacy ICAO Address">
+                <Icon name="shield-check" size={11} strokeWidth={1.9} />
+                PIA
+              </span>
+            )}
+            {flags.interesting && (
+              <span
+                className="v2-det__flag v2-det__flag--interesting"
+                title="Flagged as interesting"
+              >
+                <Icon name="star" size={11} strokeWidth={1.9} />
+                INTERESTING
+              </span>
+            )}
+            <RouteSummary origin={origin} destination={destination} />
           </div>
         </div>
         <div className="v2-det__spacer" />
@@ -243,11 +549,11 @@ export function DetailScreen({ apiBase, hex, live, onClose, onViewEvent }) {
         />
         <StatCell
           label="VERT SPEED"
-          value={vr != null ? vr : '--'}
+          value={vr != null ? Math.round(vr).toLocaleString('en-US') : '--'}
           unit="fpm"
           valueColor={vr < 0 ? 'var(--warn)' : vr > 0 ? 'var(--accent)' : undefined}
           borderColor={vr < -800 ? 'color-mix(in srgb, var(--warn) 28%, var(--bord))' : undefined}
-          sub={vr < 0 ? 'descending' : vr > 0 ? 'climbing' : 'level'}
+          sub={vr == null ? '—' : vr < 0 ? 'descending' : vr > 0 ? 'climbing' : 'level'}
         />
         <StatCell
           label="TRACK"
@@ -279,20 +585,32 @@ export function DetailScreen({ apiBase, hex, live, onClose, onViewEvent }) {
           <button
             type="button"
             className="v2-det__photo"
-            onClick={() => photoUrl && setPhotoOpen(true)}
+            onClick={() => (photoUrl ? setPhotoOpen(true) : requestPhoto())}
+            disabled={photoFetching}
             style={photoUrl ? { backgroundImage: `url(${photoUrl})` } : undefined}
-            aria-label="Enlarge aircraft photo"
+            aria-label={photoUrl ? 'Enlarge aircraft photo' : 'Fetch aircraft photo'}
           >
             {!photoUrl && (
               <span className="v2-det__photo-placeholder">
-                {(airframe.type_code || airframe.aircraft_type || live?.t || 'aircraft').toString()} · no photo available
+                {photoFetching
+                  ? 'Fetching photo…'
+                  : `${(
+                      airframe.type_code ||
+                      airframe.aircraft_type ||
+                      live?.t ||
+                      'aircraft'
+                    ).toString()} · no photo — click to fetch`}
               </span>
             )}
             <div className="v2-det__photo-scrim" />
             <div className="v2-det__photo-id">
               <div className="v2-det__photo-reg">{airframe.registration || live?.r || ''}</div>
               <div className="v2-det__photo-model">
-                {airframe.model || airframe.type_name || airframe.type_code || airframe.aircraft_type || ''}
+                {airframe.model ||
+                  airframe.type_name ||
+                  airframe.type_code ||
+                  airframe.aircraft_type ||
+                  ''}
               </div>
             </div>
             {airframe.photo_source && (
@@ -308,6 +626,31 @@ export function DetailScreen({ apiBase, hex, live, onClose, onViewEvent }) {
             )}
           </button>
 
+          {/* summary / dossier */}
+          {dossierText && (
+            <div className="v2-det__card" data-testid="v2-detail-summary">
+              <div className="v2-det__card-head">
+                <Icon name="file" size={15} strokeWidth={1.7} style={{ color: 'var(--accent)' }} />
+                <span>Summary</span>
+              </div>
+              <div className="v2-det__card-body">
+                <p className="v2-det__summary-text" data-testid="v2-detail-summary-text">
+                  {dossierText}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* flight route (above aircraft info) */}
+          <FlightRoute
+            origin={origin}
+            destination={destination}
+            position={live}
+            flightNumber={routeInfo.flightNumber}
+            airline={routeInfo.airline}
+            callsign={callsign}
+          />
+
           {/* aircraft info */}
           <div className="v2-det__card">
             <div className="v2-det__card-head">
@@ -316,13 +659,42 @@ export function DetailScreen({ apiBase, hex, live, onClose, onViewEvent }) {
             </div>
             <div className="v2-det__card-body">
               <div className="v2-det__section-label">AIRFRAME</div>
-              <KVRow label="ICAO Type">{airframe.type_code || airframe.aircraft_type || airframe.type || live?.t}</KVRow>
+              <KVRow label="ICAO Type">
+                {airframe.type_code || airframe.aircraft_type || airframe.type || live?.t}
+              </KVRow>
               <KVRow label="Manufacturer">{airframe.manufacturer}</KVRow>
               <KVRow label="Model">{airframe.model}</KVRow>
               <KVRow label="Serial (MSN)">{airframe.serial_number || airframe.msn}</KVRow>
-              <KVRow label="Built" last>
+              <KVRow label="Built" last={airframe.age_years == null && !airframe.airframe_hours}>
                 {airframe.year_built || airframe.built}
               </KVRow>
+              {airframe.age_years != null && (
+                <KVRow label="Age" last={!airframe.airframe_hours}>
+                  {`${airframe.age_years} yr${airframe.age_years === 1 ? '' : 's'}`}
+                </KVRow>
+              )}
+              {airframe.airframe_hours != null && airframe.airframe_hours !== '' && (
+                <KVRow label="Airframe Hours" last>
+                  {typeof airframe.airframe_hours === 'number'
+                    ? `${Math.round(airframe.airframe_hours).toLocaleString('en-US')} h`
+                    : airframe.airframe_hours}
+                </KVRow>
+              )}
+              {(airframe.first_flight_date || airframe.delivery_date) && (
+                <>
+                  <div className="v2-det__section-label">HISTORY</div>
+                  {airframe.first_flight_date && (
+                    <KVRow label="First Flight" last={!airframe.delivery_date}>
+                      {new Date(airframe.first_flight_date).toLocaleDateString()}
+                    </KVRow>
+                  )}
+                  {airframe.delivery_date && (
+                    <KVRow label="Delivered" last>
+                      {new Date(airframe.delivery_date).toLocaleDateString()}
+                    </KVRow>
+                  )}
+                </>
+              )}
               <div className="v2-det__section-label">OPERATOR &amp; REGISTRATION</div>
               <KVRow label="Operator">{airframe.operator || airframe.owner}</KVRow>
               <KVRow label="Callsign">{callsign || '--'}</KVRow>
@@ -331,39 +703,138 @@ export function DetailScreen({ apiBase, hex, live, onClose, onViewEvent }) {
               <KVRow label="Country" last>
                 {airframe.country || airframe.registered_country}
               </KVRow>
+              {(cachedAt || fetchFailed) && (
+                <div className="v2-det__freshness">
+                  {fetchFailed && (
+                    <span className="v2-det__freshness-warn" title="Last external lookup failed">
+                      <Icon name="alert-triangle" size={11} strokeWidth={1.9} />
+                      lookup failed
+                    </span>
+                  )}
+                  {cachedAt && (
+                    <span className="v2-det__freshness-cached">
+                      <Icon name="clock" size={11} strokeWidth={1.7} />
+                      cached {new Date(cachedAt).toLocaleString()}
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
-          {/* flight route */}
-          {origin && destination && (
-            <div className="v2-det__card v2-det__card--pad">
-              <div className="v2-det__card-head v2-det__card-head--bare">
+          {/* ownership analysis (shell-company heuristics) */}
+          {hasOwnership && (
+            <div className="v2-det__card" data-testid="v2-detail-ownership">
+              <div className="v2-det__card-head">
                 <Icon
-                  name="map-pin"
+                  name="shield"
+                  size={15}
+                  strokeWidth={1.7}
+                  style={{ color: shellSuspected ? 'var(--warn)' : 'var(--accent)' }}
+                />
+                <span>Ownership Analysis</span>
+                {ownerTypeText && (
+                  <span className="v2-det__card-aside" data-testid="v2-detail-ownership-type">
+                    {ownerTypeText}
+                  </span>
+                )}
+              </div>
+              <div className="v2-det__card-body">
+                {airframe.is_shell_suspected != null && (
+                  <div
+                    className={`v2-det__own-flag ${shellSuspected ? 'v2-det__own-flag--on' : ''}`}
+                    data-testid="v2-detail-shell-flag"
+                  >
+                    <Icon
+                      name={shellSuspected ? 'alert-triangle' : 'shield-check'}
+                      size={14}
+                      strokeWidth={1.9}
+                    />
+                    <span>
+                      {shellSuspected ? 'Shell company suspected' : 'No shell-company indicators'}
+                    </span>
+                  </div>
+                )}
+                {shellPct != null && (
+                  <div className="v2-det__own-score" data-testid="v2-detail-shell-score">
+                    <div className="v2-det__own-score-head">
+                      <span className="v2-det__section-label">SHELL LIKELIHOOD</span>
+                      <span className="v2-det__own-score-pct">{shellPct}%</span>
+                    </div>
+                    <div className="v2-det__own-bar">
+                      <div
+                        className="v2-det__own-bar-fill"
+                        style={{
+                          width: `${shellPct}%`,
+                          background: shellSuspected ? 'var(--warn)' : 'var(--accent2)',
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+                {ownership.riskLevel && (
+                  <div
+                    className={`v2-det__own-risk v2-det__own-risk--${ownership.riskLevel.toLowerCase()}`}
+                    data-testid="v2-detail-ownership-risk"
+                  >
+                    <span className="v2-det__section-label">RISK LEVEL</span>
+                    <span className="v2-det__own-risk-pill">
+                      {ownership.riskLevel.toUpperCase()}
+                    </span>
+                  </div>
+                )}
+                {ownEvidence.length > 0 && (
+                  <div className="v2-det__own-factors" data-testid="v2-detail-ownership-factors">
+                    <div className="v2-det__section-label">EVIDENCE</div>
+                    {ownEvidence.map((f, i) => (
+                      <div key={`${f.key}-${i}`} className="v2-det__own-factor">
+                        <span className="v2-det__own-factor-dot" />
+                        <span className="v2-det__own-factor-label">{f.label}</span>
+                        {f.weight != null && (
+                          <span
+                            className="v2-det__own-factor-weight"
+                            title="Contribution to shell-likelihood score"
+                          >
+                            +{Math.round(f.weight * 100)}%
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* data sources / provenance */}
+          {sourceData.length > 0 && (
+            <div className="v2-det__card">
+              <div className="v2-det__card-head">
+                <Icon
+                  name="database"
                   size={15}
                   strokeWidth={1.7}
                   style={{ color: 'var(--accent)' }}
                 />
-                <span>Flight Route</span>
+                <span>Data Sources</span>
+                <span className="v2-det__card-aside">{sourceData.length} reporting</span>
               </div>
-              <div className="v2-det__route">
-                <div>
-                  <div className="v2-det__route-code">{origin.iata || origin.icao || origin}</div>
-                  <div className="v2-det__route-city">{origin.city || origin.name || ''}</div>
-                </div>
-                <div className="v2-det__route-line">
-                  <span />
-                  <Icon name="send" size={16} style={{ color: 'var(--accent)' }} />
-                  <span />
-                </div>
-                <div style={{ textAlign: 'right' }}>
-                  <div className="v2-det__route-code">
-                    {destination.iata || destination.icao || destination}
+              <div className="v2-det__card-body">
+                {sourceData.map((s, i) => (
+                  <div key={s.source ?? i} className="v2-det__source-row">
+                    <span className="v2-det__source-name">
+                      {(s.source || 'unknown').toString().toUpperCase()}
+                    </span>
+                    <div className="v2-det__source-flags">
+                      {s.is_ladd && <span className="v2-det__source-tag">LADD</span>}
+                      {s.is_pia && <span className="v2-det__source-tag">PIA</span>}
+                      {s.is_military && <span className="v2-det__source-tag">MIL</span>}
+                    </div>
+                    <span className="v2-det__source-when">
+                      {s.fetched_at ? new Date(s.fetched_at).toLocaleDateString() : ''}
+                    </span>
                   </div>
-                  <div className="v2-det__route-city">
-                    {destination.city || destination.name || ''}
-                  </div>
-                </div>
+                ))}
               </div>
             </div>
           )}
@@ -376,48 +847,33 @@ export function DetailScreen({ apiBase, hex, live, onClose, onViewEvent }) {
             <div className="v2-det__card-head">
               <Icon name="map-pin" size={15} strokeWidth={1.7} style={{ color: 'var(--accent)' }} />
               <span>Track &amp; Position</span>
-              <span className="v2-det__card-aside">
-                {live?.lat != null && live?.lon != null
-                  ? `${live.lat.toFixed(4)}° · ${live.lon.toFixed(4)}°`
-                  : 'no live position'}
-              </span>
+              <div className="v2-det__map-ctl">
+                <span className="v2-det__card-aside">
+                  {liveAvailable
+                    ? `${live.lat.toFixed(4)}° · ${live.lon.toFixed(4)}°`
+                    : 'no live position'}
+                </span>
+                <LiveIndicator
+                  connected={liveActive}
+                  liveLabel="LIVE"
+                  offlineLabel={liveOn ? 'OFFLINE' : 'PAUSED'}
+                />
+                <Switch
+                  checked={liveOn}
+                  onCheckedChange={setLiveOn}
+                  label="Live tracking"
+                  disabled={!liveAvailable}
+                />
+              </div>
             </div>
 
             <div className="v2-det__map">
               {projection ? (
-                <>
-                  <svg
-                    className="v2-det__map-track"
-                    viewBox="0 0 100 100"
-                    preserveAspectRatio="none"
-                  >
-                    <polyline
-                      points={projection.points}
-                      fill="none"
-                      stroke="var(--accent)"
-                      strokeWidth="2.4"
-                      strokeLinecap="round"
-                      opacity="0.95"
-                      vectorEffect="non-scaling-stroke"
-                    />
-                  </svg>
-                  {marker && (
-                    <div
-                      className="v2-det__map-marker"
-                      style={{ left: `${marker.x}%`, top: `${marker.y}%` }}
-                    >
-                      <div className="v2-det__map-ring" />
-                      <svg
-                        width="16"
-                        height="16"
-                        viewBox="0 0 24 24"
-                        style={{ transform: `rotate(${marker.deg}deg)` }}
-                      >
-                        <path d="M12 2 19 21 12 16 5 21z" fill="var(--accent)" />
-                      </svg>
-                    </div>
-                  )}
-                </>
+                <DetailTrackMap
+                  points={validTrackPoints}
+                  replayPoint={replayPoint}
+                  livePoint={livePoint}
+                />
               ) : (
                 <div className="v2-det__map-empty">No recorded track in the last 24h</div>
               )}
@@ -443,7 +899,7 @@ export function DetailScreen({ apiBase, hex, live, onClose, onViewEvent }) {
                 title="V/S"
                 series={vsSeries}
                 color="var(--warn)"
-                valueLabel={vr != null ? `${vr} fpm` : '--'}
+                valueLabel={vr != null ? `${Math.round(vr).toLocaleString('en-US')} fpm` : '--'}
                 posPct={pos}
               />
             </div>
@@ -542,7 +998,9 @@ export function DetailScreen({ apiBase, hex, live, onClose, onViewEvent }) {
                 </div>
                 <div className="v2-det__rx-foot">
                   <span>{points.length} recorded positions</span>
-                  <span>{live?.seen != null ? `last seen ${live.seen}s ago` : 'not in view'}</span>
+                  <span>
+                    {live?.seen != null ? `last seen ${Math.round(live.seen)}s ago` : 'not in view'}
+                  </span>
                 </div>
               </div>
             </div>
@@ -615,6 +1073,44 @@ export function DetailScreen({ apiBase, hex, live, onClose, onViewEvent }) {
               )}
             </div>
           </div>
+
+          {/* radio activity */}
+          {radioCalls.length > 0 && (
+            <div className="v2-det__card">
+              <div className="v2-det__card-head">
+                <Icon name="mic" size={15} strokeWidth={1.7} style={{ color: 'var(--accent)' }} />
+                <span>Radio Activity</span>
+                <span className="v2-det__card-aside">{radioCalls.length} matched</span>
+              </div>
+              <div className="v2-det__card-body">
+                {radioCalls.map((c, i) => (
+                  <div key={c.id ?? i} className="v2-det__radio-row">
+                    <div className="v2-det__radio-head">
+                      <span className="v2-det__radio-freq">
+                        {typeof c.frequency_mhz === 'number'
+                          ? `${c.frequency_mhz.toFixed(3)} MHz`
+                          : c.channel_name || 'radio'}
+                      </span>
+                      {typeof c.confidence === 'number' && (
+                        <span className="v2-det__radio-conf">
+                          {Math.round(c.confidence * 100)}% match
+                        </span>
+                      )}
+                      {c.created_at && (
+                        <span className="v2-det__radio-when">
+                          {new Date(c.created_at).toLocaleTimeString('en-US', { hour12: false })}
+                        </span>
+                      )}
+                    </div>
+                    {c.transcript && <div className="v2-det__radio-text">“{c.transcript}”</div>}
+                    {typeof c.duration_seconds === 'number' && (
+                      <div className="v2-det__radio-meta">{c.duration_seconds.toFixed(1)}s</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* safety events */}
           <div className="v2-det__card">

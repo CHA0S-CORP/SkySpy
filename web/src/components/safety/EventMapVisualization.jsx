@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useCallback } from 'react';
 import L from 'leaflet';
 import { Target } from 'lucide-react';
+import { aircraftArrowIcon } from '../../utils/mapMarkerIcon';
 
 /**
  * Event Map Visualization Component
@@ -12,20 +13,10 @@ export function EventMapVisualization({ event, trackData, replayPosition, onMapR
   const replayMarkersRef = useRef({});
   const replayTracksRef = useRef({});
 
-  // Create aircraft icon
+  // Create aircraft icon — shared heading dart, consistent with the Live and
+  // Detail maps.
   const createAircraftIcon = useCallback((track, color) => {
-    const rotation = track || 0;
-    return L.divIcon({
-      className: 'safety-aircraft-marker',
-      html: `
-        <svg width="32" height="32" viewBox="0 0 24 24" style="transform: rotate(${rotation}deg)">
-          <path d="M12 2 L14 8 L20 10 L14 12 L14 18 L12 16 L10 18 L10 12 L4 10 L10 8 Z"
-                fill="${color}" stroke="#000" stroke-width="0.5"/>
-        </svg>
-      `,
-      iconSize: [32, 32],
-      iconAnchor: [16, 16],
-    });
+    return aircraftArrowIcon({ track, color, size: 30 });
   }, []);
 
   // Get interpolated position along a track

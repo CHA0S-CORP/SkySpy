@@ -195,6 +195,51 @@ export function deriveGauges({ status, info }) {
   ];
 }
 
+/**
+ * Antenna coverage summary from /system/status `antenna` (present only when the
+ * celery worker has published `antenna_analytics` to cache — otherwise null).
+ * Returns null when the payload has no usable antenna metric.
+ * @param {{status?: object}} data
+ */
+export function deriveAntenna({ status }) {
+  const a = status?.antenna;
+  if (!a) return null;
+  const max = a.max_range_nm;
+  const avg = a.avg_range_nm;
+  const cov = a.coverage_percentage;
+  if (max == null && avg == null && cov == null) return null;
+  const disp = (v, digits = 1) => (typeof v === 'number' ? v.toFixed(digits) : '--');
+  return {
+    maxRange: max != null ? `${disp(max)} nm` : '--',
+    avgRange: avg != null ? `${disp(avg)} nm` : '--',
+    coverage: cov != null ? `${Math.round(cov)}%` : '--',
+    coveragePct: typeof cov === 'number' ? Math.max(0, Math.min(100, cov)) : 0,
+  };
+}
+
+/**
+ * libacars (ACARS CFFI binding) status merged from /system/status `libacars`
+ * (available/stats/error) and /system/health `services.libacars` (issues[]).
+ * Returns null when neither payload carries libacars data.
+ * @param {{status?: object, health?: object}} data
+ */
+export function deriveLibacars({ status, health }) {
+  const s = status?.libacars;
+  const h = healthEntry(health, 'libacars');
+  if (!s && !h) return null;
+  const available = s?.available ?? (h ? isUp(h) : undefined);
+  const stats = s?.stats || null;
+  const error = s?.error || h?.message || null;
+  const issues = Array.isArray(h?.issues) ? h.issues : [];
+  return {
+    available: available === true,
+    unknown: available == null,
+    stats,
+    error,
+    issues,
+  };
+}
+
 /** 12-hour clock string like the mock's now(). */
 export function clock12(d = new Date()) {
   let h = d.getHours();

@@ -42,6 +42,46 @@ export function altitudeOf(a) {
   return typeof alt === 'number' ? alt : 0;
 }
 
+/**
+ * ATC-standard altitude color ramp as {r,g,b}:
+ * green (0ft) → yellow (10k) → orange (25k) → magenta (45k+).
+ * (Same band logic as the legacy map's getAltitudeRGB, kept local so the
+ * livemap module has no dependency on the map/ tree.)
+ */
+export function altitudeRGB(alt) {
+  const n = Number(alt);
+  if (!Number.isFinite(n) || n <= 0) return { r: 50, g: 255, b: 100 };
+  const a = Math.min(n, 45000);
+  if (a < 10000) {
+    const t = a / 10000; // green → yellow
+    return { r: Math.round(50 + 205 * t), g: 255, b: Math.round(100 - 100 * t) };
+  }
+  if (a < 25000) {
+    const t = (a - 10000) / 15000; // yellow → orange
+    return { r: 255, g: Math.round(255 - 130 * t), b: 0 };
+  }
+  const t = (a - 25000) / 20000; // orange → magenta
+  return { r: 255, g: Math.round(125 - 125 * t), b: Math.round(255 * t) };
+}
+
+/** Altitude color as a CSS rgb() string. */
+export function altitudeColor(alt) {
+  const { r, g, b } = altitudeRGB(alt);
+  return `rgb(${r},${g},${b})`;
+}
+
+/**
+ * Resolve a blip's fill color for the current display mode.
+ * @param {object} a aircraft record
+ * @param {'category'|'altitude'} mode
+ * @param {boolean} selected
+ */
+export function colorFor(a, mode, selected) {
+  if (selected) return SELECTED_COLOR;
+  if (mode === 'altitude') return altitudeColor(altitudeOf(a));
+  return CATEGORY_COLORS[categoryOf(a)];
+}
+
 /** Full-label lines. l1 altitude shown in hundreds of ft (mock). */
 export function labelLines(a) {
   const alt = altitudeOf(a);
@@ -61,14 +101,19 @@ export function severityColor(a, isSafety) {
 
 // ---- canvas draw primitives (x,y = projected container-point pixels) ----
 
-/** Rotated dart (design path M12 2 19 21 12 16 5 21z ≈ chevron), 17px box → ~8.5 half. */
-export function drawDart(ctx, x, y, trackDeg, color) {
+/**
+ * Rotated aircraft dart. Points along trackDeg. A dark outline keeps the blip
+ * legible over bright tiles (NEXRAD/imagery); a short nose tick reinforces the
+ * heading. `alpha` dims coasting/stale targets.
+ */
+export function drawDart(ctx, x, y, trackDeg, color, alpha = 1) {
   const s = 8.5;
   ctx.save();
   ctx.translate(x, y);
   ctx.rotate((trackDeg * Math.PI) / 180);
+  ctx.globalAlpha = alpha;
   ctx.shadowColor = color;
-  ctx.shadowBlur = 4;
+  ctx.shadowBlur = 3;
   ctx.fillStyle = color;
   ctx.beginPath();
   // scaled from the 24-box path: nose (0,-s), right (s*.82,s), tuck (0,s*.4), left (-s*.82,s)
@@ -78,23 +123,73 @@ export function drawDart(ctx, x, y, trackDeg, color) {
   ctx.lineTo(-s * 0.82, s);
   ctx.closePath();
   ctx.fill();
+  // dark outline for contrast (no glow bleed on the stroke)
+  ctx.shadowBlur = 0;
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = 'rgba(5,7,10,0.85)';
+  ctx.stroke();
+  // heading tick off the nose
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(0, -s);
+  ctx.lineTo(0, -s - 3);
+  ctx.stroke();
   ctx.restore();
 }
 
-/** Velocity lead line: 20px solid stub at the nose + dotted trail scaled by speed. */
-export function drawLead(ctx, x, y, trackDeg, speed, color = LEAD_COLOR) {
-  const s = typeof speed === 'number' ? speed : 0;
-  if (s <= 50) return; // v1: only moving traffic gets a velocity vector
-  const len = leadLength(s);
+/**
+ * Curved velocity predictor: a dotted line that fades toward the horizon.
+ * `pts` are pre-projected screen points [{x,y}] dead-reckoned in lat/lon by the
+ * caller from ground speed + heading + turn rate — so straight flight → straight
+ * dotted line, a turn → dotted arc. Length is speed-scaled by the caller (the
+ * predictor is time-based, so faster aircraft reach farther). Each segment is a
+ * short dash rendered less opaque as it goes forward.
+ */
+export function drawPredictor(ctx, pts, color = LEAD_COLOR) {
+  if (!pts || pts.length < 2) return;
   ctx.save();
-  ctx.translate(x, y);
-  ctx.rotate((trackDeg * Math.PI) / 180);
   ctx.strokeStyle = color;
   ctx.lineWidth = 1.5;
-  // v1 clean solid vector from just past the dart nose — no dotted trail
+  ctx.lineCap = 'round';
+  ctx.setLineDash([2, 3]);
+  for (let i = 1; i < pts.length; i++) {
+    ctx.globalAlpha = 0.7 * (1 - (i - 1) / pts.length); // fade forward
+    ctx.beginPath();
+    ctx.moveTo(pts[i - 1].x, pts[i - 1].y);
+    ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+  ctx.restore();
+}
+
+/** Thin leader line from a blip to the nearest corner of its data-block chip. */
+export function drawLeaderLine(ctx, bx, by, rect) {
+  // nearest corner of the chip rect to the blip
+  const cx = bx < rect.x ? rect.x : bx > rect.x + rect.w ? rect.x + rect.w : bx;
+  const cy = by < rect.y ? rect.y : by > rect.y + rect.h ? rect.y + rect.h : by;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(139,152,167,0.5)';
+  ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.moveTo(0, -10);
-  ctx.lineTo(0, -(10 + len));
+  ctx.moveTo(bx, by);
+  ctx.lineTo(cx, cy);
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** Coast marker: a small X through a stale target that is no longer updating. */
+export function drawCoast(ctx, x, y) {
+  const r = 5;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(233,241,248,0.7)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(x - r, y - r);
+  ctx.lineTo(x + r, y + r);
+  ctx.moveTo(x + r, y - r);
+  ctx.lineTo(x - r, y + r);
   ctx.stroke();
   ctx.restore();
 }
@@ -235,17 +330,28 @@ export function drawLabel(ctx, x, y, a, { density = 'full', color, badge, offset
   return { x: lx, y: ly, w: chipW, h: chipH };
 }
 
-/** Draw an aircraft track trail from an array of projected points [{x,y}]. */
-export function drawTrail(ctx, pts, color) {
+/**
+ * Draw an aircraft track trail from projected points [{x,y,alt,t}]. Each
+ * segment fades with age (older → fainter) and, in altitude mode, is colored by
+ * the segment's altitude. `opts`: { mode, maxAgeMs, now, color }.
+ */
+export function drawTrail(ctx, pts, opts = {}) {
   if (!pts || pts.length < 2) return;
+  const { mode = 'category', maxAgeMs = 300000, now = 0, color = '#4cc9f0' } = opts;
   ctx.save();
-  ctx.strokeStyle = color;
-  ctx.globalAlpha = 0.35;
   ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  ctx.moveTo(pts[0].x, pts[0].y);
-  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
-  ctx.stroke();
+  for (let i = 1; i < pts.length; i++) {
+    const p = pts[i];
+    const q = pts[i - 1];
+    const age = now && p.t ? now - p.t : 0;
+    const fade = Math.max(0, 1 - age / maxAgeMs);
+    ctx.globalAlpha = 0.15 + 0.45 * fade; // newest ≈ 0.6, oldest ≈ 0.15
+    ctx.strokeStyle = mode === 'altitude' ? altitudeColor(p.alt) : color;
+    ctx.beginPath();
+    ctx.moveTo(q.x, q.y);
+    ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+  }
   ctx.restore();
 }
 
@@ -312,6 +418,132 @@ export function drawNotam(ctx, x, y, radiusPx, isTfr) {
   ctx.fill();
   ctx.restore();
 }
+/**
+ * Draw a TFR (Temporary Flight Restriction). Styled distinctly from airspace: a
+ * red/amber hatched fill + solid outline so it reads as a restriction, not a
+ * class boundary. `pts` are pre-projected polygon points [{x,y}]; when a TFR
+ * has no polygon geometry the caller falls back to `drawTfrDisc` (point+radius).
+ */
+export function drawTfrPoly(ctx, pts, label) {
+  if (!pts || pts.length < 3) return;
+  ctx.save();
+  // clip to the polygon, then paint diagonal hatch lines for the "restricted" fill
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x, pts[0].y);
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+  ctx.closePath();
+  ctx.save();
+  ctx.clip();
+  ctx.strokeStyle = 'rgba(242,88,93,0.35)'; // --danger
+  ctx.lineWidth = 1;
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const p of pts) {
+    if (p.x < minX) minX = p.x;
+    if (p.y < minY) minY = p.y;
+    if (p.x > maxX) maxX = p.x;
+    if (p.y > maxY) maxY = p.y;
+  }
+  const span = maxX - minX + (maxY - minY);
+  for (let d = minX - (maxY - minY); d <= maxX; d += 8) {
+    ctx.beginPath();
+    ctx.moveTo(d, minY);
+    ctx.lineTo(d + (maxY - minY), maxY);
+    ctx.stroke();
+  }
+  ctx.restore();
+  // solid amber/red outline on top of the hatch
+  ctx.strokeStyle = 'rgba(245,181,68,0.9)'; // --warn
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  if (label && span > 40) {
+    ctx.fillStyle = '#f5b544';
+    ctx.font = '700 10px "IBM Plex Mono", monospace';
+    ctx.fillText(String(label).toUpperCase(), minX + 4, minY + 12);
+  }
+  ctx.restore();
+}
+
+/**
+ * Draw a TFR as a point + area disc (fallback when there is no polygon ring).
+ * `radiusPx` is the projected area radius; a hatched amber/red circle + center
+ * marker keeps it visually distinct from airspace and plain NOTAMs.
+ */
+export function drawTfrDisc(ctx, x, y, radiusPx, label) {
+  ctx.save();
+  ctx.strokeStyle = 'rgba(245,181,68,0.9)'; // --warn
+  ctx.lineWidth = 1.5;
+  if (radiusPx && radiusPx > 3) {
+    // hatched fill inside the disc
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(x, y, radiusPx, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.strokeStyle = 'rgba(242,88,93,0.35)';
+    ctx.lineWidth = 1;
+    for (let d = -radiusPx; d <= radiusPx; d += 8) {
+      ctx.beginPath();
+      ctx.moveTo(x + d, y - radiusPx);
+      ctx.lineTo(x + d + 2 * radiusPx, y + radiusPx);
+      ctx.stroke();
+    }
+    ctx.restore();
+    ctx.strokeStyle = 'rgba(245,181,68,0.9)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(x, y, radiusPx, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  // center marker (triangle = restriction)
+  ctx.fillStyle = 'rgba(242,88,93,0.9)';
+  ctx.beginPath();
+  ctx.moveTo(x, y - 5);
+  ctx.lineTo(x + 4.5, y + 3);
+  ctx.lineTo(x - 4.5, y + 3);
+  ctx.closePath();
+  ctx.fill();
+  if (label) {
+    ctx.fillStyle = '#f5b544';
+    ctx.font = '700 10px "IBM Plex Mono", monospace';
+    ctx.fillText(String(label).toUpperCase(), x + 7, y + 3);
+  }
+  ctx.restore();
+}
+
+/** PIREP marker: severity-colored dot with a small "P" tag at the report point. */
+export function drawPirep(ctx, x, y, color = '#4cc9f0') {
+  ctx.save();
+  ctx.fillStyle = color;
+  ctx.strokeStyle = 'rgba(5,7,10,0.85)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(x, y, 4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = '#05070a';
+  ctx.font = '700 7px "IBM Plex Mono", monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('P', x, y + 0.5);
+  ctx.restore();
+}
+
+/**
+ * Severity color for a PIREP from its turbulence/icing intensity. Falls back to
+ * the info cyan for plain/unknown reports.
+ */
+export function pirepColor(p) {
+  const turb = String(p?.turbulence || '').toUpperCase();
+  const icing = String(p?.icing || '').toUpperCase();
+  const sev = `${turb} ${icing}`;
+  if (/SEV|EXTREME|XTRM/.test(sev)) return SEVERITY_COLORS.danger;
+  if (/MOD/.test(sev)) return SEVERITY_COLORS.warn;
+  if (turb || icing) return SEVERITY_COLORS.info;
+  return SEVERITY_COLORS.info;
+}
+
 export function drawAirport(ctx, x, y, ident) {
   ctx.save();
   ctx.strokeStyle = '#8b98a7';

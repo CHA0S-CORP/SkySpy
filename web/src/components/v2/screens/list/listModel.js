@@ -181,10 +181,28 @@ export function toRow(a) {
   }
   const emerg = EMERGENCY_SQUAWKS.includes(a.squawk) || a.emergency === true;
   const track = Math.round(a.track ?? 0);
+  // Registration / tail number (tar1090 `r`, normalizer aliases to `registration`).
+  // Delivered by the live stream but previously only searchable — surface it as a
+  // secondary line under the callsign when present and distinct from the callsign.
+  const tail = (a.r || a.registration || '').trim() || null;
+  const cs = (a.flight || '').trim() || '--';
+  // Operator / owner-operator (normalizer aliases owner_operator → ownOp).
+  // Delivered by the live stream when the feeder provides it; render as a
+  // secondary line under the callsign, distinct from the registration tail.
+  const operator = (a.ownOp || '').trim() || null;
+  // Full type name (normalizer aliases description → desc), e.g. "Airbus A321neo".
+  // Surface as the Type-column title/tooltip and a secondary line when present.
+  const typeFull = (a.desc || '').trim() || null;
+  // Build year (normalizer aliases to `year`; fall back to backend `year_built`).
+  const yearBuilt = a.year ?? a.year_built ?? null;
   return {
     hex: a.hex,
     icao: (a.hex || '').toUpperCase(),
-    cs: (a.flight || '').trim() || '--',
+    cs,
+    tail: tail && tail.toUpperCase() !== cs.toUpperCase() ? tail : null,
+    operator,
+    typeFull,
+    year: typeof yearBuilt === 'number' || typeof yearBuilt === 'string' ? String(yearBuilt) : null,
     type: a.t || '--',
     isMil: cat === 'military',
     accent: air ? cc : 'transparent',

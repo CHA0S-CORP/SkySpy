@@ -1,6 +1,6 @@
 {
   "base": "http://localhost:3000",
-  "ts": "2026-07-16T20:16:43.204Z",
+  "ts": "2026-07-17T19:29:39.182Z",
   "routes": {
     "map": {
       "name": "map",
@@ -61,7 +61,7 @@
         "pane": {
           "clips": true,
           "scrollable": true,
-          "scrollHeight": 2093,
+          "scrollHeight": 2268,
           "clientHeight": 940
         },
         "unscrollableClip": false,
@@ -183,6 +183,30 @@
           "scrollable": false,
           "scrollHeight": 1000,
           "clientHeight": 1000
+        },
+        "unscrollableClip": false,
+        "hScroll": false,
+        "overflowCount": 0,
+        "overflowSample": [],
+        "labelOverlaps": 0,
+        "errorBoundary": false
+      },
+      "problems": [],
+      "ok": true
+    },
+    "airframe?icao=C82B0B": {
+      "name": "airframe",
+      "screenshot": "e2e/screenshots/qa/airframe.png",
+      "diagnostics": {
+        "viewport": {
+          "vw": 1600,
+          "vh": 1000
+        },
+        "pane": {
+          "clips": true,
+          "scrollable": true,
+          "scrollHeight": 1472,
+          "clientHeight": 940
         },
         "unscrollableClip": false,
         "hScroll": false,

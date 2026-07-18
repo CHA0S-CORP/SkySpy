@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Icon } from '../../primitives';
-import { bearingTo,
+import {
+  bearingTo,
   THREAT_CONFIG,
   blipPosition,
   displaySpeed,
@@ -42,7 +43,7 @@ function localThreats(aircraft, origin) {
           : origin && typeof a.lat === 'number' && typeof a.lon === 'number'
             ? bearingTo(origin, { lat: a.lat, lon: a.lon })
             : undefined,
-      trend: a.vr < -200 ? 'closing' : a.vr > 200 ? 'departing' : 'holding',
+      trend: (a.vr ?? 0) < -200 ? 'closing' : (a.vr ?? 0) > 200 ? 'departing' : 'holding',
       threat_level: /police|sheriff|patrol/i.test(a.ownOp || a.op || '') ? 'critical' : 'medium',
       is_law_enforcement: /police|sheriff|patrol/i.test(a.ownOp || a.op || ''),
     }))
@@ -105,7 +106,8 @@ export function CannonballScreen({ aircraft, threats: backendThreats, feederLoca
 
   const origin = gpsPos || (feederLocation?.lat != null ? feederLocation : null);
   const threats = useMemo(
-    () => (backendThreats && backendThreats.length ? backendThreats : localThreats(aircraft, origin)),
+    () =>
+      backendThreats && backendThreats.length ? backendThreats : localThreats(aircraft, origin),
     [backendThreats, aircraft, origin]
   );
   const level = threatLevelOf(threats);
@@ -303,7 +305,21 @@ export function CannonballScreen({ aircraft, threats: backendThreats, feederLoca
             </div>
           </div>
           <div className="v2-cb__nearest">
-            <div className="v2-cb__nearest-label">NEAREST AIR UNIT</div>
+            <div className="v2-cb__nearest-top">
+              <div className="v2-cb__nearest-label">NEAREST AIR UNIT</div>
+              {nearest?.urgency != null && (
+                <div
+                  className="v2-cb__urgency"
+                  style={{ '--u': nearest.urgency }}
+                  title="Urgency score (0–100)"
+                  data-testid="v2-cannonball-urgency"
+                >
+                  <Icon name="zap" size={12} strokeWidth={2} />
+                  <span className="v2-cb__urgency-num">{nearest.urgency}</span>
+                  <span className="v2-cb__urgency-cap">URGENCY</span>
+                </div>
+              )}
+            </div>
             {nearest ? (
               <>
                 <div className="v2-cb__nearest-head">
@@ -320,6 +336,15 @@ export function CannonballScreen({ aircraft, threats: backendThreats, feederLoca
                     {nearest.tag}
                   </span>
                 </div>
+                {nearest.agency && (
+                  <div className="v2-cb__agency" data-testid="v2-cannonball-agency">
+                    <Icon name="shield" size={13} strokeWidth={1.9} style={{ color: conf.color }} />
+                    <span className="v2-cb__agency-name">{nearest.agency}</span>
+                    {nearest.agencyType && (
+                      <span className="v2-cb__agency-type">{nearest.agencyType}</span>
+                    )}
+                  </div>
+                )}
                 <div className="v2-cb__nearest-metrics">
                   <div>
                     <div className="v2-cb__nearest-mlabel">DISTANCE</div>
@@ -330,15 +355,47 @@ export function CannonballScreen({ aircraft, threats: backendThreats, feederLoca
                     <div className="v2-cb__nearest-mval">{nearest.alt}</div>
                   </div>
                   <div>
-                    <div className="v2-cb__nearest-mlabel">TREND</div>
-                    <div
-                      className="v2-cb__nearest-mval"
-                      style={{ color: nearest.closing ? 'var(--cb-alert)' : 'var(--cb-caution)' }}
-                    >
-                      {nearest.trend}
+                    <div className="v2-cb__nearest-mlabel">
+                      {nearest.closingKts != null ? 'CLOSING' : 'TREND'}
                     </div>
+                    {nearest.closingKts != null ? (
+                      <div
+                        className="v2-cb__nearest-mval"
+                        style={{ color: nearest.closing ? 'var(--cb-alert)' : 'var(--cb-caution)' }}
+                      >
+                        {nearest.closing ? '+' : '−'}
+                        {nearest.closingKts}
+                        <span className="v2-cb__nearest-munit">kt</span>
+                      </div>
+                    ) : (
+                      <div
+                        className="v2-cb__nearest-mval"
+                        style={{ color: nearest.closing ? 'var(--cb-alert)' : 'var(--cb-caution)' }}
+                      >
+                        {nearest.trend}
+                      </div>
+                    )}
                   </div>
                 </div>
+                {nearest.patterns.length > 0 && (
+                  <div className="v2-cb__patterns" data-testid="v2-cannonball-patterns">
+                    {nearest.patterns.map((p) => (
+                      <span key={p.type} className="v2-cb__pattern" title={`${p.label} pattern`}>
+                        <Icon name="crosshair" size={11} strokeWidth={2} />
+                        {p.label}
+                        {p.confidence != null && (
+                          <span className="v2-cb__pattern-conf">{p.confidence}%</span>
+                        )}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {nearest.idReason && (
+                  <div className="v2-cb__nearest-reason">
+                    <Icon name="info" size={12} strokeWidth={1.8} />
+                    <span>{nearest.idReason}</span>
+                  </div>
+                )}
               </>
             ) : (
               <div className="v2-cb__nearest-clear">— sky clear —</div>
