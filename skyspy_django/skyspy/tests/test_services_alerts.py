@@ -9,6 +9,7 @@ from datetime import timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
+from django.contrib.auth.models import User
 from django.db import DatabaseError, transaction
 from django.test import TestCase
 from django.utils import timezone
@@ -459,18 +460,19 @@ class AlertServiceComplexConditionTests(TestCase):
         self.assertTrue(result)
 
     def test_complex_conditions_empty_groups(self):
-        """Test that empty groups return True."""
+        """Empty groups must NOT match (default-deny), else a malformed rule
+        becomes a catch-all matching every aircraft."""
         aircraft = {"hex": "ABC123"}
         conditions = {"logic": "AND", "groups": []}
         result = self.service._evaluate_complex_conditions(aircraft, conditions)
-        self.assertTrue(result)
+        self.assertFalse(result)
 
     def test_complex_conditions_empty_conditions_in_group(self):
-        """Test that empty conditions in group return True."""
+        """An empty condition group must NOT match (default-deny)."""
         aircraft = {"hex": "ABC123"}
         conditions = {"logic": "AND", "groups": [{"logic": "AND", "conditions": []}]}
         result = self.service._evaluate_complex_conditions(aircraft, conditions)
-        self.assertTrue(result)
+        self.assertFalse(result)
 
     def test_complex_conditions_default_and_logic(self):
         """Test that missing logic defaults to AND."""
@@ -713,6 +715,74 @@ class AlertServiceTriggerTests(TestCase):
 
             # Two history records
             self.assertEqual(AlertHistory.objects.count(), 2)
+
+
+class AlertServiceSuppressionAndAttributionTests(TestCase):
+    """Suppression windows and alert-history owner attribution."""
+
+    def setUp(self):
+        cooldown_manager.clear_all()
+        self.service = AlertService()
+        self.service._legacy_cooldowns = {}
+
+    def tearDown(self):
+        cooldown_manager.clear_all()
+        AlertHistory.objects.all().delete()
+        AlertRule.objects.all().delete()
+        User.objects.all().delete()
+
+    @patch("skyspy.services.alerts.sync_emit")
+    def test_active_suppression_window_blocks_trigger(self, mock_sync_emit):
+        mock_sync_emit.return_value = True
+        db_rule = AlertRule.objects.create(
+            name="Suppressed",
+            rule_type="icao",
+            operator="eq",
+            value="ABC123",
+            # No day => every day; 00:00-23:59 => always within window.
+            suppression_windows=[{"start": "00:00", "end": "23:59"}],
+        )
+        rule = CompiledRule.from_db_rule(db_rule)
+
+        result = self.service._trigger_alert(rule, {"hex": "ABC123", "flight": "X"})
+
+        assert result is None
+        assert AlertHistory.objects.count() == 0
+
+    @patch("skyspy.services.alerts.sync_emit")
+    def test_no_suppression_window_allows_trigger(self, mock_sync_emit):
+        mock_sync_emit.return_value = True
+        db_rule = AlertRule.objects.create(
+            name="Not Suppressed",
+            rule_type="icao",
+            operator="eq",
+            value="ABC123",
+            suppression_windows=[],
+        )
+        rule = CompiledRule.from_db_rule(db_rule)
+
+        result = self.service._trigger_alert(rule, {"hex": "ABC123", "flight": "X"})
+
+        assert result is not None
+        assert AlertHistory.objects.count() == 1
+
+    @patch("skyspy.services.alerts.sync_emit")
+    def test_history_attributed_to_rule_owner(self, mock_sync_emit):
+        mock_sync_emit.return_value = True
+        owner = User.objects.create(username="rule-owner")
+        db_rule = AlertRule.objects.create(
+            name="Owned",
+            rule_type="icao",
+            operator="eq",
+            value="ABC123",
+            owner=owner,
+        )
+        rule = CompiledRule.from_db_rule(db_rule)
+
+        self.service._trigger_alert(rule, {"hex": "ABC123", "flight": "X"})
+
+        history = AlertHistory.objects.get()
+        assert history.user_id == owner.id
 
 
 class AlertServiceCheckAlertsTests(TestCase):
@@ -1219,9 +1289,14 @@ class TestPerChannelNotificationStatus:
 
         urls = [c.kwargs["channel_url"] for c in mock_task.delay.call_args_list]
         assert urls == ["json://good.example.com", "json://bad.example.com"]
+        # Body is rendered from the default "alert" NotificationTemplate (seeded
+        # in migration 0004) and must be identical across every channel.
+        bodies = {c.kwargs["body"] for c in mock_task.delay.call_args_list}
+        assert len(bodies) == 1
+        rendered_body = bodies.pop()
+        assert "Test Alert" in rendered_body  # {rule_name} substituted
         for c in mock_task.delay.call_args_list:
             assert c.kwargs["event_type"] == "alert"
-            assert c.kwargs["body"] == "msg"
 
 
 @pytest.mark.django_db

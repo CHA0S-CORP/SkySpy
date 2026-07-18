@@ -14,6 +14,48 @@ from django.dispatch import receiver
 logger = logging.getLogger(__name__)
 
 
+def evaluate_suppression_windows(windows) -> bool:
+    """Return True if the local wall-clock time falls in any suppression window.
+
+    Windows are ``[{"day": "saturday", "start": "22:00", "end": "08:00"}, ...]``.
+    ``day`` is optional (empty = every day); ``start > end`` denotes an overnight
+    window. Shared by AlertRule.is_in_suppression_window() and the alert service
+    (via CompiledRule) so both evaluate windows identically.
+    """
+    if not windows:
+        return False
+
+    try:
+        import calendar
+        from datetime import datetime
+
+        now = datetime.now()
+        current_day = calendar.day_name[now.weekday()].lower()
+        current_time = now.strftime("%H:%M")
+
+        for window in windows:
+            day = window.get("day", "").lower()
+            start = window.get("start", "")
+            end = window.get("end", "")
+
+            if day and day != current_day:
+                continue
+
+            if start and end:
+                if start <= end:
+                    # Normal window (e.g., 09:00 - 17:00)
+                    if start <= current_time <= end:
+                        return True
+                else:
+                    # Overnight window (e.g., 22:00 - 08:00)
+                    if current_time >= start or current_time <= end:
+                        return True
+
+        return False
+    except (ValueError, KeyError, TypeError, AttributeError):
+        return False
+
+
 class AlertRule(models.Model):
     """User-defined alert rules with complex conditions and scheduling."""
 
@@ -121,38 +163,7 @@ class AlertRule(models.Model):
 
     def is_in_suppression_window(self) -> bool:
         """Check if current time is within a suppression window."""
-        if not self.suppression_windows:
-            return False
-
-        try:
-            import calendar
-            from datetime import datetime
-
-            now = datetime.now()
-            current_day = calendar.day_name[now.weekday()].lower()
-            current_time = now.strftime("%H:%M")
-
-            for window in self.suppression_windows:
-                day = window.get("day", "").lower()
-                start = window.get("start", "")
-                end = window.get("end", "")
-
-                if day and day != current_day:
-                    continue
-
-                if start and end:
-                    if start <= end:
-                        # Normal window (e.g., 09:00 - 17:00)
-                        if start <= current_time <= end:
-                            return True
-                    else:
-                        # Overnight window (e.g., 22:00 - 08:00)
-                        if current_time >= start or current_time <= end:
-                            return True
-
-            return False
-        except (ValueError, KeyError, TypeError, AttributeError):
-            return False
+        return evaluate_suppression_windows(self.suppression_windows)
 
     def can_be_edited_by(self, user) -> bool:
         """Check if a user can edit this rule."""

@@ -67,6 +67,10 @@ class CompiledRule:
     starts_at: datetime | None
     expires_at: datetime | None
 
+    # Suppression windows (list of {"day","start","end"} dicts). Carried through
+    # the cache so the alert service can evaluate them without a DB fetch.
+    suppression_windows: list | None = None
+
     # Pre-computed optimization hints
     requires_military: bool = False
     requires_position: bool = False
@@ -199,6 +203,7 @@ class CompiledRule:
             is_system=is_system,
             starts_at=rule.starts_at,
             expires_at=rule.expires_at,
+            suppression_windows=getattr(rule, "suppression_windows", None),
             requires_military=flags["military"],
             requires_position=flags["position"],
             requires_altitude=flags["altitude"],
@@ -407,6 +412,7 @@ class AlertRuleCache:
             "is_system": rule.is_system,
             "starts_at": rule.starts_at.isoformat() if rule.starts_at else None,
             "expires_at": rule.expires_at.isoformat() if rule.expires_at else None,
+            "suppression_windows": rule.suppression_windows,
             "requires_military": rule.requires_military,
             "requires_position": rule.requires_position,
             "requires_altitude": rule.requires_altitude,
@@ -461,6 +467,7 @@ class AlertRuleCache:
             is_system=data.get("is_system", False),
             starts_at=starts_at,
             expires_at=expires_at,
+            suppression_windows=data.get("suppression_windows"),
             requires_military=data.get("requires_military", False),
             requires_position=data.get("requires_position", False),
             requires_altitude=data.get("requires_altitude", False),

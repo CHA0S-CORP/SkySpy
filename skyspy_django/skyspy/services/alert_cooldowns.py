@@ -9,9 +9,10 @@ import logging
 import threading
 import time
 from collections import OrderedDict
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from django.conf import settings
+from django.utils import timezone
 
 try:
     from redis.exceptions import RedisError
@@ -124,7 +125,7 @@ class LRUCooldownCache:
             return
 
         self._last_cleanup = now
-        cutoff = datetime.utcnow() - timedelta(minutes=30)  # Keep for 30 min max
+        cutoff = timezone.now() - timedelta(minutes=30)  # Keep for 30 min max
 
         # Remove expired entries (iterate over copy of keys)
         keys_to_remove = [k for k, v in self._cache.items() if v < cutoff]
@@ -191,7 +192,7 @@ class DistributedCooldownManager:
             - last_trigger_time: When the cooldown was last set (None if first trigger)
         """
         key = self._get_key(rule_id, icao_hex)
-        now = datetime.utcnow()
+        now = timezone.now()
         now_ts = now.timestamp()
 
         if self.redis:
@@ -211,7 +212,7 @@ class DistributedCooldownManager:
                 else:
                     # Key exists - still in cooldown
                     if last_ts is not None:
-                        last_time = datetime.fromtimestamp(float(last_ts))
+                        last_time = datetime.fromtimestamp(float(last_ts), tz=UTC)
                         return False, last_time
                     return False, None
 
@@ -224,7 +225,7 @@ class DistributedCooldownManager:
     def _check_fallback(self, rule_id: int, icao_hex: str, cooldown_seconds: int) -> tuple[bool, datetime | None]:
         """In-memory fallback when Redis is unavailable. Uses thread-safe LRU cache."""
         key = (rule_id, icao_hex.upper())
-        now = datetime.utcnow()
+        now = timezone.now()
 
         last_trigger = self._fallback_cooldowns.get(key)
 

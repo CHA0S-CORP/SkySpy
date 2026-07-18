@@ -193,7 +193,7 @@ class SafetyMonitorUnitTests(TestCase):
             {
                 "hex": "XYZ789",
                 "flight": "SWA123",
-                "baro_rate": 7000,  # Above 6000 fpm threshold
+                "baro_rate": 11000,  # warning tier (>= 10500 fpm)
             }
         ]
 
@@ -205,7 +205,7 @@ class SafetyMonitorUnitTests(TestCase):
         event = vs_events[0]
         self.assertEqual(event["severity"], "warning")
         self.assertIn("climbing", event["message"])
-        self.assertIn("7000", event["message"])
+        self.assertIn("11000", event["message"])
 
     @patch("skyspy.socketio.utils.sync_emit")
     def test_extreme_vs_descending(self, mock_sync_emit):
@@ -349,6 +349,506 @@ class SafetyMonitorUnitTests(TestCase):
 
         tcas_events = [e for e in events if e["event_type"] == "tcas_ra"]
         self.assertEqual(len(tcas_events), 0)
+
+    # =========================================================================
+    # Type-Aware Sensitivity Tests
+    # =========================================================================
+
+    @patch("skyspy.socketio.utils.sync_emit")
+    def test_extreme_vs_high_perf_below_floor_no_alert(self, mock_sync_emit):
+        """A fighter (category A6) at 7000 fpm must NOT alert — high-perf floor is 15000."""
+        mock_sync_emit.return_value = True
+
+        aircraft = {"hex": "MIL01", "flight": "VIPER1", "baro_rate": 7000, "category": "A6"}
+        events = self.monitor.update_aircraft([aircraft])
+
+        vs_events = [e for e in events if e["event_type"] == "extreme_vs"]
+        self.assertEqual(len(vs_events), 0)
+
+    @patch("skyspy.socketio.utils.sync_emit")
+    def test_extreme_vs_high_perf_above_floor_alerts(self, mock_sync_emit):
+        """A fighter beyond the high-perf floor (>= 15000 fpm) still alerts."""
+        mock_sync_emit.return_value = True
+
+        aircraft = {"hex": "MIL02", "flight": "VIPER2", "baro_rate": 16000, "category": "A6"}
+        events = self.monitor.update_aircraft([aircraft])
+
+        vs_events = [e for e in events if e["event_type"] == "extreme_vs"]
+        self.assertEqual(len(vs_events), 1)
+        self.assertEqual(vs_events[0]["details"]["ac_class"], "fighter")
+
+    @patch("skyspy.socketio.utils.sync_emit")
+    def test_vs_reversal_high_perf_suppressed(self, mock_sync_emit):
+        """A high-magnitude VS reversal on a fighter is aerobatics, not a TCAS RA."""
+        mock_sync_emit.return_value = True
+        import time
+
+        aircraft = {"hex": "MIL03", "flight": "VIPER3", "baro_rate": 2500, "alt": 20000, "category": "A6"}
+        self.monitor.update_aircraft([aircraft])
+        now = time.time()
+        self.monitor._aircraft_state["MIL03"]["vs_history"] = [(now - 6, 2500), (now - 5, 2400)]
+
+        events = self.monitor.update_aircraft([{**aircraft, "baro_rate": -2000}])
+
+        rev = [e for e in events if e["event_type"] in ("vs_reversal", "tcas_ra")]
+        self.assertEqual(len(rev), 0)
+
+    @patch("skyspy.socketio.utils.sync_emit")
+    def test_vs_reversal_light_ga_suppressed(self, mock_sync_emit):
+        """A light GA aircraft (category A1) reversing VS is airwork, not TCAS."""
+        mock_sync_emit.return_value = True
+        import time
+
+        aircraft = {"hex": "GA01", "flight": "N12345", "baro_rate": 2500, "alt": 8000, "category": "A1"}
+        self.monitor.update_aircraft([aircraft])
+        now = time.time()
+        self.monitor._aircraft_state["GA01"]["vs_history"] = [(now - 6, 2500), (now - 5, 2400)]
+
+        events = self.monitor.update_aircraft([{**aircraft, "baro_rate": -2000}])
+
+        rev = [e for e in events if e["event_type"] in ("vs_reversal", "tcas_ra")]
+        self.assertEqual(len(rev), 0)
+
+    @patch("skyspy.services.safety.calculate_distance_nm")
+    @patch("skyspy.socketio.utils.sync_emit")
+    def test_proximity_military_formation_suppressed(self, mock_sync_emit, mock_distance):
+        """Two fighters in close (non-critical) formation must not raise a conflict."""
+        mock_sync_emit.return_value = True
+        mock_distance.return_value = 0.3
+
+        aircraft_list = [
+            {"hex": "FORM1", "flight": "VIPER1", "lat": 47.0, "lon": -122.0, "alt": 20000, "category": "A6"},
+            {"hex": "FORM2", "flight": "VIPER2", "lat": 47.001, "lon": -122.001, "alt": 20200, "category": "A6"},
+        ]
+        events = self.monitor.update_aircraft(aircraft_list)
+
+        prox = [e for e in events if e["event_type"] == "proximity_conflict"]
+        self.assertEqual(len(prox), 0)
+
+    @patch("skyspy.services.safety.calculate_distance_nm")
+    @patch("skyspy.socketio.utils.sync_emit")
+    def test_proximity_military_formation_critical_still_alerts(self, mock_sync_emit, mock_distance):
+        """A genuine loss of separation (<0.25nm/<300ft) between fighters still alerts."""
+        mock_sync_emit.return_value = True
+        mock_distance.return_value = 0.2
+
+        aircraft_list = [
+            {"hex": "FORM3", "flight": "VIPER3", "lat": 47.0, "lon": -122.0, "alt": 20000, "category": "A6"},
+            {"hex": "FORM4", "flight": "VIPER4", "lat": 47.0001, "lon": -122.0001, "alt": 20100, "category": "A6"},
+        ]
+        events = self.monitor.update_aircraft(aircraft_list)
+
+        prox = [e for e in events if e["event_type"] == "proximity_conflict"]
+        self.assertEqual(len(prox), 1)
+        self.assertEqual(prox[0]["severity"], "critical")
+
+    def test_classify_aircraft_by_category(self):
+        """ADS-B emitter category maps to the expected safety class."""
+        cases = {
+            "A6": "fighter",
+            "A7": "rotorcraft",
+            "A5": "airliner",
+            "A3": "airliner",
+            "A2": "light_ga",
+            "A1": "light_ga",
+            "B1": "glider",
+            "B6": "uav",
+            "": "unknown",
+        }
+        for category, expected in cases.items():
+            self.assertEqual(
+                self.monitor._classify_aircraft({"hex": "ABC123", "category": category}),
+                expected,
+                msg=f"category {category!r}",
+            )
+
+    def test_classify_aircraft_by_military_role(self):
+        """Military type codes resolve to a role-appropriate safety class."""
+        cases = {
+            "F16": "fighter",
+            "F35": "fighter",
+            "C17": "military_transport",
+            "KC46": "military_transport",
+            "UH60": "rotorcraft",
+            "MQ9": "uav",
+        }
+        for type_code, expected in cases.items():
+            self.assertEqual(
+                self.monitor._classify_aircraft({"hex": "AE1234", "t": type_code}),
+                expected,
+                msg=f"type {type_code!r}",
+            )
+
+    def test_classify_category_overrides_over_unknown(self):
+        """A benign category with no military signal falls through to its class, not fighter."""
+        self.assertEqual(self.monitor._classify_aircraft({"hex": "A12345", "category": "A3"}), "airliner")
+        self.assertEqual(self.monitor._classify_aircraft({"hex": "A12345"}), "unknown")
+
+    @patch("skyspy.socketio.utils.sync_emit")
+    def test_glider_vs_reversal_suppressed(self, mock_sync_emit):
+        """A thermalling glider (category B1) reversing VS must not alert."""
+        mock_sync_emit.return_value = True
+        import time
+
+        aircraft = {"hex": "GLDR1", "flight": "GLIDER", "baro_rate": 2500, "alt": 8000, "category": "B1"}
+        self.monitor.update_aircraft([aircraft])
+        now = time.time()
+        self.monitor._aircraft_state["GLDR1"]["vs_history"] = [(now - 6, 2500), (now - 5, 2400)]
+
+        events = self.monitor.update_aircraft([{**aircraft, "baro_rate": -2000}])
+        rev = [e for e in events if e["event_type"] in ("vs_reversal", "tcas_ra")]
+        self.assertEqual(len(rev), 0)
+
+    @patch("skyspy.socketio.utils.sync_emit")
+    def test_military_transport_keeps_tcas_sensitivity(self, mock_sync_emit):
+        """A tanker/airlifter (military_transport) flies airliner-like — TCAS RA still fires."""
+        mock_sync_emit.return_value = True
+        import time
+
+        aircraft = {"hex": "AE1234", "flight": "RCH1", "t": "C17", "baro_rate": 2500, "alt": 25000}
+        self.monitor.update_aircraft([aircraft])
+        now = time.time()
+        self.monitor._aircraft_state["AE1234"]["vs_history"] = [(now - 6, 2500), (now - 5, 2400)]
+
+        events = self.monitor.update_aircraft([{**aircraft, "baro_rate": -2000}])
+        tcas = [e for e in events if e["event_type"] == "tcas_ra"]
+        self.assertEqual(len(tcas), 1)
+
+    def test_type_profiles_exposed(self):
+        """get_type_profiles exposes every registered profile with effective thresholds."""
+        profiles = self.monitor.get_type_profiles()
+        self.assertIn("fighter", profiles)
+        self.assertIn("unknown", profiles)
+        # Fighter floor is held above the configured global extreme threshold
+        self.assertGreaterEqual(profiles["fighter"]["extreme_vs_floor"], 15000)
+        self.assertFalse(profiles["fighter"]["vs_reversal"])
+        self.assertTrue(profiles["fighter"]["formation_suppression"])
+        # Airliner keeps full sensitivity
+        self.assertTrue(profiles["airliner"]["tcas_ra"])
+        self.assertFalse(profiles["airliner"]["formation_suppression"])
+
+    @patch("skyspy.socketio.utils.sync_emit")
+    def test_vs_reversal_no_nearby_traffic_suppressed(self, mock_sync_emit):
+        """A regular VS reversal with no conflicting traffic nearby is just maneuvering."""
+        mock_sync_emit.return_value = True
+        import time
+
+        # Transport class, regular (non-TCAS) reversal: +3000 -> -1200 (one leg
+        # below the TCAS threshold), abs_change 4200 -> warning geometry.
+        aircraft = {
+            "hex": "REV01",
+            "flight": "UAL100",
+            "baro_rate": 3000,
+            "alt": 15000,
+            "lat": 47.0,
+            "lon": -122.0,
+            "category": "A3",
+        }
+        self.monitor.update_aircraft([aircraft])
+        now = time.time()
+        self.monitor._aircraft_state["REV01"]["vs_history"] = [(now - 6, 3000), (now - 5, 3000)]
+
+        events = self.monitor.update_aircraft([{**aircraft, "baro_rate": -1200}])
+
+        rev = [e for e in events if e["event_type"] == "vs_reversal"]
+        self.assertEqual(len(rev), 0)
+
+    @patch("skyspy.socketio.utils.sync_emit")
+    def test_vs_reversal_with_nearby_traffic_alerts(self, mock_sync_emit):
+        """The same reversal WITH conflicting traffic nearby does alert."""
+        mock_sync_emit.return_value = True
+        import time
+
+        reverser = {
+            "hex": "REV01",
+            "flight": "UAL100",
+            "baro_rate": 3000,
+            "alt": 15000,
+            "lat": 47.0,
+            "lon": -122.0,
+            "category": "A3",
+        }
+        # ~0.6nm away, co-altitude -> within the vs_reversal traffic window
+        neighbor = {"hex": "REV02", "flight": "UAL200", "alt": 15000, "lat": 47.01, "lon": -122.0, "category": "A3"}
+        self.monitor.update_aircraft([reverser, neighbor])
+        now = time.time()
+        self.monitor._aircraft_state["REV01"]["vs_history"] = [(now - 6, 3000), (now - 5, 3000)]
+
+        events = self.monitor.update_aircraft([{**reverser, "baro_rate": -1200}, neighbor])
+
+        rev = [e for e in events if e["event_type"] == "vs_reversal"]
+        self.assertEqual(len(rev), 1)
+        self.assertEqual(rev[0]["severity"], "warning")
+
+    @patch("skyspy.services.safety.calculate_distance_nm")
+    @patch("skyspy.socketio.utils.sync_emit")
+    def test_proximity_excludes_non_icao_ghost(self, mock_sync_emit, mock_distance):
+        """A non-ICAO (~) TIS-B/ADS-R shadow of a real aircraft must not raise a conflict."""
+        mock_sync_emit.return_value = True
+        mock_distance.return_value = 0.03
+
+        aircraft_list = [
+            {"hex": "A6EE69", "flight": "N546CA", "lat": 47.0, "lon": -122.0, "alt": 850, "gs": 78, "category": "A1"},
+            # non-ICAO shadow ~140ft away, same class of position
+            {"hex": "~29993C", "flight": "", "lat": 47.0003, "lon": -122.0, "alt": 800, "gs": 72},
+        ]
+        events = self.monitor.update_aircraft(aircraft_list)
+
+        prox = [e for e in events if e["event_type"] == "proximity_conflict"]
+        self.assertEqual(len(prox), 0)
+
+    @patch("skyspy.services.safety.calculate_distance_nm")
+    @patch("skyspy.socketio.utils.sync_emit")
+    def test_proximity_excludes_near_stationary(self, mock_sync_emit, mock_distance):
+        """A near-stationary target (gs<40) is parked/clutter, not conflicting traffic."""
+        mock_sync_emit.return_value = True
+        mock_distance.return_value = 0.2
+
+        aircraft_list = [
+            {"hex": "VOI183X", "flight": "VOI183", "lat": 47.0, "lon": -122.0, "alt": 600, "gs": 171, "category": "A3"},
+            # gs 11 = ground vehicle / parked with a spurious 500ft altitude
+            {"hex": "XBHCG1", "flight": "XBHCG", "lat": 47.003, "lon": -122.0, "alt": 500, "gs": 11, "category": "A0"},
+        ]
+        events = self.monitor.update_aircraft(aircraft_list)
+
+        prox = [e for e in events if e["event_type"] == "proximity_conflict"]
+        self.assertEqual(len(prox), 0)
+
+    @patch("skyspy.services.safety.calculate_distance_nm")
+    @patch("skyspy.socketio.utils.sync_emit")
+    def test_proximity_moving_rotorcraft_still_counts(self, mock_sync_emit, mock_distance):
+        """A moving helicopter (gs above the hover floor) stays in — it flies slowly
+        but is real conflicting traffic. Paired with a light GA so formation
+        suppression doesn't mask whether the heli was included.
+        """
+        mock_sync_emit.return_value = True
+        mock_distance.return_value = 0.15
+
+        aircraft_list = [
+            {"hex": "HELO01", "flight": "LIFE1", "lat": 47.0, "lon": -122.0, "alt": 800, "gs": 25, "category": "A7"},
+            {"hex": "GABUG1", "flight": "N999", "lat": 47.0025, "lon": -122.0, "alt": 850, "gs": 80, "category": "A1"},
+        ]
+        events = self.monitor.update_aircraft(aircraft_list)
+
+        prox = [e for e in events if e["event_type"] == "proximity_conflict"]
+        self.assertEqual(len(prox), 1)
+
+    @patch("skyspy.services.safety.calculate_distance_nm")
+    @patch("skyspy.socketio.utils.sync_emit")
+    def test_proximity_excludes_hovering_rotorcraft(self, mock_sync_emit, mock_distance):
+        """A genuinely hovering helicopter (gs<5, on-station) is a fixed point, not
+        conflicting traffic — it must not raise a fresh conflict with every passer.
+        """
+        mock_sync_emit.return_value = True
+        mock_distance.return_value = 0.2
+
+        aircraft_list = [
+            # ENG/medevac heli hovering on-station at a helipad altitude
+            {"hex": "HOVER1", "flight": "N71HD", "lat": 47.0, "lon": -122.0, "alt": 800, "gs": 1, "category": "A7"},
+            {"hex": "PLANE1", "flight": "N999", "lat": 47.003, "lon": -122.0, "alt": 850, "gs": 120, "category": "A1"},
+        ]
+        events = self.monitor.update_aircraft(aircraft_list)
+
+        prox = [e for e in events if e["event_type"] == "proximity_conflict"]
+        self.assertEqual(len(prox), 0)
+
+    @patch("skyspy.services.safety.calculate_distance_nm")
+    @patch("skyspy.socketio.utils.sync_emit")
+    def test_proximity_light_ga_pair_tightened(self, mock_sync_emit, mock_distance):
+        """Two light GA at 0.4nm is routine VFR see-and-avoid — suppressed by type scale."""
+        mock_sync_emit.return_value = True
+        mock_distance.return_value = 0.4
+
+        aircraft_list = [
+            {"hex": "GA10", "flight": "N111", "lat": 47.0, "lon": -122.0, "alt": 3000, "category": "A1"},
+            {"hex": "GA11", "flight": "N222", "lat": 47.001, "lon": -122.001, "alt": 3100, "category": "A1"},
+        ]
+        events = self.monitor.update_aircraft(aircraft_list)
+
+        prox = [e for e in events if e["event_type"] == "proximity_conflict"]
+        self.assertEqual(len(prox), 0)
+
+    @patch("skyspy.services.safety.calculate_distance_nm")
+    @patch("skyspy.socketio.utils.sync_emit")
+    def test_proximity_airliner_pair_full_range(self, mock_sync_emit, mock_distance):
+        """The same 0.4nm geometry between airliners still alerts (full range)."""
+        mock_sync_emit.return_value = True
+        mock_distance.return_value = 0.4
+
+        aircraft_list = [
+            {"hex": "JET10", "flight": "UAL1", "lat": 47.0, "lon": -122.0, "alt": 30000, "category": "A5"},
+            {"hex": "JET11", "flight": "DAL2", "lat": 47.001, "lon": -122.001, "alt": 30100, "category": "A5"},
+        ]
+        events = self.monitor.update_aircraft(aircraft_list)
+
+        prox = [e for e in events if e["event_type"] == "proximity_conflict"]
+        self.assertEqual(len(prox), 1)
+
+    @patch("skyspy.services.safety.calculate_distance_nm")
+    @patch("skyspy.socketio.utils.sync_emit")
+    def test_proximity_mixed_pair_uses_more_sensitive(self, mock_sync_emit, mock_distance):
+        """A light-GA-vs-airliner pair keeps airliner range (max of the two scales)."""
+        mock_sync_emit.return_value = True
+        mock_distance.return_value = 0.4
+
+        aircraft_list = [
+            {"hex": "GA12", "flight": "N333", "lat": 47.0, "lon": -122.0, "alt": 9500, "category": "A1"},
+            {"hex": "JET12", "flight": "SWA3", "lat": 47.001, "lon": -122.001, "alt": 9600, "category": "A3"},
+        ]
+        events = self.monitor.update_aircraft(aircraft_list)
+
+        prox = [e for e in events if e["event_type"] == "proximity_conflict"]
+        self.assertEqual(len(prox), 1)
+
+    @patch("skyspy.socketio.utils.sync_emit")
+    def test_proximity_critical_tier_but_diverging_suppressed(self, mock_sync_emit):
+        """Co-altitude pair at 0.24nm (critical-tier geometry) but SEPARATING must not alert.
+
+        Beyond the always-alert floor, critical-tier geometry alone is not enough —
+        the pair must be converging. 0.24nm/0ft separating at ~18kt is 1400ft apart
+        and growing, not a conflict.
+        """
+        mock_sync_emit.return_value = True
+
+        # ~0.24nm apart, co-altitude, flying apart (unknown class -> scale 1.0)
+        aircraft_list = [
+            {"hex": "DIV10", "flight": "AAA", "lat": 47.0, "lon": -122.003, "alt": 25000, "gs": 200, "track": 270},
+            {"hex": "DIV11", "flight": "BBB", "lat": 47.0, "lon": -121.997, "alt": 25000, "gs": 200, "track": 90},
+        ]
+        events = self.monitor.update_aircraft(aircraft_list)
+
+        prox = [e for e in events if e["event_type"] == "proximity_conflict"]
+        self.assertEqual(len(prox), 0)
+
+    @patch("skyspy.socketio.utils.sync_emit")
+    def test_proximity_diverging_within_old_floor_suppressed(self, mock_sync_emit):
+        """Regression: separating traffic just inside the old 0.5nm floor must NOT alert.
+
+        The always-alert floor used to equal proximity_nm, making the divergence
+        gate unreachable — two aircraft separating at ~150kt kept firing.
+        """
+        mock_sync_emit.return_value = True
+
+        # ~0.3nm apart, co-altitude, flying directly away from each other
+        aircraft_list = [
+            {"hex": "SEP01", "flight": "EAST", "lat": 47.0, "lon": -122.004, "alt": 30000, "gs": 450, "track": 270},
+            {"hex": "SEP02", "flight": "WEST", "lat": 47.0, "lon": -121.996, "alt": 30000, "gs": 450, "track": 90},
+        ]
+        events = self.monitor.update_aircraft(aircraft_list)
+
+        prox = [e for e in events if e["event_type"] == "proximity_conflict"]
+        self.assertEqual(len(prox), 0)
+
+    @patch("skyspy.socketio.utils.sync_emit")
+    def test_predictive_vertical_convergence_alerts(self, mock_sync_emit):
+        """900ft apart now but climbing/descending into co-altitude at the CPA -> conflict.
+
+        Static altitude gating (current 800ft > 500ft gate) would miss this; the
+        vertical-speed projection catches it.
+        """
+        mock_sync_emit.return_value = True
+
+        aircraft_list = [
+            # head-on, ~0.8nm apart, one climbing, one descending toward each other
+            {
+                "hex": "VC01",
+                "flight": "CLB",
+                "lat": 47.0,
+                "lon": -122.01,
+                "alt": 10000,
+                "gs": 300,
+                "track": 90,
+                "vr": 3000,
+            },
+            {
+                "hex": "VC02",
+                "flight": "DES",
+                "lat": 47.0,
+                "lon": -121.99,
+                "alt": 10800,
+                "gs": 300,
+                "track": 270,
+                "vr": -3000,
+            },
+        ]
+        events = self.monitor.update_aircraft(aircraft_list)
+
+        prox = [e for e in events if e["event_type"] == "proximity_conflict"]
+        self.assertEqual(len(prox), 1)
+        pred = prox[0]["details"]["predicted"]
+        self.assertTrue(pred["converging"])
+        self.assertLess(pred["cpa_vertical_ft"], 500)
+
+    @patch("skyspy.socketio.utils.sync_emit")
+    def test_predictive_vertical_resolution_no_alert(self, mock_sync_emit):
+        """Co-altitude now but climbing/descending APART -> vertically resolved by the CPA.
+
+        The horizontal paths cross, but by the time they are horizontally closest
+        they are >500ft apart vertically, so it is not a conflict.
+        """
+        mock_sync_emit.return_value = True
+
+        aircraft_list = [
+            {
+                "hex": "VR01",
+                "flight": "UP",
+                "lat": 47.0,
+                "lon": -122.01,
+                "alt": 10000,
+                "gs": 300,
+                "track": 90,
+                "vr": 4000,
+            },
+            {
+                "hex": "VR02",
+                "flight": "DN",
+                "lat": 47.0,
+                "lon": -121.99,
+                "alt": 10000,
+                "gs": 300,
+                "track": 270,
+                "vr": -4000,
+            },
+        ]
+        events = self.monitor.update_aircraft(aircraft_list)
+
+        prox = [e for e in events if e["event_type"] == "proximity_conflict"]
+        self.assertEqual(len(prox), 0)
+
+    @patch("skyspy.socketio.utils.sync_emit")
+    def test_predictive_horizontal_early_warning(self, mock_sync_emit):
+        """A pair ~1nm apart (beyond proximity_nm) closing head-on is flagged early."""
+        mock_sync_emit.return_value = True
+
+        aircraft_list = [
+            {"hex": "EW01", "flight": "EAST", "lat": 47.0, "lon": -122.012, "alt": 10000, "gs": 400, "track": 90},
+            {"hex": "EW02", "flight": "WEST", "lat": 47.0, "lon": -121.988, "alt": 10000, "gs": 400, "track": 270},
+        ]
+        events = self.monitor.update_aircraft(aircraft_list)
+
+        prox = [e for e in events if e["event_type"] == "proximity_conflict"]
+        self.assertEqual(len(prox), 1)
+        pred = prox[0]["details"]["predicted"]
+        self.assertTrue(pred["converging"])
+        self.assertLess(pred["cpa_horizontal_nm"], self.monitor.proximity_nm)
+        self.assertGreater(prox[0]["details"]["distance_nm"], self.monitor.proximity_nm)
+
+    @patch("skyspy.socketio.utils.sync_emit")
+    def test_proximity_slow_convergence_far_cpa_no_alert(self, mock_sync_emit):
+        """A pair within range but whose CPA is >60s away (slow chase) is not a conflict."""
+        mock_sync_emit.return_value = True
+        self.monitor.proximity_nm = 1.0
+
+        # ~0.8nm apart, both eastbound; trailing aircraft only 20kt faster, so the
+        # closest point of approach is ~2.5 minutes out — not an imminent conflict.
+        aircraft_list = [
+            {"hex": "SLOW1", "flight": "UAL1", "lat": 47.0, "lon": -122.0, "alt": 30000, "gs": 400, "track": 90},
+            {"hex": "SLOW2", "flight": "UAL2", "lat": 47.0, "lon": -121.98, "alt": 30000, "gs": 380, "track": 90},
+        ]
+        events = self.monitor.update_aircraft(aircraft_list)
+
+        prox = [e for e in events if e["event_type"] == "proximity_conflict"]
+        self.assertEqual(len(prox), 0)
 
     # =========================================================================
     # Proximity Conflict Tests
@@ -692,16 +1192,17 @@ class SafetyMonitorUnitTests(TestCase):
         """A conflict that worsens to critical within the cooldown must re-alert."""
         mock_sync_emit.return_value = True
 
-        # Initial detection: ~0.4nm apart, 400ft apart -> low/warning severity
+        # Initial detection: ~0.4nm apart, 300ft apart -> warning severity
+        # (a "low"-severity conflict is suppressed as noise, so start at warning)
         events_1 = self.monitor.update_aircraft(
             [
                 {"hex": "ESC01", "flight": "ESC1", "lat": 47.0, "lon": -122.0, "alt": 10000},
-                {"hex": "ESC02", "flight": "ESC2", "lat": 47.0, "lon": -121.99, "alt": 10400},
+                {"hex": "ESC02", "flight": "ESC2", "lat": 47.0, "lon": -121.99, "alt": 10300},
             ]
         )
         prox_1 = [e for e in events_1 if e["event_type"] == "proximity_conflict"]
         self.assertEqual(len(prox_1), 1)
-        self.assertNotEqual(prox_1[0]["severity"], "critical")
+        self.assertEqual(prox_1[0]["severity"], "warning")
 
         # Seconds later (well inside the 60s cooldown) they converge to
         # critical geometry: <0.25nm, <300ft
@@ -718,6 +1219,43 @@ class SafetyMonitorUnitTests(TestCase):
     # =========================================================================
     # Cooldown and Deduplication Tests
     # =========================================================================
+
+    def test_event_expiry_is_type_aware(self):
+        """Transient geometric events expire far sooner than emergency squawks."""
+        m = self.monitor
+        self.assertEqual(m._event_expiry_for("proximity_conflict"), m.TRANSIENT_EVENT_EXPIRY)
+        self.assertEqual(m._event_expiry_for("tcas_ra"), m.TRANSIENT_EVENT_EXPIRY)
+        self.assertEqual(m._event_expiry_for("extreme_vs"), m.TRANSIENT_EVENT_EXPIRY)
+        self.assertEqual(m._event_expiry_for("squawk_emergency"), m.EVENT_EXPIRY)
+        self.assertLess(m.TRANSIENT_EVENT_EXPIRY, m.EVENT_EXPIRY)
+
+    @patch("skyspy.socketio.utils.sync_emit")
+    def test_stale_proximity_resolves_but_squawk_persists(self, mock_sync_emit):
+        """A passed proximity conflict clears at the transient timeout; a squawk holds."""
+        mock_sync_emit.return_value = True
+        import time
+
+        m = self.monitor
+        now = time.time()
+        stale = now - (m.TRANSIENT_EVENT_EXPIRY + 15)  # older than transient, younger than 300s
+        with m._events_lock:
+            m._active_events["proximity_conflict:AAA:BBB"] = {
+                "id": "proximity_conflict:AAA:BBB",
+                "event_type": "proximity_conflict",
+                "severity": "warning",
+                "last_seen": stale,
+            }
+            m._active_events["squawk_emergency:CCC"] = {
+                "id": "squawk_emergency:CCC",
+                "event_type": "squawk_emergency",
+                "severity": "critical",
+                "last_seen": stale,
+            }
+        m._last_cleanup = 0.0  # force cleanup to run
+        m._cleanup_old_state()
+
+        self.assertNotIn("proximity_conflict:AAA:BBB", m._active_events)  # resolved
+        self.assertIn("squawk_emergency:CCC", m._active_events)  # persists
 
     def test_cooldown_mechanism(self):
         """Test that cooldown prevents duplicate events via _can_trigger_event."""

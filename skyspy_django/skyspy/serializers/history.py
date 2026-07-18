@@ -31,6 +31,8 @@ class SightingSerializer(serializers.ModelSerializer):
             "vr",
             "distance_nm",
             "is_military",
+            "is_emergency",
+            "track",
             "squawk",
             "aircraft_type",
         ]

@@ -8,7 +8,6 @@ broadcasting from sync contexts (Celery), and other Socket.IO helpers.
 from .batcher import DEFAULT_BATCH_CONFIG, MessageBatcher
 from .broadcast import (
     broadcast_aircraft_update,
-    broadcast_alert,
     broadcast_safety_event,
     broadcast_to_all,
     broadcast_to_room,
@@ -29,7 +28,6 @@ __all__ = [
     "broadcast_to_room",
     "broadcast_to_all",
     "broadcast_aircraft_update",
-    "broadcast_alert",
     "broadcast_safety_event",
     # Snapshot caching
     "SnapshotCache",

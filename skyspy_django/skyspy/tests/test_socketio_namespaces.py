@@ -273,6 +273,63 @@ class TestMainNamespace:
         assert namespace.namespace == "/"
 
 
+@pytest.mark.django_db
+class TestAlertRuleOwnerScoping:
+    """The socket alert-rules handler must not leak other users' private rules.
+
+    Guards the fix for AlertHandlerMixin._get_alert_rules, which previously did
+    AlertRule.objects.all() with no owner/visibility filter.
+    """
+
+    def _make_rules(self):
+        from django.contrib.auth.models import User
+
+        from skyspy.models import AlertRule
+
+        owner = User.objects.create(username="scoping-owner")
+        other = User.objects.create(username="scoping-other")
+        mine = AlertRule.objects.create(name="mine", visibility="private", owner=owner)
+        theirs = AlertRule.objects.create(name="theirs", visibility="private", owner=other)
+        public = AlertRule.objects.create(name="pub", visibility="public", owner=other)
+        shared = AlertRule.objects.create(name="shr", visibility="shared", owner=other)
+        return owner, other, mine, theirs, public, shared
+
+    def test_owner_sees_own_shared_and_public_not_others_private(self):
+        from skyspy.socketio.namespaces.mixins.alerts import AlertHandlerMixin
+
+        owner, _other, mine, theirs, public, shared = self._make_rules()
+        visible = set(AlertHandlerMixin._scope_rules_for_user(owner).values_list("id", flat=True))
+
+        assert mine.id in visible
+        assert public.id in visible
+        assert shared.id in visible
+        assert theirs.id not in visible  # other user's private rule stays hidden
+
+    def test_anonymous_sees_only_public(self):
+        from django.contrib.auth.models import AnonymousUser
+
+        from skyspy.socketio.namespaces.mixins.alerts import AlertHandlerMixin
+
+        _owner, _other, mine, theirs, public, shared = self._make_rules()
+        visible = set(AlertHandlerMixin._scope_rules_for_user(AnonymousUser()).values_list("id", flat=True))
+
+        assert visible == {public.id}
+        assert mine.id not in visible
+        assert theirs.id not in visible
+        assert shared.id not in visible
+
+    def test_superuser_sees_all(self):
+        from django.contrib.auth.models import User
+
+        from skyspy.socketio.namespaces.mixins.alerts import AlertHandlerMixin
+
+        _owner, _other, mine, theirs, public, shared = self._make_rules()
+        admin = User.objects.create(username="scoping-admin", is_superuser=True)
+        visible = set(AlertHandlerMixin._scope_rules_for_user(admin).values_list("id", flat=True))
+
+        assert {mine.id, theirs.id, public.id, shared.id} <= visible
+
+
 class TestAudioNamespace:
     """Tests for AudioNamespace class."""
 

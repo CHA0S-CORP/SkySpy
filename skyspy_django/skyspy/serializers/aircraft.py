@@ -134,6 +134,9 @@ class AircraftInfoSerializer(serializers.ModelSerializer):
     source_data = AirframeSourceDataSerializer(
         many=True, read_only=True, help_text="Raw data from each external source"
     )
+    dossier_text = serializers.SerializerMethodField(
+        help_text="RAG dossier text for this airframe, or null if none exists"
+    )
 
     class Meta:
         model = AircraftInfo
@@ -163,11 +166,26 @@ class AircraftInfoSerializer(serializers.ModelSerializer):
             "photo_photographer",
             "photo_source",
             "extra_data",
+            "owner_type",
+            "is_shell_suspected",
+            "shell_score",
+            "ownership_flags",
             "cached_at",
             "fetch_failed",
             "matched_radio_calls",
             "source_data",
+            "dossier_text",
         ]
+
+    def get_dossier_text(self, obj):
+        """Return the airframe's RAG dossier text, or None if no document exists."""
+        if not obj.icao_hex:
+            return None
+
+        from skyspy.models import AirframeDocument
+
+        doc = AirframeDocument.objects.filter(icao_hex=obj.icao_hex).values_list("content", flat=True).first()
+        return doc
 
     def get_age_years(self, obj):
         """Calculate aircraft age in years."""

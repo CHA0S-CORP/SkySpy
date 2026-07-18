@@ -344,8 +344,11 @@ class AlertService:
         logic = conditions.get("logic", "AND").upper()
         groups = conditions.get("groups", [])
 
+        # Default-deny: a conditions dict with no groups is malformed. Returning
+        # True here would turn a misconfigured rule into a catch-all that matches
+        # every aircraft.
         if not groups:
-            return True
+            return False
 
         results = [self._evaluate_condition_group(aircraft, group) for group in groups]
 
@@ -361,8 +364,9 @@ class AlertService:
         logic = group.get("logic", "AND").upper()
         conditions = group.get("conditions", [])
 
+        # Default-deny: an empty condition group must not match every aircraft.
         if not conditions:
-            return True
+            return False
 
         results = []
         for cond in conditions:
@@ -419,6 +423,10 @@ class AlertService:
                     message=message,
                     priority=rule.priority,
                     aircraft_data=aircraft,
+                    # Attribute the alert to the rule owner so history can be
+                    # filtered directly by user (owner_id is carried on the
+                    # CompiledRule, no extra query needed).
+                    user_id=rule.owner_id,
                 )
 
                 # Update rule's last_triggered timestamp
@@ -474,13 +482,12 @@ class AlertService:
         """
         Check if the rule is currently in a suppression window.
 
-        Suppression windows are stored in the database model, but we need
-        to fetch them. For now, return False as suppression windows
-        will be implemented in the model changes.
+        The rule's suppression_windows are carried on the CompiledRule (cached
+        from the DB model), so no DB fetch is needed on the hot path.
         """
-        # This will be implemented when suppression_windows field is added
-        # to AlertRule model
-        return False
+        from skyspy.models.alerts import evaluate_suppression_windows
+
+        return evaluate_suppression_windows(rule.suppression_windows)
 
     def _send_notification(self, alert_data: dict, rule: AlertRule | None = None):
         """
@@ -528,7 +535,17 @@ class AlertService:
             # NotificationLog write and per-channel retry handling.
             from skyspy.tasks.notifications import send_notification_task
 
-            title = f"SkysPy Alert: {alert_data['rule_name']}"
+            # Render title/body from a matching NotificationTemplate when one is
+            # configured, otherwise fall back to the plain defaults. We keep the
+            # channel selection above (per-rule notification_channels + global
+            # config) rather than routing through
+            # notification_dispatcher.dispatch_alert(): that dispatcher selects
+            # channels by user preference + global NotificationChannel rows and
+            # does NOT honor a rule's notification_channels M2M or
+            # use_global_notifications, so switching would silently drop per-rule
+            # delivery. See services/notification_dispatcher.py.
+            title, body = self._render_alert_message(alert_data)
+
             for url, channel_id in url_channel_pairs:
                 # Isolate each iteration: a failure queueing one channel must
                 # not skip delivery to the remaining channels.
@@ -536,7 +553,7 @@ class AlertService:
                     send_notification_task.delay(
                         channel_url=url,
                         title=title,
-                        body=alert_data["message"],
+                        body=body,
                         priority=alert_data.get("priority", "info"),
                         event_type="alert",
                         channel_id=channel_id,
@@ -551,6 +568,32 @@ class AlertService:
 
         except (DatabaseError, ConnectionError, OSError, ValueError, TypeError) as e:
             logger.error(f"Failed to send notification: {type(e).__name__}: {e}")
+
+    def _render_alert_message(self, alert_data: dict) -> tuple[str, str]:
+        """Render notification (title, body) for an alert.
+
+        Uses a matching NotificationTemplate (by event_type "alert" + priority)
+        when configured, rendering its variables against the alert context;
+        otherwise falls back to the plain default title/body.
+        """
+        default_title = f"SkysPy Alert: {alert_data['rule_name']}"
+        default_body = alert_data.get("message", "")
+
+        try:
+            from skyspy.models.notifications import NotificationTemplate
+            from skyspy.services.template_engine import template_engine
+
+            template = NotificationTemplate.get_template_for("alert", alert_data.get("priority", "info"))
+            if not template:
+                return default_title, default_body
+
+            context = template_engine.build_context_from_alert(alert_data)
+            title = template_engine.render(template.title_template, context) or default_title
+            body = template_engine.render(template.body_template, context) or default_body
+            return title, body
+        except (DatabaseError, ValueError, KeyError, TypeError) as e:
+            logger.warning(f"Alert template render failed, using defaults: {type(e).__name__}: {e}")
+            return default_title, default_body
 
     def _call_webhook(self, url: str, data: dict, rule: CompiledRule):
         """

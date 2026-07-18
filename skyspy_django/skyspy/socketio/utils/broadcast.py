@@ -333,33 +333,6 @@ def broadcast_aircraft_update(
     )
 
 
-def broadcast_alert(
-    alert_data: dict,
-    room: str = "alerts",
-    namespace: str = "/",
-) -> bool:
-    """
-    Broadcast an alert event.
-
-    Convenience function for broadcasting alert notifications to clients
-    subscribed to alerts.
-
-    Args:
-        alert_data: The alert data dict
-        room: The room for alerts (default 'alerts')
-        namespace: The Socket.IO namespace (default '/')
-
-    Returns:
-        True if the message was published successfully, False otherwise
-    """
-    return broadcast_to_room(
-        room=room,
-        event="alert:new",
-        data=alert_data,
-        namespace=namespace,
-    )
-
-
 def broadcast_safety_event(
     event_data: dict,
     room: str = "safety",

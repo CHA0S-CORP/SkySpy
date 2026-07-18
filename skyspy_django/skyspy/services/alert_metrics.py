@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 from threading import Lock
 
 from django.conf import settings
+from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 
@@ -104,7 +105,7 @@ class AlertMetricsCollector:
         self, duration_ms: float, aircraft_count: int, rules_evaluated: int, alerts_triggered: int, cache_hit: bool
     ):
         """Record metrics for a complete evaluation cycle."""
-        now = datetime.utcnow()
+        now = timezone.now()
 
         metrics = EvaluationMetrics(
             start_time=now,
@@ -142,7 +143,7 @@ class AlertMetricsCollector:
 
     def record_trigger(self, rule_id: int, rule_name: str, priority: str, evaluation_ms: float):
         """Record a successful alert trigger."""
-        now = datetime.utcnow()
+        now = timezone.now()
 
         with self._lock:
             if rule_id not in self._rule_metrics:
@@ -194,7 +195,7 @@ class AlertMetricsCollector:
         """Get a summary of current metrics."""
         with self._lock:
             # Calculate window stats
-            window_cutoff = datetime.utcnow() - timedelta(minutes=self._window_minutes)
+            window_cutoff = timezone.now() - timedelta(minutes=self._window_minutes)
             recent = [e for e in self._evaluations if e.start_time >= window_cutoff]
 
             if recent:

@@ -981,6 +981,102 @@ class TestAircraftInfoLookup:
 
 
 # =============================================================================
+# 11. Airframe Ownership & Dossier Field Tests
+# =============================================================================
+
+
+@pytest.mark.django_db
+class TestAirframeOwnershipFields:
+    """Tests for the ownership/shell + dossier fields on GET /api/v1/airframes/{hex}/."""
+
+    OWNERSHIP_KEYS = [
+        "owner_type",
+        "is_shell_suspected",
+        "shell_score",
+        "ownership_flags",
+        "dossier_text",
+    ]
+
+    def test_ownership_keys_present(self, api_client, db):
+        """All new ownership/dossier keys are present in the serialized airframe."""
+        AircraftInfoFactory(icao_hex="OWN001", registration="N90001")
+
+        response = api_client.get("/api/v1/airframes/OWN001/")
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+
+        for key in self.OWNERSHIP_KEYS:
+            assert key in data, f"expected key {key!r} in airframe detail response"
+
+    def test_ownership_values_serialize(self, api_client, db):
+        """Populated ownership/shell values round-trip through the serializer."""
+        AircraftInfoFactory(
+            icao_hex="OWN002",
+            registration="N90002",
+            owner_type="llc",
+            is_shell_suspected=True,
+            shell_score=0.87,
+            ownership_flags={
+                "factors": ["registered_to_llc", "delaware_address"],
+                "details": {"state": "DE"},
+            },
+        )
+
+        response = api_client.get("/api/v1/airframes/OWN002/")
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+
+        assert data["owner_type"] == "llc"
+        assert data["is_shell_suspected"] is True
+        assert data["shell_score"] == pytest.approx(0.87)
+        assert data["ownership_flags"] == {
+            "factors": ["registered_to_llc", "delaware_address"],
+            "details": {"state": "DE"},
+        }
+
+    def test_dossier_text_serializes_when_document_exists(self, api_client, db):
+        """dossier_text returns AirframeDocument.content when a document exists."""
+        from skyspy.models import AirframeDocument
+
+        AircraftInfoFactory(icao_hex="OWN003", registration="N90003")
+        dossier = "N90003 is a Boeing 737-800 operated by Test Airlines. No incidents on record."
+        AirframeDocument.objects.create(
+            icao_hex="OWN003",
+            registration="N90003",
+            content=dossier,
+            content_hash="deadbeef",
+        )
+
+        response = api_client.get("/api/v1/airframes/OWN003/")
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+
+        assert data["dossier_text"] == dossier
+
+    def test_absence_safe_defaults(self, api_client, db):
+        """With no ownership data or dossier, fields default to null/false (no exception)."""
+        AircraftInfoFactory(
+            icao_hex="OWN004",
+            registration="N90004",
+            owner_type=None,
+            is_shell_suspected=False,
+            shell_score=None,
+            ownership_flags=None,
+        )
+
+        response = api_client.get("/api/v1/airframes/OWN004/")
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+
+        assert data["owner_type"] is None
+        assert data["is_shell_suspected"] is False
+        assert data["shell_score"] is None
+        assert data["ownership_flags"] is None
+        # No AirframeDocument was created for this hex -> dossier_text is null, not an error.
+        assert data["dossier_text"] is None
+
+
+# =============================================================================
 # 10. Permission Checks Tests
 # =============================================================================
 

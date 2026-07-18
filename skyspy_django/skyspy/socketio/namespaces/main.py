@@ -409,6 +409,11 @@ class MainNamespace(
                 await self._emit_error(sid, request_id, "Permission denied")
                 return
 
+            # Inject the authenticated session user so handlers can owner-scope
+            # their queries/mutations. Set server-side AFTER reading client params
+            # so a client cannot spoof "_user" to impersonate another account.
+            params["_user"] = session.get("user")
+
             handler = getattr(self, f"_handle_{request_type.replace('-', '_')}", None)
             if handler:
                 result = await handler(params)

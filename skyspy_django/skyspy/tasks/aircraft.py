@@ -179,6 +179,12 @@ def poll_aircraft(self):
             ac["military"] = ac.get("dbFlags", 0) & 1 == 1
             ac["emergency"] = ac.get("squawk") in ("7500", "7600", "7700")
 
+        # Tag non-ICAO (~) duplicates against real ICAO tracks (same helper as
+        # the stream path) so poll-sourced data behaves identically.
+        from skyspy.tasks.aircraft_stream import annotate_ghosts
+
+        annotate_ghosts(aircraft_list)
+
         # Update cache
         cache.set("current_aircraft", aircraft_list, timeout=30)
         cache.set("aircraft_timestamp", now_timestamp, timeout=30)

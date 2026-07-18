@@ -254,13 +254,13 @@ def seed_config(apps, schema_editor):
         {
             'key': 'safety.vs_extreme_threshold',
             'category': 'safety',
-            'value': '6000',
+            'value': '9000',
             'value_type': 'integer',
             'display_name': 'VS Extreme Threshold (ft/min)',
             'description': 'Extreme vertical speed threshold for critical alerts',
             'validation_rules': {'min': 2000, 'max': 20000},
             'env_var': 'SAFETY_VS_EXTREME_THRESHOLD',
-            'default_value': '6000',
+            'default_value': '9000',
             'sort_order': 3,
         },
         {

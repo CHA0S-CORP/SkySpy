@@ -5,10 +5,11 @@ Tests alert performance metrics collection,
 evaluation timing, trigger rates, and cache statistics.
 """
 
-from datetime import datetime, timedelta
+from datetime import timedelta
 from unittest.mock import MagicMock, patch
 
 from django.test import TestCase
+from django.utils import timezone
 
 from skyspy.services.alert_metrics import (
     AlertMetricsCollector,
@@ -24,7 +25,7 @@ class EvaluationMetricsDataclassTests(TestCase):
 
     def test_evaluation_metrics_creation(self):
         """Test creating EvaluationMetrics instance."""
-        now = datetime.utcnow()
+        now = timezone.now()
         metrics = EvaluationMetrics(
             start_time=now,
             duration_ms=15.5,
@@ -317,7 +318,7 @@ class AlertMetricsCollectorGetSummaryTests(TestCase):
         """Test that summary only includes evaluations in window."""
         # Create evaluation outside window
         old_metrics = EvaluationMetrics(
-            start_time=datetime.utcnow() - timedelta(minutes=120),  # 2 hours ago
+            start_time=timezone.now() - timedelta(minutes=120),  # 2 hours ago
             duration_ms=10.0,
             aircraft_count=100,
             rules_evaluated=25,

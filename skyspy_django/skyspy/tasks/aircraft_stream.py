@@ -93,8 +93,10 @@ _previous_aircraft_state: dict[str, dict] = {}
 _previous_aircraft_state_lock = Lock()
 
 # Fields that trigger updates when changed - these are the most important
-# fields that clients need to track for map display and status
-TRACKED_FIELDS = {"lat", "lon", "alt", "alt_baro", "gs", "track", "vr", "squawk", "flight"}
+# fields that clients need to track for map display and status.
+# "ghost" is included so a track flipping to/from ghost (non-ICAO duplicate)
+# propagates over the existing delta channel with no extra wire plumbing.
+TRACKED_FIELDS = {"lat", "lon", "alt", "alt_baro", "gs", "track", "vr", "squawk", "flight", "ghost"}
 
 # Cache keys
 CACHE_KEY_AIRCRAFT = "current_aircraft"
@@ -102,6 +104,29 @@ CACHE_KEY_TIMESTAMP = "aircraft_timestamp"
 CACHE_KEY_ONLINE = "adsb_online"
 CACHE_KEY_STREAM_ACTIVE = "aircraft_stream_active"
 CACHE_KEY_LAST_BROADCAST = "last_aircraft_broadcast"
+
+# ============================================================================
+# Ghost (non-ICAO duplicate) detection state
+# ============================================================================
+#
+# Non-ICAO addresses (TIS-B / ADS-R rebroadcast or anonymized targets) arrive
+# with a leading "~" and frequently duplicate a real ICAO track for the same
+# physical aircraft. detect_ghost_aircraft() correlates them once per cycle
+# where the full aircraft list is assembled; the hot broadcast path only does
+# an O(1) membership stamp. Recomputed + swapped from scratch each cycle so a
+# ghost automatically un-ghosts when its ICAO parent disappears.
+_ghost_hexes: set[str] = set()  # {ghost_hex}
+_ghost_of: dict[str, str] = {}  # {ghost_hex: matched_icao_hex}
+_ghost_lock = Lock()
+
+# Spatial/kinematic gates for the callsign-less fallback tier. All must pass;
+# the conjunction makes merging two distinct aircraft (which differ in
+# track/altitude even when laterally close) extremely unlikely, while
+# rebroadcast jitter of one target stays well inside them.
+GHOST_MATCH_NM = 0.15  # horizontal separation (~900 ft), tighter than safety floor
+GHOST_MATCH_ALT_FT = 125  # one Mode-C step (100 ft) + slack
+GHOST_MATCH_TRACK_DEG = 20  # ground-track circular difference
+GHOST_MATCH_GS_KT = 30  # ground-speed difference
 
 
 # ============================================================================
@@ -200,6 +225,124 @@ def _compute_field_changes(prev: dict, curr: dict) -> dict:
             changes[field] = curr_val
 
     return changes
+
+
+# ============================================================================
+# Ghost (non-ICAO duplicate) detection
+# ============================================================================
+
+
+def _track_delta_deg(a: float, b: float) -> float:
+    """Smallest circular difference between two ground tracks, in degrees."""
+    d = abs(a - b) % 360.0
+    return d if d <= 180.0 else 360.0 - d
+
+
+def detect_ghost_aircraft(aircraft_list: list[dict]) -> dict[str, str]:
+    """
+    Identify ~-prefixed (non-ICAO: TIS-B / ADS-R / anonymized) tracks that
+    duplicate a real ICAO-addressed track for the same physical aircraft.
+
+    Matching, strongest first (first confident match wins):
+      1. Callsign: ghost and an ICAO track share a non-empty callsign
+         (case-insensitive). No position required - the strongest signal.
+      2. Spatial/kinematic fallback (only when callsign can't match): the ghost
+         has a position and an ICAO track passes ALL of GHOST_MATCH_* gates;
+         the nearest such track wins (tie-break: smallest altitude delta).
+
+    Emergency targets are never treated as ghosts - they must never be hidden.
+
+    Pure / side-effect-free: returns {ghost_hex: matched_icao_hex}. The caller
+    swaps the result into module state and stamps aircraft dicts.
+    """
+    from skyspy.services.safety import calculate_distance_nm
+
+    icao_by_callsign: dict[str, dict] = {}
+    icao_with_pos: list[dict] = []
+    ghosts: list[dict] = []
+
+    for ac in aircraft_list:
+        hexv = ac.get("hex")
+        if not hexv:
+            continue
+        if hexv.startswith("~"):
+            # An emergency ghost must never be hidden - exclude it as a candidate.
+            if not ac.get("emergency"):
+                ghosts.append(ac)
+            continue
+        callsign = ac.get("flight")
+        if callsign:
+            # Last writer wins on duplicate callsigns; acceptable (rare, and
+            # any ICAO parent is a valid dedup target).
+            icao_by_callsign[callsign.strip().upper()] = ac
+        if ac.get("lat") is not None and ac.get("lon") is not None:
+            icao_with_pos.append(ac)
+
+    result: dict[str, str] = {}
+    for ghost in ghosts:
+        # Tier 1: callsign match.
+        callsign = ghost.get("flight")
+        if callsign:
+            parent = icao_by_callsign.get(callsign.strip().upper())
+            if parent is not None:
+                result[ghost["hex"]] = parent["hex"]
+                continue
+
+        # Tier 2: spatial/kinematic fallback (needs a ghost position).
+        glat, glon = ghost.get("lat"), ghost.get("lon")
+        if glat is None or glon is None:
+            continue
+        g_alt, g_trk, g_gs = ghost.get("alt"), ghost.get("track"), ghost.get("gs")
+        best = None  # (distance_nm, alt_delta, icao_hex)
+        for cand in icao_with_pos:
+            dist = calculate_distance_nm(glat, glon, cand["lat"], cand["lon"])
+            if dist > GHOST_MATCH_NM:
+                continue
+            c_alt = cand.get("alt")
+            alt_delta = abs(g_alt - c_alt) if (g_alt is not None and c_alt is not None) else 0
+            if g_alt is not None and c_alt is not None and alt_delta > GHOST_MATCH_ALT_FT:
+                continue
+            c_trk = cand.get("track")
+            if g_trk is not None and c_trk is not None and _track_delta_deg(g_trk, c_trk) > GHOST_MATCH_TRACK_DEG:
+                continue
+            c_gs = cand.get("gs")
+            if g_gs is not None and c_gs is not None and abs(g_gs - c_gs) > GHOST_MATCH_GS_KT:
+                continue
+            key = (dist, alt_delta)
+            if best is None or key < best[0]:
+                best = (key, cand["hex"])
+        if best is not None:
+            result[ghost["hex"]] = best[1]
+
+    return result
+
+
+def annotate_ghosts(aircraft_list: list[dict]) -> None:
+    """
+    Run ghost detection over the full aircraft list, swap the result into module
+    state (used by the hot broadcast path), and stamp `ghost`/`ghost_of` onto the
+    passed dicts so cache snapshots carry the flag. Broad-guarded: a detection
+    failure must never break the stream/poll loop.
+    """
+    global _ghost_hexes, _ghost_of
+    try:
+        mapping = detect_ghost_aircraft(aircraft_list)
+    except Exception as e:  # broad: dedup is best-effort; never break the aircraft loop
+        logger.warning(f"Ghost detection failed: {e}")
+        return
+
+    # Reassign wholesale (atomic ref swap) so a reader that grabbed the old
+    # objects under lock keeps iterating a stable snapshot.
+    with _ghost_lock:
+        _ghost_hexes = set(mapping.keys())
+        _ghost_of = dict(mapping)
+
+    for ac in aircraft_list:
+        hexv = ac.get("hex")
+        is_ghost = hexv in mapping
+        ac["ghost"] = is_ghost
+        if is_ghost:
+            ac["ghost_of"] = mapping[hexv]
 
 
 def compute_aircraft_delta(current: list[dict]) -> dict:
@@ -490,6 +633,19 @@ def update_state_and_broadcast(batch: list[dict], full_snapshot: bool = True):
 
     timestamp = timezone.now().isoformat().replace("+00:00", "Z")
 
+    # Stamp ghost flags from the last detection pass (O(1) membership - the
+    # expensive correlation runs 1/sec in sync_cache_state). Broadcast objects
+    # are the source of truth for what clients receive, so tag them here rather
+    # than relying on _aircraft_state dict identity (SSE batches are partial).
+    with _ghost_lock:
+        gh, go = _ghost_hexes, _ghost_of  # refs under lock; swapped wholesale each cycle
+    for ac in batch:
+        hexv = ac.get("hex")
+        is_ghost = hexv in gh
+        ac["ghost"] = is_ghost
+        if is_ghost:
+            ac["ghost_of"] = go.get(hexv)
+
     # Build batch lookup
     batch_by_icao = {ac["hex"]: ac for ac in batch if ac.get("hex")}
     current_icaos = set(batch_by_icao.keys())
@@ -612,6 +768,12 @@ def sync_cache_state():
         aircraft_list = list(_aircraft_state.values())
 
     timestamp = timezone.now().isoformat().replace("+00:00", "Z")
+
+    # Correlate non-ICAO (~) duplicates against real ICAO tracks. Updates the
+    # shared _ghost_hexes state (stamped O(1) in the hot path) and tags these
+    # dicts so the cached snapshot carries the flag. This is the one place the
+    # full list is assembled - same rationale as safety monitoring below.
+    annotate_ghosts(aircraft_list)
 
     cache.set_many(
         {

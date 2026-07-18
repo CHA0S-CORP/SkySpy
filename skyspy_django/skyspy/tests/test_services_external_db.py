@@ -524,10 +524,23 @@ class RouteCacheTests(TestCase):
 
     @patch("skyspy.services.external_db.httpx.Client")
     def test_fetch_route_success(self, mock_client_class):
-        """Test successful route fetch."""
+        """Test successful route fetch normalizes the adsb.im list payload."""
         mock_response = Mock()
         mock_response.status_code = 200
-        mock_response.json.return_value = {"UAL456": {"origin": "KSFO", "destination": "KJFK", "aircraft_type": "B738"}}
+        # adsb.im replies with a list of matches; airports are origin-first.
+        mock_response.json.return_value = [
+            {
+                "callsign": "UAL456",
+                "airline_code": "UAL",
+                "number": "456",
+                "airport_codes": "KSFO-KJFK",
+                "plausible": True,
+                "_airports": [
+                    {"iata": "SFO", "icao": "KSFO", "name": "San Francisco Intl", "location": "San Francisco"},
+                    {"iata": "JFK", "icao": "KJFK", "name": "John F Kennedy Intl", "location": "New York"},
+                ],
+            }
+        ]
         mock_client = Mock()
         mock_client.post.return_value = mock_response
         mock_client.__enter__ = Mock(return_value=mock_client)
@@ -537,8 +550,26 @@ class RouteCacheTests(TestCase):
         result = fetch_route("UAL456")
 
         self.assertIsNotNone(result)
-        self.assertEqual(result["origin"], "KSFO")
-        self.assertEqual(result["destination"], "KJFK")
+        self.assertEqual(result["origin"]["icao"], "KSFO")
+        self.assertEqual(result["origin"]["city"], "San Francisco")
+        self.assertEqual(result["destination"]["icao"], "KJFK")
+        self.assertEqual(result["airport_codes"], "KSFO-KJFK")
+
+    @patch("skyspy.services.external_db.httpx.Client")
+    def test_fetch_route_empty_list(self, mock_client_class):
+        """A no-match (empty list) reply yields None, not a crash."""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = []
+        mock_client = Mock()
+        mock_client.post.return_value = mock_response
+        mock_client.__enter__ = Mock(return_value=mock_client)
+        mock_client.__exit__ = Mock(return_value=False)
+        mock_client_class.return_value = mock_client
+
+        result = fetch_route("UAL456")
+
+        self.assertIsNone(result)
 
     @patch("skyspy.services.external_db.httpx.Client")
     def test_fetch_route_cached(self, mock_client_class):

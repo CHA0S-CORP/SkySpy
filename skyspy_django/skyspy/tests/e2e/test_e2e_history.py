@@ -183,6 +183,35 @@ class TestSightingHistory:
             for i in range(len(results) - 1):
                 assert results[i]["timestamp"] >= results[i + 1]["timestamp"]
 
+    def test_sightings_include_emergency_and_track_keys(self, api_client, sightings_history):
+        """Every serialized sighting exposes the is_emergency and track keys."""
+        response = api_client.get("/api/v1/sightings/")
+        data = response.json()
+
+        assert data["results"], "expected at least one sighting in the response"
+        for sighting in data["results"]:
+            assert "is_emergency" in sighting
+            assert "track" in sighting
+
+    def test_emergency_sighting_serializes_flag_and_track(self, api_client, db):
+        """A sighting created with is_emergency=True and a track value serializes both."""
+        sighting = AircraftSightingFactory(
+            icao_hex="EMG001",
+            callsign="EMRG01",
+            squawk="7700",
+            is_emergency=True,
+            track=137.5,
+        )
+
+        response = api_client.get("/api/v1/sightings/?icao=EMG001")
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+
+        match = next((s for s in data["results"] if s["id"] == sighting.id), None)
+        assert match is not None, "created emergency sighting not found in response"
+        assert match["is_emergency"] is True
+        assert match["track"] == pytest.approx(137.5)
+
 
 # =============================================================================
 # Session History Tests

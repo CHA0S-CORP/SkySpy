@@ -377,6 +377,44 @@ def fetch_route_info(callsign: str):
 
 
 @shared_task
+def _planespotters_photo(icao: str, lookup_url: str) -> tuple[str | None, str | None, str | None]:
+    """
+    Query a single Planespotters photo endpoint (hex- or registration-keyed) and
+    persist the resolved URLs onto the AircraftInfo record.
+
+    Returns ``(photo_url, thumbnail_url, photo_page_link)`` — all ``None`` when no
+    photo is found or the request fails.
+    """
+    from skyspy.models import AircraftInfo
+
+    try:
+        response = httpx.get(lookup_url, timeout=10.0)
+        if response.status_code != 200:
+            return None, None, None
+        photos = response.json().get("photos")
+        if not photos:
+            return None, None, None
+        photo = photos[0]
+        # Priority: thumbnail_large (~800px, good quality) > thumbnail for display.
+        large_thumb = photo.get("thumbnail_large", {})
+        small_thumb = photo.get("thumbnail", {})
+        photo_url = large_thumb.get("src") if isinstance(large_thumb, dict) else None
+        thumbnail_url = small_thumb.get("src") if isinstance(small_thumb, dict) else None
+        photo_page_link = photo.get("link")
+        if photo_url:
+            AircraftInfo.objects.filter(icao_hex=icao).update(
+                photo_url=photo_url,
+                photo_thumbnail_url=thumbnail_url,
+                photo_page_link=photo_page_link,
+                photo_source="planespotters.net",
+                photo_photographer=photo.get("photographer"),
+            )
+        return photo_url, thumbnail_url, photo_page_link
+    except (DatabaseError, httpx.HTTPError, ValueError, KeyError, TypeError, OSError) as e:
+        logger.debug(f"Planespotters photo check failed for {icao} ({lookup_url}): {e}")
+        return None, None, None
+
+
 def fetch_aircraft_photos(
     icao_hex: str, photo_url: str = None, thumbnail_url: str = None, photo_page_link: str = None, force: bool = False
 ):
@@ -401,45 +439,28 @@ def fetch_aircraft_photos(
                 return
 
         # If no URLs provided, try to get them from database or fetch from hexdb
+        registration = None
         if not photo_url:
             try:
                 info = AircraftInfo.objects.get(icao_hex=icao)
                 photo_url = info.photo_url
                 thumbnail_url = info.photo_thumbnail_url or thumbnail_url
                 photo_page_link = info.photo_page_link or photo_page_link
+                registration = (info.registration or "").strip() or None
             except AircraftInfo.DoesNotExist:
                 pass
 
-        # Try planespotters first (higher quality source)
+        # Try planespotters first (higher quality source). General-aviation
+        # airframes are frequently absent from the hex index but present under
+        # their registration, so fall back to the reg endpoint before hexdb.
         if not photo_url:
-            try:
-                ps_url = f"https://api.planespotters.net/pub/photos/hex/{icao}"
-                response = httpx.get(ps_url, timeout=10.0)
-                if response.status_code == 200:
-                    data = response.json()
-                    if data.get("photos"):
-                        photo = data["photos"][0]
-                        # Priority: thumbnail_large > thumbnail for display
-                        # thumbnail_large is usually 800px wide, good quality
-                        large_thumb = photo.get("thumbnail_large", {})
-                        small_thumb = photo.get("thumbnail", {})
-
-                        # Use large thumbnail as main photo (best available via API)
-                        photo_url = large_thumb.get("src") if isinstance(large_thumb, dict) else None
-                        thumbnail_url = small_thumb.get("src") if isinstance(small_thumb, dict) else None
-                        photo_page_link = photo.get("link")
-
-                        # Update database with URLs
-                        if photo_url:
-                            AircraftInfo.objects.filter(icao_hex=icao).update(
-                                photo_url=photo_url,
-                                photo_thumbnail_url=thumbnail_url,
-                                photo_page_link=photo_page_link,
-                                photo_source="planespotters.net",
-                                photo_photographer=photo.get("photographer"),
-                            )
-            except (DatabaseError, httpx.HTTPError, ValueError, KeyError, TypeError, OSError) as e:
-                logger.debug(f"Planespotters photo check failed for {icao}: {e}")
+            lookup_urls = [f"https://api.planespotters.net/pub/photos/hex/{icao}"]
+            if registration:
+                lookup_urls.append(f"https://api.planespotters.net/pub/photos/reg/{registration}")
+            for lookup_url in lookup_urls:
+                photo_url, thumbnail_url, photo_page_link = _planespotters_photo(icao, lookup_url)
+                if photo_url:
+                    break
 
         # Fallback to hexdb.io if planespotters didn't work
         if not photo_url:
