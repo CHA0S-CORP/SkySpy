@@ -91,6 +91,20 @@ export function DetailPanel({ apiBase, aircraft, track = [], onClose, onOpenFull
           {status.label}
         </div>
 
+        {aircraft.ghost && (
+          <div
+            className="lm-panel__ghost"
+            style={{ color: 'var(--dim)' }}
+            data-testid="lm-panel-ghost"
+          >
+            <Icon name="alert-triangle" size={13} strokeWidth={1.7} />
+            <span>
+              Ghost — non-ICAO (TIS-B/ADS-R) duplicate
+              {aircraft.ghost_of ? ` of ${aircraft.ghost_of.toUpperCase()}` : ''}
+            </span>
+          </div>
+        )}
+
         <div className="lm-panel__chips">
           {chip('HEX', (hex || '').toUpperCase())}
           {chip('TYPE', airframe.aircraft_type || aircraft.t || '--')}

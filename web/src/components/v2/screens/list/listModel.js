@@ -130,9 +130,11 @@ const SORT_KEYS = {
  */
 export function selectAircraft(
   aircraft,
-  { query = '', filter = null, sortBy = 'dist', sortDir = 'asc' } = {}
+  { query = '', filter = null, sortBy = 'dist', sortDir = 'asc', showGhosts = false } = {}
 ) {
   let list = aircraft.slice();
+  // Non-ICAO (~) duplicates of a real ICAO track are hidden unless revealed.
+  if (!showGhosts) list = list.filter((a) => !a.ghost);
   const q = query.trim().toLowerCase();
   if (q) {
     list = list.filter((a) =>

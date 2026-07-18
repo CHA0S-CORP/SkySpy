@@ -30,9 +30,11 @@ from skyspy.tasks.aircraft_stream import (
     _db_write_buffer,
     _new_aircraft_queue,
     _previous_aircraft_state_lock,
+    annotate_ghosts,
     broadcast_aircraft_delta,
     clear_delta_state,
     compute_aircraft_delta,
+    detect_ghost_aircraft,
     flush_stream_to_database,
     get_stream_task_status,
     normalize_aircraft,
@@ -878,7 +880,7 @@ class ComputeFieldChangesTest(TestCase):
 
     def test_tracked_fields_completeness(self):
         """Verify TRACKED_FIELDS contains expected fields."""
-        expected = {"lat", "lon", "alt", "alt_baro", "gs", "track", "vr", "squawk", "flight"}
+        expected = {"lat", "lon", "alt", "alt_baro", "gs", "track", "vr", "squawk", "flight", "ghost"}
         self.assertEqual(TRACKED_FIELDS, expected)
 
 

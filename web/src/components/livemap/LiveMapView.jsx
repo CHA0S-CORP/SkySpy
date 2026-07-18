@@ -71,7 +71,13 @@ export function LiveMapView({
 
   const overlayData = useMapOverlayData({ wsRequest, wsConnected, feeder, aircraft, overlays });
 
-  const filterFn = useMemo(() => makeFilterFn(filters), [filters]);
+  const filterFn = useMemo(() => {
+    const base = makeFilterFn(filters);
+    // Ghosts (non-ICAO ~ duplicates of a real ICAO track) are hidden unless the
+    // Layers "Ghost Tracks" toggle is on.
+    if (overlays.showGhosts) return base;
+    return (a) => !a.ghost && base(a);
+  }, [filters, overlays.showGhosts]);
   // Only highlight *active* events: the 24h snapshot includes long-finished
   // events, and resolved ones are flagged (not removed) by the socket layer —
   // without this filter an aircraft stays permanently marked on the map.

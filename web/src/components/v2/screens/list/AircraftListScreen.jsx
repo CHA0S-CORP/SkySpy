@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Icon } from '../../primitives';
+import { Icon, Switch } from '../../primitives';
 import { useBulkAircraftInfo } from '../../../../hooks/useBulkAircraftInfo';
 import { CHIP_DEFS, COLUMNS, FILTER_TESTS, selectAircraft, toRow } from './listModel';
 
@@ -19,6 +19,7 @@ export function AircraftListScreen({ aircraft, onSelectAircraft, apiBase }) {
   const [filter, setFilter] = useState(null);
   const [sortBy, setSortBy] = useState('dist');
   const [sortDir, setSortDir] = useState('asc');
+  const [showGhosts, setShowGhosts] = useState(false);
 
   const counts = useMemo(() => {
     const c = {};
@@ -27,9 +28,10 @@ export function AircraftListScreen({ aircraft, onSelectAircraft, apiBase }) {
   }, [aircraft]);
 
   const rows = useMemo(
-    () => selectAircraft(aircraft, { query, filter, sortBy, sortDir }).map(toRow),
-    [aircraft, query, filter, sortBy, sortDir]
+    () => selectAircraft(aircraft, { query, filter, sortBy, sortDir, showGhosts }).map(toRow),
+    [aircraft, query, filter, sortBy, sortDir, showGhosts]
   );
+  const ghostCount = useMemo(() => aircraft.filter((a) => a.ghost).length, [aircraft]);
 
   // Off-hot-path enrichment: the hexes currently shown drive one debounced,
   // cache-only bulk lookup. Keyed on the (sorted) hex set inside the hook, so
@@ -60,6 +62,10 @@ export function AircraftListScreen({ aircraft, onSelectAircraft, apiBase }) {
             aria-label="Search aircraft"
           />
         </div>
+        <label className="v2-list__ghost-toggle" title="Show non-ICAO (TIS-B/ADS-R) duplicate tracks">
+          <span>Ghosts{ghostCount ? ` (${ghostCount})` : ''}</span>
+          <Switch checked={showGhosts} onCheckedChange={setShowGhosts} label="Show ghost tracks" />
+        </label>
       </div>
 
       <div className="v2-list__chips">

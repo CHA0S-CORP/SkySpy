@@ -442,6 +442,76 @@ class SafetyMonitorUnitTests(TestCase):
         self.assertEqual(len(prox), 1)
         self.assertEqual(prox[0]["severity"], "critical")
 
+    @patch("skyspy.socketio.utils.sync_emit")
+    def test_proximity_formation_station_keeping_suppressed(self, mock_sync_emit):
+        """Two fighters holding formation (matched velocity, tight) are not a conflict.
+
+        Even at critical geometry, a station-keeping pair (near-zero closure, not
+        converging) is suppressed — that is what formation flight looks like.
+        """
+        mock_sync_emit.return_value = True
+
+        aircraft_list = [
+            {
+                "hex": "FRM01",
+                "flight": "LEAD",
+                "lat": 47.0,
+                "lon": -122.0,
+                "alt": 20000,
+                "gs": 400,
+                "track": 90,
+                "category": "A6",
+            },
+            # ~0.07nm abeam, identical velocity vector
+            {
+                "hex": "FRM02",
+                "flight": "WING",
+                "lat": 47.0,
+                "lon": -122.0017,
+                "alt": 20000,
+                "gs": 400,
+                "track": 90,
+                "category": "A6",
+            },
+        ]
+        events = self.monitor.update_aircraft(aircraft_list)
+
+        prox = [e for e in events if e["event_type"] == "proximity_conflict"]
+        self.assertEqual(len(prox), 0)
+
+    @patch("skyspy.socketio.utils.sync_emit")
+    def test_proximity_formation_capable_converging_still_alerts(self, mock_sync_emit):
+        """A converging pair of formation-capable aircraft (overtake) still alerts."""
+        mock_sync_emit.return_value = True
+
+        aircraft_list = [
+            # trailing fighter overtaking the leader (150kt closure) -> real conflict
+            {
+                "hex": "OVT01",
+                "flight": "FAST",
+                "lat": 47.0,
+                "lon": -122.02,
+                "alt": 20000,
+                "gs": 500,
+                "track": 90,
+                "category": "A6",
+            },
+            {
+                "hex": "OVT02",
+                "flight": "SLOW",
+                "lat": 47.0,
+                "lon": -122.00,
+                "alt": 20000,
+                "gs": 350,
+                "track": 90,
+                "category": "A6",
+            },
+        ]
+        events = self.monitor.update_aircraft(aircraft_list)
+
+        prox = [e for e in events if e["event_type"] == "proximity_conflict"]
+        self.assertEqual(len(prox), 1)
+
     def test_classify_aircraft_by_category(self):
         """ADS-B emitter category maps to the expected safety class."""
         cases = {

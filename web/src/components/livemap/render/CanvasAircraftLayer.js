@@ -323,7 +323,8 @@ export class CanvasAircraftLayer {
         const pred = this._predictorPoints(v.hex, a, track, project);
         if (pred) drawPredictor(ctx, pred.pts, selected ? SELECTED_COLOR : color);
       }
-      drawDart(ctx, x, y, track, color, coasting ? 0.4 : 1);
+      // Ghosts (non-ICAO ~ duplicates) render dimmed when revealed via the toggle.
+      drawDart(ctx, x, y, track, color, (coasting ? 0.4 : 1) * (a.ghost ? 0.45 : 1));
       if (coasting) drawCoast(ctx, x, y);
 
       // priority: selected(4) > hovered(3) > safety(2) > interesting(1) > normal(0)
