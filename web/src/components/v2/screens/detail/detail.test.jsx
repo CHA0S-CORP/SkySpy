@@ -463,4 +463,38 @@ describe('DetailScreen', () => {
     // No factors block when ownership_flags is null.
     expect(screen.queryByTestId('v2-detail-ownership-factors')).not.toBeInTheDocument();
   });
+
+  it('renders a law-enforcement badge from ownership_flags.law_enforcement', async () => {
+    global.fetch = vi.fn((url) => {
+      const respond = (body) =>
+        Promise.resolve({
+          ok: true,
+          headers: new Headers({ 'content-type': 'application/json' }),
+          json: () => Promise.resolve(body),
+        });
+      const u = String(url);
+      if (u.includes('/airframes/'))
+        return respond({
+          registration: 'N882SD',
+          manufacturer: 'AIRBUS HELICOPTERS INC',
+          model: 'AS350B3',
+          owner: 'CITY OF SAN DIEGO',
+          owner_type: 'government',
+          ownership_flags: {
+            law_enforcement: {
+              category: 'Municipal Aviation',
+              description: 'City government (public-safety aircraft)',
+              confidence: 'medium',
+              identifiers: ['helicopter', 'surveillance_type', 'owner'],
+            },
+          },
+        });
+      if (u.includes('/sightings')) return respond({ sightings: TRACK });
+      if (u.includes('/safety/events')) return respond({ events: [] });
+      if (u.includes('/sessions')) return respond({ sessions: [] });
+      return respond({});
+    });
+    renderScreen();
+    await waitFor(() => expect(screen.getByText('Municipal Aviation')).toBeInTheDocument());
+  });
 });

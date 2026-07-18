@@ -363,6 +363,13 @@ export function DetailScreen({
       ? airframe.dossier_text.trim()
       : null;
   const ownerTypeText = ownerTypeLabel(airframe.owner_type);
+  // Law-enforcement / public-safety classification from the backend ownership
+  // analysis (law_enforcement_db.identify_law_enforcement). Present as a nested
+  // object on ownership_flags: {category, description, confidence, identifiers}.
+  const leInfo =
+    airframe.ownership_flags && typeof airframe.ownership_flags === 'object'
+      ? airframe.ownership_flags.law_enforcement
+      : null;
   const shellSuspected = airframe.is_shell_suspected === true;
   const shellScore = typeof airframe.shell_score === 'number' ? airframe.shell_score : null;
   const shellPct =
@@ -552,6 +559,18 @@ export function DetailScreen({
               >
                 <Icon name="star" size={11} strokeWidth={1.9} />
                 INTERESTING
+              </span>
+            )}
+            {leInfo && (
+              <span
+                className="v2-det__flag v2-det__flag--le"
+                title={
+                  [leInfo.category, leInfo.description].filter(Boolean).join(' — ') ||
+                  'Law enforcement / public-safety aircraft'
+                }
+              >
+                <Icon name="shield" size={11} strokeWidth={1.9} />
+                {leInfo.category || 'LAW ENFORCEMENT'}
               </span>
             )}
             <RouteSummary origin={origin} destination={destination} />

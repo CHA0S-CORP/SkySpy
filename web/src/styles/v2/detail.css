@@ -893,6 +893,14 @@ a.v2-det__route-code--link:hover {
   border-color: color-mix(in srgb, var(--accent) 34%, transparent);
   color: var(--accent);
 }
+/* Law-enforcement / public-safety — fixed police-blue, distinct from the
+   theme accents so it reads unambiguously across all themes. */
+.v2-det__flag--le {
+  background: color-mix(in srgb, #4f7fff 15%, transparent);
+  border-color: color-mix(in srgb, #4f7fff 40%, transparent);
+  color: #7aa2ff;
+  text-transform: uppercase;
+}
 
 /* freshness footer (aircraft info card) */
 .v2-det__freshness {

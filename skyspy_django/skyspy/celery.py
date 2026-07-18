@@ -70,6 +70,28 @@ def debug_task(self):
     print(f"Request: {self.request!r}")
 
 
+from celery.signals import worker_ready  # noqa: E402
+
+
+@worker_ready.connect
+def _load_cached_databases_on_ready(sender=None, **kwargs):
+    """Bootstrap external aircraft DBs from cached files when the worker starts.
+
+    Without this a freshly-restarted worker has empty in-memory FAA/OpenSky/etc.
+    until the daily 4 AM sync — so on-demand lookups return no owner/manufacturer/
+    LE data (the stale-check task skips DBs it has never loaded). Enqueued rather
+    than run inline so it never delays worker readiness.
+    """
+    try:
+        from skyspy.tasks.external_db import load_cached_databases
+
+        load_cached_databases.delay()
+    except Exception as e:  # broad: startup hook must never crash the worker
+        import logging
+
+        logging.getLogger(__name__).warning(f"Failed to queue cached-DB load on startup: {e}")
+
+
 # =============================================================================
 # Celery Beat Schedule
 # =============================================================================

@@ -204,6 +204,29 @@ def load_opensky_database():
         return False
 
 
+@shared_task(ignore_result=True)
+@singleton_task(timeout=1800)
+def load_cached_databases():
+    """Load external aircraft DBs from cached files on disk (no download).
+
+    Bootstraps a freshly-started worker so on-demand lookups (fetch_aircraft_info)
+    immediately have owner/manufacturer/LE data, instead of waiting for the daily
+    4 AM sync. ``auto_download=False`` keeps it fast and network-free; missing
+    files are a no-op (the scheduled sync downloads them). Enqueued from the
+    worker_ready signal — see skyspy/celery.py.
+    """
+    try:
+        from skyspy.services import external_db
+
+        external_db.init_databases(auto_download=False)
+        stats = external_db.get_database_stats()
+        logger.info(f"Loaded cached external databases on startup: {stats}")
+        return stats
+    except Exception as e:  # broad: Celery task top-level guard, must not crash the worker
+        logger.error(f"Failed to load cached databases: {e}")
+        return None
+
+
 @shared_task(bind=True, max_retries=2, ignore_result=True)
 def fetch_aircraft_info_batch(self, icao_list: list):
     """
