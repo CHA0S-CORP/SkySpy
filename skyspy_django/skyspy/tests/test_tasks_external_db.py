@@ -27,6 +27,15 @@ PS_PHOTO = {
     "photographer": "Jane Doe",
 }
 
+AD_THUMB = "https://www.airport-data.com/images/aircraft/thumbnails/001/234/1234.jpg"
+
+
+def _ad_resp(status=200, rows=None):
+    r = MagicMock()
+    r.status_code = status
+    r.json.return_value = {"status": status, "count": len(rows or []), "data": rows or []}
+    return r
+
 
 class FetchAircraftPhotosTests(TestCase):
     """fetch_aircraft_photos hex/registration source selection."""
@@ -85,8 +94,34 @@ class FetchAircraftPhotosTests(TestCase):
     @patch("skyspy.services.photo_cache.download_photo", return_value="/tmp/A1B2C3.jpg")
     @patch("skyspy.services.photo_cache.get_photo_url", return_value=None)
     @patch("skyspy.tasks.external_db.httpx.get")
+    def test_falls_back_to_airport_data(self, mock_get, *_mocks):
+        """When Planespotters misses entirely, airport-data.com resolves a photo."""
+        AircraftInfo.objects.create(icao_hex="A1B2C3", registration="N12345")
+
+        def _by_url(url, **_kwargs):
+            if "planespotters" in url:
+                return _resp(200, photos=[])  # miss on hex + reg
+            if "airport-data.com" in url and "m=A1B2C3" in url:
+                return _ad_resp(200, rows=[{"image": AD_THUMB, "link": "https://x", "photographer": "Sam"}])
+            return _resp(404)
+
+        mock_get.side_effect = _by_url
+
+        external_db.fetch_aircraft_photos("A1B2C3")
+
+        info = AircraftInfo.objects.get(icao_hex="A1B2C3")
+        self.assertEqual(info.photo_source, "airport-data.com")
+        # full-size derived by dropping the /thumbnails path segment
+        self.assertNotIn("/thumbnails", info.photo_url)
+        self.assertIn("/thumbnails", info.photo_thumbnail_url)
+
+    @patch("skyspy.tasks.external_db.http_client.head_ok", return_value=False)
+    @patch("skyspy.services.photo_cache.update_photo_paths")
+    @patch("skyspy.services.photo_cache.download_photo", return_value="/tmp/A1B2C3.jpg")
+    @patch("skyspy.services.photo_cache.get_photo_url", return_value=None)
+    @patch("skyspy.tasks.external_db.httpx.get")
     def test_no_registration_only_tries_hex(self, mock_get, *_mocks):
-        """Without a registration the reg endpoint is never attempted."""
+        """Without a registration, only hex-keyed endpoints are attempted."""
         AircraftInfo.objects.create(icao_hex="A1B2C3", registration="")
 
         mock_get.side_effect = lambda url, **_k: _resp(200, photos=[])
@@ -95,4 +130,6 @@ class FetchAircraftPhotosTests(TestCase):
 
         called = [c.args[0] for c in mock_get.call_args_list]
         self.assertTrue(any("/photos/hex/" in u for u in called))
+        # no registration -> neither the Planespotters reg endpoint nor airport-data r=
         self.assertFalse(any("/photos/reg/" in u for u in called))
+        self.assertFalse(any("r=" in u for u in called))

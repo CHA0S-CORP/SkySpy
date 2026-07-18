@@ -415,6 +415,47 @@ def _planespotters_photo(icao: str, lookup_url: str) -> tuple[str | None, str | 
         return None, None, None
 
 
+def _airport_data_photo(icao: str, param: str, value: str) -> tuple[str | None, str | None, str | None]:
+    """
+    Query airport-data.com's ac_thumb.json (the community photo DB many ADS-B
+    tools use) by Mode-S hex (``param='m'``) or registration (``param='r'``) and
+    persist the resolved URLs onto the AircraftInfo record.
+
+    Returns ``(photo_url, thumbnail_url, photo_page_link)`` — all ``None`` when no
+    photo is found or the request fails.
+    """
+    from skyspy.models import AircraftInfo
+
+    try:
+        url = f"https://www.airport-data.com/api/ac_thumb.json?{param}={value}&n=1"
+        response = httpx.get(url, timeout=10.0, headers={"User-Agent": "skyspy/1.0"})
+        if response.status_code != 200:
+            return None, None, None
+        payload = response.json()
+        rows = payload.get("data") if isinstance(payload, dict) else None
+        if not rows:
+            return None, None, None
+        row = rows[0]
+        thumb = row.get("image")
+        if not thumb:
+            return None, None, None
+        # The full-size image lives at the same path without the /thumbnails segment.
+        full = thumb.replace("/thumbnails", "")
+        page_link = row.get("link")
+        AircraftInfo.objects.filter(icao_hex=icao).update(
+            photo_url=full,
+            photo_thumbnail_url=thumb,
+            photo_page_link=page_link,
+            photo_source="airport-data.com",
+            photo_photographer=row.get("photographer"),
+        )
+        return full, thumb, page_link
+    except (DatabaseError, httpx.HTTPError, ValueError, KeyError, TypeError, OSError) as e:
+        logger.debug(f"airport-data.com photo check failed for {icao} ({param}={value}): {e}")
+        return None, None, None
+
+
+@shared_task
 def fetch_aircraft_photos(
     icao_hex: str, photo_url: str = None, thumbnail_url: str = None, photo_page_link: str = None, force: bool = False
 ):
@@ -459,6 +500,17 @@ def fetch_aircraft_photos(
                 lookup_urls.append(f"https://api.planespotters.net/pub/photos/reg/{registration}")
             for lookup_url in lookup_urls:
                 photo_url, thumbnail_url, photo_page_link = _planespotters_photo(icao, lookup_url)
+                if photo_url:
+                    break
+
+        # airport-data.com — broad community DB; try Mode-S hex then registration.
+        # Covers many airframes (incl. GA) that Planespotters lacks.
+        if not photo_url:
+            attempts = [("m", icao)]
+            if registration:
+                attempts.append(("r", registration))
+            for param, value in attempts:
+                photo_url, thumbnail_url, photo_page_link = _airport_data_photo(icao, param, value)
                 if photo_url:
                     break
 
