@@ -49,19 +49,19 @@ function scanDirectory(dir, basePath = '') {
 
     if (entry.isDirectory()) {
       assets.push(...scanDirectory(fullPath, relativePath));
-    } else if (entry.name.endsWith('.png') || entry.name.endsWith('.gif')) {
+    } else if (entry.name.endsWith('.png') || entry.name.endsWith('.gif') || entry.name.endsWith('.webp')) {
       const stats = fs.statSync(fullPath);
-      const isGif = entry.name.endsWith('.gif');
+      const isAnimation = entry.name.endsWith('.gif') || entry.name.endsWith('.webp');
 
       // Parse view name from filename
       // e.g., "map-aircraft-popup.png" -> "map"
-      const nameParts = entry.name.replace(/\.(png|gif)$/, '').split('-');
+      const nameParts = entry.name.replace(/\.(png|gif|webp)$/, '').split('-');
       const view = nameParts[0];
 
       assets.push({
         name: entry.name,
         path: relativePath,
-        type: isGif ? 'animation' : 'screenshot',
+        type: isAnimation ? 'animation' : 'screenshot',
         viewport: basePath || 'root',
         view,
         size: stats.size,

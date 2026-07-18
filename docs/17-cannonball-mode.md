@@ -913,9 +913,7 @@ Background tasks that power Cannonball Mode:
 
 <!-- SCREENSHOTS:cannonball:START -->
 ![Cannonball Hud](screenshots/desktop/cannonball-hud.png)
-![Cannonball Mobile Hud](screenshots/desktop/cannonball-mobile-hud.png)
-![Cannonball Radar View](screenshots/desktop/cannonball-radar-view.png)
-![Cannonball Settings](screenshots/desktop/cannonball-settings.png)
+![Cannonball Scan](screenshots/desktop/cannonball-scan.png)
 
-<sub>Also captured for: mobile, tablet (see `docs/screenshots/`).</sub>
+<sub>Also captured for: animations, mobile, tablet (see `docs/screenshots/`).</sub>
 <!-- SCREENSHOTS:cannonball:END -->

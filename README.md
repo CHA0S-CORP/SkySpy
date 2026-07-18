@@ -28,75 +28,6 @@ SkySpy is a sophisticated aircraft tracking platform that captures position data
 
 ## Screenshots
 
-### Live Map View
-
-Real-time aircraft tracking with position updates, flight labels, range rings, and interactive markers.
-
-![Aircraft Detail](docs/screenshots/aircraft-detail.gif)
-
-### CRT Radar Mode
-
-Classic ATC radar display with sweep animation and phosphor glow effects.
-
-![CRT Mode](docs/screenshots/crt-mode.gif)
-
-### Aircraft Detail Panel
-
-Click any aircraft to view detailed information including registration, operator, altitude, speed, and external links.
-
-![Aircraft Detail](docs/screenshots/detail.png)
-![Aircraft Detail](docs/screenshots/airplane1.png)
-![Aircraft Detail](docs/screenshots/airplane2.png)
-![Aircraft Detail](docs/screenshots/airplane3.png)
-
-### Statistics Dashboard
-
-Real-time statistics showing aircraft counts, altitude distribution, closest/highest/fastest aircraft.
-
-![Stats View](docs/screenshots/stats.png)
-
-
-### Safety Alerts & Proximity Warnings
-
-Automatic detection and alerting for emergency squawks (7700/7600/7500) and proximity events.
-
-![Safety Banner](docs/screenshots/saftey-1.png)
-![Safety Banner2](docs/screenshots/saftey2.png)
-
-
-### Flight History
-
-Browse historical sightings with filters and detailed flight session information.
-
-![History View](docs/screenshots/history-1.png)
-
-### ACARS Message History
-
-Browse historical ACARS messages with filters and detailed flight session information.
-
-![ACARS History View](docs/screenshots/history2.png)
-
-### PIREP Weather Reports
-
-View pilot reports (PIREPs) for real-time weather conditions including turbulence, icing, and visibility.
-
-![PIREP Popup](docs/screenshots/pirep.png)
-
-### NavAid Information
-
-Interactive navigation aid markers showing VORs, NDBs, and waypoints with frequency and identifier information.
-
-![NavAid Popup](docs/screenshots/nav.png)
-
-
-### Alert Configuration
-
-Create custom alert rules with flexible conditions and scheduling.
-
-![Alerts View](docs/screenshots/desktop/alerts-rules-list.png)
-
-### Full Interface Gallery
-
 > The images below are generated automatically by the Playwright documentation
 > pipeline (`npm run docs:generate` from `web/`) and cover every screen across
 > desktop/tablet/mobile viewports. Do not edit between the marker comments — the
@@ -108,7 +39,7 @@ Create custom alert rules with flexible conditions and scheduling.
 ![Map Aircraft Popup](docs/screenshots/desktop/map-aircraft-popup.png)
 ![Map Emergency Aircraft](docs/screenshots/desktop/map-emergency-aircraft.png)
 ![Map Filters](docs/screenshots/desktop/map-filters.png)
-![Map Full Controls](docs/screenshots/desktop/map-full-controls.png)
+![Map Legend](docs/screenshots/desktop/map-legend.png)
 ![Map Overlays](docs/screenshots/desktop/map-overlays.png)
 ![Map Overview](docs/screenshots/desktop/map-overview.png)
 
@@ -156,7 +87,7 @@ Create custom alert rules with flexible conditions and scheduling.
 #### Advanced Analytics
 
 <!-- SCREENSHOTS:analytics:START -->
-![Analytics Geographic](docs/screenshots/desktop/analytics-geographic.png)
+![Analytics Military](docs/screenshots/desktop/analytics-military.png)
 ![Analytics Overview](docs/screenshots/desktop/analytics-overview.png)
 
 <sub>Also captured for: mobile, tablet (see `docs/screenshots/`).</sub>
@@ -166,16 +97,12 @@ Create custom alert rules with flexible conditions and scheduling.
 
 <!-- SCREENSHOTS:history:START -->
 ![History Acars](docs/screenshots/desktop/history-acars.png)
-![History Analytics](docs/screenshots/desktop/history-analytics.png)
 ![History Archive](docs/screenshots/desktop/history-archive.png)
-![History Date Picker](docs/screenshots/desktop/history-date-picker.png)
 ![History Notams](docs/screenshots/desktop/history-notams.png)
 ![History Pireps](docs/screenshots/desktop/history-pireps.png)
 ![History Safety Events](docs/screenshots/desktop/history-safety-events.png)
-![History Session Detail](docs/screenshots/desktop/history-session-detail.png)
 ![History Sessions](docs/screenshots/desktop/history-sessions.png)
 ![History Sightings](docs/screenshots/desktop/history-sightings.png)
-![History With Replay](docs/screenshots/desktop/history-with-replay.png)
 
 <sub>Also captured for: mobile, tablet (see `docs/screenshots/`).</sub>
 <!-- SCREENSHOTS:history:END -->
@@ -184,11 +111,7 @@ Create custom alert rules with flexible conditions and scheduling.
 
 <!-- SCREENSHOTS:audio:START -->
 ![Audio Emergency](docs/screenshots/desktop/audio-emergency.png)
-![Audio Filters](docs/screenshots/desktop/audio-filters.png)
 ![Audio List](docs/screenshots/desktop/audio-list.png)
-![Audio Playback](docs/screenshots/desktop/audio-playback.png)
-![Audio Transcript](docs/screenshots/desktop/audio-transcript.png)
-![Audio With Stats](docs/screenshots/desktop/audio-with-stats.png)
 
 <sub>Also captured for: mobile, tablet (see `docs/screenshots/`).</sub>
 <!-- SCREENSHOTS:audio:END -->
@@ -196,11 +119,10 @@ Create custom alert rules with flexible conditions and scheduling.
 #### Alerts
 
 <!-- SCREENSHOTS:alerts:START -->
-![Alerts Condition Form](docs/screenshots/desktop/alerts-condition-form.png)
+![Alerts History](docs/screenshots/desktop/alerts-history.png)
 ![Alerts Notification Settings](docs/screenshots/desktop/alerts-notification-settings.png)
 ![Alerts Rule Builder](docs/screenshots/desktop/alerts-rule-builder.png)
 ![Alerts Rules List](docs/screenshots/desktop/alerts-rules-list.png)
-![Alerts Test Modal](docs/screenshots/desktop/alerts-test-modal.png)
 
 <sub>Also captured for: mobile, tablet (see `docs/screenshots/`).</sub>
 <!-- SCREENSHOTS:alerts:END -->
@@ -229,18 +151,16 @@ Create custom alert rules with flexible conditions and scheduling.
 ![Assistant Overview](docs/screenshots/desktop/assistant-overview.png)
 ![Assistant Prompt](docs/screenshots/desktop/assistant-prompt.png)
 
-<sub>Also captured for: mobile, tablet (see `docs/screenshots/`).</sub>
+<sub>Also captured for: animations, mobile, tablet (see `docs/screenshots/`).</sub>
 <!-- SCREENSHOTS:assistant:END -->
 
 #### Cannonball Mode
 
 <!-- SCREENSHOTS:cannonball:START -->
 ![Cannonball Hud](docs/screenshots/desktop/cannonball-hud.png)
-![Cannonball Mobile Hud](docs/screenshots/desktop/cannonball-mobile-hud.png)
-![Cannonball Radar View](docs/screenshots/desktop/cannonball-radar-view.png)
-![Cannonball Settings](docs/screenshots/desktop/cannonball-settings.png)
+![Cannonball Scan](docs/screenshots/desktop/cannonball-scan.png)
 
-<sub>Also captured for: mobile, tablet (see `docs/screenshots/`).</sub>
+<sub>Also captured for: animations, mobile, tablet (see `docs/screenshots/`).</sub>
 <!-- SCREENSHOTS:cannonball:END -->
 
 #### Login

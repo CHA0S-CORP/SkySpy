@@ -1279,11 +1279,10 @@ GET /api/v1/alerts/rules/metrics/
 ### Alerts
 
 <!-- SCREENSHOTS:alerts:START -->
-![Alerts Condition Form](screenshots/desktop/alerts-condition-form.png)
+![Alerts History](screenshots/desktop/alerts-history.png)
 ![Alerts Notification Settings](screenshots/desktop/alerts-notification-settings.png)
 ![Alerts Rule Builder](screenshots/desktop/alerts-rule-builder.png)
 ![Alerts Rules List](screenshots/desktop/alerts-rules-list.png)
-![Alerts Test Modal](screenshots/desktop/alerts-test-modal.png)
 
 <sub>Also captured for: mobile, tablet (see `docs/screenshots/`).</sub>
 <!-- SCREENSHOTS:alerts:END -->

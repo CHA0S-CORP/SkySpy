@@ -1271,8 +1271,14 @@ export const test = base.extend({
           events: docMockData.generateCuratedSafetyEvents(),
         });
 
-        // Audio
+        // Audio. The v2 Radio screen (useRadioFeed.js) fetches
+        // `/api/v1/audio?hours=..&limit=..`, so the base `/audio` endpoint must
+        // be mocked too — the older `/audio/transmissions` glob never matched it,
+        // which left the Radio view empty (and every audio screenshot identical).
         await this.mock('/audio/transmissions', {
+          transmissions: docMockData.generateCuratedAudioTransmissions(),
+        });
+        await this.mock('/audio', {
           transmissions: docMockData.generateCuratedAudioTransmissions(),
         });
 

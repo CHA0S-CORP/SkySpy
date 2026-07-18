@@ -1189,11 +1189,7 @@ AcarsMessage.objects.filter(timestamp__lt=cutoff).delete()
 
 <!-- SCREENSHOTS:audio:START -->
 ![Audio Emergency](screenshots/desktop/audio-emergency.png)
-![Audio Filters](screenshots/desktop/audio-filters.png)
 ![Audio List](screenshots/desktop/audio-list.png)
-![Audio Playback](screenshots/desktop/audio-playback.png)
-![Audio Transcript](screenshots/desktop/audio-transcript.png)
-![Audio With Stats](screenshots/desktop/audio-with-stats.png)
 
 <sub>Also captured for: mobile, tablet (see `docs/screenshots/`).</sub>
 <!-- SCREENSHOTS:audio:END -->

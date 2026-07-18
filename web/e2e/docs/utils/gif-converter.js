@@ -110,6 +110,64 @@ export async function convertToGif(inputPath, outputPath, options = {}) {
 }
 
 /**
+ * Check if gif2webp (libwebp) is available
+ * @returns {boolean}
+ */
+export function checkGif2webp() {
+  try {
+    execSync('gif2webp -version', { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * @typedef {Object} WebpOptions
+ * @property {number} [quality=75] - Quality 0-100 (lossy) / compression effort baseline
+ * @property {boolean} [lossy=false] - Use lossy compression (smaller, softer edges)
+ * @property {number} [method=6] - Compression method 0 (fast) - 6 (best/slowest)
+ */
+
+/**
+ * Convert an animated GIF to an animated WebP (smaller, same frames/timing).
+ * Reuses the palette-optimized GIF produced by convertToGif so the two outputs
+ * stay frame-identical.
+ * @param {string} inputPath - Path to input GIF
+ * @param {string} outputPath - Path to output WebP
+ * @param {WebpOptions} options
+ */
+export function convertGifToWebp(inputPath, outputPath, options = {}) {
+  const { quality = 75, lossy = false, method = 6 } = options;
+
+  if (!checkGif2webp()) {
+    throw new Error(
+      'gif2webp is not installed. Install it with: brew install webp (macOS) or apt-get install webp (Ubuntu)'
+    );
+  }
+
+  if (!fs.existsSync(inputPath)) {
+    throw new Error(`Input file not found: ${inputPath}`);
+  }
+
+  const outputDir = path.dirname(outputPath);
+  if (!fs.existsSync(outputDir)) {
+    fs.mkdirSync(outputDir, { recursive: true });
+  }
+
+  // -mixed lets gif2webp pick lossy/lossless per frame; -lossy forces lossy.
+  const mode = lossy ? '-lossy' : '-mixed';
+  const cmd = `gif2webp ${mode} -q ${quality} -m ${method} "${inputPath}" -o "${outputPath}"`;
+  execSync(cmd, { stdio: 'pipe' });
+
+  return {
+    input: inputPath,
+    output: outputPath,
+    size: fs.statSync(outputPath).size,
+  };
+}
+
+/**
  * Batch convert all video files in a directory
  * @param {string} inputDir - Directory containing video files
  * @param {string} outputDir - Directory for output GIFs
@@ -156,12 +214,62 @@ export async function batchConvertVideos(inputDir, outputDir, options = {}) {
 }
 
 /**
+ * Friendly output names for known animation tests. Playwright truncates the
+ * artifact directory (inserting a hash), so the old `.anim.js-` marker no longer
+ * survives — we match on the test title, which is preserved at the tail of the
+ * dir name (e.g. `...-radar-sweep-desktop`).
+ */
+const ANIMATION_NAME_MAP = [
+  { match: 'agent-conversation', name: 'assistant-conversation' },
+  { match: 'radar-sweep', name: 'cannonball-radar-sweep' },
+  { match: 'threat-detection', name: 'cannonball-threat-detection' },
+  { match: 'threat-approach', name: 'cannonball-threat-approach' },
+  { match: 'pattern-detection', name: 'cannonball-pattern-detection' },
+];
+
+/**
+ * Derive a stable, readable, collision-free output name for an animation video.
+ * @param {string} videoPath - Full path to the .webm recording
+ * @param {Set<string>} usedNames - Names already taken this run (mutated)
+ * @returns {string}
+ */
+export function deriveAnimationName(videoPath, usedNames = new Set()) {
+  const parts = videoPath.split(path.sep);
+  const dir = parts[parts.length - 2] || 'animation';
+
+  let base = ANIMATION_NAME_MAP.find((e) => dir.includes(e.match))?.name;
+  if (!base) {
+    // Fallback: clean the Playwright artifact dir — drop the leading
+    // `animations-`/`screenshots-` prefix, the trailing viewport, and the
+    // inserted truncation hash — then sanitize.
+    base = dir
+      .replace(/^(animations|screenshots)-/, '')
+      .replace(/-(desktop|tablet|mobile|chromium)$/, '')
+      .replace(/-[0-9a-f]{5}-/, '-')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'animation';
+  }
+
+  // Guarantee uniqueness so two videos never overwrite each other.
+  let name = base;
+  let n = 2;
+  while (usedNames.has(name)) {
+    name = `${base}-${n++}`;
+  }
+  usedNames.add(name);
+  return name;
+}
+
+/**
  * Convert animation test recordings to GIFs
  * This is the main entry point for the docs:animations:convert script
  */
 export async function convertAnimationRecordings() {
   const inputDir = path.join(process.cwd(), 'e2e/docs/output');
-  const outputDir = path.join(process.cwd(), 'docs/screenshots/animations');
+  // Committed docs live at the repo root (../docs/screenshots), same target
+  // generate-index.js scans — NOT web/docs.
+  const outputDir = path.join(process.cwd(), '..', 'docs/screenshots/animations');
 
   console.log('Converting animation recordings to GIFs...');
   console.log(`Input directory: ${inputDir}`);
@@ -185,32 +293,32 @@ export async function convertAnimationRecordings() {
     return videos;
   };
 
-  const videos = findVideos(inputDir);
-  console.log(`Found ${videos.length} video files`);
+  // Only convert recordings from animation tests (.anim.js → artifact dir
+  // prefixed `animations-`). Screenshot tests (.doc.js) also record video with
+  // `video: 'on'`, but turning a static screenshot into a GIF is just noise.
+  const videos = findVideos(inputDir).filter((v) => {
+    const parent = v.split(path.sep).slice(-2, -1)[0] || '';
+    return parent.startsWith('animations-');
+  });
+  console.log(`Found ${videos.length} animation video files`);
 
   if (videos.length === 0) {
-    console.log('No videos to convert. Run docs:animations first.');
+    console.log('No animation videos to convert. Run docs:animations first.');
     return [];
   }
 
+  const webpAvailable = checkGif2webp();
+  if (!webpAvailable) {
+    console.warn('gif2webp not found — skipping animated WebP output (GIF only).');
+    console.warn('Install it with: brew install webp (macOS) or apt-get install webp (Ubuntu)');
+  }
+
   const results = [];
+  const webpResults = [];
+  const usedNames = new Set();
 
   for (const videoPath of videos) {
-    // Extract animation name from path
-    // e.g., .../test-cannonball-threats-anim-Cannonball-Threat-Detection/.../video.webm
-    const parts = videoPath.split(path.sep);
-    const testDir = parts.find((p) => p.includes('.anim.'));
-
-    let outputName = 'animation';
-    if (testDir) {
-      // Extract meaningful name from test directory
-      outputName = testDir
-        .replace(/\.anim\.js-/, '-')
-        .replace(/-chromium$/, '')
-        .toLowerCase()
-        .replace(/[^a-z0-9-]/g, '-');
-    }
-
+    const outputName = deriveAnimationName(videoPath, usedNames);
     const outputPath = path.join(outputDir, `${outputName}.gif`);
 
     try {
@@ -221,6 +329,19 @@ export async function convertAnimationRecordings() {
         optimize: true,
       });
       results.push({ status: 'success', ...result });
+
+      // Also emit an animated WebP (smaller, frame-identical to the GIF).
+      if (webpAvailable) {
+        const webpPath = outputPath.replace(/\.gif$/, '.webp');
+        try {
+          console.log(`  → webp: ${path.basename(webpPath)}`);
+          const webpResult = convertGifToWebp(outputPath, webpPath, { quality: 80 });
+          webpResults.push({ status: 'success', ...webpResult });
+        } catch (error) {
+          console.error(`  Failed to convert to webp:`, error.message);
+          webpResults.push({ status: 'error', input: outputPath, error: error.message });
+        }
+      }
     } catch (error) {
       console.error(`Failed to convert:`, error.message);
       results.push({
@@ -242,6 +363,12 @@ export async function convertAnimationRecordings() {
   if (successful.length > 0) {
     const totalSize = successful.reduce((sum, r) => sum + r.size, 0);
     console.log(`Total GIF size: ${(totalSize / 1024 / 1024).toFixed(2)} MB`);
+  }
+
+  const webpOk = webpResults.filter((r) => r.status === 'success');
+  if (webpOk.length > 0) {
+    const totalWebp = webpOk.reduce((sum, r) => sum + r.size, 0);
+    console.log(`WebP written: ${webpOk.length}  (${(totalWebp / 1024 / 1024).toFixed(2)} MB)`);
   }
 
   return results;
