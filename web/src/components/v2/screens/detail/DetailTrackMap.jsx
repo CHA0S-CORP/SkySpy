@@ -33,7 +33,14 @@ export function DetailTrackMap({ points = [], replayPoint = null, livePoint = nu
     const map = L.map(containerRef.current, {
       zoomControl: false,
       attributionControl: true,
+      // Inline preview inside a scrollable detail page — don't trap the page
+      // scroll when the pointer is over the map. Wheel zoom only after click.
+      scrollWheelZoom: false,
     });
+    // Enable wheel-zoom once the user clicks into the map, disable on leave so
+    // scrolling past it keeps moving the page.
+    map.on('focus click', () => map.scrollWheelZoom.enable());
+    map.on('blur mouseout', () => map.scrollWheelZoom.disable());
     mapRef.current = map;
     L.tileLayer(CARTO_DARK, { attribution: CARTO_ATTR, subdomains: 'abcd', maxZoom: 19 }).addTo(
       map

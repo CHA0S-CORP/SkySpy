@@ -74,6 +74,28 @@
   border: 1px solid color-mix(in srgb, var(--accent2) 32%, transparent);
   color: var(--accent2);
 }
+/* clickable variant — opens the type's technical dossier */
+button.v2-det__type-chip--link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  transition:
+    background 0.14s,
+    border-color 0.14s,
+    box-shadow 0.14s;
+}
+button.v2-det__type-chip--link:hover {
+  background: color-mix(in srgb, var(--accent2) 22%, transparent);
+  border-color: color-mix(in srgb, var(--accent2) 60%, transparent);
+}
+button.v2-det__type-chip--link:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent2) 55%, transparent);
+}
+.v2-det__type-chip--link svg {
+  opacity: 0.75;
+}
 .v2-det__op-chip {
   font-size: 11px;
   padding: 3px 8px;
@@ -977,6 +999,237 @@ a.v2-det__route-code--link:hover {
   color: var(--dim2);
 }
 
+/* ==========================================================================
+   Activity cards — ACARS messages + radio calls (sortable, detail-rich)
+   ========================================================================== */
+
+.v2-det__sortbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 2px 0 10px;
+  border-bottom: 1px solid var(--bord);
+  margin-bottom: 8px;
+}
+.v2-det__sortbar-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 1px;
+  color: var(--dim2);
+  margin-right: 2px;
+}
+.v2-det__sort-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--bord);
+  background: var(--bg2);
+  color: var(--dim);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    color 0.12s ease,
+    border-color 0.12s ease,
+    background 0.12s ease;
+}
+.v2-det__sort-btn:hover {
+  color: var(--txt);
+  border-color: var(--bord2);
+}
+.v2-det__sort-btn.is-active {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.v2-det__activity-empty {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 16px 4px;
+  font-size: 12px;
+  color: var(--dim);
+}
+
+.v2-det__acars-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* one message / call — left accent bar keyed to label or match confidence */
+.v2-det__acars-row {
+  position: relative;
+  padding: 10px 12px 10px 14px;
+  border-radius: 10px;
+  background: var(--bg2);
+  border: 1px solid var(--bord);
+  overflow: hidden;
+}
+.v2-det__acars-row::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--row-accent, var(--accent));
+  opacity: 0.85;
+}
+.v2-det__acars-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.v2-det__acars-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding: 1px 6px;
+  border-radius: 5px;
+  border: 1px solid currentColor;
+}
+.v2-det__acars-ident {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--txt);
+}
+.v2-det__acars-airline {
+  font-size: 11px;
+  color: var(--dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 150px;
+}
+.v2-det__acars-src {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.5px;
+  color: var(--dim2);
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--bg1);
+}
+.v2-det__acars-when {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--dim2);
+}
+.v2-det__acars-labelname {
+  margin-top: 4px;
+  font-size: 11px;
+  font-style: italic;
+  color: var(--dim);
+}
+.v2-det__acars-text {
+  margin: 7px 0 0;
+  padding: 8px 10px;
+  border-radius: 7px;
+  background: var(--bg0);
+  border: 1px solid var(--bord);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--txt);
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-x: auto;
+}
+.v2-det__acars-nobody {
+  margin-top: 6px;
+  font-size: 11px;
+  font-style: italic;
+  color: var(--dim2);
+}
+.v2-det__acars-more {
+  margin-top: 5px;
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.v2-det__acars-more:hover {
+  text-decoration: underline;
+}
+.v2-det__acars-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.v2-det__tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px;
+  border-radius: 5px;
+  background: var(--bg1);
+  border: 1px solid var(--bord);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--dim);
+}
+.v2-det__tag--apt {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+}
+.v2-det__tag--fl {
+  color: var(--accent2);
+  border-color: color-mix(in srgb, var(--accent2) 40%, transparent);
+}
+.v2-det__tag--err {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 45%, transparent);
+}
+.v2-det__tag--raw {
+  color: var(--dim2);
+  font-style: italic;
+}
+
+/* radio-call play button + bordered confidence pill (override base) */
+.v2-det__radio-play {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+  cursor: pointer;
+  transition:
+    background 0.12s ease,
+    transform 0.1s ease;
+}
+.v2-det__radio-play:hover {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.v2-det__radio-play.is-playing {
+  background: var(--accent);
+  color: var(--bg0);
+}
+.v2-det__acars-row .v2-det__radio-conf {
+  padding: 1px 6px;
+  border: 1px solid currentColor;
+  border-radius: 5px;
+  font-weight: 700;
+}
+
 /* summary / dossier card */
 .v2-det__summary-text {
   margin: 0;
@@ -1092,4 +1345,441 @@ a.v2-det__route-code--link:hover {
   color: var(--accent2);
   background: color-mix(in srgb, var(--accent2) 14%, transparent);
   border-color: color-mix(in srgb, var(--accent2) 40%, var(--bord));
+}
+
+/* generic spinner for action buttons (airframe refresh, etc.) */
+.v2-spin {
+  animation: flighthist-spin 0.9s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .v2-spin {
+    animation: none;
+  }
+}
+
+/* ==========================================================================
+   Flight History — LLM narrative card (shared by v2 detail + legacy overview)
+   Global classes so the prose reads identically in both hosts.
+   ========================================================================== */
+
+.flighthist {
+  position: relative;
+}
+
+/* Cap the AI flight-history narrative and scroll it in place — long timelines
+   would otherwise push the rest of the airframe page down. Scoped to the v2
+   card body so the legacy section (which has no fixed host height) is untouched. */
+.v2-det__card-body.flighthist {
+  max-height: 320px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--bord) transparent;
+}
+.v2-det__card-body.flighthist::-webkit-scrollbar {
+  width: 8px;
+}
+.v2-det__card-body.flighthist::-webkit-scrollbar-thumb {
+  background: var(--bord);
+  border-radius: 4px;
+}
+.v2-det__card-body.flighthist::-webkit-scrollbar-thumb:hover {
+  background: var(--dim2);
+}
+
+/* AI badge — used in both the v2 card-head and the legacy section title */
+.flighthist__ai {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px;
+  border-radius: 5px;
+  font-family: var(--font-mono, monospace);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: var(--accent2, #7cc4ff);
+  background: color-mix(in srgb, var(--accent2, #7cc4ff) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent2, #7cc4ff) 40%, transparent);
+}
+
+/* legacy header row lays the glyph/title/badge/button on one line */
+.flighthist__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.flighthist__glyph {
+  color: var(--accent2, #7cc4ff);
+}
+
+.flighthist__regen {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  border: 1px solid var(--bord, rgba(255, 255, 255, 0.1));
+  background: transparent;
+  color: var(--dim, #8a93a6);
+  cursor: pointer;
+  transition:
+    color 0.12s ease,
+    border-color 0.12s ease,
+    background 0.12s ease;
+}
+.flighthist__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.flighthist__head .flighthist__actions {
+  margin-left: auto;
+}
+.flighthist__regen:hover:not(:disabled) {
+  color: var(--accent, #6ee7a8);
+  border-color: color-mix(in srgb, var(--accent, #6ee7a8) 45%, transparent);
+  background: color-mix(in srgb, var(--accent, #6ee7a8) 10%, transparent);
+}
+.flighthist__regen:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+.flighthist__regen.is-spinning {
+  animation: flighthist-spin 0.9s linear infinite;
+}
+@keyframes flighthist-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.flighthist__prose {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.62;
+  color: var(--txt, #e7ecf3);
+}
+.flighthist__prose--muted {
+  color: var(--dim, #8a93a6);
+  font-style: italic;
+}
+
+/* narrative broken into timeline entries (reuses .v2-det__timeline-* rail) */
+.flighthist__timeline {
+  padding-top: 2px;
+}
+/* readable body copy — override the tiny dim default of .v2-det__timeline-note */
+.flighthist__sentence {
+  margin-top: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--txt, #e7ecf3);
+}
+/* flight-number badges under the relevant sentence */
+.flighthist__flights {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 6px;
+}
+.flighthist__flight {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 5px;
+  font-family: var(--font-mono, monospace);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  color: var(--accent2, #7cc4ff);
+  background: color-mix(in srgb, var(--accent2, #7cc4ff) 13%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent2, #7cc4ff) 42%, transparent);
+}
+
+/* the last sentence needs no trailing rail line */
+.flighthist__timeline .v2-det__timeline-row:last-child .v2-det__timeline-line {
+  display: none;
+}
+.flighthist__timeline .v2-det__timeline-row:last-child .v2-det__timeline-body {
+  padding-bottom: 2px;
+}
+
+.flighthist__meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 9px;
+  border-top: 1px solid var(--bord, rgba(255, 255, 255, 0.08));
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  color: var(--dim2, #667085);
+}
+
+/* shimmer skeleton while the narrative generates */
+.flighthist__skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.flighthist__skeleton span {
+  height: 11px;
+  border-radius: 4px;
+  background: linear-gradient(
+    90deg,
+    var(--bg2, #1a1f29) 25%,
+    color-mix(in srgb, var(--accent2, #7cc4ff) 12%, var(--bg2, #1a1f29)) 50%,
+    var(--bg2, #1a1f29) 75%
+  );
+  background-size: 200% 100%;
+  animation: flighthist-shimmer 1.3s ease-in-out infinite;
+}
+.flighthist__skeleton span:nth-child(1) {
+  width: 100%;
+}
+.flighthist__skeleton span:nth-child(2) {
+  width: 92%;
+}
+.flighthist__skeleton span:nth-child(3) {
+  width: 68%;
+}
+@keyframes flighthist-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/* legacy overview host: give the section a card surface like its siblings */
+.flighthist-section .flighthist {
+  padding-top: 4px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .flighthist__skeleton span,
+  .flighthist__regen.is-spinning {
+    animation: none;
+  }
+}
+
+/* ==========================================================================
+   ACARS AI Analysis — structured LLM decode, shown as an accordion.
+   Shared by the history ACARS tab and the airframe ACARS card (global classes).
+   ========================================================================== */
+
+.acars-ai {
+  margin-top: 8px;
+  border-top: 1px solid var(--bord);
+  padding-top: 8px;
+}
+.acars-ai__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 4px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  color: var(--accent2, #7cc4ff);
+}
+.acars-ai__toggle:hover {
+  color: var(--txt);
+}
+.acars-ai__spark {
+  color: var(--accent2, #7cc4ff);
+}
+.acars-ai__chev {
+  transition: transform 0.16s ease;
+  color: var(--dim);
+}
+.acars-ai.is-open .acars-ai__chev {
+  transform: rotate(180deg);
+}
+.acars-ai__panel {
+  margin-top: 8px;
+  padding: 12px;
+  border-radius: 10px;
+  background: var(--bg2);
+  border: 1px solid var(--bord);
+  animation: acars-ai-in 0.16s ease;
+}
+@keyframes acars-ai-in {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.acars-ai__msg {
+  font-size: 12px;
+  color: var(--dim);
+  font-style: italic;
+}
+.acars-ai__loading {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.acars-ai__loading span {
+  height: 10px;
+  border-radius: 4px;
+  background: linear-gradient(
+    90deg,
+    var(--bg1, #12161d) 25%,
+    color-mix(in srgb, var(--accent2, #7cc4ff) 14%, var(--bg1, #12161d)) 50%,
+    var(--bg1, #12161d) 75%
+  );
+  background-size: 200% 100%;
+  animation: flighthist-shimmer 1.3s ease-in-out infinite;
+}
+.acars-ai__loading span:nth-child(1) {
+  width: 85%;
+}
+.acars-ai__loading span:nth-child(2) {
+  width: 100%;
+}
+.acars-ai__loading span:nth-child(3) {
+  width: 60%;
+}
+
+.acars-ai__headline {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--txt);
+  line-height: 1.4;
+}
+.acars-ai__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 8px;
+}
+.acars-ai__tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 5px;
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--dim);
+  background: var(--bg1);
+  border: 1px solid var(--bord);
+}
+.acars-ai__tag--name {
+  color: var(--accent2, #7cc4ff);
+  border-color: color-mix(in srgb, var(--accent2, #7cc4ff) 40%, transparent);
+}
+.acars-ai__tag--ac {
+  color: var(--accent, #6ee7a8);
+  border-color: color-mix(in srgb, var(--accent, #6ee7a8) 40%, transparent);
+}
+.acars-ai__summary {
+  margin: 10px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--txt);
+}
+
+.acars-ai__fields {
+  margin: 10px 0 0;
+  display: grid;
+  grid-template-columns: minmax(90px, auto) 1fr;
+  gap: 1px;
+  background: var(--bord);
+  border: 1px solid var(--bord);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.acars-ai__field {
+  display: contents;
+}
+.acars-ai__field-label {
+  padding: 6px 10px;
+  background: var(--bg1);
+  font-size: 11px;
+  color: var(--dim);
+  font-weight: 600;
+}
+.acars-ai__field-value {
+  margin: 0;
+  padding: 6px 10px;
+  background: var(--bg1);
+  font-family: var(--font-mono, monospace);
+  font-size: 11.5px;
+  color: var(--txt);
+}
+.acars-ai__field-note {
+  display: block;
+  margin-top: 2px;
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-style: italic;
+  color: var(--dim2);
+}
+
+.acars-ai__airports {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 10px;
+}
+.acars-ai__apt {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px;
+  border-radius: 5px;
+  font-family: var(--font-mono, monospace);
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--accent, #6ee7a8);
+  background: color-mix(in srgb, var(--accent, #6ee7a8) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent, #6ee7a8) 38%, transparent);
+}
+.acars-ai__apt--warn {
+  color: var(--warn, #f5b544);
+  background: color-mix(in srgb, var(--warn, #f5b544) 12%, transparent);
+  border-color: color-mix(in srgb, var(--warn, #f5b544) 40%, transparent);
+}
+.acars-ai__apt-flag {
+  font-style: normal;
+  font-weight: 800;
+}
+.acars-ai__notes {
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.acars-ai__notes li {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--dim2);
+}
+.acars-ai__notes li svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: var(--warn, #f5b544);
+}
+@media (prefers-reduced-motion: reduce) {
+  .acars-ai__panel,
+  .acars-ai__loading span {
+    animation: none;
+  }
 }

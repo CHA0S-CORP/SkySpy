@@ -137,6 +137,15 @@ class AircraftInfo(models.Model):
     shell_score = models.FloatField(blank=True, null=True)  # 0..1 shell-company likelihood
     ownership_flags = models.JSONField(blank=True, null=True)  # factors/details from the analysis
 
+    # Flight route (origin/destination airports) resolved from the current
+    # callsign via adsb.im / adsbdb / hexdb. Route is per-flight, so we record
+    # which callsign it belongs to and refresh when the callsign changes.
+    # route_data shape: {callsign, airline_code, flight_number, origin{icao,iata,
+    # name,city,country,lat,lon}, destination{...}} (see external_db._airport_brief).
+    route_data = models.JSONField(blank=True, null=True)
+    route_callsign = models.CharField(max_length=16, blank=True, null=True)
+    route_fetched_at = models.DateTimeField(blank=True, null=True)
+
     # Cache management
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

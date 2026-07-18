@@ -33,6 +33,12 @@ vi.mock('./info', () => ({
       RegistrationCard - {data?.registration || hex || 'Unknown'}
     </div>
   ),
+  RouteCard: ({ data }) => (
+    <div data-testid="route-card">RouteCard - {data?.route?.origin?.icao || 'None'}</div>
+  ),
+  OwnershipCard: ({ data }) => (
+    <div data-testid="ownership-card">OwnershipCard - {data?.owner_type || 'None'}</div>
+  ),
   PhotoCard: ({ photoInfo }) => (
     <div data-testid="photo-card">PhotoCard - {photoInfo?.photographer || 'Unknown'}</div>
   ),

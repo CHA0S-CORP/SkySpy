@@ -82,6 +82,17 @@ def get_photo_path(icao_hex: str, is_thumbnail: bool = False) -> Path:
     return cache_dir / f"{icao_hex.upper()}{suffix}.jpg"
 
 
+def is_photo_cached(icao_hex: str, is_thumbnail: bool = False) -> bool:
+    """True when the photo already exists in the cache (S3 object or local file)."""
+    if not settings.PHOTO_CACHE_ENABLED:
+        return False
+    icao_hex = icao_hex.upper()
+    if settings.S3_ENABLED:
+        return _check_s3_photo_exists(icao_hex, is_thumbnail)
+    path = get_photo_path(icao_hex, is_thumbnail)
+    return path.exists() and path.stat().st_size > 0
+
+
 def _get_s3_photo_key(icao_hex: str, is_thumbnail: bool = False) -> str:
     """Get S3 key for photo."""
     suffix = "_thumb" if is_thumbnail else ""
@@ -235,6 +246,29 @@ def get_signed_photo_url(icao_hex: str, is_thumbnail: bool = False, expires_in: 
         return url
     except Exception as e:  # broad: signed-URL generation returns None on any error (tested)
         logger.error(f"Failed to generate signed URL for {icao_hex}: {e}")
+        return None
+
+
+def get_photo_bytes(icao_hex: str, is_thumbnail: bool = False) -> bytes | None:
+    """Fetch cached photo bytes from S3 so they can be served through our own API.
+
+    Lets the frontend always hit /api/v1/photos/<icao> (same-origin) instead of
+    being redirected to a remote signed URL.
+    """
+    from skyspy.services.storage import _get_s3_client
+
+    client = _get_s3_client()
+    if not client:
+        return None
+
+    key = _get_s3_photo_key(icao_hex, is_thumbnail)
+    try:
+        from botocore.exceptions import BotoCoreError, ClientError
+
+        response = client.get_object(Bucket=settings.S3_BUCKET, Key=key)
+        return response["Body"].read()
+    except (BotoCoreError, ClientError) as e:
+        logger.warning(f"S3 photo fetch failed for {icao_hex}: {e}")
         return None
 
 

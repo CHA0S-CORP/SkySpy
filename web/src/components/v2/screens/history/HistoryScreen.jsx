@@ -3,6 +3,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Icon } from '../../primitives';
 import { useHistoryData, RANGE_HOURS } from './useHistoryData';
 import { ArchiveTab } from './ArchiveTab';
+import { AcarsTab } from './AcarsTab';
+import { NotamsTab } from './NotamsTab';
 import {
   activityBins,
   airlineOf,
@@ -69,9 +71,10 @@ function EmptyTab({ label }) {
  * @param {string} props.apiBase
  * @param {(hex: string) => void} props.onSelectAircraft
  * @param {(eventId: string|number) => void} props.onViewEvent
+ * @param {(notamId: string) => void} [props.onViewNotam] - open NOTAM detail
  * @param {{data?: string}} [props.hashParams] - deep-link tab (`?data=notams`)
  */
-export function HistoryScreen({ apiBase, onSelectAircraft, onViewEvent, hashParams }) {
+export function HistoryScreen({ apiBase, onSelectAircraft, onViewEvent, onViewNotam, hashParams }) {
   const initialTab = TABS.some((t) => t.key === hashParams?.data) ? hashParams.data : 'sessions';
   const [tab, setTab] = useState(initialTab);
 
@@ -93,10 +96,25 @@ export function HistoryScreen({ apiBase, onSelectAircraft, onViewEvent, hashPara
   const [sortBy, setSortBy] = useState('time');
   const [sortDir, setSortDir] = useState('desc');
   const [archiveIcao, setArchiveIcao] = useState('');
+  const [headerOpen, setHeaderOpen] = useState(false);
 
   const queryClient = useQueryClient();
   const historyData = useHistoryData(apiBase, range, tab, archiveIcao);
-  const { sessions, safety, stats, sightings, acars, notams, pireps } = historyData;
+  const { sessions, safety, stats, sightings, acars, notams, notamTfrs, pireps } = historyData;
+
+  // Merge the NOTAM list with the national TFR feed for the archive tab,
+  // de-duped by notam id.
+  const notamRows = useMemo(() => {
+    const seen = new Set();
+    const out = [];
+    for (const n of [...(notams.data || []), ...(notamTfrs.data || [])]) {
+      const id = (n.notam_id || n.id || '').toString();
+      if (id && seen.has(id)) continue;
+      if (id) seen.add(id);
+      out.push(n);
+    }
+    return out;
+  }, [notams.data, notamTfrs.data]);
 
   const sessionList = sessions.data || [];
   const safetyList = safety.data || [];
@@ -174,36 +192,54 @@ export function HistoryScreen({ apiBase, onSelectAircraft, onViewEvent, hashPara
               </button>
             ))}
           </div>
-          <div className="v2-hist__kpis">
-            <Kpi
-              icon="line-chart"
-              iconColor="var(--accent)"
-              label="SESSIONS"
-              value={kpis.sessions}
+          {headerOpen ? (
+            <div className="v2-hist__kpis">
+              <Kpi
+                icon="line-chart"
+                iconColor="var(--accent)"
+                label="SESSIONS"
+                value={kpis.sessions}
+              />
+              <Kpi icon="send" iconColor="var(--accent2)" label="AIRCRAFT" value={kpis.aircraft} />
+              <Kpi
+                icon="clock"
+                iconColor="var(--accent2)"
+                label="AVG DURATION"
+                value={kpis.avgDur}
+                unit="min"
+              />
+              <Kpi
+                icon="map-pin"
+                iconColor="var(--accent2)"
+                label="MAX RANGE"
+                value={kpis.maxRange}
+                unit="nm"
+              />
+              <Kpi
+                icon="alert-triangle"
+                iconColor="var(--warn)"
+                label="SAFETY EVENTS"
+                value={kpis.safety}
+                warn
+              />
+            </div>
+          ) : (
+            <div className="v2-hist__spacer" />
+          )}
+          <button
+            type="button"
+            className="v2-iconbtn v2-hist__refresh"
+            title={headerOpen ? 'Collapse header' : 'Expand header'}
+            aria-expanded={headerOpen}
+            onClick={() => setHeaderOpen((v) => !v)}
+          >
+            <Icon
+              name="chevron-right"
+              size={16}
+              strokeWidth={1.9}
+              style={{ transform: headerOpen ? 'rotate(-90deg)' : 'rotate(90deg)' }}
             />
-            <Kpi icon="send" iconColor="var(--accent2)" label="AIRCRAFT" value={kpis.aircraft} />
-            <Kpi
-              icon="clock"
-              iconColor="var(--accent2)"
-              label="AVG DURATION"
-              value={kpis.avgDur}
-              unit="min"
-            />
-            <Kpi
-              icon="map-pin"
-              iconColor="var(--accent2)"
-              label="MAX RANGE"
-              value={kpis.maxRange}
-              unit="nm"
-            />
-            <Kpi
-              icon="alert-triangle"
-              iconColor="var(--warn)"
-              label="SAFETY EVENTS"
-              value={kpis.safety}
-              warn
-            />
-          </div>
+          </button>
           <button
             type="button"
             className="v2-iconbtn v2-hist__refresh"
@@ -215,6 +251,8 @@ export function HistoryScreen({ apiBase, onSelectAircraft, onViewEvent, hashPara
         </div>
 
         {/* activity */}
+        {headerOpen && (
+        <>
         <div className="v2-hist__activity">
           <span className="v2-hist__activity-label">{range.toUpperCase()} ACTIVITY</span>
           <div className="v2-hist__activity-bars">
@@ -247,6 +285,8 @@ export function HistoryScreen({ apiBase, onSelectAircraft, onViewEvent, hashPara
               ))}
             </div>
           </div>
+        )}
+        </>
         )}
 
         {/* tabs */}
@@ -554,57 +594,15 @@ export function HistoryScreen({ apiBase, onSelectAircraft, onViewEvent, hashPara
             </div>
           ))}
 
-        {tab === 'acars' &&
-          ((acars.data || []).length === 0 ? (
-            <EmptyTab label="ACARS" />
-          ) : (
-            <div className="v2-hist__rows">
-              {(acars.data || []).map((m, i) => (
-                <div key={m.id ?? i} className="v2-hist__row v2-hist__row--static">
-                  <Icon
-                    name="message"
-                    size={15}
-                    strokeWidth={1.7}
-                    style={{ color: 'var(--accent2)' }}
-                  />
-                  <div className="v2-hist__row-body">
-                    <div className="v2-hist__row-title v2-mono">
-                      {(m.callsign || m.registration || m.icao_hex || 'ACARS').toString().trim()}
-                      {m.label ? ` · ${m.label}` : ''}
-                    </div>
-                    <div className="v2-hist__row-sub">
-                      {m.decoded_text || m.text || m.message || ''}
-                    </div>
-                  </div>
-                  <span className="v2-hist__row-time">
-                    {m.timestamp || m.created_at
-                      ? new Date(m.timestamp || m.created_at).toLocaleTimeString()
-                      : ''}
-                  </span>
-                </div>
-              ))}
-            </div>
-          ))}
+        {tab === 'acars' && (
+          <AcarsTab
+            messages={acars.data || []}
+            apiBase={apiBase}
+            onSelectAircraft={onSelectAircraft}
+          />
+        )}
 
-        {tab === 'notams' &&
-          ((notams.data || []).length === 0 ? (
-            <EmptyTab label="NOTAM" />
-          ) : (
-            <div className="v2-hist__rows">
-              {(notams.data || []).map((n, i) => (
-                <div key={n.id ?? n.notam_id ?? i} className="v2-hist__row v2-hist__row--static">
-                  <Icon name="file" size={15} strokeWidth={1.7} style={{ color: 'var(--warn)' }} />
-                  <div className="v2-hist__row-body">
-                    <div className="v2-hist__row-title v2-mono">
-                      {n.notam_id || n.location || 'NOTAM'}
-                      {n.notam_type ? ` · ${n.notam_type}` : ''}
-                    </div>
-                    <div className="v2-hist__row-sub">{(n.text || '').slice(0, 220)}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ))}
+        {tab === 'notams' && <NotamsTab notams={notamRows} onViewNotam={onViewNotam} />}
 
         {tab === 'pireps' &&
           ((pireps.data || []).length === 0 ? (

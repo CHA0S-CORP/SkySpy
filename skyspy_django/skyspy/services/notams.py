@@ -755,6 +755,45 @@ def get_notams(
     return results[:limit]
 
 
+def get_notam_detail(notam_id: str) -> dict[str, Any] | None:
+    """Full detail for a single cached NOTAM (by ``notam_id``), or ``None``.
+
+    Same shape as :func:`get_notams` items, plus ``raw_text`` and the effective
+    schedule/keywords needed by the NOTAM detail page.
+    """
+    from skyspy.services.notam_decoder import decode_notam
+
+    notam = CachedNotam.objects.filter(notam_id=notam_id).first()
+    if not notam:
+        return None
+
+    decoded = decode_notam(notam)
+    return {
+        "notam_id": notam.notam_id,
+        "notam_type": notam.notam_type,
+        "classification": notam.classification,
+        "location": notam.location,
+        "latitude": notam.latitude,
+        "longitude": notam.longitude,
+        "radius_nm": notam.radius_nm,
+        "floor_ft": notam.floor_ft,
+        "ceiling_ft": notam.ceiling_ft,
+        "effective_start": notam.effective_start.isoformat() if notam.effective_start else None,
+        "effective_end": notam.effective_end.isoformat() if notam.effective_end else None,
+        "is_permanent": notam.is_permanent,
+        "text": notam.text,
+        "raw_text": notam.raw_text or notam.text,
+        "keywords": notam.keywords,
+        "geometry": notam.geometry,
+        "reason": notam.reason,
+        "is_active": notam.is_active,
+        "is_tfr": notam.is_tfr,
+        "severity": decoded["severity"],
+        "human_summary": decoded["human_summary"],
+        "decoded": decoded,
+    }
+
+
 @cached_with_ttl(ttl=60)
 def get_tfrs(
     lat: float | None = None,

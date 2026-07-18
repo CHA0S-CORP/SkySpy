@@ -50,8 +50,14 @@ logger = logging.getLogger(__name__)
 _aircraft_state: dict[str, dict] = {}  # icao -> aircraft data
 _aircraft_state_lock = Lock()
 
-# Buffer for database writes (cold path - flushed periodically)
-_db_write_buffer: deque[dict] = deque(maxlen=10000)
+# Buffer for database writes (cold path - flushed periodically). deque(maxlen)
+# silently discards the OLDEST row on overflow, so a lagging flush or a feed
+# burst would drop positions with no trace. _db_buffer_dropped counts those
+# discards so flush_stream_to_database can surface them instead of losing data
+# silently; the flush also re-queues failed batches, so overflow is the sole
+# remaining loss path. Sized for ~10s of a dense feed at the 5s flush cadence.
+_db_write_buffer: deque[dict] = deque(maxlen=50000)
+_db_buffer_dropped = 0
 
 # Monotonic count of stream messages received this process - synced to the
 # "aircraft_messages" cache key so emit_stats_tick / the REST status endpoint
@@ -67,6 +73,13 @@ _seen_aircraft_lock = Lock()
 # Track new aircraft for batch lookup (thread-safe with lock)
 _new_aircraft_queue: deque[str] = deque(maxlen=500)
 _new_aircraft_queue_lock = Lock()
+
+# Track (hex, callsign) pairs for route lookup, plus a per-hex "last callsign
+# enqueued" map so a route is only re-fetched when the callsign changes.
+_route_lookup_queue: deque[tuple[str, str]] = deque(maxlen=500)
+_route_lookup_lock = Lock()
+_route_callsign_seen: dict[str, str] = {}
+_route_callsign_seen_lock = Lock()
 
 # Last state snapshot for change detection (thread-safe with lock)
 _previous_icaos: set[str] = set()
@@ -238,6 +251,17 @@ def _track_delta_deg(a: float, b: float) -> float:
     return d if d <= 180.0 else 360.0 - d
 
 
+def _num(v) -> float | None:
+    """Coerce a kinematic field to float, or None. `alt` can be the string
+    "ground" (on-ground Mode-C) — treat any non-numeric as absent."""
+    if isinstance(v, (int, float)):
+        return float(v)
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
+
+
 def detect_ghost_aircraft(aircraft_list: list[dict]) -> dict[str, str]:
     """
     Identify ~-prefixed (non-ICAO: TIS-B / ADS-R / anonymized) tracks that
@@ -292,20 +316,20 @@ def detect_ghost_aircraft(aircraft_list: list[dict]) -> dict[str, str]:
         glat, glon = ghost.get("lat"), ghost.get("lon")
         if glat is None or glon is None:
             continue
-        g_alt, g_trk, g_gs = ghost.get("alt"), ghost.get("track"), ghost.get("gs")
+        g_alt, g_trk, g_gs = _num(ghost.get("alt")), _num(ghost.get("track")), _num(ghost.get("gs"))
         best = None  # (distance_nm, alt_delta, icao_hex)
         for cand in icao_with_pos:
             dist = calculate_distance_nm(glat, glon, cand["lat"], cand["lon"])
             if dist > GHOST_MATCH_NM:
                 continue
-            c_alt = cand.get("alt")
+            c_alt = _num(cand.get("alt"))
             alt_delta = abs(g_alt - c_alt) if (g_alt is not None and c_alt is not None) else 0
             if g_alt is not None and c_alt is not None and alt_delta > GHOST_MATCH_ALT_FT:
                 continue
-            c_trk = cand.get("track")
+            c_trk = _num(cand.get("track"))
             if g_trk is not None and c_trk is not None and _track_delta_deg(g_trk, c_trk) > GHOST_MATCH_TRACK_DEG:
                 continue
-            c_gs = cand.get("gs")
+            c_gs = _num(cand.get("gs"))
             if g_gs is not None and c_gs is not None and abs(g_gs - c_gs) > GHOST_MATCH_GS_KT:
                 continue
             key = (dist, alt_delta)
@@ -704,6 +728,24 @@ def update_state_and_broadcast(batch: list[dict], full_snapshot: bool = True):
         with _new_aircraft_queue_lock:
             _new_aircraft_queue.extend(truly_new)
 
+    # Queue route lookups whenever a callsign first appears or changes for a hex.
+    # Cheap dedup against _route_callsign_seen keeps this to ~one fetch per flight.
+    route_pairs = []
+    with _route_callsign_seen_lock:
+        for ac in batch:
+            hx = ac.get("hex")
+            cs = (ac.get("flight") or "").strip().upper()
+            if not hx or not cs:
+                continue
+            if _route_callsign_seen.get(hx) != cs:
+                _route_callsign_seen[hx] = cs
+                route_pairs.append((hx, cs))
+        if len(_route_callsign_seen) > 10000:
+            _route_callsign_seen.clear()
+    if route_pairs:
+        with _route_lookup_lock:
+            _route_lookup_queue.extend(route_pairs)
+
     # Broadcast to clients (this is the latency-critical part)
     try:
         # Filter out removed aircraft from batch before broadcasting
@@ -742,10 +784,15 @@ def update_state_and_broadcast(batch: list[dict], full_snapshot: bool = True):
         else:
             _previous_icaos |= current_icaos
 
-    # Buffer for database write (non-blocking append)
+    # Buffer for database write (non-blocking append). Count overflow discards
+    # (deque drops the oldest silently at maxlen) so the flush task can warn.
+    global _db_buffer_dropped
     with _db_buffer_lock:
+        cap = _db_write_buffer.maxlen
         for ac in batch:
             if ac.get("lat") is not None and ac.get("lon") is not None:
+                if len(_db_write_buffer) >= cap:
+                    _db_buffer_dropped += 1
                 _db_write_buffer.append(ac.copy())
 
 
@@ -832,6 +879,8 @@ def flush_stream_to_database(self):
 
     from skyspy.models import AircraftSighting
 
+    global _db_buffer_dropped
+
     # Grab all buffered data
     with _db_buffer_lock:
         if not _db_write_buffer:
@@ -839,6 +888,15 @@ def flush_stream_to_database(self):
         # Take a snapshot and clear buffer
         to_write = list(_db_write_buffer)
         _db_write_buffer.clear()
+        dropped = _db_buffer_dropped
+        _db_buffer_dropped = 0
+
+    if dropped:
+        logger.warning(
+            "Dropped %d buffered aircraft positions on overflow (DB write buffer hit maxlen — "
+            "flush lagging or feed burst); consider raising the deque maxlen or flush cadence",
+            dropped,
+        )
 
     if not to_write:
         return
@@ -917,6 +975,23 @@ def process_new_aircraft_lookups(self):
             logger.debug(f"Queued batch of {len(to_lookup)} aircraft for info lookup")
         except Exception as e:  # broad: Celery enqueue/broker failure modes are unknowable; lookups are best-effort
             logger.debug(f"Failed to queue batch lookup: {e}")
+
+    # Drain queued (hex, callsign) route lookups — one task per changed flight.
+    route_pairs = []
+    with _route_lookup_lock:
+        while _route_lookup_queue and len(route_pairs) < 50:
+            try:
+                route_pairs.append(_route_lookup_queue.popleft())
+            except IndexError:
+                break
+    if route_pairs:
+        from skyspy.tasks.external_db import fetch_route_for_icao
+
+        for hx, cs in route_pairs:
+            try:
+                fetch_route_for_icao.delay(hx, cs)
+            except Exception as e:  # broad: broker enqueue failure modes unknowable; route enrichment is best-effort
+                logger.debug(f"Failed to queue route lookup for {hx}/{cs}: {e}")
 
 
 @shared_task(bind=True, max_retries=0, ignore_result=True)
@@ -1328,6 +1403,160 @@ def stream_adsbx(feeder_lat: float, feeder_lon: float, poll_interval: float, rad
             raise
 
 
+# Keyless community sources. All return the readsb {"ac": [...]} schema, so a
+# record from any of them maps straight through normalize_aircraft_fast. URL
+# templates take {lat}/{lon}/{radius}.
+_FREE_SOURCE_TEMPLATES = {
+    "adsb.lol": "https://api.adsb.lol/v2/point/{lat}/{lon}/{radius}",
+    "adsb.fi": "https://opendata.adsb.fi/api/v2/lat/{lat}/lon/{lon}/dist/{radius}",
+    "airplanes.live": "https://api.airplanes.live/v2/point/{lat}/{lon}/{radius}",
+}
+
+
+def _resolve_free_sources() -> list[tuple[str, str]]:
+    """Parse AIRCRAFT_STREAM_FREE_SOURCES into an ordered [(name, template), ...] list.
+
+    Accepts known source names (adsb.lol/adsb.fi/airplanes.live) or a full URL
+    template containing {lat}/{lon}/{radius}. Falls back to adsb.lol.
+    """
+    raw = getattr(settings, "AIRCRAFT_STREAM_FREE_SOURCES", "") or ""
+    sources: list[tuple[str, str]] = []
+    for name in (s.strip() for s in raw.split(",")):
+        if not name:
+            continue
+        if name in _FREE_SOURCE_TEMPLATES:
+            sources.append((name, _FREE_SOURCE_TEMPLATES[name]))
+        elif "{lat}" in name and "{lon}" in name and "{radius}" in name:
+            sources.append((name, name))
+        else:
+            logger.warning(f"Unknown free ADS-B source '{name}', skipping")
+    return sources or [("adsb.lol", _FREE_SOURCE_TEMPLATES["adsb.lol"])]
+
+
+def stream_adsblol(feeder_lat: float, feeder_lon: float, poll_interval: float, radius_nm: int):
+    """
+    Stream aircraft from keyless community APIs (adsb.lol/adsb.fi/airplanes.live),
+    round-robining across the configured sources.
+
+    All sources are keyless and return the same readsb schema, so records map
+    straight through the standard normalize/broadcast path. Rotating spreads the
+    per-IP rate limit across sources; a 429 from one source skips immediately to
+    the next rather than stalling. Politeness guideline is <=1 req/s per source;
+    keep poll_interval >= 2s. Radius is capped by the APIs at 250nm.
+
+    Args:
+        feeder_lat: Center latitude for area search
+        feeder_lon: Center longitude for area search
+        poll_interval: Seconds between polls (each source is hit every
+            poll_interval * len(sources) seconds)
+        radius_nm: Search radius in nautical miles (max 250)
+    """
+    radius_nm = min(int(radius_nm), 250)
+    sources = _resolve_free_sources()
+
+    logger.info(
+        f"Starting community round-robin stream over {[n for n, _ in sources]} "
+        f"(lat={feeder_lat}, lon={feeder_lon}, radius={radius_nm}nm, interval={poll_interval}s)"
+    )
+
+    cache.set(CACHE_KEY_STREAM_ACTIVE, True, timeout=30)
+
+    last_cache_sync = time.time()
+    last_stats_log = time.time()
+    cache_sync_interval = 1.0
+    stats_log_interval = 30.0
+
+    polls_completed = 0
+    total_aircraft = 0
+    idx = 0
+    consecutive_errors = 0
+    max_consecutive_errors = max(6, len(sources) * 2)
+
+    while True:
+        poll_start = time.time()
+        name, template = sources[idx % len(sources)]
+        idx += 1
+        url = template.format(lat=feeder_lat, lon=feeder_lon, radius=radius_nm)
+
+        try:
+            resp = requests.get(url, timeout=15, headers={"Accept": "application/json"})
+            if resp.status_code == 429:
+                # Rate limited on this source: rotate to the next one immediately.
+                logger.warning(f"{name} rate limit (429), rotating to next source")
+                consecutive_errors += 1
+                if consecutive_errors >= max_consecutive_errors:
+                    raise RuntimeError("all community sources rate-limited")
+                time.sleep(min(poll_interval, 1.0))
+                continue
+            resp.raise_for_status()
+            aircraft_list = resp.json().get("ac", []) or []
+            consecutive_errors = 0
+
+            batch = []
+            for ac in aircraft_list:
+                hex_code = ac.get("hex") or ac.get("icao")
+                if not hex_code or ac.get("lat") is None or ac.get("lon") is None:
+                    continue
+                normalized = {
+                    "hex": hex_code.upper(),
+                    "flight": (ac.get("flight") or "").strip() or None,
+                    "r": ac.get("r"),
+                    "t": ac.get("t"),
+                    "lat": ac.get("lat"),
+                    "lon": ac.get("lon"),
+                    "alt_baro": ac.get("alt_baro"),
+                    "alt_geom": ac.get("alt_geom"),
+                    "gs": ac.get("gs"),
+                    "track": ac.get("track"),
+                    "baro_rate": ac.get("baro_rate"),
+                    "squawk": ac.get("squawk"),
+                    "emergency": ac.get("emergency"),
+                    "category": ac.get("category"),
+                    "seen": ac.get("seen", 0),
+                    "rssi": ac.get("rssi"),
+                    "source": name,
+                }
+                normalized = normalize_aircraft_fast(normalized, feeder_lat, feeder_lon)
+                normalized["military"] = bool(ac.get("mil", False))
+                batch.append(normalized)
+
+            if batch:
+                update_state_and_broadcast(batch)
+                total_aircraft += len(batch)
+
+            polls_completed += 1
+
+            now = time.time()
+
+            if now - last_cache_sync >= cache_sync_interval:
+                sync_cache_state()
+                last_cache_sync = now
+
+            cache.set(CACHE_KEY_STREAM_ACTIVE, True, timeout=30)
+
+            if now - last_stats_log >= stats_log_interval:
+                with _aircraft_state_lock:
+                    active_aircraft = len(_aircraft_state)
+                logger.info(
+                    f"community stream stats: {polls_completed} polls, {total_aircraft} aircraft processed, "
+                    f"{active_aircraft} active aircraft"
+                )
+                last_stats_log = now
+
+            elapsed = time.time() - poll_start
+            sleep_time = max(0.1, poll_interval - elapsed)
+            time.sleep(sleep_time)
+
+        except requests.RequestException as e:
+            # Transient network/HTTP error on one source: rotate, don't kill the stream.
+            logger.warning(f"{name} poll error: {e}, rotating to next source")
+            consecutive_errors += 1
+            if consecutive_errors >= max_consecutive_errors:
+                logger.error("community stream: all sources failing, reraising for reconnect")
+                raise
+            time.sleep(min(poll_interval, 1.0))
+
+
 # ============================================================================
 # Main Streaming Task
 # ============================================================================
@@ -1352,6 +1581,7 @@ def stream_aircraft(self):
     - 'sse': Use SSE endpoint (e.g., http://ultrafeeder/v2/sse)
     - 'tcp': Use raw TCP (e.g., ultrafeeder:30047)
     - 'adsbx': Use ADSBexchange API (requires ADSBX_RAPIDAPI_KEY)
+    - 'adsblol': Use adsb.lol community API (keyless, radius max 250nm)
     - 'auto': Try SSE first, fall back to TCP
     """
     if not settings.AIRCRAFT_STREAM_ENABLED:
@@ -1373,6 +1603,10 @@ def stream_aircraft(self):
     adsbx_interval = getattr(settings, "AIRCRAFT_STREAM_ADSBX_INTERVAL", 2.0)
     adsbx_radius = getattr(settings, "AIRCRAFT_STREAM_ADSBX_RADIUS", 250)
 
+    # adsb.lol configuration
+    adsblol_interval = getattr(settings, "AIRCRAFT_STREAM_ADSBLOL_INTERVAL", 2.0)
+    adsblol_radius = getattr(settings, "AIRCRAFT_STREAM_ADSBLOL_RADIUS", 250)
+
     # Pre-fetch settings to avoid repeated lookups
     feeder_lat = settings.FEEDER_LAT
     feeder_lon = settings.FEEDER_LON
@@ -1387,10 +1621,16 @@ def stream_aircraft(self):
     max_consecutive_errors = 10
     use_sse = stream_mode in ("sse", "auto")
     use_adsbx = stream_mode == "adsbx"
+    use_adsblol = stream_mode == "adsblol"
 
     while True:
         try:
-            if use_adsbx:
+            if use_adsblol:
+                logger.info(
+                    f"Starting adsb.lol API stream (radius={adsblol_radius}nm, interval={adsblol_interval}s)..."
+                )
+                stream_adsblol(feeder_lat, feeder_lon, adsblol_interval, adsblol_radius)
+            elif use_adsbx:
                 logger.info(
                     f"Starting ADSBexchange API stream (radius={adsbx_radius}nm, interval={adsbx_interval}s)..."
                 )

@@ -10,6 +10,7 @@ import { AircraftCards } from '../safety/AircraftCards';
 import { EventMapVisualization } from '../safety/EventMapVisualization';
 import { TelemetrySnapshotsContent } from '../safety/TelemetrySnapshot';
 import { FlightDataGraphs } from '../safety/FlightDataGraphs';
+import { EventAiSummary } from '../safety/EventAiSummary';
 
 // Extracted hook
 import { useSafetyEventData } from '../../hooks/useSafetyEventData';
@@ -323,6 +324,9 @@ export function SafetyEventPage({
             </div>
             <p className="sep-message-text">{event.message}</p>
           </div>
+
+          {/* AI analysis (LLM plain-English explanation) */}
+          <EventAiSummary eventId={eventId} apiBase={apiBase} accent={severityColor} />
 
           {/* Aircraft cards */}
           <AircraftCards

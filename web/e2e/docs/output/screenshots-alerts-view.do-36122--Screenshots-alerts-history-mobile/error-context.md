@@ -1,0 +1,106 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - banner [ref=e4]:
+      - button "Toggle navigation" [ref=e5] [cursor=pointer]:
+        - img [ref=e6]
+      - generic [ref=e8]:
+        - img [ref=e10]
+        - generic [ref=e14]:
+          - text: Sky
+          - emphasis [ref=e15]: Spy
+      - generic [ref=e16]:
+        - button "radar" [ref=e17] [cursor=pointer]: radar
+        - button "Slate theme" [ref=e19] [cursor=pointer]
+        - button "Amber theme" [ref=e21] [cursor=pointer]
+      - generic [ref=e23]:
+        - button "Notifications" [ref=e24] [cursor=pointer]:
+          - img [ref=e25]
+        - button "Settings" [ref=e27] [cursor=pointer]:
+          - img [ref=e28]
+        - generic [ref=e31]:
+          - img [ref=e32]
+          - generic [ref=e35]: 14:30:00
+          - generic [ref=e36]: UTC
+    - generic [ref=e37]:
+      - navigation "Primary" [ref=e38]:
+        - generic [ref=e39]: NAVIGATION
+        - button "Live Map" [ref=e40] [cursor=pointer]:
+          - img [ref=e41]
+          - text: Live Map
+        - button "Aircraft List" [ref=e43] [cursor=pointer]:
+          - img [ref=e44]
+          - text: Aircraft List
+        - button "Statistics" [ref=e46] [cursor=pointer]:
+          - img [ref=e47]
+          - text: Statistics
+        - button "Analytics" [ref=e49] [cursor=pointer]:
+          - img [ref=e50]
+          - text: Analytics
+        - button "History" [ref=e53] [cursor=pointer]:
+          - img [ref=e54]
+          - text: History
+        - button "Radio" [ref=e56] [cursor=pointer]:
+          - img [ref=e57]
+          - text: Radio
+        - button "Alerts" [ref=e60] [cursor=pointer]:
+          - img [ref=e61]
+          - text: Alerts
+        - button "System" [ref=e63] [cursor=pointer]:
+          - img [ref=e64]
+          - text: System
+        - button "Assistant" [ref=e66] [cursor=pointer]:
+          - img [ref=e67]
+          - text: Assistant
+        - button "Cannonball" [ref=e69] [cursor=pointer]:
+          - img [ref=e70]
+          - text: Cannonball
+        - button "Services" [ref=e75] [cursor=pointer]:
+          - img [ref=e76]
+          - text: Services
+          - img [ref=e79]
+        - generic [ref=e82]:
+          - generic [ref=e85]: LIVE
+          - generic [ref=e86]: v2.5.0
+        - generic [ref=e87]: © CHAOS CORP
+      - main [ref=e88]:
+        - generic [ref=e90]:
+          - generic [ref=e91]:
+            - tablist [ref=e92]:
+              - tab "Rules 0" [selected] [ref=e93] [cursor=pointer]:
+                - text: Rules
+                - generic [ref=e94]: "0"
+              - tab "History" [ref=e95] [cursor=pointer]
+              - tab "Notifications" [ref=e96] [cursor=pointer]
+            - button "New Rule" [ref=e97] [cursor=pointer]:
+              - img [ref=e98]
+              - text: New Rule
+          - generic [ref=e100]:
+            - generic [ref=e101]:
+              - img [ref=e102]
+              - textbox "Search rules" [ref=e105]:
+                - /placeholder: Search rules…
+            - combobox "Priority filter" [ref=e106] [cursor=pointer]:
+              - option "All Priorities" [selected]
+              - option "Info"
+              - option "Warning"
+              - option "Critical"
+              - option "Emergency"
+            - combobox "Status filter" [ref=e107] [cursor=pointer]:
+              - option "All Status" [selected]
+              - option "Enabled"
+              - option "Disabled"
+            - generic [ref=e108]: 0 rules
+          - generic [ref=e110]:
+            - img [ref=e111]
+            - generic [ref=e113]: No rules match your filters
+            - button "Create Rule" [ref=e114] [cursor=pointer]:
+              - img [ref=e115]
+              - text: Create Rule
+  - generic [ref=e117]:
+    - img [ref=e119]
+    - button "Open Tanstack query devtools" [ref=e187] [cursor=pointer]:
+      - img [ref=e188]
+```

@@ -15,6 +15,10 @@ import {
 import { altitudeOf, EMERGENCY_SQUAWKS } from '../list/listModel';
 import { DetailTrackMap } from './DetailTrackMap';
 import { FlightRoute, RouteSummary, parseRoute } from './FlightRoute';
+import { AcarsActivityCard, RadioActivityCard } from './DetailActivity';
+import { FlightHistoryCard } from '../../../shared/FlightHistoryCard';
+import { AirframeModal } from '../airframes/AirframeModal';
+import { AIRFRAMES } from '../airframes/airframesData';
 
 const SPEEDS = [0.5, 1, 2, 4];
 
@@ -207,6 +211,7 @@ export function DetailScreen({
   const [speed, setSpeed] = useState(1);
   const [pos, setPos] = useState(100);
   const [liveOn, setLiveOn] = useState(true);
+  const [dossierOpen, setDossierOpen] = useState(false);
 
   // The aircraft is streaming a usable position right now (in coverage).
   const liveAvailable = typeof live?.lat === 'number' && typeof live?.lon === 'number';
@@ -218,7 +223,7 @@ export function DetailScreen({
   // opened from the radio screen for an aircraft no longer in view) so the
   // route lookup and callsign row still populate.
   const callsign = (live?.flight || call || '').trim();
-  const { info, track, safety, sessions, route } = useDetailData(
+  const { info, track, safety, sessions, route, acars } = useDetailData(
     apiBase,
     hex,
     callsign,
@@ -227,6 +232,14 @@ export function DetailScreen({
   const airframe = info.data || {};
   const points = track.data || [];
   const safetyEvents = safety.data || [];
+
+  // ICAO type designator + its matching reference-library airframe (if indexed),
+  // so the header type badge can open the technical dossier.
+  const rawType = airframe.type_code || airframe.aircraft_type || airframe.type || live?.t || '';
+  const dossierFrame = useMemo(() => {
+    const t = String(rawType).toUpperCase();
+    return t ? AIRFRAMES.find((a) => a.id === t) || null : null;
+  }, [rawType]);
 
   // playback timer (local advance between socket ticks, mock cadence)
   useEffect(() => {
@@ -340,6 +353,9 @@ export function DetailScreen({
     ? airframe.matched_radio_calls
     : [];
 
+  // ACARS/VDL2 datalink messages for this airframe (own 24h query).
+  const acarsMessages = Array.isArray(acars.data) ? acars.data : [];
+
   // Ownership analysis (shell-company heuristics) + dossier prose. All optional
   // — the cards below render only when their fields are actually present.
   const dossierText =
@@ -408,6 +424,28 @@ export function DetailScreen({
     }, 3000);
   }, [photoUrl, photoFetching, hex, apiBase, queryClient, stopPhotoPoll]);
 
+  // Force-refresh the whole airframe record (re-fetch external sources) and nudge
+  // the flight-history card to append any new activity.
+  const [airframeRefreshing, setAirframeRefreshing] = useState(false);
+  const [fhRefreshKey, setFhRefreshKey] = useState(0);
+  const refreshAirframe = useCallback(async () => {
+    if (!hex || airframeRefreshing) return;
+    const hexUC = (hex || '').toUpperCase();
+    setAirframeRefreshing(true);
+    toast('Refreshing airframe data…');
+    try {
+      await fetch(`${apiBase}/api/v1/airframes/${hexUC}/refresh/`, { method: 'POST' });
+    } catch {
+      // Trigger may still have run server-side; re-poll regardless.
+    }
+    // Re-poll the record (useDetailData keeps polling while it's unpopulated) and
+    // force the flight-history card to re-check for new sessions.
+    queryClient.invalidateQueries({ queryKey: ['v2-detail-info', apiBase, hexUC] });
+    queryClient.invalidateQueries({ queryKey: ['v2-detail-track', apiBase, hexUC] });
+    setFhRefreshKey((k) => k + 1);
+    setTimeout(() => setAirframeRefreshing(false), 4000);
+  }, [hex, apiBase, airframeRefreshing, queryClient]);
+
   // Stop polling once the photo lands, and clean up on hex change / unmount.
   useEffect(() => {
     if (photoUrl && photoPollRef.current) {
@@ -475,11 +513,20 @@ export function DetailScreen({
                 {registration}
               </span>
             )}
-            {(airframe.type_code || airframe.aircraft_type || airframe.type || live?.t) && (
-              <span className="v2-det__type-chip">
-                {airframe.type_code || airframe.aircraft_type || airframe.type || live?.t}
-              </span>
-            )}
+            {rawType &&
+              (dossierFrame ? (
+                <button
+                  type="button"
+                  className="v2-det__type-chip v2-det__type-chip--link"
+                  onClick={() => setDossierOpen(true)}
+                  title={`View ${dossierFrame.name} technical dossier`}
+                >
+                  {rawType}
+                  <Icon name="layers" size={11} strokeWidth={1.9} />
+                </button>
+              ) : (
+                <span className="v2-det__type-chip">{rawType}</span>
+              ))}
             {(airframe.operator || airframe.owner) && (
               <span className="v2-det__op-chip">{airframe.operator || airframe.owner}</span>
             )}
@@ -512,6 +559,21 @@ export function DetailScreen({
         </div>
         <div className="v2-det__spacer" />
         <div className="v2-det__actions">
+          <button
+            type="button"
+            className="v2-btn"
+            onClick={refreshAirframe}
+            disabled={airframeRefreshing}
+            title="Refresh airframe data"
+            data-testid="v2-detail-refresh"
+          >
+            <Icon
+              name="refresh-cw"
+              size={15}
+              strokeWidth={1.7}
+              className={airframeRefreshing ? 'v2-spin' : undefined}
+            />
+          </button>
           <button type="button" className="v2-btn" onClick={share} title="Share">
             <Icon name="share" size={15} strokeWidth={1.7} />
           </button>
@@ -806,6 +868,129 @@ export function DetailScreen({
             </div>
           )}
 
+          {/* sighting history */}
+          <div className="v2-det__card">
+            <div className="v2-det__card-head">
+              <Icon
+                name="crosshair"
+                size={15}
+                strokeWidth={1.7}
+                style={{ color: 'var(--accent)' }}
+              />
+              <span>Sighting History</span>
+              <span className="v2-det__card-aside">seen {(sessions.data || []).length}× here</span>
+            </div>
+            <div className="v2-det__card-body">
+              {(sessions.data || []).length === 0 ? (
+                <div className="v2-det__map-empty">
+                  First time this station has seen this airframe
+                </div>
+              ) : (
+                (sessions.data || []).map((s, i) => (
+                  <div key={s.id ?? i} className="v2-det__timeline-row">
+                    <div className="v2-det__timeline-rail">
+                      <span
+                        className="v2-det__timeline-dot"
+                        style={{ background: i === 0 ? 'var(--accent)' : 'var(--dim)' }}
+                      />
+                      <span className="v2-det__timeline-line" />
+                    </div>
+                    <div className="v2-det__timeline-body">
+                      <div className="v2-det__timeline-head">
+                        <span>{(s.callsign || '').trim() || (s.icao_hex || '').toUpperCase()}</span>
+                        <span className="v2-det__timeline-when">
+                          {s.last_seen ? new Date(s.last_seen).toLocaleDateString() : ''}
+                        </span>
+                      </div>
+                      <div className="v2-det__timeline-note">
+                        {typeof s.max_rssi === 'number'
+                          ? `peak ${Math.round(s.max_rssi)} dB · `
+                          : ''}
+                        {s.duration_min != null ? `${Math.round(s.duration_min)} min tracked` : ''}
+                        {typeof s.min_distance_nm === 'number'
+                          ? ` · closest ${s.min_distance_nm.toFixed(1)} nm`
+                          : ''}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* safety events */}
+          <div className="v2-det__card">
+            <div className="v2-det__card-head">
+              <Icon
+                name="alert-triangle"
+                size={15}
+                strokeWidth={1.7}
+                style={{ color: 'var(--warn)' }}
+              />
+              <span>Safety Events</span>
+              <span className="v2-det__card-aside">{safetyEvents.length} in 24h</span>
+            </div>
+            <div className="v2-det__card-body">
+              {safetyEvents.length === 0 ? (
+                <div className="v2-det__allclear">
+                  <Icon
+                    name="shield-check"
+                    size={16}
+                    strokeWidth={1.8}
+                    style={{ color: 'var(--accent)' }}
+                  />
+                  <span>ALL CLEAR — no safety events for this aircraft</span>
+                </div>
+              ) : (
+                safetyEvents.map((e, i) => {
+                  const c = sevColor(e.severity);
+                  return (
+                    <button
+                      key={e.id ?? i}
+                      type="button"
+                      className="v2-det__safety-row"
+                      onClick={() => (e.id != null ? onViewEvent(e.id) : null)}
+                    >
+                      <span
+                        className="v2-det__safety-icon"
+                        style={{
+                          color: c,
+                          background: `color-mix(in srgb, ${c} 15%, transparent)`,
+                        }}
+                      >
+                        <Icon name="alert-triangle" size={15} strokeWidth={1.9} />
+                      </span>
+                      <div className="v2-det__safety-body">
+                        <div className="v2-det__safety-title">
+                          {(e.event_type || e.type || 'Safety event').replaceAll('_', ' ')}
+                        </div>
+                        <div className="v2-det__safety-detail">
+                          {e.description || e.message || ''}
+                        </div>
+                      </div>
+                      <span
+                        className="v2-det__safety-sev"
+                        style={{
+                          color: c,
+                          background: `color-mix(in srgb, ${c} 15%, transparent)`,
+                        }}
+                      >
+                        {(e.severity || 'info').toUpperCase()}
+                      </span>
+                      <span className="v2-det__safety-time">
+                        {e.timestamp || e.created_at
+                          ? new Date(e.timestamp || e.created_at).toLocaleTimeString('en-US', {
+                              hour12: false,
+                            })
+                          : ''}
+                      </span>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </div>
+
           {/* data sources / provenance */}
           {sourceData.length > 0 && (
             <div className="v2-det__card">
@@ -1024,166 +1209,12 @@ export function DetailScreen({
             </div>
           </div>
 
-          {/* sighting history */}
-          <div className="v2-det__card">
-            <div className="v2-det__card-head">
-              <Icon
-                name="crosshair"
-                size={15}
-                strokeWidth={1.7}
-                style={{ color: 'var(--accent)' }}
-              />
-              <span>Sighting History</span>
-              <span className="v2-det__card-aside">seen {(sessions.data || []).length}× here</span>
-            </div>
-            <div className="v2-det__card-body">
-              {(sessions.data || []).length === 0 ? (
-                <div className="v2-det__map-empty">
-                  First time this station has seen this airframe
-                </div>
-              ) : (
-                (sessions.data || []).map((s, i) => (
-                  <div key={s.id ?? i} className="v2-det__timeline-row">
-                    <div className="v2-det__timeline-rail">
-                      <span
-                        className="v2-det__timeline-dot"
-                        style={{ background: i === 0 ? 'var(--accent)' : 'var(--dim)' }}
-                      />
-                      <span className="v2-det__timeline-line" />
-                    </div>
-                    <div className="v2-det__timeline-body">
-                      <div className="v2-det__timeline-head">
-                        <span>{(s.callsign || '').trim() || (s.icao_hex || '').toUpperCase()}</span>
-                        <span className="v2-det__timeline-when">
-                          {s.last_seen ? new Date(s.last_seen).toLocaleDateString() : ''}
-                        </span>
-                      </div>
-                      <div className="v2-det__timeline-note">
-                        {typeof s.max_rssi === 'number'
-                          ? `peak ${Math.round(s.max_rssi)} dB · `
-                          : ''}
-                        {s.duration_min != null ? `${Math.round(s.duration_min)} min tracked` : ''}
-                        {typeof s.min_distance_nm === 'number'
-                          ? ` · closest ${s.min_distance_nm.toFixed(1)} nm`
-                          : ''}
-                      </div>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
+          {/* LLM flight-history narrative (hidden when LLM off / no history) */}
+          <FlightHistoryCard apiBase={apiBase} hex={hex} variant="v2" refreshKey={fhRefreshKey} />
 
-          {/* radio activity */}
-          {radioCalls.length > 0 && (
-            <div className="v2-det__card">
-              <div className="v2-det__card-head">
-                <Icon name="mic" size={15} strokeWidth={1.7} style={{ color: 'var(--accent)' }} />
-                <span>Radio Activity</span>
-                <span className="v2-det__card-aside">{radioCalls.length} matched</span>
-              </div>
-              <div className="v2-det__card-body">
-                {radioCalls.map((c, i) => (
-                  <div key={c.id ?? i} className="v2-det__radio-row">
-                    <div className="v2-det__radio-head">
-                      <span className="v2-det__radio-freq">
-                        {typeof c.frequency_mhz === 'number'
-                          ? `${c.frequency_mhz.toFixed(3)} MHz`
-                          : c.channel_name || 'radio'}
-                      </span>
-                      {typeof c.confidence === 'number' && (
-                        <span className="v2-det__radio-conf">
-                          {Math.round(c.confidence * 100)}% match
-                        </span>
-                      )}
-                      {c.created_at && (
-                        <span className="v2-det__radio-when">
-                          {new Date(c.created_at).toLocaleTimeString('en-US', { hour12: false })}
-                        </span>
-                      )}
-                    </div>
-                    {c.transcript && <div className="v2-det__radio-text">“{c.transcript}”</div>}
-                    {typeof c.duration_seconds === 'number' && (
-                      <div className="v2-det__radio-meta">{c.duration_seconds.toFixed(1)}s</div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* safety events */}
-          <div className="v2-det__card">
-            <div className="v2-det__card-head">
-              <Icon
-                name="alert-triangle"
-                size={15}
-                strokeWidth={1.7}
-                style={{ color: 'var(--warn)' }}
-              />
-              <span>Safety Events</span>
-              <span className="v2-det__card-aside">{safetyEvents.length} in 24h</span>
-            </div>
-            <div className="v2-det__card-body">
-              {safetyEvents.length === 0 ? (
-                <div className="v2-det__allclear">
-                  <Icon
-                    name="shield-check"
-                    size={16}
-                    strokeWidth={1.8}
-                    style={{ color: 'var(--accent)' }}
-                  />
-                  <span>ALL CLEAR — no safety events for this aircraft</span>
-                </div>
-              ) : (
-                safetyEvents.map((e, i) => {
-                  const c = sevColor(e.severity);
-                  return (
-                    <button
-                      key={e.id ?? i}
-                      type="button"
-                      className="v2-det__safety-row"
-                      onClick={() => (e.id != null ? onViewEvent(e.id) : null)}
-                    >
-                      <span
-                        className="v2-det__safety-icon"
-                        style={{
-                          color: c,
-                          background: `color-mix(in srgb, ${c} 15%, transparent)`,
-                        }}
-                      >
-                        <Icon name="alert-triangle" size={15} strokeWidth={1.9} />
-                      </span>
-                      <div className="v2-det__safety-body">
-                        <div className="v2-det__safety-title">
-                          {(e.event_type || e.type || 'Safety event').replaceAll('_', ' ')}
-                        </div>
-                        <div className="v2-det__safety-detail">
-                          {e.description || e.message || ''}
-                        </div>
-                      </div>
-                      <span
-                        className="v2-det__safety-sev"
-                        style={{
-                          color: c,
-                          background: `color-mix(in srgb, ${c} 15%, transparent)`,
-                        }}
-                      >
-                        {(e.severity || 'info').toUpperCase()}
-                      </span>
-                      <span className="v2-det__safety-time">
-                        {e.timestamp || e.created_at
-                          ? new Date(e.timestamp || e.created_at).toLocaleTimeString('en-US', {
-                              hour12: false,
-                            })
-                          : ''}
-                      </span>
-                    </button>
-                  );
-                })
-              )}
-            </div>
-          </div>
+          {/* ACARS datalink messages + matched radio calls (sortable) */}
+          <AcarsActivityCard messages={acarsMessages} apiBase={apiBase} />
+          <RadioActivityCard calls={radioCalls} />
 
           {/* external links */}
           <div className="v2-det__external">
@@ -1226,6 +1257,9 @@ export function DetailScreen({
           </button>
         </div>
       )}
+
+      {/* Technical dossier for this aircraft's type, opened from the type badge. */}
+      <AirframeModal frame={dossierFrame} open={dossierOpen} onOpenChange={setDossierOpen} />
     </div>
   );
 }

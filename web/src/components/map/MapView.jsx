@@ -2722,7 +2722,6 @@ function MapView({
         aircraft={aircraft}
         aircraftInfo={aircraftInfo}
         onSelectAircraft={selectAircraft}
-        highlightedHexes={highlightedHexes}
         setHighlightedHexes={setHighlightedHexes}
       />
 

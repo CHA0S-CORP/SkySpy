@@ -137,6 +137,9 @@ class AircraftInfoSerializer(serializers.ModelSerializer):
     dossier_text = serializers.SerializerMethodField(
         help_text="RAG dossier text for this airframe, or null if none exists"
     )
+    route = serializers.SerializerMethodField(
+        help_text="Origin/destination airports for the aircraft's current callsign, or null"
+    )
 
     class Meta:
         model = AircraftInfo
@@ -175,7 +178,12 @@ class AircraftInfoSerializer(serializers.ModelSerializer):
             "matched_radio_calls",
             "source_data",
             "dossier_text",
+            "route",
         ]
+
+    def get_route(self, obj):
+        """Return the stored origin/destination route dict, or None."""
+        return obj.route_data or None
 
     def get_dossier_text(self, obj):
         """Return the airframe's RAG dossier text, or None if no document exists."""

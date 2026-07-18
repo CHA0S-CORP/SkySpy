@@ -27,6 +27,7 @@ import contextlib
 import hashlib
 import json
 import logging
+import math
 import threading
 import time
 from collections import OrderedDict, defaultdict
@@ -115,6 +116,12 @@ class AcarsService:
         self._running = False
         self._acars_task: asyncio.Task | None = None
         self._vdlm2_task: asyncio.Task | None = None
+        self._airframes_task: asyncio.Task | None = None
+        # Airframes.io poller config (loaded from settings in start())
+        self._af_airports: set[str] = set()
+        self._af_lat: float | None = None
+        self._af_lon: float | None = None
+        self._af_radius_nm: float = 0.0
 
         # Statistics
         self._stats_lock = threading.Lock()
@@ -129,6 +136,12 @@ class AcarsService:
 
         # Message deduplication cache (30 second TTL)
         self._dedup_cache = LRUCache(maxsize=10000, ttl_seconds=30)
+
+        # ICAO hexes already queued for airframe-info enrichment this process, so
+        # a plane heard repeatedly over ACARS doesn't enqueue a lookup per message
+        # (the batch task itself also skips hexes already stored). Bounded set.
+        self._info_seen: set[str] = set()
+        self._info_seen_lock = threading.Lock()
 
         # Recent messages buffer for initial load
         self._recent_messages: list[dict] = []
@@ -160,7 +173,7 @@ class AcarsService:
         self._dedup_cache.add(msg_hash)
         return False
 
-    async def start(self, acars_port: int = 5550, vdlm2_port: int = 5555):
+    async def start(self, acars_port: int = 5550, vdlm2_port: int = 5555, airframes: bool | None = None):
         """Start listening for ACARS and VDL2 messages."""
         if self._running:
             logger.warning("ACARS service already running, ignoring start request")
@@ -177,6 +190,29 @@ class AcarsService:
         if vdlm2_port:
             self._vdlm2_task = asyncio.create_task(self._udp_listener(vdlm2_port, "vdlm2"))
             logger.info(f"VDL2 UDP listener started on 0.0.0.0:{vdlm2_port}")
+
+        # Start the airframes.io firehose poller (open LAX-area ACARS source)
+        from django.conf import settings
+
+        if airframes is None:
+            airframes = getattr(settings, "AIRFRAMES_ACARS_ENABLED", False)
+        if airframes:
+            self._af_airports = {
+                a.strip().upper()
+                for a in (getattr(settings, "AIRFRAMES_ACARS_AIRPORTS", "") or "").split(",")
+                if a.strip()
+            }
+            self._af_lat = getattr(settings, "AIRFRAMES_ACARS_CENTER_LAT", None)
+            self._af_lon = getattr(settings, "AIRFRAMES_ACARS_CENTER_LON", None)
+            self._af_radius_nm = getattr(settings, "AIRFRAMES_ACARS_RADIUS_NM", 0.0) or 0.0
+            self._airframes_task = asyncio.create_task(self._airframes_poll_loop())
+            logger.info(
+                "Airframes ACARS poller started (airports=%s, center=%s,%s r=%snm)",
+                sorted(self._af_airports),
+                self._af_lat,
+                self._af_lon,
+                self._af_radius_nm,
+            )
 
         logger.info("ACARS service started successfully")
 
@@ -196,6 +232,12 @@ class AcarsService:
             with contextlib.suppress(asyncio.CancelledError):
                 await self._vdlm2_task
             logger.debug("VDL2 listener stopped")
+
+        if self._airframes_task:
+            self._airframes_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._airframes_task
+            logger.debug("Airframes poller stopped")
 
         # Log final stats
         stats = self.get_stats()
@@ -260,6 +302,101 @@ class AcarsService:
             transport.close()
             logger.debug(f"UDP transport closed for {source}")
 
+    # ------------------------------------------------------------------
+    # Airframes.io firehose poller (open, no-hardware ACARS source)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _haversine_nm(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+        """Great-circle distance in nautical miles."""
+        r = 3440.065  # earth radius in nm
+        p1, p2 = math.radians(lat1), math.radians(lat2)
+        dphi = math.radians(lat2 - lat1)
+        dlmb = math.radians(lon2 - lon1)
+        a = math.sin(dphi / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dlmb / 2) ** 2
+        return 2 * r * math.asin(min(1.0, math.sqrt(a)))
+
+    def _airframes_station_ok(self, station: dict) -> bool:
+        """Keep only LAX-area ground stations (by nearest-airport ICAO or radius)."""
+        icao = (station.get("nearestAirportIcao") or "").upper()
+        if self._af_airports and icao in self._af_airports:
+            return True
+        lat = station.get("latitude")
+        lon = station.get("longitude")
+        if lat is None or lon is None:
+            lat, lon = station.get("geoipLatitude"), station.get("geoipLongitude")
+        if lat is not None and lon is not None and self._af_radius_nm > 0 and self._af_lat is not None:
+            return self._haversine_nm(self._af_lat, self._af_lon, lat, lon) <= self._af_radius_nm
+        return False
+
+    @staticmethod
+    def _airframes_to_flat(m: dict) -> tuple[str, dict]:
+        """Reshape an airframes.io message into the flat acarsdec/vdlm2dec JSON
+        that _normalize_message already understands."""
+        station = m.get("station") or {}
+        airframe = m.get("airframe") or {}
+        flight = m.get("flight") or {}
+        source_type = (m.get("sourceType") or "").lower()
+        source = "vdlm2" if source_type == "vdl" or "vdl" in (m.get("source") or "").lower() else "acars"
+        flat = {
+            "timestamp": m.get("timestamp"),
+            "freq": m.get("frequency"),
+            "channel": m.get("channel"),
+            "icao": airframe.get("icao") or m.get("fromHex") or m.get("icao"),
+            "tail": m.get("tail") or airframe.get("tail"),
+            "flight": m.get("flightNumber") or flight.get("flight"),
+            "label": m.get("label"),
+            "block_id": m.get("blockId"),
+            "msgno": m.get("messageNumber"),
+            "ack": m.get("ack"),
+            "mode": m.get("mode"),
+            "text": m.get("text") or "",
+            "level": m.get("level"),
+            "error": m.get("error"),
+            "station_id": station.get("ident"),
+            "depa": m.get("departingAirport"),
+            "dsta": m.get("destinationAirport"),
+        }
+        return source, flat
+
+    async def _airframes_poll_loop(self):
+        """Poll the airframes.io firehose, filter to LAX-area stations, and feed
+        matching messages through the normal processing pipeline."""
+        import httpx
+        from django.conf import settings
+
+        url = getattr(settings, "AIRFRAMES_ACARS_URL", "https://api.airframes.io/v1/messages")
+        interval = max(2, getattr(settings, "AIRFRAMES_ACARS_POLL_INTERVAL", 4))
+        headers = {"User-Agent": "skyspy-acars/1.0"}
+        key = getattr(settings, "AIRFRAMES_ACARS_API_KEY", "")
+        if key:
+            headers["Authorization"] = f"Bearer {key}"
+
+        async with httpx.AsyncClient(timeout=15, headers=headers) as client:
+            while self._running:
+                try:
+                    resp = await client.get(url, params={"limit": 100})
+                    resp.raise_for_status()
+                    payload = resp.json()
+                    messages = (
+                        payload if isinstance(payload, list) else payload.get("messages") or payload.get("results", [])
+                    )
+                    kept = 0
+                    for m in messages:
+                        if not self._airframes_station_ok(m.get("station") or {}):
+                            continue
+                        source, flat = self._airframes_to_flat(m)
+                        await self._process_message(json.dumps(flat).encode(), source)
+                        kept += 1
+                    logger.debug("Airframes poll: kept %d/%d messages (LAX-area)", kept, len(messages))
+                except httpx.HTTPError as e:
+                    logger.warning("Airframes poll HTTP error: %s", e)
+                except (ValueError, KeyError, TypeError) as e:
+                    logger.warning("Airframes poll parse error: %s", e)
+                except Exception as e:  # broad: poll loop must survive any single-cycle failure
+                    logger.error("Airframes poll unexpected error: %s", e, exc_info=True)
+                await asyncio.sleep(interval)
+
     async def _process_message(self, data: bytes, source: str):
         """Process a received message."""
         try:
@@ -306,6 +443,12 @@ class AcarsService:
 
                 # Persist to database
                 await self._store_message(enriched)
+
+                # Enrich the airframe: an aircraft heard only over ACARS (never on
+                # the ADS-B hot stream) would otherwise never get an AircraftInfo
+                # row, so its type/operator/registration stay unstored. Queue its
+                # ICAO for the same batch lookup the stream uses.
+                self._queue_info_lookup(normalized.get("icao_hex"))
 
                 # Broadcast via Channels
                 await self._broadcast_message(enriched)
@@ -533,6 +676,35 @@ class AcarsService:
         except (DatabaseError, ValueError, TypeError, OSError) as e:
             logger.error(f"Error storing ACARS message: {e}", exc_info=True)
             return None
+
+    def _queue_info_lookup(self, icao_hex: str | None):
+        """Queue an airframe-info lookup for an ACARS-heard ICAO hex.
+
+        Deduped per-process so a repeatedly-heard aircraft enqueues at most one
+        task; the batch task additionally skips hexes already in AircraftInfo, so
+        this only does real work for genuinely new airframes.
+        """
+        if not icao_hex:
+            return
+        icao = icao_hex.upper().strip()
+        # Non-ICAO (~ TIS-B/anonymized) addresses have no registry entry.
+        if not icao or icao.startswith("~"):
+            return
+
+        with self._info_seen_lock:
+            if icao in self._info_seen:
+                return
+            self._info_seen.add(icao)
+            # Bound the set; drop everything and restart tracking if it grows huge.
+            if len(self._info_seen) > 10000:
+                self._info_seen = {icao}
+
+        try:
+            from skyspy.tasks.external_db import fetch_aircraft_info_batch
+
+            fetch_aircraft_info_batch.delay([icao])
+        except Exception as e:  # broad: enqueue must never break message processing (eager mode can raise)
+            logger.debug(f"Failed to queue airframe-info lookup for {icao}: {e}")
 
     def _queue_decode_task(self, message_id: int, label: str | None):
         """Queue a Celery task to decode the message with libacars.

@@ -200,9 +200,15 @@ class LLMClient:
         if not texts:
             return []
 
-        api_url = getattr(settings, "EMBEDDING_API_URL", "") or self.api_url
-        api_key = getattr(settings, "EMBEDDING_API_KEY", "") or self.api_key
-        model = getattr(settings, "EMBEDDING_MODEL", "") or "text-embedding-3-small"
+        # A blank/comment-only env value (e.g. an inline "# defaults to ..."
+        # that leaked in as the value) must not defeat the fallback to LLM_*.
+        def _clean(v):
+            v = (v or "").strip()
+            return "" if v.startswith("#") else v
+
+        api_url = _clean(getattr(settings, "EMBEDDING_API_URL", "")) or self.api_url
+        api_key = _clean(getattr(settings, "EMBEDDING_API_KEY", "")) or self.api_key
+        model = _clean(getattr(settings, "EMBEDDING_MODEL", "")) or "text-embedding-3-small"
 
         if not getattr(settings, "LLM_ENABLED", False):
             logger.debug("LLM/embeddings not enabled")

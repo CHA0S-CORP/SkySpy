@@ -1,6 +1,12 @@
 import React from 'react';
 import { Switch, SegmentedControl, Select } from '../../v2/primitives';
-import { OVERLAY_DEFS, TRAIL_LENGTH_OPTIONS, PREDICTOR_LENGTH_OPTIONS } from '../mapState';
+import {
+  OVERLAY_DEFS,
+  TRAIL_LENGTH_OPTIONS,
+  PREDICTOR_LENGTH_OPTIONS,
+  DEFAULT_AIRSPACE_CLASSES,
+} from '../mapState';
+import { AIRSPACE_CLASSES } from '../render/symbology';
 
 const COLOR_MODES = [
   { value: 'category', label: 'Type' },
@@ -27,14 +33,19 @@ export function LayersPanel({ overlays, onChange }) {
       </div>
       <div className="lm-panel-pop__group">
         {OVERLAY_DEFS.map(({ key, label }) => (
-          <label key={key} className="lm-panel-pop__row">
-            <span>{label}</span>
-            <Switch
-              checked={!!overlays[key]}
-              onCheckedChange={(v) => onChange({ [key]: v })}
-              label={label}
-            />
-          </label>
+          <React.Fragment key={key}>
+            <label className="lm-panel-pop__row">
+              <span>{label}</span>
+              <Switch
+                checked={!!overlays[key]}
+                onCheckedChange={(v) => onChange({ [key]: v })}
+                label={label}
+              />
+            </label>
+            {key === 'airspace' && overlays.airspace && (
+              <AirspaceClassToggles overlays={overlays} onChange={onChange} />
+            )}
+          </React.Fragment>
         ))}
       </div>
 
@@ -98,6 +109,33 @@ export function LayersPanel({ overlays, onChange }) {
           />
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Per-class airspace visibility sub-toggles (Class B/C/D/E, Restricted, MOA,
+ * TFR, …). Each row shows the class's map color swatch. Rendered inline under
+ * the Airspace overlay row when that layer is enabled.
+ */
+function AirspaceClassToggles({ overlays, onChange }) {
+  const classes = overlays.airspaceClasses || DEFAULT_AIRSPACE_CLASSES;
+  const set = (key, v) => onChange({ airspaceClasses: { ...classes, [key]: v } });
+  return (
+    <div className="lm-panel-pop__subgroup">
+      {AIRSPACE_CLASSES.map(({ key, label, rgb }) => (
+        <label key={key} className="lm-panel-pop__row lm-panel-pop__row--sub">
+          <span>
+            <i className="lm-airspace-swatch" style={{ background: `rgb(${rgb})` }} />
+            {label}
+          </span>
+          <Switch
+            checked={classes[key] !== false}
+            onCheckedChange={(v) => set(key, v)}
+            label={label}
+          />
+        </label>
+      ))}
     </div>
   );
 }

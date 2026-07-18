@@ -43,16 +43,21 @@ class PhotoServeView(APIView):
         icao_hex = icao_hex.upper().strip()
         is_thumbnail = photo_type == "thumb"
 
-        # Check S3 first
+        # S3-backed cache: stream the object through our own endpoint so the
+        # browser always loads a same-origin URL (no redirect to a remote signed
+        # URL, which is opaque/expires and reads as a broken image).
         if settings.S3_ENABLED:
-            from skyspy.services.photo_cache import get_photo_url
+            from django.http import HttpResponse
 
-            url = get_photo_url(icao_hex, is_thumbnail=is_thumbnail, signed=True, verify_exists=True)
-            if url:
-                from django.http import HttpResponseRedirect
+            from skyspy.services.photo_cache import get_photo_bytes
 
-                return HttpResponseRedirect(url)
-            raise Http404("Photo not found")
+            data = get_photo_bytes(icao_hex, is_thumbnail=is_thumbnail)
+            if not data:
+                raise Http404("Photo not found")
+
+            response = HttpResponse(data, content_type="image/jpeg")
+            response["Cache-Control"] = "public, max-age=86400"  # 1 day cache
+            return response
 
         # Local filesystem
         cache_dir = Path(settings.PHOTO_CACHE_DIR)
@@ -73,6 +78,33 @@ class AirframeViewSet(viewsets.ViewSet):
     authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
     permission_classes = [FeatureBasedPermission]
 
+    # Fields that make an AircraftInfo record "populated" (worth not retrying).
+    _AIRFRAME_IDENTITY_FIELDS = ("registration", "type_code", "type_name", "manufacturer", "model", "operator", "owner")
+    # Minimum gap between automatic background retries for a failed/empty lookup.
+    _AIRFRAME_RETRY_COOLDOWN = 120  # seconds
+
+    def _is_populated_airframe(self, info):
+        """True when the record carries at least one meaningful identity field."""
+        return any(getattr(info, f, None) for f in self._AIRFRAME_IDENTITY_FIELDS)
+
+    def _requeue_airframe_fetch(self, icao):
+        """Queue a background airframe fetch, rate-limited so polling can't spam it."""
+        from django.core.cache import cache
+
+        gate_key = f"airframe:refetch:{icao}"
+        if not cache.add(gate_key, 1, self._AIRFRAME_RETRY_COOLDOWN):
+            return False  # a retry was queued within the cooldown window
+        try:
+            from skyspy.tasks.external_db import fetch_aircraft_info
+
+            fetch_aircraft_info.delay(icao)
+            logger.debug(f"Queued aircraft info lookup for {icao}")
+            return True
+        except (ConnectionError, OSError, RuntimeError, KombuOperationalError) as e:
+            logger.warning(f"Failed to queue aircraft info lookup for {icao}: {e}")
+            cache.delete(gate_key)  # let the next poll retry immediately
+            return False
+
     @extend_schema(
         summary="Get aircraft info by ICAO",
         parameters=[
@@ -82,20 +114,12 @@ class AirframeViewSet(viewsets.ViewSet):
     )
     def retrieve(self, request, pk=None):
         """Get aircraft information by ICAO hex."""
+        icao = pk.upper().strip().lstrip("~")
         try:
             info = AircraftInfo.objects.get(icao_hex__iexact=pk)
-            return Response(AircraftInfoSerializer(info).data)
         except AircraftInfo.DoesNotExist:
-            # Queue background lookup for this aircraft
-            icao = pk.upper().strip()
-            try:
-                from skyspy.tasks.external_db import fetch_aircraft_info
-
-                fetch_aircraft_info.delay(icao)
-                logger.debug(f"Queued aircraft info lookup for {icao}")
-            except (ConnectionError, OSError, RuntimeError, KombuOperationalError) as e:
-                logger.warning(f"Failed to queue aircraft info lookup for {icao}: {e}")
-
+            # No record yet — queue the initial lookup and report not-found.
+            self._requeue_airframe_fetch(icao)
             return Response(
                 {
                     "error": "Aircraft info not found",
@@ -105,6 +129,14 @@ class AirframeViewSet(viewsets.ViewSet):
                 },
                 status=status.HTTP_404_NOT_FOUND,
             )
+
+        # The record exists but the external lookup failed or came back empty. The
+        # frontend polls this endpoint while the airframe is unpopulated, so re-queue
+        # a fetch here (rate-limited) to periodically retry until it fills in.
+        if info.fetch_failed or not self._is_populated_airframe(info):
+            self._requeue_airframe_fetch(icao)
+
+        return Response(AircraftInfoSerializer(info).data)
 
     @extend_schema(
         summary="Get aircraft photos",
@@ -175,14 +207,27 @@ class AirframeViewSet(viewsets.ViewSet):
     )
     @action(detail=False, methods=["get"], url_path="registration/(?P<registration>[^/.]+)")
     def by_registration(self, request, registration=None):
-        """Get aircraft info by registration."""
+        """Resolve a registration to airframe info (or at least an ICAO hex).
+
+        Falls back to deriving the ICAO 24-bit address from a US N-number when
+        the aircraft has never been seen by this receiver — otherwise the
+        airframe page can't open for any tail we haven't previously cached.
+        """
         try:
             info = AircraftInfo.objects.get(registration__iexact=registration)
             return Response(AircraftInfoSerializer(info).data)
         except AircraftInfo.DoesNotExist:
-            return Response(
-                {"error": "Aircraft not found", "registration": registration}, status=status.HTTP_404_NOT_FOUND
-            )
+            pass
+
+        # DB miss: US N-numbers map deterministically onto the ICAO A-block, so
+        # we can still return a hex the client can open the airframe page with.
+        from skyspy.services.nnumber import n_to_icao
+
+        icao_hex = n_to_icao(registration)
+        if icao_hex:
+            return Response({"icao_hex": icao_hex, "registration": registration.upper(), "source": "n-number"})
+
+        return Response({"error": "Aircraft not found", "registration": registration}, status=status.HTTP_404_NOT_FOUND)
 
     @extend_schema(
         summary="Search aircraft",
@@ -403,6 +448,323 @@ class AirframeViewSet(viewsets.ViewSet):
             {"icao_hex": icao, "status": "queued", "message": "Photo fetch queued", "force": force},
             status=status.HTTP_202_ACCEPTED,
         )
+
+    @extend_schema(
+        summary="LLM-generated flight-history summary",
+        description=(
+            "Plain-English narrative of what this ground station has observed for the "
+            "aircraft (session/sighting counts, first/last seen, callsigns, altitude and "
+            "distance envelope, ACARS airports). Requires the LLM to be enabled/configured; "
+            "returns available=false otherwise. Append-only by default: the stored briefing is "
+            "never rewritten. Pass refresh=true to append new activity observed since it was "
+            "last generated (no-op if nothing new); pass regenerate=true to rewrite the whole "
+            "briefing from scratch."
+        ),
+        parameters=[
+            OpenApiParameter(name="icao", type=str, location=OpenApiParameter.PATH, description="ICAO hex code"),
+            OpenApiParameter(
+                name="refresh",
+                type=bool,
+                location=OpenApiParameter.QUERY,
+                description="Update from latest: append any new activity, keeping existing history",
+            ),
+            OpenApiParameter(
+                name="regenerate",
+                type=bool,
+                location=OpenApiParameter.QUERY,
+                description="Generate new: rewrite the whole briefing from scratch",
+            ),
+        ],
+    )
+    @action(detail=True, methods=["get"], url_path="flight-history")
+    def flight_history(self, request, pk=None):
+        """Append-only LLM narrative of this station's observation history for one airframe."""
+        from django.core.cache import cache
+        from django.utils import timezone
+
+        from skyspy.services import aviation_llm
+
+        icao = pk.upper().strip().lstrip("~")
+
+        if not aviation_llm.available():
+            return Response({"available": False, "summary": None, "icao_hex": icao})
+
+        # Long TTL: the briefing is durable and only ever appended to, so it should
+        # survive normal churn rather than expiring and being rewritten from scratch.
+        cache_key = f"airframe:flight_history:{icao}"
+        ttl = 30 * 24 * 60 * 60
+        # Two explicit user actions:
+        #   refresh=true    → "Update from latest": append only new activity, keep history.
+        #   regenerate=true → "Generate new": rewrite the whole briefing from scratch.
+        refresh = request.query_params.get("refresh", "false").lower() == "true"
+        regenerate = request.query_params.get("regenerate", "false").lower() == "true"
+
+        stored = cache.get(cache_key)
+
+        # Normal load never regenerates — return the stored briefing verbatim so old
+        # events are never rewritten.
+        if stored is not None and stored.get("summary") and not refresh and not regenerate:
+            return Response(stored)
+
+        context, based_on, state = self._build_flight_history_context(icao)
+        # Real callsigns observed for this airframe — sent to the client so it can badge
+        # exactly these strings wherever they appear in the narrative, instead of
+        # regex-guessing (which misses some and mis-tags registrations/type codes).
+        # Strip + dedupe case-insensitively (DB rows can differ only by trailing space).
+        callsigns = []
+        _seen_cs = set()
+        for cs in context.get("callsigns_seen") or []:
+            norm = str(cs or "").strip()
+            key = norm.upper()
+            if norm and key not in _seen_cs:
+                _seen_cs.add(key)
+                callsigns.append(norm)
+        if not based_on.get("sessions") and not based_on.get("sightings"):
+            payload = {"available": True, "summary": None, "icao_hex": icao, "based_on": based_on, "state": state}
+            cache.set(cache_key, payload, 60 * 30)
+            return Response(payload)
+
+        # Append path: a briefing already exists — add only the sessions observed
+        # since it was last written, leaving the prior text untouched. Skipped when
+        # the user explicitly asked to regenerate from scratch.
+        if stored and stored.get("summary") and not regenerate:
+            prior_state = stored.get("state") or {}
+            has_new = (state.get("sessions", 0) > prior_state.get("sessions", 0)) or (
+                state.get("last_seen")
+                and prior_state.get("last_seen")
+                and state["last_seen"] > prior_state["last_seen"]
+            )
+            if not has_new:
+                return Response(stored)
+
+            new_context, new_based_on, _ = self._build_flight_history_context(icao, since=prior_state.get("last_seen"))
+            if new_based_on.get("sessions", 0) <= 0:
+                return Response(stored)
+
+            appended = aviation_llm.flight_history_append(stored["summary"], new_context)
+            if not appended:
+                return Response(stored)
+
+            summary = (stored["summary"].rstrip() + " " + appended).strip()
+            payload = {
+                "available": True,
+                "summary": summary,
+                "icao_hex": icao,
+                "based_on": based_on,
+                "callsigns": callsigns,
+                "state": state,
+                "generated_at": timezone.now().isoformat(),
+            }
+            cache.set(cache_key, payload, ttl)
+            return Response(payload)
+
+        # First-time generation: the full initial briefing.
+        summary = aviation_llm.flight_history_summary(context)
+        payload = {
+            "available": True,
+            "summary": summary,
+            "icao_hex": icao,
+            "based_on": based_on,
+            "callsigns": callsigns,
+            "state": state,
+            "generated_at": timezone.now().isoformat(),
+        }
+        cache.set(cache_key, payload, ttl if summary else 30 * 60)
+        return Response(payload)
+
+    def _build_flight_history_context(self, icao, since=None):
+        """Gather identity + local observation data for the flight-history LLM.
+
+        When ``since`` (an ISO timestamp) is given, only sessions seen after it are
+        included — used to build the delta for an append. Returns
+        ``(context_dict, based_on_counts, state_marker)`` where ``state_marker``
+        tracks the total session count and latest ``last_seen`` for the airframe.
+        """
+        from django.db.models import Count, Max, Min, Sum
+        from django.utils.dateparse import parse_datetime
+
+        from skyspy.models import AcarsMessage, AircraftSession, AircraftSighting, SafetyEvent
+
+        EMERGENCY_SQUAWKS = {"7500": "hijack", "7600": "radio failure", "7700": "general emergency"}
+
+        info = AircraftInfo.objects.filter(icao_hex__iexact=icao).first()
+
+        # State marker is always over ALL sessions (drives the append decision),
+        # independent of the ``since`` delta filter below.
+        totals = AircraftSession.objects.filter(icao_hex__iexact=icao).aggregate(
+            sessions=Count("id"), last_seen=Max("last_seen")
+        )
+        state = {
+            "sessions": totals["sessions"] or 0,
+            "last_seen": totals["last_seen"].isoformat() if totals["last_seen"] else None,
+        }
+
+        sessions_qs = AircraftSession.objects.filter(icao_hex__iexact=icao)
+        since_dt = parse_datetime(since) if isinstance(since, str) else since
+        if since_dt:
+            sessions_qs = sessions_qs.filter(last_seen__gt=since_dt)
+        agg = sessions_qs.aggregate(
+            first_seen=Min("first_seen"),
+            last_seen=Max("last_seen"),
+            positions=Sum("total_positions"),
+            min_alt=Min("min_altitude"),
+            max_alt=Max("max_altitude"),
+            min_dist=Min("min_distance_nm"),
+            max_dist=Max("max_distance_nm"),
+            peak_rssi=Max("max_rssi"),
+            session_count=Count("id"),
+        )
+        session_count = agg["session_count"] or 0
+
+        callsigns = list(
+            sessions_qs.exclude(callsign__isnull=True)
+            .exclude(callsign="")
+            .values_list("callsign", flat=True)
+            .distinct()[:12]
+        )
+
+        # Take the 8 most recent passes, then present them oldest-first so the LLM can
+        # narrate the timeline in chronological order (departure → later returns).
+        recent_sessions = [
+            {
+                "first_seen": s.first_seen,
+                "last_seen": s.last_seen,
+                "callsign": s.callsign,
+                "positions": s.total_positions,
+                "min_altitude_ft": s.min_altitude,
+                "max_altitude_ft": s.max_altitude,
+                "closest_nm": s.min_distance_nm,
+            }
+            for s in reversed(list(sessions_qs.order_by("-last_seen")[:8]))
+        ]
+
+        # On a delta build we only count the new sessions; totals come from ``state``.
+        sightings_qs = AircraftSighting.objects.filter(icao_hex__iexact=icao)
+        if since_dt:
+            sightings_qs = sightings_qs.filter(timestamp__gt=since_dt)
+        sighting_count = 0 if since_dt else sightings_qs.count()
+
+        # Transponder codes seen for this airframe. Emergency squawks (7500/7600/7700)
+        # are the whole point of surfacing this to the briefing, so flag them loudly.
+        squawks = [
+            sq
+            for sq in sightings_qs.exclude(squawk__isnull=True)
+            .exclude(squawk="")
+            .values_list("squawk", flat=True)
+            .distinct()[:30]
+            if sq
+        ]
+        emergency_squawks = sorted({f"{sq} ({EMERGENCY_SQUAWKS[sq]})" for sq in squawks if sq in EMERGENCY_SQUAWKS})
+
+        # Safety events recorded for this airframe (emergency squawks, TCAS RA,
+        # proximity, etc.) — real observed events, strongest signal in the history.
+        safety_qs = SafetyEvent.objects.filter(icao_hex__iexact=icao)
+        if since_dt:
+            safety_qs = safety_qs.filter(timestamp__gt=since_dt)
+        safety_events = [
+            {
+                "event_type": e.event_type,
+                "severity": e.severity,
+                "timestamp": e.timestamp,
+                "message": (e.message or "")[:200] or None,
+            }
+            for e in safety_qs.order_by("-timestamp")[:12]
+        ]
+
+        # Airports referenced in this airframe's recent ACARS/VDL2 traffic (skipped on
+        # a delta build so the append doesn't re-mention already-covered airports). The
+        # airports live inside the model's ``decoded`` JSON blob.
+        airports = set()
+        if not since_dt:
+            for decoded in (
+                AcarsMessage.objects.filter(icao_hex__iexact=icao)
+                .exclude(decoded__isnull=True)
+                .order_by("-timestamp")
+                .values_list("decoded", flat=True)[:60]
+            ):
+                mentioned = (decoded or {}).get("airports_mentioned") or []
+                for a in mentioned:
+                    if a:
+                        airports.add(str(a).upper())
+                if len(airports) >= 12:
+                    break
+
+        # Give the model everything we know about the airframe, not just a subset.
+        identity = {}
+        if info:
+            identity = {
+                "registration": info.registration,
+                "type": info.type_name or info.model,
+                "type_code": info.type_code,
+                "type_name": info.type_name,
+                "manufacturer": info.manufacturer,
+                "model": info.model,
+                "serial_number": info.serial_number,
+                "year_built": info.year_built,
+                "first_flight_date": info.first_flight_date,
+                "delivery_date": info.delivery_date,
+                "airframe_hours": info.airframe_hours,
+                "operator": info.operator,
+                "operator_icao": info.operator_icao,
+                "operator_callsign": info.operator_callsign,
+                "owner": info.owner,
+                "owner_type": info.owner_type,
+                "based_city": info.city,
+                "based_state": info.state,
+                "country": info.country,
+                "country_code": info.country_code,
+                "category": info.category,
+                "is_military": info.is_military or None,
+                "is_law_enforcement_or_interesting": info.is_interesting or None,
+                "privacy_ladd": info.is_ladd or None,
+                "privacy_icao_address": info.is_pia or None,
+                "shell_company_suspected": info.is_shell_suspected or None,
+                "shell_likelihood": info.shell_score,
+                "data_source": info.source,
+            }
+            # Any additional provider fields we captured but don't model explicitly.
+            if isinstance(info.extra_data, dict):
+                extra = {
+                    k: v
+                    for k, v in info.extra_data.items()
+                    if v not in (None, "", [], {}) and not isinstance(v, (dict, list))
+                }
+                if extra:
+                    identity["additional"] = dict(list(extra.items())[:20])
+
+        context = {
+            "icao_hex": icao,
+            "identity": {k: v for k, v in identity.items() if v not in (None, "")},
+            "observed": {
+                "sessions_tracked": session_count,
+                "total_position_reports": agg["positions"],
+                "first_seen_here": agg["first_seen"],
+                "last_seen_here": agg["last_seen"],
+                "altitude_range_ft": [agg["min_alt"], agg["max_alt"]]
+                if agg["min_alt"] is not None or agg["max_alt"] is not None
+                else None,
+                "distance_range_nm": [agg["min_dist"], agg["max_dist"]]
+                if agg["min_dist"] is not None or agg["max_dist"] is not None
+                else None,
+                "peak_rssi_db": agg["peak_rssi"],
+            },
+            "callsigns_seen": callsigns,
+            "squawks_seen": squawks,
+            "emergency_squawks": emergency_squawks,
+            "safety_events": safety_events,
+            "acars_airports": sorted(airports),
+            "recent_sessions": recent_sessions,
+        }
+
+        based_on = {
+            "sessions": session_count,
+            "sightings": sighting_count,
+            "callsigns": len(callsigns),
+            "squawks": len(squawks),
+            "safety_events": len(safety_events),
+            "acars_airports": len(airports),
+        }
+        return context, based_on, state
 
     @extend_schema(
         summary="Upgrade aircraft photo",

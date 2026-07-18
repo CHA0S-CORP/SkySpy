@@ -181,10 +181,46 @@ DATABASE_URL, REDIS_URL, DJANGO_SECRET_KEY
 ULTRAFEEDER_HOST/PORT          # ADS-B receiver
 FEEDER_LAT/LON                 # Antenna location for distance calc
 
+# Aviation reference-data fetch radius (nm) around FEEDER_LAT/LON. Airspace
+# boundaries (OpenAIP) + airports/navaids (AWC) are fetched within this radius
+# so the map layers populate near the antenna (was a fixed CONUS grid that
+# rate-limited OpenAIP to empty). AIRSPACE_EXTRA_REGIONS = JSON list of
+# [lat, lon, radius_nm] for multi-site coverage.
+AIRSPACE_FETCH_RADIUS_NM=250
+GEODATA_FETCH_RADIUS_NM=250
+AIRSPACE_EXTRA_REGIONS=[]
+
 # Feature toggles
 AUTH_MODE=public|private|hybrid
-AIRCRAFT_STREAM_MODE=sse|tcp|adsbx|auto
+AIRCRAFT_STREAM_MODE=sse|tcp|adsbx|adsblol|auto   # adsblol = keyless community feed, round-robins AIRCRAFT_STREAM_FREE_SOURCES (adsb.lol,adsb.fi,airplanes.live) — radius max 250nm around FEEDER_LAT/LON
 SAFETY_MONITORING_ENABLED, ACARS_ENABLED
+
+# Airframes.io live ACARS (open, no-hardware source). When AIRFRAMES_ACARS_ENABLED,
+# run_acars polls api.airframes.io's firehose and keeps only the ground stations
+# whose nearest airport is in AIRFRAMES_ACARS_AIRPORTS (default = LAX metro) OR
+# within AIRFRAMES_ACARS_RADIUS_NM of the center (default LAX), then feeds them
+# through the same normalize/dedupe/store/broadcast path as the UDP listener — so
+# the History → ACARS tab shows real LAX-area traffic. Free/keyless today; set the
+# API key for a feeder rate limit. The newest-100 firehose window is ~5s, so keep
+# POLL_INTERVAL low (default 4s); the 30s dedupe cache absorbs the overlap.
+AIRFRAMES_ACARS_ENABLED=False
+AIRFRAMES_ACARS_URL=https://api.airframes.io/v1/messages
+AIRFRAMES_ACARS_API_KEY=
+AIRFRAMES_ACARS_POLL_INTERVAL=4
+AIRFRAMES_ACARS_AIRPORTS=KLAX,KVNY,KBUR,...      # comma ICAOs; empty = radius only
+AIRFRAMES_ACARS_CENTER_LAT=33.9416
+AIRFRAMES_ACARS_CENTER_LON=-118.4085
+AIRFRAMES_ACARS_RADIUS_NM=100
+
+# OpenSanctions owner screening (feeds ownership/shell-risk analysis). Screens
+# owner names against sanctions/PEP/watchlists. Needs an API key (free for
+# non-commercial); off by default = no-op without a key. Ownership analysis also
+# now uses the FAA MASTER TYPE-REGISTRANT code (authoritative entity type),
+# STREET address (registered-agent/PO-box heuristics) and FRACT-OWNER flag.
+OPENSANCTIONS_ENABLED=False
+OPENSANCTIONS_API_URL=https://api.opensanctions.org
+OPENSANCTIONS_API_KEY=
+OPENSANCTIONS_DATASET=default
 
 # REST throttling (public dashboards are anonymous - keep anon above one
 # dashboard's polling volume)
@@ -210,8 +246,22 @@ EMBEDDING_DIM=1536
 # model. Endpoint at POST /api/v1/assistant/ask/ and SSE /api/v1/assistant/stream/.
 ASSISTANT_ENABLED=False
 ASSISTANT_MODEL=         # defaults to LLM_MODEL
-ASSISTANT_MAX_STEPS=6
+ASSISTANT_MAX_STEPS=10   # tool-call budget/query; higher = chain more tools into one synthesized answer
 ASSISTANT_TIMEOUT=60
+# Auto-inject a compact live-traffic snapshot into each query so answers are
+# grounded in the current picture without spending a tool call. Disable on
+# tiny/RPi models if the extra context hurts.
+ASSISTANT_BRIEFING_ENABLED=True
+# Context-window budget knobs (raise for large-context models, keep low on RPi).
+ASSISTANT_MAX_RESULT_CHARS=6000   # per-tool result cap
+ASSISTANT_MAX_HISTORY_MSGS=16     # prior turns carried
+ASSISTANT_MAX_HISTORY_CHARS=3000  # per-message cap
+# Airframe photos in assistant answers are rendered from the fetch_airframe_photo
+# tool call with a server-templated <img> src (NOT LLM markdown — the model was
+# hallucinating photo URLs). Empty (default) auto-infers: a signed S3 URL when
+# S3_ENABLED, else same-origin /api/v1/photos/<hex>. Set a public asset base to
+# force <base>/<HEX>.jpg (e.g. https://sky-spy-assets.s3.amazonaws.com/photos).
+ASSISTANT_PHOTO_BASE_URL=
 ```
 
 ### Redis Layout

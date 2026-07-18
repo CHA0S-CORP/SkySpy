@@ -65,6 +65,10 @@ def reset_stream_state():
         stream_module._seen_aircraft.clear()
     stream_module._new_aircraft_queue.clear()
     stream_module._previous_icaos.clear()
+    # Clear ghost detection state
+    with stream_module._ghost_lock:
+        stream_module._ghost_hexes = set()
+        stream_module._ghost_of = {}
     # Clear differential update state
     clear_delta_state()
 
@@ -882,6 +886,144 @@ class ComputeFieldChangesTest(TestCase):
         """Verify TRACKED_FIELDS contains expected fields."""
         expected = {"lat", "lon", "alt", "alt_baro", "gs", "track", "vr", "squawk", "flight", "ghost"}
         self.assertEqual(TRACKED_FIELDS, expected)
+
+
+class GhostDetectionTest(TestCase):
+    """Tests for non-ICAO (~) ghost duplicate detection."""
+
+    def setUp(self):
+        cache.clear()
+        reset_stream_state()
+
+    def tearDown(self):
+        cache.clear()
+        reset_stream_state()
+
+    def test_callsign_match(self):
+        """A ~-ghost sharing a callsign with an ICAO track maps to it."""
+        acs = [
+            {"hex": "A1B2C3", "flight": "UAL55", "lat": 47.6, "lon": -122.3},
+            {"hex": "~ABC123", "flight": "UAL55"},  # no position, callsign only
+        ]
+        self.assertEqual(detect_ghost_aircraft(acs), {"~ABC123": "A1B2C3"})
+
+    def test_callsign_case_insensitive(self):
+        acs = [
+            {"hex": "A1B2C3", "flight": "ual55"},
+            {"hex": "~ABC123", "flight": "UAL55 "},
+        ]
+        self.assertEqual(detect_ghost_aircraft(acs), {"~ABC123": "A1B2C3"})
+
+    def test_callsign_mismatch_no_position_no_ghost(self):
+        acs = [
+            {"hex": "A1B2C3", "flight": "UAL55"},
+            {"hex": "~ABC123", "flight": "DAL99"},
+        ]
+        self.assertEqual(detect_ghost_aircraft(acs), {})
+
+    def test_spatial_match_within_gates(self):
+        """Co-located callsign-less ghost matches via the spatial fallback."""
+        acs = [
+            {"hex": "A1B2C3", "lat": 47.6000, "lon": -122.3000, "alt": 10000, "track": 90, "gs": 250},
+            {"hex": "~SPATIAL", "lat": 47.6010, "lon": -122.3005, "alt": 10050, "track": 92, "gs": 255},
+        ]
+        self.assertEqual(detect_ghost_aircraft(acs), {"~SPATIAL": "A1B2C3"})
+
+    def test_spatial_too_far_no_ghost(self):
+        acs = [
+            {"hex": "A1B2C3", "lat": 47.60, "lon": -122.30, "alt": 10000, "track": 90, "gs": 250},
+            {"hex": "~FAR", "lat": 47.65, "lon": -122.30, "alt": 10000, "track": 90, "gs": 250},
+        ]
+        self.assertEqual(detect_ghost_aircraft(acs), {})
+
+    def test_spatial_altitude_gate(self):
+        """Close laterally but different altitude → not a ghost."""
+        acs = [
+            {"hex": "A1B2C3", "lat": 47.6000, "lon": -122.3000, "alt": 10000, "track": 90, "gs": 250},
+            {"hex": "~ALT", "lat": 47.6005, "lon": -122.3000, "alt": 10500, "track": 90, "gs": 250},
+        ]
+        self.assertEqual(detect_ghost_aircraft(acs), {})
+
+    def test_spatial_track_gate(self):
+        """Close laterally but opposite tracks (pattern legs) → not a ghost."""
+        acs = [
+            {"hex": "A1B2C3", "lat": 47.6000, "lon": -122.3000, "alt": 10000, "track": 90, "gs": 250},
+            {"hex": "~TRK", "lat": 47.6005, "lon": -122.3000, "alt": 10000, "track": 200, "gs": 250},
+        ]
+        self.assertEqual(detect_ghost_aircraft(acs), {})
+
+    def test_two_ghosts_one_icao(self):
+        """TIS-B and ADS-R copies of one target both flag against the ICAO track."""
+        acs = [
+            {"hex": "A1B2C3", "flight": "SWA10", "lat": 47.6, "lon": -122.3},
+            {"hex": "~TISB", "flight": "SWA10"},
+            {"hex": "~ADSR", "flight": "SWA10"},
+        ]
+        self.assertEqual(detect_ghost_aircraft(acs), {"~TISB": "A1B2C3", "~ADSR": "A1B2C3"})
+
+    def test_ghost_no_callsign_no_position_never_ghost(self):
+        acs = [
+            {"hex": "A1B2C3", "flight": "UAL55", "lat": 47.6, "lon": -122.3},
+            {"hex": "~NADA"},
+        ]
+        self.assertEqual(detect_ghost_aircraft(acs), {})
+
+    def test_emergency_ghost_never_hidden(self):
+        """An emergency squawk target is never treated as a ghost candidate."""
+        acs = [
+            {"hex": "A1B2C3", "flight": "UAL55", "lat": 47.6, "lon": -122.3},
+            {"hex": "~EMG", "flight": "UAL55", "emergency": True},
+        ]
+        self.assertEqual(detect_ghost_aircraft(acs), {})
+
+    def test_unghost_when_parent_disappears(self):
+        with_parent = [
+            {"hex": "A1B2C3", "flight": "UAL55"},
+            {"hex": "~ABC123", "flight": "UAL55"},
+        ]
+        self.assertEqual(detect_ghost_aircraft(with_parent), {"~ABC123": "A1B2C3"})
+        without_parent = [{"hex": "~ABC123", "flight": "UAL55"}]
+        self.assertEqual(detect_ghost_aircraft(without_parent), {})
+
+    def test_annotate_stamps_dicts_and_state(self):
+        """annotate_ghosts tags dicts and populates module state."""
+        import skyspy.tasks.aircraft_stream as stream_module
+
+        acs = [
+            {"hex": "A1B2C3", "flight": "UAL55", "lat": 47.6, "lon": -122.3},
+            {"hex": "~ABC123", "flight": "UAL55"},
+        ]
+        annotate_ghosts(acs)
+        self.assertFalse(acs[0]["ghost"])
+        self.assertTrue(acs[1]["ghost"])
+        self.assertEqual(acs[1]["ghost_of"], "A1B2C3")
+        self.assertIn("~ABC123", stream_module._ghost_hexes)
+        self.assertEqual(stream_module._ghost_of["~ABC123"], "A1B2C3")
+
+    @patch("skyspy.tasks.aircraft_stream.broadcast_new_aircraft")
+    @patch("skyspy.tasks.aircraft_stream.broadcast_aircraft_delta")
+    @patch("skyspy.tasks.aircraft_stream.broadcast_positions_fast")
+    def test_hot_path_stamps_ghost_from_state(self, mock_pos, mock_delta, mock_new):
+        """update_state_and_broadcast stamps ghost onto batch dicts from state."""
+        import skyspy.tasks.aircraft_stream as stream_module
+
+        with stream_module._ghost_lock:
+            stream_module._ghost_hexes = {"~ABC123"}
+            stream_module._ghost_of = {"~ABC123": "A1B2C3"}
+        batch = [
+            {"hex": "A1B2C3", "flight": "UAL55", "lat": 47.6, "lon": -122.3},
+            {"hex": "~ABC123", "flight": "UAL55", "lat": 47.6, "lon": -122.3},
+        ]
+        update_state_and_broadcast(batch, full_snapshot=True)
+        self.assertFalse(batch[0]["ghost"])
+        self.assertTrue(batch[1]["ghost"])
+        self.assertEqual(batch[1]["ghost_of"], "A1B2C3")
+
+    def test_ghost_field_tracked_in_delta(self):
+        """A track flipping to ghost emits {'ghost': True} via the delta."""
+        prev = {"hex": "~ABC123", "ghost": False}
+        curr = {"hex": "~ABC123", "ghost": True}
+        self.assertEqual(_compute_field_changes(prev, curr), {"ghost": True})
 
 
 class ComputeAircraftDeltaTest(TestCase):

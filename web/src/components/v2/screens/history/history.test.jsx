@@ -309,7 +309,7 @@ describe('HistoryScreen', () => {
   it('deep-links to a tab via hashParams and shows empty state', async () => {
     renderScreen({ hashParams: { data: 'acars' } });
     await waitFor(() =>
-      expect(screen.getByText('No acars records in this window')).toBeInTheDocument()
+      expect(screen.getByText('No ACARS messages in this window')).toBeInTheDocument()
     );
   });
 

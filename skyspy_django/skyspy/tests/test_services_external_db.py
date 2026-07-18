@@ -522,13 +522,12 @@ class RouteCacheTests(TestCase):
         external_db._route_cache.clear()
         external_db._route_cache_ttl.clear()
 
-    @patch("skyspy.services.external_db.httpx.Client")
-    def test_fetch_route_success(self, mock_client_class):
+    @patch("skyspy.services.external_db.http_client.post_json")
+    def test_fetch_route_success(self, mock_post_json):
         """Test successful route fetch normalizes the adsb.im list payload."""
-        mock_response = Mock()
-        mock_response.status_code = 200
-        # adsb.im replies with a list of matches; airports are origin-first.
-        mock_response.json.return_value = [
+        # fetch_route now goes through http_client.post_json (adsb.im), not a raw
+        # httpx.Client. adsb.im replies with a list of matches (airports origin-first).
+        mock_post_json.return_value = [
             {
                 "callsign": "UAL456",
                 "airline_code": "UAL",
@@ -541,11 +540,6 @@ class RouteCacheTests(TestCase):
                 ],
             }
         ]
-        mock_client = Mock()
-        mock_client.post.return_value = mock_response
-        mock_client.__enter__ = Mock(return_value=mock_client)
-        mock_client.__exit__ = Mock(return_value=False)
-        mock_client_class.return_value = mock_client
 
         result = fetch_route("UAL456")
 
@@ -555,17 +549,12 @@ class RouteCacheTests(TestCase):
         self.assertEqual(result["destination"]["icao"], "KJFK")
         self.assertEqual(result["airport_codes"], "KSFO-KJFK")
 
-    @patch("skyspy.services.external_db.httpx.Client")
-    def test_fetch_route_empty_list(self, mock_client_class):
-        """A no-match (empty list) reply yields None, not a crash."""
-        mock_response = Mock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = []
-        mock_client = Mock()
-        mock_client.post.return_value = mock_response
-        mock_client.__enter__ = Mock(return_value=mock_client)
-        mock_client.__exit__ = Mock(return_value=False)
-        mock_client_class.return_value = mock_client
+    @patch("skyspy.services.external_db._fetch_route_hexdb", return_value=None)
+    @patch("skyspy.services.adsbdb.get_route_by_callsign", return_value=None)
+    @patch("skyspy.services.external_db.http_client.post_json")
+    def test_fetch_route_empty_list(self, mock_post_json, _mock_adsbdb, _mock_hexdb):
+        """No match from any source (adsb.im empty, adsbdb + hexdb None) yields None."""
+        mock_post_json.return_value = []
 
         result = fetch_route("UAL456")
 
@@ -593,15 +582,12 @@ class RouteCacheTests(TestCase):
         result = fetch_route("   ")
         self.assertIsNone(result)
 
-    @patch("skyspy.services.external_db.httpx.Client")
-    def test_fetch_route_api_error(self, mock_client_class):
-        """Test route fetch handles API errors gracefully."""
-        mock_client = Mock()
-        mock_client.post.side_effect = httpx.ConnectError("API error")
-        mock_client.__enter__ = Mock(return_value=mock_client)
-        mock_client.__exit__ = Mock(return_value=False)
-        mock_client_class.return_value = mock_client
-
+    @patch("skyspy.services.external_db._fetch_route_hexdb", return_value=None)
+    @patch("skyspy.services.adsbdb.get_route_by_callsign", return_value=None)
+    @patch("skyspy.services.external_db.http_client.post_json", return_value=None)
+    def test_fetch_route_api_error(self, _mock_post_json, _mock_adsbdb, _mock_hexdb):
+        """Test route fetch handles API errors gracefully (all sources return None)."""
+        # http_client.post_json swallows transport errors and returns None itself.
         result = fetch_route("UAL456")
 
         self.assertIsNone(result)

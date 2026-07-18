@@ -450,6 +450,11 @@ app.conf.beat_schedule = {
         "task": "skyspy.tasks.rag.refresh_airframe_documents",
         "schedule": crontab(hour=7, minute=0),
     },
+    # Embed recent ACARS/NOTAM/PIREP text for semantic search - every 30 min
+    "refresh-rag-documents": {
+        "task": "skyspy.tasks.rag.refresh_rag_documents",
+        "schedule": crontab(minute="*/30"),
+    },
 }
 
 

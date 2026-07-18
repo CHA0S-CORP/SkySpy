@@ -58,9 +58,14 @@ class Command(BaseCommand):
 
         acars_port = options["acars_port"] if not options["no_acars"] else None
         vdlm2_port = options["vdlm2_port"] if not options["no_vdlm2"] else None
+        airframes = getattr(settings, "AIRFRAMES_ACARS_ENABLED", False)
 
-        if not acars_port and not vdlm2_port:
-            self.stderr.write(self.style.ERROR("No listeners enabled. Use --acars-port or --vdlm2-port"))
+        if not acars_port and not vdlm2_port and not airframes:
+            self.stderr.write(
+                self.style.ERROR(
+                    "No sources enabled. Use --acars-port/--vdlm2-port or set AIRFRAMES_ACARS_ENABLED=True."
+                )
+            )
             sys.exit(1)
 
         self.stdout.write(self.style.SUCCESS("Starting ACARS service..."))
@@ -68,6 +73,8 @@ class Command(BaseCommand):
             self.stdout.write(f"  ACARS listener: UDP port {acars_port}")
         if vdlm2_port:
             self.stdout.write(f"  VDL2 listener: UDP port {vdlm2_port}")
+        if airframes:
+            self.stdout.write("  Airframes.io poller: LAX-area stations")
 
         # Run the async service
         try:

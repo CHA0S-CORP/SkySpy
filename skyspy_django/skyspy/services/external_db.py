@@ -92,6 +92,59 @@ OPENSKY_DOWNLOAD_PATH = Path("/data/opensky/aircraft-database.csv")
 ADSB_IM_ROUTE_API = "https://adsb.im/api/0/routeset"
 ADSB_LOL_API_BASE = "https://api.adsb.lol"
 
+# FAA MASTER "TYPE REGISTRANT" code -> authoritative owner type. This is the
+# registry's own entity classification and beats regex-guessing LLC/trust from
+# the name. (6 is unused by the FAA.)
+FAA_REGISTRANT_TYPES = {
+    "1": "individual",
+    "2": "partnership",
+    "3": "corporation",
+    "4": "co_owned",
+    "5": "government",
+    "7": "llc",
+    "8": "non_citizen_corp",
+    "9": "non_citizen_co_owned",
+}
+
+# Keyless community hex-lookup pool (readsb schema). Enrichment round-robins
+# across these to spread per-IP rate limits; a source that 429s or errors is put
+# on an exponential-backoff cooldown and skipped until it expires.
+_HEX_SOURCE_BASES = {
+    "adsb.lol": "https://api.adsb.lol/v2/hex/{hex}",
+    "adsb.fi": "https://opendata.adsb.fi/api/v2/hex/{hex}",
+    "airplanes.live": "https://api.airplanes.live/v2/hex/{hex}",
+}
+_HEX_COOLDOWN_BASE = 15.0  # seconds; doubles per consecutive failure
+_HEX_COOLDOWN_MAX = 300.0
+_hex_lock = Lock()
+_hex_counter = 0
+_hex_cooldown_until: dict[str, float] = {}
+_hex_fail_streak: dict[str, int] = {}
+
+
+def _enrichment_sources() -> list[tuple[str, str]]:
+    """Ordered [(name, hex_url_template), ...] from AIRCRAFT_STREAM_FREE_SOURCES."""
+    names = getattr(settings, "AIRCRAFT_STREAM_FREE_SOURCES", "") or ""
+    ordered = [n.strip() for n in names.split(",") if n.strip() in _HEX_SOURCE_BASES]
+    if not ordered:
+        ordered = list(_HEX_SOURCE_BASES)
+    return [(n, _HEX_SOURCE_BASES[n]) for n in ordered]
+
+
+def _note_hex_success(name: str) -> None:
+    with _hex_lock:
+        _hex_fail_streak.pop(name, None)
+        _hex_cooldown_until.pop(name, None)
+
+
+def _note_hex_failure(name: str) -> None:
+    with _hex_lock:
+        streak = _hex_fail_streak.get(name, 0) + 1
+        _hex_fail_streak[name] = streak
+        cooldown = min(_HEX_COOLDOWN_BASE * (2 ** (streak - 1)), _HEX_COOLDOWN_MAX)
+        _hex_cooldown_until[name] = time.monotonic() + cooldown
+
+
 UPDATE_INTERVAL_HOURS = 24
 
 # Registration prefix to country mapping
@@ -572,11 +625,24 @@ def _load_faa_master(path: Path) -> int:
 
                     n_number = row.get("N-NUMBER", "").strip()
 
+                    # Street + Street2 -> single owner address (drives the
+                    # registered-agent / PO-box shell heuristics, previously blind
+                    # because only city/state were captured).
+                    street = row.get("STREET", "").strip()
+                    street2 = row.get("STREET2", "").strip()
+                    owner_address = ", ".join(p for p in (street, street2) if p) or None
+                    reg_type = FAA_REGISTRANT_TYPES.get(row.get("TYPE REGISTRANT", "").strip())
+                    fractional = row.get("FRACT OWNER", "").strip().upper() == "Y"
+
                     _faa_db[mode_s_hex] = {
                         "registration": f"N{n_number}" if n_number else None,
                         "serial_number": row.get("SERIAL NUMBER", "").strip() or None,
                         "year_built": _safe_int(row.get("YEAR MFR", "").strip()),
                         "owner": row.get("NAME", "").strip(),
+                        "owner_address": owner_address,
+                        "owner_zip": row.get("ZIP CODE", "").strip() or None,
+                        "faa_registrant_type": reg_type,
+                        "fractional_owner": fractional or None,
                         "city": row.get("CITY", "").strip() or None,
                         "state": row.get("STATE", "").strip() or None,
                         "country": "United States",
@@ -885,6 +951,12 @@ def fetch_route(callsign: str) -> dict | None:
 
         route_data = adsbdb.get_route_by_callsign(callsign)
 
+    # Last resort: hexdb callsign-route (keyless). Returns a plain-text
+    # "ICAO-ICAO[-ICAO...]" leg string — codes only, no names/coords — so it is
+    # strictly a lower-fidelity fallback after the two rich sources above.
+    if not route_data:
+        route_data = _fetch_route_hexdb(callsign)
+
     if route_data:
         with _route_lock:
             # Cleanup if cache is too large
@@ -895,6 +967,43 @@ def fetch_route(callsign: str) -> dict | None:
         return route_data
 
     return None
+
+
+def _fetch_route_hexdb(callsign: str) -> dict | None:
+    """Fetch a codes-only route from hexdb's callsign-route endpoint.
+
+    hexdb returns a bare "EGLL-KLAX" (or multi-leg "EGLL-EGCC-KLAX") text body.
+    We take the first leg as origin and the last as destination and fill only
+    the icao codes; names/coords are unknown from this source. Returns the
+    shared route shape so it is a drop-in fallback, or None.
+    """
+    from urllib.parse import quote
+
+    # get_text swallows network/circuit/rate errors and returns None itself.
+    text = http_client.get_text(
+        f"https://hexdb.io/callsign-route?callsign={quote(callsign)}",
+        source="hexdb",
+        timeout=8.0,
+    )
+    if not text or not isinstance(text, str):
+        return None
+    legs = [seg.strip().upper() for seg in text.strip().split("-") if seg.strip()]
+    # Guard against error/HTML bodies: legs must look like 3-4 char ICAO idents.
+    if len(legs) < 2 or not all(3 <= len(seg) <= 4 and seg.isalnum() for seg in legs):
+        return None
+
+    def _brief(icao: str) -> dict:
+        return {"iata": None, "icao": icao, "name": None, "city": None, "country": None, "lat": None, "lon": None}
+
+    return {
+        "callsign": callsign,
+        "airline_code": None,
+        "flight_number": None,
+        "airport_codes": "-".join(legs),
+        "plausible": None,
+        "origin": _brief(legs[0]),
+        "destination": _brief(legs[-1]),
+    }
 
 
 def _cleanup_route_cache(now: float):
@@ -913,21 +1022,66 @@ def _cleanup_route_cache(now: float):
             _route_cache_ttl.pop(k, None)
 
 
-def fetch_aircraft_from_adsb_lol(icao_hex: str) -> dict | None:
-    """Fetch live aircraft data from adsb.lol API."""
-    icao_hex = icao_hex.upper().strip()
-
+def _fetch_hex_from_source(name: str, template: str, icao_hex: str) -> tuple[dict | None, bool]:
+    """Query one community source. Returns (record_or_None, ok) where ok=False means
+    the source failed (429/network/parse) and should be put on cooldown."""
     try:
         with httpx.Client(timeout=10.0) as client:
-            response = client.get(f"{ADSB_LOL_API_BASE}/v2/hex/{icao_hex}", headers={"User-Agent": "SkySpyAPI/2.6"})
-
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("ac"):
-                    return data["ac"][0] if data["ac"] else None
-
+            response = client.get(template.format(hex=icao_hex), headers={"User-Agent": "SkySpyAPI/2.6"})
+        if response.status_code == 429:
+            logger.debug(f"{name} hex lookup rate-limited (429) for {icao_hex}, backing off")
+            return None, False
+        if response.status_code == 200:
+            ac = response.json().get("ac")
+            return (ac[0] if ac else None), True
+        logger.debug(f"{name} hex lookup HTTP {response.status_code} for {icao_hex}")
+        return None, False
     except (httpx.HTTPError, ConnectionError, OSError, ValueError) as e:
-        logger.debug(f"adsb.lol lookup failed for {icao_hex}: {type(e).__name__}: {e}")
+        logger.debug(f"{name} lookup failed for {icao_hex}: {type(e).__name__}: {e}")
+        return None, False
+
+
+def fetch_aircraft_from_adsb_lol(icao_hex: str) -> dict | None:
+    """Fetch live aircraft data from the keyless community hex-lookup pool.
+
+    Round-robins across adsb.lol / adsb.fi / airplanes.live to spread the per-IP
+    rate limit, with per-source exponential backoff: a source that 429s or errors
+    is skipped until its cooldown expires. If every source is cooled down, one
+    best-effort attempt is still made so enrichment never goes fully dark.
+    (Name kept for callers; no longer adsb.lol-specific.)
+    """
+    icao_hex = icao_hex.upper().strip()
+    sources = _enrichment_sources()
+    count = len(sources)
+
+    global _hex_counter
+    with _hex_lock:
+        start = _hex_counter % count
+        _hex_counter += 1
+
+    now = time.monotonic()
+    attempted = False
+    for offset in range(count):
+        name, template = sources[(start + offset) % count]
+        with _hex_lock:
+            if _hex_cooldown_until.get(name, 0.0) > now:
+                continue  # source is backing off, skip it
+        attempted = True
+        record, ok = _fetch_hex_from_source(name, template, icao_hex)
+        if ok:
+            _note_hex_success(name)
+            return record
+        _note_hex_failure(name)
+
+    # All sources cooled down: make one forced attempt on the rotation head so
+    # enrichment degrades gracefully rather than returning nothing.
+    if not attempted:
+        name, template = sources[start]
+        record, ok = _fetch_hex_from_source(name, template, icao_hex)
+        if ok:
+            _note_hex_success(name)
+            return record
+        _note_hex_failure(name)
 
     return None
 

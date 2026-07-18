@@ -19,7 +19,9 @@ import json
 import logging
 
 import socketio
+from asgiref.sync import sync_to_async
 from django.conf import settings
+from django.db import close_old_connections
 from django.utils import timezone
 
 from skyspy.socketio.middleware.auth import authenticate_socket
@@ -38,6 +40,22 @@ from skyspy.socketio.utils.rate_limiter import DEFAULT_RATE_LIMITS, RateLimiter
 from skyspy.socketio.utils.snapshot_cache import snapshot_cache
 
 logger = logging.getLogger(__name__)
+
+
+@sync_to_async
+def _recycle_db_connections():
+    """Recycle stale DB connections before ORM access in a socket handler.
+
+    Socket.IO handlers run outside Django's request/response cycle, so the
+    ``close_old_connections()`` that Django normally fires per request never
+    runs here. The shared thread-sensitive executor keeps one persistent
+    connection, and the DB server (or PgBouncer) reaps it while idle — the
+    next query then raises ``OperationalError: the connection is closed``.
+    This runs in the same thread-sensitive executor as the handlers, so it
+    recycles the very connection they are about to use. Requires
+    ``CONN_HEALTH_CHECKS`` to detect connections closed before CONN_MAX_AGE.
+    """
+    close_old_connections()
 
 
 class MainNamespace(
@@ -414,6 +432,10 @@ class MainNamespace(
             # so a client cannot spoof "_user" to impersonate another account.
             params["_user"] = session.get("user")
 
+            # Drop any DB connection reaped while the socket was idle, so the
+            # handler's ORM query does not hit "the connection is closed".
+            await _recycle_db_connections()
+
             handler = getattr(self, f"_handle_{request_type.replace('-', '_')}", None)
             if handler:
                 result = await handler(params)
@@ -530,6 +552,10 @@ class MainNamespace(
     async def _generate_topic_snapshot(self, topic: str) -> dict | None:
         """Generate a fresh snapshot for a topic."""
         timestamp = timezone.now().isoformat()
+
+        # Connect/subscribe snapshots also run outside the request cycle; recycle
+        # a possibly-dead connection before the ORM query behind each snapshot.
+        await _recycle_db_connections()
 
         if topic == "notams":
             return await self._get_notam_snapshot({"active_only": True, "limit": 100})

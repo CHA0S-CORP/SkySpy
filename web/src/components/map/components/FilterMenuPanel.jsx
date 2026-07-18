@@ -20,6 +20,7 @@ export function FilterMenuPanel({ trafficFilters, updateTrafficFilters, onClose 
         </button>
       </div>
 
+      <div className="filter-menu-body">
       <div className="filter-section">
         <label className="overlay-toggle">
           <input
@@ -180,8 +181,9 @@ export function FilterMenuPanel({ trafficFilters, updateTrafficFilters, onClose 
           />
         </div>
       </div>
+      </div>
 
-      <div className="overlay-divider" />
+      <div className="filter-menu-footer">
       <button
         className="filter-reset-btn"
         onClick={() =>
@@ -203,6 +205,7 @@ export function FilterMenuPanel({ trafficFilters, updateTrafficFilters, onClose 
         <RefreshCw size={14} />
         <span>Reset Filters</span>
       </button>
+      </div>
     </div>
   );
 }

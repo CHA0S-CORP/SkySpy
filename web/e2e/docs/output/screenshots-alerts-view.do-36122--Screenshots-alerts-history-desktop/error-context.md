@@ -1,0 +1,121 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - banner [ref=e4]:
+      - generic [ref=e5]:
+        - img [ref=e7]
+        - generic [ref=e11]:
+          - text: Sky
+          - emphasis [ref=e12]: Spy
+      - generic [ref=e13]:
+        - generic [ref=e14]:
+          - img [ref=e15]
+          - generic [ref=e17]: "281"
+          - generic [ref=e18]: AIRCRAFT
+        - generic [ref=e20]:
+          - img [ref=e21]
+          - generic [ref=e24]: "32.8"
+          - generic [ref=e25]: LAT
+        - generic [ref=e26]:
+          - img [ref=e27]
+          - generic [ref=e30]: "-117.3"
+          - generic [ref=e31]: LON
+        - generic [ref=e33]:
+          - img [ref=e34]
+          - generic [ref=e37]: "3"
+          - generic [ref=e38]: ONLINE
+      - generic [ref=e39]:
+        - button "radar" [ref=e40] [cursor=pointer]: radar
+        - button "Slate theme" [ref=e42] [cursor=pointer]
+        - button "Amber theme" [ref=e44] [cursor=pointer]
+      - generic [ref=e46]:
+        - button "Notifications" [ref=e47] [cursor=pointer]:
+          - img [ref=e48]
+        - button "Settings" [ref=e50] [cursor=pointer]:
+          - img [ref=e51]
+        - generic [ref=e54]:
+          - img [ref=e55]
+          - generic [ref=e58]: 14:30:00
+          - generic [ref=e59]: UTC
+    - generic [ref=e60]:
+      - navigation "Primary" [ref=e61]:
+        - generic [ref=e62]: NAVIGATION
+        - button "Live Map" [ref=e63] [cursor=pointer]:
+          - img [ref=e64]
+          - text: Live Map
+        - button "Aircraft List" [ref=e66] [cursor=pointer]:
+          - img [ref=e67]
+          - text: Aircraft List
+        - button "Statistics" [ref=e69] [cursor=pointer]:
+          - img [ref=e70]
+          - text: Statistics
+        - button "Analytics" [ref=e72] [cursor=pointer]:
+          - img [ref=e73]
+          - text: Analytics
+        - button "History" [ref=e76] [cursor=pointer]:
+          - img [ref=e77]
+          - text: History
+        - button "Radio" [ref=e79] [cursor=pointer]:
+          - img [ref=e80]
+          - text: Radio
+        - button "Alerts" [ref=e83] [cursor=pointer]:
+          - img [ref=e84]
+          - text: Alerts
+        - button "System" [ref=e86] [cursor=pointer]:
+          - img [ref=e87]
+          - text: System
+        - button "Assistant" [ref=e89] [cursor=pointer]:
+          - img [ref=e90]
+          - text: Assistant
+        - button "Cannonball" [ref=e92] [cursor=pointer]:
+          - img [ref=e93]
+          - text: Cannonball
+        - button "Services" [ref=e98] [cursor=pointer]:
+          - img [ref=e99]
+          - text: Services
+          - img [ref=e102]
+        - generic [ref=e105]:
+          - generic [ref=e108]: LIVE
+          - generic [ref=e109]: v2.5.0
+        - generic [ref=e110]: © CHAOS CORP
+      - main [ref=e111]:
+        - generic [ref=e113]:
+          - generic [ref=e114]:
+            - tablist [ref=e115]:
+              - tab "Rules 0" [selected] [ref=e116] [cursor=pointer]:
+                - text: Rules
+                - generic [ref=e117]: "0"
+              - tab "History" [ref=e118] [cursor=pointer]
+              - tab "Notifications" [ref=e119] [cursor=pointer]
+            - button "New Rule" [ref=e120] [cursor=pointer]:
+              - img [ref=e121]
+              - text: New Rule
+          - generic [ref=e123]:
+            - generic [ref=e124]:
+              - img [ref=e125]
+              - textbox "Search rules" [ref=e128]:
+                - /placeholder: Search rules…
+            - combobox "Priority filter" [ref=e129] [cursor=pointer]:
+              - option "All Priorities" [selected]
+              - option "Info"
+              - option "Warning"
+              - option "Critical"
+              - option "Emergency"
+            - combobox "Status filter" [ref=e130] [cursor=pointer]:
+              - option "All Status" [selected]
+              - option "Enabled"
+              - option "Disabled"
+            - generic [ref=e131]: 0 rules
+          - generic [ref=e133]:
+            - img [ref=e134]
+            - generic [ref=e136]: No rules match your filters
+            - button "Create Rule" [ref=e137] [cursor=pointer]:
+              - img [ref=e138]
+              - text: Create Rule
+  - generic [ref=e140]:
+    - img [ref=e142]
+    - button "Open Tanstack query devtools" [ref=e190] [cursor=pointer]:
+      - img [ref=e191]
+```

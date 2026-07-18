@@ -30,8 +30,11 @@ class AssistantAskView(APIView):
     permission_classes = [FeatureBasedPermission]
 
     def post(self, request):
-        query = (request.data or {}).get("query", "")
-        result = agent.ask(query)
+        data = request.data or {}
+        query = data.get("query", "")
+        context = data.get("context")
+        history = data.get("history")
+        result = agent.ask(query, context=context, history=history)
         http_status = 200 if result.get("status") in ("ok", "empty_query") else 503
         return Response(result, status=http_status)
 
@@ -60,10 +63,12 @@ async def assistant_stream(request):
     except (ValueError, TypeError):
         body = {}
     query = body.get("query", "")
+    context = body.get("context")
+    history = body.get("history")
 
     async def event_stream():
         try:
-            async for event in agent.astream(query):
+            async for event in agent.astream(query, context=context, history=history):
                 yield _sse(event)
         except Exception as e:  # broad: never let the stream 500 mid-flight
             logger.warning(f"assistant_stream failed: {type(e).__name__}: {e}")

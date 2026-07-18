@@ -16,10 +16,6 @@ from functools import lru_cache
 from django.db import DatabaseError
 
 from skyspy.services.libacars_binding import (
-    MsgDir,
-    decode_acars_apps,
-)
-from skyspy.services.libacars_binding import (
     is_available as libacars_is_available,
 )
 
@@ -244,50 +240,56 @@ def validate_coordinates(lat: float, lon: float) -> bool:
     return -90 <= lat <= 90 and -180 <= lon <= 180
 
 
+def _finish_coord(lat: float, lon: float) -> dict | None:
+    """Validate and round a lat/lon pair, or return None if out of range."""
+    if validate_coordinates(lat, lon):
+        return {"lat": round(lat, 4), "lon": round(lon, 4)}
+    return None
+
+
 def parse_coordinates(text: str) -> dict | None:
     """
-    Parse coordinates from various ACARS message formats.
+    Parse coordinates from the several formats seen in real ACARS position
+    reports (labels 16/17/20/21/22, ADS, OOOI). Spaces are stripped first, so
+    lat/lon may be joined directly or separated by ``,`` or ``/``. Supported:
+
+    - ``N3417.9W11645.4``   degrees + decimal minutes (DDMM.m)
+    - ``N34.0145W108.9483`` decimal degrees, hemisphere prefix (any separator)
+    - ``42.7921N78.6982W``  decimal degrees, hemisphere suffix
+    - ``N12345W123456``     DDMMt packed (minutes in tenths) — legacy fallback
     """
     if not text:
         return None
 
     text_clean = text.replace(" ", "").replace("\n", "").replace("\r", "")
 
-    # Format 1: N12345W123456 (DDMMm for lat, DDDMMm for lon - tenths of minutes)
-    match = re.search(r"([NS])(\d{2})(\d{3})([EW])(\d{3})(\d{3})", text_clean)
-    if match:
-        lat_deg = int(match.group(2))
-        lat_min = int(match.group(3)) / 10
-        lat = lat_deg + lat_min / 60
-        if match.group(1) == "S":
-            lat = -lat
+    # DDMM.m — 2/3-digit degrees followed by 2-digit minutes with a decimal.
+    m = re.search(r"([NS])(\d{2})(\d{2}\.\d+)[,/]?([EW])(\d{3})(\d{2}\.\d+)", text_clean)
+    if m:
+        lat = int(m.group(2)) + float(m.group(3)) / 60
+        lon = int(m.group(5)) + float(m.group(6)) / 60
+        return _finish_coord(-lat if m.group(1) == "S" else lat, -lon if m.group(4) == "W" else lon)
 
-        lon_deg = int(match.group(5))
-        lon_min = int(match.group(6)) / 10
-        lon = lon_deg + lon_min / 60
-        if match.group(4) == "W":
-            lon = -lon
+    # Decimal degrees, hemisphere prefix: N34.0145 / W108.9483 (any separator).
+    m = re.search(r"([NS])(\d{1,2}\.\d+)[,/]?([EW])(\d{1,3}\.\d+)", text_clean)
+    if m:
+        lat = float(m.group(2))
+        lon = float(m.group(4))
+        return _finish_coord(-lat if m.group(1) == "S" else lat, -lon if m.group(3) == "W" else lon)
 
-        if validate_coordinates(lat, lon):
-            return {"lat": round(lat, 4), "lon": round(lon, 4)}
-        return None
+    # Decimal degrees, hemisphere suffix: 42.7921N 78.6982W.
+    m = re.search(r"(\d{1,2}\.\d+)([NS])[,/]?(\d{1,3}\.\d+)([EW])", text_clean)
+    if m:
+        lat = float(m.group(1))
+        lon = float(m.group(3))
+        return _finish_coord(-lat if m.group(2) == "S" else lat, -lon if m.group(4) == "W" else lon)
 
-    # Format 2: N 49.128,W122.374 (decimal degrees)
-    match = re.search(r"([NS])\s*(\d+\.?\d*)\s*,\s*([EW])\s*(\d+\.?\d*)", text_clean)
-    if match:
-        try:
-            lat = float(match.group(2))
-            if match.group(1) == "S":
-                lat = -lat
-            lon = float(match.group(4))
-            if match.group(3) == "W":
-                lon = -lon
-
-            if validate_coordinates(lat, lon):
-                return {"lat": round(lat, 4), "lon": round(lon, 4)}
-        except ValueError:
-            pass
-        return None
+    # Legacy DDMMt packed form (minutes in tenths): N12345W123456.
+    m = re.search(r"([NS])(\d{2})(\d{3})([EW])(\d{3})(\d{3})", text_clean)
+    if m:
+        lat = int(m.group(2)) + (int(m.group(3)) / 10) / 60
+        lon = int(m.group(5)) + (int(m.group(6)) / 10) / 60
+        return _finish_coord(-lat if m.group(1) == "S" else lat, -lon if m.group(4) == "W" else lon)
 
     return None
 
@@ -408,8 +410,12 @@ def decode_message_text(text: str, label: str = None, libacars_data: dict = None
         }
         if label in decodable_labels:
             try:
-                msg_dir = MsgDir(direction) if direction in (0, 1, 2) else MsgDir.UNKNOWN
-                result = decode_acars_apps(label, text_stripped, msg_dir, use_cache=True)
+                # Isolated in a subprocess: some malformed CPDLC/ARINC payloads
+                # segfault libacars, which would otherwise kill the whole worker
+                # (and stop the aircraft feed sharing it). See acars_safe_decode.
+                from skyspy.services.acars_safe_decode import safe_decode_acars_apps
+
+                result = safe_decode_acars_apps(label, text_stripped, direction)
                 if result:
                     decoded["libacars"] = result
                     logger.debug("libacars_decoded", extra={"label": label, "keys": list(result.keys())})
@@ -438,6 +444,37 @@ def decode_message_text(text: str, label: str = None, libacars_data: dict = None
         h1_decoded = decode_h1_message(text_stripped)
         if h1_decoded:
             decoded.update(h1_decoded)
+            return decoded
+
+    # Position / ADS reports (labels 16, 17, 20, 21, 22). These carry a lat/lon
+    # in one of several formats (see parse_coordinates) plus, on some, a
+    # requested/next fix ident. Only claim a position report if we extract
+    # something geographic; otherwise fall through to generic parsing.
+    if label in ("16", "17", "20", "21", "22"):
+        pos_decoded = {}
+        coords = parse_coordinates(text_stripped)
+        if coords:
+            pos_decoded["position"] = coords
+
+        alt_match = re.search(r"(?:ALT|/A)?(\d{4,5})FT|ALT(\d{4,5})|FL(\d{2,3})", text_upper)
+        if alt_match:
+            if alt_match.group(3):  # FLxxx
+                pos_decoded["altitude_ft"] = int(alt_match.group(3)) * 100
+                pos_decoded["flight_level"] = f"FL{int(alt_match.group(3))}"
+            else:
+                alt = int(alt_match.group(1) or alt_match.group(2))
+                pos_decoded["altitude_ft"] = alt
+                pos_decoded["flight_level"] = f"FL{alt // 100}"
+
+        # Requested / next waypoint ident (e.g. "REQ POS JAWBN", "NEXT WPT MARNR").
+        wpt_match = re.search(r"(?:REQ\s*POS|NEXT\s*WPT|WPT|TO)\s+([A-Z]{3,5})\b", text_upper)
+        if wpt_match:
+            pos_decoded["waypoints"] = [wpt_match.group(1)]
+
+        if pos_decoded:
+            decoded["message_type"] = "Position Report"
+            decoded["description"] = "Aircraft position/ADS report"
+            decoded.update(pos_decoded)
             return decoded
 
     # OOOI Events

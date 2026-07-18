@@ -10,6 +10,7 @@ const NAV_ITEMS = [
   { id: 'aircraft', icon: 'plane', label: 'Aircraft List', feature: 'aircraft' },
   { id: 'stats', icon: 'bar-chart', label: 'Statistics', feature: 'aircraft' },
   { id: 'analytics', icon: 'line-chart', label: 'Analytics', feature: 'aircraft' },
+  { id: 'airframes', icon: 'layers', label: 'Airframes', feature: 'aircraft' },
   { id: 'history', icon: 'history', label: 'History', feature: 'history' },
   { id: 'audio', icon: 'wave', label: 'Radio', feature: 'audio' },
   { id: 'alerts', icon: 'bell', label: 'Alerts', feature: 'alerts' },

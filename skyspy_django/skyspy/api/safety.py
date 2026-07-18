@@ -326,6 +326,64 @@ class SafetyEventViewSet(viewsets.ModelViewSet):
         _broadcast_ack_update(event.id, acknowledged=True)
         return Response(SafetyEventSerializer(event).data)
 
+    @extend_schema(
+        summary="Get plain-English AI summary of a safety event",
+        description=(
+            "Uses the configured LLM to explain one safety event (proximity conflict, "
+            "TCAS RA, emergency squawk, extreme vertical rate, …) in plain English, "
+            "grounded in the event's separation / CPA data. Opt-in (one cached LLM "
+            "call). Returns available=false when the LLM is disabled/unconfigured — "
+            "the client falls back to the event's own message."
+        ),
+    )
+    @action(detail=True, methods=["get"], url_path="ai-summary")
+    def ai_summary(self, request, pk=None):
+        """Plain-English LLM explanation of one safety event."""
+        from skyspy.services import aviation_llm
+
+        event = self.get_object()
+
+        if not aviation_llm.available():
+            return Response({"available": False, "summary": None})
+
+        def _ac(snapshot, hexid, callsign):
+            if not snapshot and not hexid:
+                return None
+            snap = snapshot or {}
+            return {
+                "icao_hex": hexid,
+                "callsign": (callsign or snap.get("callsign") or "").strip() or None,
+                "altitude_ft": snap.get("alt") or snap.get("altitude"),
+                "ground_speed_kt": snap.get("gs"),
+                "vertical_rate_fpm": snap.get("vr") or snap.get("vs"),
+                "heading": snap.get("heading") or snap.get("track"),
+            }
+
+        context = {
+            "event_type": event.event_type,
+            "severity": event.severity,
+            "message": event.message,
+            "aircraft": [
+                a
+                for a in (
+                    _ac(event.aircraft_snapshot, event.icao_hex, event.callsign),
+                    _ac(event.aircraft_snapshot_2, event.icao_hex_2, event.callsign_2),
+                )
+                if a
+            ],
+            "closest_point_of_approach": {
+                "horizontal_separation_nm": (event.details or {}).get("horizontal_sep_nm")
+                or event.cpa_distance_nm,
+                "vertical_separation_ft": (event.details or {}).get("vertical_sep_ft"),
+                "closure_rate_kt": (event.details or {}).get("closure_rate_kt"),
+                "time_to_cpa_seconds": (event.details or {}).get("time_to_cpa_seconds")
+                or event.cpa_time_seconds,
+            },
+        }
+
+        summary = aviation_llm.summarize_safety_event(context)
+        return Response({"available": True, "summary": summary, "id": event.id})
+
     @extend_schema(summary="Unacknowledge safety event", description="Remove acknowledgement from a safety event")
     @action(detail=True, methods=["delete"])
     def unacknowledge(self, request, pk=None):

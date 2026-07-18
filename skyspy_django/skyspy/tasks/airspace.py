@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 
 import httpx
 from celery import shared_task
+from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
@@ -199,23 +200,22 @@ def refresh_airspace_boundaries(self):
         return {"status": "disabled", "count": boundary_count}
 
     try:
-        # Define regions to fetch (CONUS grid for comprehensive coverage)
-        regions = [
-            # Western US
-            (37.0, -122.0, 300),  # California/Nevada
-            (47.0, -122.0, 300),  # Pacific Northwest
-            (33.0, -112.0, 300),  # Arizona/New Mexico
-            (40.0, -105.0, 300),  # Colorado/Wyoming
-            # Central US
-            (35.0, -97.0, 300),  # Texas/Oklahoma
-            (41.0, -95.0, 300),  # Midwest
-            (45.0, -93.0, 300),  # Upper Midwest
-            # Eastern US
-            (33.0, -84.0, 300),  # Southeast
-            (40.0, -75.0, 300),  # Northeast
-            (42.0, -83.0, 300),  # Great Lakes
-            (28.0, -82.0, 300),  # Florida
-        ]
+        # Single-site feeders only need airspace around their own antenna. The
+        # old fixed 11-region CONUS grid fired 11 back-to-back OpenAIP requests
+        # per run, which tripped the API's rate limit (429) and stored *nothing*
+        # — the boundary table stayed empty. Fetch one region centered on the
+        # feeder instead (configurable radius), so the layer actually populates
+        # where the map is looking. Extra regions can be added via
+        # AIRSPACE_EXTRA_REGIONS (list of [lat, lon, radius_nm]).
+        feeder_lat = float(getattr(settings, "FEEDER_LAT", 0) or 0)
+        feeder_lon = float(getattr(settings, "FEEDER_LON", 0) or 0)
+        radius_nm = float(getattr(settings, "AIRSPACE_FETCH_RADIUS_NM", 250) or 250)
+        regions = [(feeder_lat, feeder_lon, radius_nm)]
+        regions.extend(
+            (float(r[0]), float(r[1]), float(r[2]))
+            for r in getattr(settings, "AIRSPACE_EXTRA_REGIONS", []) or []
+            if len(r) == 3
+        )
 
         total_stored = 0
 

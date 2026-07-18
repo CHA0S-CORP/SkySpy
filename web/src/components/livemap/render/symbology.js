@@ -356,16 +356,131 @@ export function drawTrail(ctx, pts, opts = {}) {
 }
 
 /** Draw an airspace polygon from projected points [{x,y}]. */
-export function drawAirspacePoly(ctx, pts) {
+/**
+ * Airspace class → display metadata (toggle key, label, RGB triplet). The
+ * backend maps OpenAIP types to these classes (see tasks/airspace.py
+ * _map_openaip_type_to_class). Ordered for the Layers sub-panel.
+ */
+export const AIRSPACE_CLASSES = [
+  { key: 'B', label: 'Class B', rgb: '48,120,255' },
+  { key: 'C', label: 'Class C', rgb: '76,201,240' },
+  { key: 'D', label: 'Class D', rgb: '61,220,132' },
+  { key: 'E', label: 'Class E', rgb: '139,152,167' },
+  { key: 'RESTRICTED', label: 'Restricted', rgb: '242,88,93' },
+  { key: 'PROHIBITED', label: 'Prohibited', rgb: '229,57,90' },
+  { key: 'WARNING', label: 'Warning / Danger', rgb: '245,181,68' },
+  { key: 'ALERT', label: 'Alert', rgb: '245,181,68' },
+  { key: 'MOA', label: 'MOA', rgb: '179,157,255' },
+  { key: 'TFR', label: 'TFR', rgb: '242,88,93' },
+];
+
+const AIRSPACE_RGB = Object.fromEntries(AIRSPACE_CLASSES.map((c) => [c.key, c.rgb]));
+const AIRSPACE_LABEL = Object.fromEntries(AIRSPACE_CLASSES.map((c) => [c.key, c.label]));
+
+/** Normalize a raw airspace class to a known key (default 'E'). */
+export function normAirspaceClass(cls) {
+  const k = String(cls || '').toUpperCase();
+  return AIRSPACE_RGB[k] ? k : 'E';
+}
+
+/** Friendly display label for an airspace class (e.g. 'B' → 'Class B'). */
+export function airspaceLabel(cls) {
+  return AIRSPACE_LABEL[normAirspaceClass(cls)];
+}
+
+/**
+ * One-line plain-English description of a special-use airspace class — what the
+ * hazard is and the entry rule. Returns null for the plain controlled classes
+ * (B/C/D/E), whose label + altitude band already say enough. Surfaced in hover
+ * tips so a "Warning / Danger" area is more than a bare badge.
+ */
+const AIRSPACE_DESC = {
+  RESTRICTED:
+    'Restricted — entry needs the controlling agency’s permission (e.g. gunnery, missiles).',
+  PROHIBITED: 'Prohibited — flight is not allowed at any time.',
+  WARNING: 'Warning / Danger — activity hazardous to aircraft; may be active.',
+  ALERT: 'Alert — heavy pilot training or unusual aerial activity; stay vigilant.',
+  MOA: 'Military Operations Area — military training; use caution when active.',
+  TFR: 'Temporary Flight Restriction — check NOTAMs before entering.',
+};
+export function airspaceDescription(cls) {
+  return AIRSPACE_DESC[normAirspaceClass(cls)] ?? null;
+}
+
+/** `rgba()` string for an airspace class at a given alpha. */
+export function airspaceColor(cls, alpha = 1) {
+  return `rgba(${AIRSPACE_RGB[normAirspaceClass(cls)]},${alpha})`;
+}
+
+/**
+ * Extract projectable rings from an airspace geometry, accepting a GeoJSON
+ * Polygon / MultiPolygon, a bare `{points}` array, or a raw ring. Returns an
+ * array of rings, each an array of `{lat, lon}`. MultiPolygon flattening was
+ * the old renderer's blind spot — Class B/complex airspaces silently drew
+ * nothing because their outer "ring" was itself a list of rings.
+ */
+export function airspaceRings(geo) {
+  if (!geo) return [];
+  const toPts = (ring) =>
+    Array.isArray(ring)
+      ? ring
+          .map((c) => (Array.isArray(c) ? { lat: c[1], lon: c[0] } : c))
+          .filter((c) => c && typeof c.lat === 'number' && typeof c.lon === 'number')
+      : [];
+  const type = geo.type;
+  const coords = geo.coordinates;
+  if (type === 'MultiPolygon' && Array.isArray(coords)) {
+    // [[ring,...], [ring,...]] — take every polygon's outer ring
+    return coords.map((poly) => toPts(poly?.[0])).filter((r) => r.length >= 3);
+  }
+  if (type === 'Polygon' && Array.isArray(coords)) {
+    return coords.map(toPts).filter((r) => r.length >= 3); // outer + holes
+  }
+  if (Array.isArray(geo.points)) return [toPts(geo.points)].filter((r) => r.length >= 3);
+  if (Array.isArray(geo)) return [toPts(geo)].filter((r) => r.length >= 3);
+  return [];
+}
+
+/** Even-odd point-in-polygon test for a projected ring of `{x, y}`. */
+export function pointInRing(pt, ring) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i].x;
+    const yi = ring[i].y;
+    const xj = ring[j].x;
+    const yj = ring[j].y;
+    if (yi > pt.y !== yj > pt.y && pt.x < ((xj - xi) * (pt.y - yi)) / (yj - yi) + xi) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
+export function drawAirspacePoly(ctx, pts, rgb = '76,201,240') {
   if (!pts || pts.length < 3) return;
   ctx.save();
-  ctx.strokeStyle = 'rgba(76,201,240,0.35)'; // --accent2
-  ctx.fillStyle = 'rgba(76,201,240,0.05)';
+  ctx.strokeStyle = `rgba(${rgb},0.5)`;
+  ctx.fillStyle = `rgba(${rgb},0.07)`;
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(pts[0].x, pts[0].y);
   for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
   ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** Dashed circle for a radius-only airspace (center + radius, no polygon). */
+export function drawAirspaceDisc(ctx, x, y, r, rgb = '76,201,240') {
+  if (!(r > 0)) return;
+  ctx.save();
+  ctx.strokeStyle = `rgba(${rgb},0.5)`;
+  ctx.fillStyle = `rgba(${rgb},0.07)`;
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 3]);
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
   ctx.restore();

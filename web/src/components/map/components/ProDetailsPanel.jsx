@@ -867,7 +867,7 @@ export function ProDetailsPanel({
         title="More Details"
         icon={ChevronDown}
         defaultOpen={sectionsOpen.secondaryMetrics}
-        onOpenChange={(open) => setSectionsOpen((s) => ({ ...s, secondaryMetrics: open }))}
+        onOpenChange={(open) => handleSectionChange('secondaryMetrics', open)}
       >
         <SecondaryMetrics
           track={proTrack}
@@ -884,7 +884,7 @@ export function ProDetailsPanel({
         title="Photo"
         icon={Image}
         defaultOpen={sectionsOpen.photo}
-        onOpenChange={(open) => setSectionsOpen((s) => ({ ...s, photo: open }))}
+        onOpenChange={(open) => handleSectionChange('photo', open)}
         lazy
       >
         <PhotoSection
@@ -911,7 +911,7 @@ export function ProDetailsPanel({
         title="Performance Graphs"
         icon={LineChart}
         defaultOpen={sectionsOpen.graphs}
-        onOpenChange={(open) => setSectionsOpen((s) => ({ ...s, graphs: open }))}
+        onOpenChange={(open) => handleSectionChange('graphs', open)}
       >
         <GraphsSection
           altitude={proAltitude}

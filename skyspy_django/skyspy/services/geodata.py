@@ -14,6 +14,7 @@ from datetime import datetime
 from math import atan2, cos, radians, sin, sqrt
 
 import httpx
+from django.conf import settings
 from django.db import transaction
 from django.db.models import Max
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
@@ -24,6 +25,28 @@ logger = logging.getLogger(__name__)
 
 # API endpoint
 AWC_BASE = "https://aviationweather.gov/api/data"
+
+# Default bbox when no feeder location is configured (CONUS, majors only).
+CONUS_BBOX = "24,-130,50,-60"
+
+
+def _feeder_bbox(radius_nm: float | None = None) -> str:
+    """
+    AWC bbox ("latMin,lonMin,latMax,lonMax") centered on the feeder antenna.
+
+    The old code always queried the whole CONUS at a low density, so airports/
+    navaids near a given feeder were sparse or absent. Querying a box around
+    FEEDER_LAT/LON returns dense local coverage (and lets us drop the density
+    cap so small fields show up). Falls back to CONUS when no feeder is set.
+    """
+    lat = float(getattr(settings, "FEEDER_LAT", 0) or 0)
+    lon = float(getattr(settings, "FEEDER_LON", 0) or 0)
+    if not lat and not lon:
+        return CONUS_BBOX
+    r = float(radius_nm or getattr(settings, "GEODATA_FETCH_RADIUS_NM", 250) or 250)
+    d_lat = r / 60.0
+    d_lon = r / (60.0 * max(cos(radians(lat)), 0.1))
+    return f"{lat - d_lat:.4f},{lon - d_lon:.4f},{lat + d_lat:.4f},{lon + d_lon:.4f}"
 
 # GeoJSON data sources (Natural Earth via GitHub)
 GEOJSON_SOURCES = {
@@ -172,9 +195,11 @@ def refresh_airports() -> int:
     logger.info("Refreshing cached airports...")
     now = datetime.utcnow()
 
-    bbox = "24,-130,50,-60"  # CONUS roughly
+    bbox = _feeder_bbox()  # local box around the feeder (CONUS fallback)
 
-    data = fetch_awc_data("airport", {"bbox": bbox, "zoom": 5, "density": 5, "format": "json"})
+    # density=12 pulls small/GA fields too (the old density=5 only returned
+    # majors, so a feeder ringed by small airports saw almost nothing).
+    data = fetch_awc_data("airport", {"bbox": bbox, "zoom": 5, "density": 12, "format": "json"})
 
     if isinstance(data, dict) and "error" in data:
         logger.warning(f"Failed to fetch airports: {data.get('error')}")
@@ -231,7 +256,7 @@ def refresh_navaids() -> int:
     logger.info("Refreshing cached navaids...")
     now = datetime.utcnow()
 
-    bbox = "24,-130,50,-60"
+    bbox = _feeder_bbox()
 
     data = fetch_awc_data("navaid", {"bbox": bbox, "format": "json"})
 

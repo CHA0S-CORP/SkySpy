@@ -44,6 +44,32 @@ class TestToolShapes:
         assert json.loads(tools.find_incidents("N12345")) is not None
         assert json.loads(tools.semantic_airframe_search("trust owned jet", 3)) is not None
 
+    def test_new_insight_tools_return_json(self, db):
+        # Correlation: no fields → matrix; both fields → scatter; bad field → error.
+        assert json.loads(tools.metric_correlations()) is not None
+        assert json.loads(tools.metric_correlations("altitude_baro", "distance_nm", 24)) is not None
+        assert "error" in json.loads(tools.metric_correlations("bogus", "distance_nm"))
+        # Detection tools resolve identifiers; unknown ones return a clean error.
+        assert "error" in json.loads(tools.aircraft_track("ZZZZZZ"))
+        assert "error" in json.loads(tools.identify_law_enforcement("ZZZZZZ"))
+        assert json.loads(tools.threat_assessment()) is not None
+        assert json.loads(tools.semantic_event_search("close proximity conflict", 3)) is not None
+
+    def test_track_pattern_flags_orbit(self):
+        # A closed loop (returns near its start after a long path) → orbit_or_loiter.
+        import math
+
+        loop = [
+            {"lat": 34.0 + 0.05 * math.sin(t), "lon": -118.0 + 0.05 * math.cos(t), "vertical_rate": 0}
+            for t in [i * math.pi / 6 for i in range(13)]
+        ]
+        assert tools._track_pattern(loop)["orbit_or_loiter"] is True
+        # A straight departing line does not.
+        line = [{"lat": 34.0 + 0.2 * i, "lon": -118.0, "vertical_rate": -4000} for i in range(6)]
+        pat = tools._track_pattern(line)
+        assert pat["orbit_or_loiter"] is False
+        assert pat["rapid_descent"] is True
+
     def test_guard_converts_exceptions_to_error_json(self):
         # Force the underlying service to raise; the guard must return error JSON.
         with patch("skyspy.services.stats_cache.calculate_history_stats", side_effect=RuntimeError("boom")):
@@ -78,11 +104,9 @@ class TestGetTools:
         # Every tool exposes a non-empty description (the docstring the model reads).
         assert all(t.description for t in lc_tools)
 
-
-# ---------------------------------------------------------------------------
-# Agent helpers + gating
-# ---------------------------------------------------------------------------
-
+    # ---------------------------------------------------------------------------
+    # Agent helpers + gating
+    # ---------------------------------------------------------------------------
 
     @staticmethod
     def _tool_msg(name, content, call_id="c1"):
@@ -130,7 +154,9 @@ class TestGetTools:
     def test_available_for_local_endpoint_without_key(self):
         assert agent.is_available() is True
 
-    @override_settings(ASSISTANT_ENABLED=True, LLM_ENABLED=True, LLM_API_URL="https://api.openai.com/v1", LLM_API_KEY="")
+    @override_settings(
+        ASSISTANT_ENABLED=True, LLM_ENABLED=True, LLM_API_URL="https://api.openai.com/v1", LLM_API_KEY=""
+    )
     def test_unavailable_for_remote_without_key(self):
         assert agent.is_available() is False
 

@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useCallback } from 'react';
+import React, { useRef, useEffect, useCallback, useState } from 'react';
 import L from 'leaflet';
 import { Target } from 'lucide-react';
 import { aircraftArrowIcon } from '../../utils/mapMarkerIcon';
@@ -9,9 +9,14 @@ import { aircraftArrowIcon } from '../../utils/mapMarkerIcon';
  */
 export function EventMapVisualization({ event, trackData, replayPosition, onMapReady }) {
   const mapRef = useRef(null);
-  const mapContainerRef = useRef(null);
+  // Callback-ref target held in state so the init effect re-runs once the
+  // container is actually in the DOM (an inline ref that inits inside a
+  // setTimeout races the layout and leaves Leaflet sized to 0 → grey tiles).
+  const [containerEl, setContainerEl] = useState(null);
   const replayMarkersRef = useRef({});
   const replayTracksRef = useRef({});
+  const staticTracksRef = useRef([]);
+  const eventMarkerRef = useRef(null);
 
   // Create aircraft icon — shared heading dart, consistent with the Live and
   // Detail maps.
@@ -91,96 +96,126 @@ export function EventMapVisualization({ event, trackData, replayPosition, onMapR
     [event, trackData, getInterpolatedPosition, createAircraftIcon]
   );
 
-  // Initialize map
-  const initializeMap = useCallback(
-    (containerEl) => {
-      if (!containerEl || mapRef.current || !event) return;
+  // Event center from the best available position (details → both snapshots →
+  // either snapshot). Returns null when nothing is geolocated.
+  const eventCenter = useCallback(() => {
+    if (!event) return null;
+    const s1 = event.aircraft_snapshot;
+    const s2 = event.aircraft_snapshot_2;
+    if (event.details?.lat && event.details?.lon) return [event.details.lat, event.details.lon];
+    if (s1?.lat && s1?.lon && s2?.lat && s2?.lon)
+      return [(s1.lat + s2.lat) / 2, (s1.lon + s2.lon) / 2];
+    if (s1?.lat && s1?.lon) return [s1.lat, s1.lon];
+    if (s2?.lat && s2?.lon) return [s2.lat, s2.lon];
+    return null;
+  }, [event]);
 
-      const snapshot1 = event.aircraft_snapshot;
-      const snapshot2 = event.aircraft_snapshot_2;
+  // Init the Leaflet map once the container is mounted and the event has a
+  // position. Kept minimal — content (markers/tracks) is drawn in a separate
+  // effect so late-arriving track data doesn't force a re-init.
+  useEffect(() => {
+    if (!containerEl || mapRef.current) return undefined;
+    const center = eventCenter();
+    if (!center) return undefined;
 
-      let eventLat, eventLon;
+    const map = L.map(containerEl, {
+      center,
+      zoom: 10,
+      zoomControl: true,
+      attributionControl: false,
+    });
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      maxZoom: 19,
+    }).addTo(map);
+    mapRef.current = map;
+    onMapReady?.(map);
 
-      if (event.details?.lat && event.details?.lon) {
-        eventLat = event.details.lat;
-        eventLon = event.details.lon;
-      } else if (snapshot1?.lat && snapshot1?.lon && snapshot2?.lat && snapshot2?.lon) {
-        eventLat = (snapshot1.lat + snapshot2.lat) / 2;
-        eventLon = (snapshot1.lon + snapshot2.lon) / 2;
-      } else if (snapshot1?.lat && snapshot1?.lon) {
-        eventLat = snapshot1.lat;
-        eventLon = snapshot1.lon;
-      } else if (snapshot2?.lat && snapshot2?.lon) {
-        eventLat = snapshot2.lat;
-        eventLon = snapshot2.lon;
-      } else {
-        return;
-      }
+    // Leaflet caches the container size at construction; inside a sticky grid
+    // column that size is often stale/zero on first paint, which renders grey
+    // half-tiles. Recompute after layout settles and whenever the box resizes.
+    const invalidate = () => mapRef.current?.invalidateSize();
+    const raf = requestAnimationFrame(invalidate);
+    const t = setTimeout(invalidate, 250);
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(invalidate) : null;
+    ro?.observe(containerEl);
 
-      const map = L.map(containerEl, {
-        center: [eventLat, eventLon],
-        zoom: 10,
-        zoomControl: true,
-        attributionControl: false,
-      });
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(t);
+      ro?.disconnect();
+      map.remove();
+      mapRef.current = null;
+      replayMarkersRef.current = {};
+      replayTracksRef.current = {};
+      staticTracksRef.current = [];
+      eventMarkerRef.current = null;
+    };
+  }, [containerEl, eventCenter, onMapReady]);
 
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        maxZoom: 19,
-      }).addTo(map);
+  // Draw / refresh the event marker, faint background tracks, and fit bounds
+  // whenever the event or its track data changes.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !event) return;
+    const center = eventCenter();
+    if (!center) return;
 
-      // Add event location marker
-      const eventIcon = L.divIcon({
-        className: 'event-location-marker',
-        html: `
+    // Event location marker
+    if (eventMarkerRef.current) map.removeLayer(eventMarkerRef.current);
+    const eventIcon = L.divIcon({
+      className: 'event-location-marker',
+      html: `
         <div class="event-marker-pulse-ring"></div>
         <div class="event-marker-core"></div>
       `,
-        iconSize: [40, 40],
-        iconAnchor: [20, 20],
-      });
+      iconSize: [40, 40],
+      iconAnchor: [20, 20],
+    });
+    const eventMarker = L.marker(center, { icon: eventIcon }).addTo(map);
+    eventMarker.bindPopup(
+      `<b>Event Location</b><br>${event.event_type?.replace(/_/g, ' ')}<br>${
+        event.timestamp ? new Date(event.timestamp).toLocaleString() : ''
+      }`
+    );
+    eventMarkerRef.current = eventMarker;
 
-      const eventMarker = L.marker([eventLat, eventLon], { icon: eventIcon }).addTo(map);
-      eventMarker.bindPopup(
-        `<b>Event Location</b><br>${event.event_type?.replace(/_/g, ' ')}<br>${new Date(event.timestamp).toLocaleString()}`
-      );
-
-      // Add faint background tracks
-      const icaos = [event.icao, event.icao_2].filter(Boolean);
-      const colors = ['#00ff88', '#44aaff'];
-
-      icaos.forEach((icao, i) => {
-        const track = trackData[icao];
-        if (track?.length > 1) {
-          const coords = [...track]
-            .reverse()
-            .filter((p) => p.lat && p.lon)
-            .map((p) => [p.lat, p.lon]);
-          if (coords.length > 1) {
-            L.polyline(coords, {
-              color: colors[i],
-              weight: 2,
-              opacity: 0.2,
-              dashArray: '4, 6',
-            }).addTo(map);
-          }
+    // Faint background tracks
+    staticTracksRef.current.forEach((l) => map.removeLayer(l));
+    staticTracksRef.current = [];
+    const icaos = [event.icao, event.icao_hex, event.icao_2].filter(Boolean);
+    const colors = ['#00ff88', '#44aaff'];
+    icaos.forEach((icao, i) => {
+      const track = trackData[icao];
+      if (track?.length > 1) {
+        const coords = [...track]
+          .reverse()
+          .filter((p) => p.lat && p.lon)
+          .map((p) => [p.lat, p.lon]);
+        if (coords.length > 1) {
+          const line = L.polyline(coords, {
+            color: colors[i % colors.length],
+            weight: 2,
+            opacity: 0.2,
+            dashArray: '4, 6',
+          }).addTo(map);
+          staticTracksRef.current.push(line);
         }
-      });
-
-      // Fit bounds
-      if (snapshot1?.lat && snapshot2?.lat) {
-        const bounds = L.latLngBounds([
-          [snapshot1.lat, snapshot1.lon],
-          [snapshot2.lat, snapshot2.lon],
-        ]);
-        map.fitBounds(bounds.pad(0.3));
       }
+    });
 
-      mapRef.current = map;
-      updateReplayMarkers(replayPosition);
-      onMapReady?.(map);
-    },
-    [event, trackData, replayPosition, updateReplayMarkers, onMapReady]
-  );
+    // Fit bounds to the involved aircraft (snapshots preferred, else tracks)
+    const s1 = event.aircraft_snapshot;
+    const s2 = event.aircraft_snapshot_2;
+    const pts = [];
+    if (s1?.lat && s1?.lon) pts.push([s1.lat, s1.lon]);
+    if (s2?.lat && s2?.lon) pts.push([s2.lat, s2.lon]);
+    staticTracksRef.current.forEach((l) => l.getLatLngs().forEach((ll) => pts.push(ll)));
+    if (pts.length > 1) {
+      map.fitBounds(L.latLngBounds(pts).pad(0.3));
+    }
+
+    updateReplayMarkers(replayPosition);
+  }, [event, trackData, eventCenter, updateReplayMarkers, replayPosition]);
 
   // Update markers when replay position changes
   useEffect(() => {
@@ -188,16 +223,6 @@ export function EventMapVisualization({ event, trackData, replayPosition, onMapR
       updateReplayMarkers(replayPosition);
     }
   }, [replayPosition, updateReplayMarkers]);
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (mapRef.current) {
-        mapRef.current.remove();
-        mapRef.current = null;
-      }
-    };
-  }, []);
 
   return (
     <div className="sep-map-container">
@@ -209,15 +234,7 @@ export function EventMapVisualization({ event, trackData, replayPosition, onMapR
           REPLAY
         </div>
       </div>
-      <div
-        className="sep-map"
-        ref={(el) => {
-          if (el && !mapRef.current) {
-            mapContainerRef.current = el;
-            setTimeout(() => initializeMap(el), 100);
-          }
-        }}
-      />
+      <div className="sep-map" ref={setContainerEl} />
       <div className="sep-map-overlay-gradient" />
     </div>
   );

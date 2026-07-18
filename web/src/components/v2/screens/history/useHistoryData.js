@@ -85,8 +85,18 @@ export function useHistoryData(apiBase, range, tab, archiveIcao = '') {
     queryKey: ['v2-history-notams', apiBase],
     enabled: tab === 'notams',
     queryFn: async () => {
-      const data = await getJson(`${apiBase}/api/v1/notams/`, {});
+      const data = await getJson(`${apiBase}/api/v1/notams/?limit=300`, {});
       return asList(data, 'notams', 'results');
+    },
+  });
+
+  // The NOTAMs archive tab also surfaces national TFRs (separate feed).
+  const notamTfrs = useQuery({
+    queryKey: ['v2-history-notam-tfrs', apiBase],
+    enabled: tab === 'notams',
+    queryFn: async () => {
+      const data = await getJson(`${apiBase}/api/v1/notams/tfrs/`, {});
+      return asList(data, 'tfrs', 'results');
     },
   });
 
@@ -154,6 +164,7 @@ export function useHistoryData(apiBase, range, tab, archiveIcao = '') {
     sightings,
     acars,
     notams,
+    notamTfrs,
     pireps,
     notamStats,
     archiveNotams,

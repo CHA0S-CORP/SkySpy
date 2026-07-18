@@ -11,6 +11,7 @@ Provides statistics and analytics for ACARS/VDL2 messages including:
 """
 
 import logging
+import re
 from collections import defaultdict
 from datetime import timedelta
 
@@ -476,8 +477,11 @@ def get_acars_summary_stats(hours: int = 24) -> dict:
     unique_aircraft = base_qs.values("icao_hex").distinct().count()
     unique_flights = base_qs.filter(callsign__isnull=False).values("callsign").distinct().count()
 
-    # Top label
+    # Top label — carry the decoded name/description/category so consumers (and
+    # the LLM assistant) don't have to guess what the raw code means.
     top_label = base_qs.values("label").annotate(count=Count("id")).order_by("-count").first()
+    top_label_code = top_label["label"] if top_label else None
+    top_label_info = MESSAGE_LABELS.get(top_label_code, {}) if top_label_code else {}
 
     # Messages per hour average
     hourly_avg = total / hours if hours > 0 else 0
@@ -490,8 +494,11 @@ def get_acars_summary_stats(hours: int = 24) -> dict:
         "unique_aircraft": unique_aircraft,
         "unique_flights": unique_flights,
         "messages_per_hour": round(hourly_avg, 1),
-        "top_label": top_label["label"] if top_label else None,
+        "top_label": top_label_code,
         "top_label_count": top_label["count"] if top_label else 0,
+        "top_label_name": top_label_info.get("name"),
+        "top_label_description": top_label_info.get("description"),
+        "top_label_category": get_label_category(top_label_code) if top_label_code else None,
         "timestamp": timezone.now().isoformat().replace("+00:00", "Z"),
     }
 
@@ -557,3 +564,181 @@ def get_cached_acars_airlines() -> dict | None:
         refresh_acars_stats_cache(broadcast=False)
         airlines = cache.get(CACHE_KEY_ACARS_AIRLINES)
     return airlines
+
+
+# =============================================================================
+# Notable / "interesting" message detection
+# =============================================================================
+
+# Anomaly keywords by severity. Matched case-insensitively against message text.
+# These surface the human-authored exceptions in a stream that is otherwise
+# routine telemetry (OOOI, position, weather, squitters).
+NOTABLE_KEYWORDS = {
+    "critical": [
+        "MAYDAY",
+        "PAN PAN",
+        "PAN-PAN",
+        "EMERGENCY",
+        "7700",
+        "7600",
+        "7500",
+        "HIJACK",
+        "ENGINE FAIL",
+        "ENGINE FIRE",
+        "SMOKE",
+        "FIRE",
+        "DEPRESSURI",
+        "RAPID DESCENT",
+        "FUEL EMERGENCY",
+        "MIN FUEL",
+        "MINIMUM FUEL",
+        "MEDICAL EMERGENCY",
+    ],
+    "warning": [
+        "DIVERT",
+        "DIVERSION",
+        "RETURN TO",
+        "PRIORITY",
+        "MEDICAL",
+        "DOCTOR",
+        "FAULT",
+        "FAILURE",
+        "MALFUNCTION",
+        "INOP",
+        "HYDRAULIC",
+        "DEGRADED",
+        "ABORT",
+        "REJECT",
+        "GO AROUND",
+        "GO-AROUND",
+        "TCAS",
+        "TERRAIN",
+        "WINDSHEAR",
+        "WIND SHEAR",
+        "INJUR",
+        "UNRULY",
+        "DISRUPT",
+        "SECURITY",
+        "LOW FUEL",
+        "SICK PAX",
+        "ILL PAX",
+        "SEVERE",
+    ],
+    "info": [
+        "DELAY",
+        "MAINT",
+        "DEFECT",
+        "MEL",
+        "DEVIAT",
+        "TURBULENCE",
+        "TURB",
+        "HOLD",
+        "TECH",
+        "OFFLOAD",
+        "PAX",
+        "AMBULANCE",
+    ],
+}
+
+_KEYWORD_WEIGHT = {"critical": 100, "warning": 40, "info": 10}
+
+# Labels that are almost always routine machine telemetry — penalized so they
+# only surface when they carry anomaly keywords.
+_ROUTINE_LABELS = {"SQ", "SA", "10", "11", "12", "13", "80", "H1", "H2", "5Z", "_d"}
+
+_WORD_RE = re.compile(r"[A-Za-z]{4,}")
+
+
+def _score_message(text: str, label: str, label_freq: dict, total: int) -> tuple[int, list[str]]:
+    """Return (interestingness score, human-readable reasons) for one message."""
+    reasons = []
+    score = 0
+    upper = (text or "").upper()
+
+    for severity, words in NOTABLE_KEYWORDS.items():
+        hits = [w for w in words if w in upper]
+        if hits:
+            score += _KEYWORD_WEIGHT[severity] * min(len(hits), 3)
+            reasons.append(f"{severity}: {', '.join(sorted(set(hits))[:4])}")
+
+    # Human free-text (prose beats CSV/position telemetry).
+    readable = len(_WORD_RE.findall(text or ""))
+    if readable >= 3:
+        score += min(readable, 25)
+        reasons.append(f"free-text ({readable} words)")
+
+    # Rare labels are more likely to be something unusual.
+    if label and total:
+        share = label_freq.get(label, 0) / total
+        if share and share < 0.01:
+            score += 20
+            reasons.append(f"rare label {label}")
+        elif share and share < 0.03:
+            score += 8
+
+    if label in _ROUTINE_LABELS:
+        score -= 25
+
+    return score, reasons
+
+
+def find_notable_messages(hours: int = 24, limit: int = 15, min_score: int = 15) -> dict:
+    """
+    Surface the most *interesting* ACARS/VDL2 messages in the last N hours.
+
+    Ranks messages by an interestingness score built from anomaly/emergency
+    keywords (diversions, faults, medical, emergencies), the amount of
+    human-authored free text, and label rarity — while penalizing routine
+    telemetry (position, OOOI, squitters). Answers open-ended asks like
+    "find some interesting ACARS messages" that have no specific search term.
+    """
+    cutoff = timezone.now() - timedelta(hours=hours)
+    rows = list(
+        AcarsMessage.objects.filter(timestamp__gte=cutoff)
+        .exclude(text__isnull=True)
+        .exclude(text="")
+        .values("id", "timestamp", "source", "label", "icao_hex", "registration", "callsign", "text")[:8000]
+    )
+
+    label_freq = defaultdict(int)
+    for r in rows:
+        label_freq[r["label"]] += 1
+    total = len(rows)
+
+    scored = []
+    seen = set()
+    for r in rows:
+        text = r["text"] or ""
+        # Collapse repeated identical telemetry from the same airframe.
+        dedupe_key = (r["icao_hex"], text[:80])
+        if dedupe_key in seen:
+            continue
+        seen.add(dedupe_key)
+
+        score, reasons = _score_message(text, r["label"], label_freq, total)
+        if score < min_score:
+            continue
+        scored.append(
+            {
+                "id": r["id"],
+                "timestamp": r["timestamp"].isoformat() if r["timestamp"] else None,
+                "source": r["source"],
+                "label": r["label"],
+                "label_name": MESSAGE_LABELS.get(r["label"], {}).get("name") if r["label"] else None,
+                "icao_hex": r["icao_hex"],
+                "registration": r["registration"],
+                "callsign": r["callsign"],
+                "text": text[:400],
+                "score": score,
+                "reasons": reasons,
+            }
+        )
+
+    scored.sort(key=lambda m: m["score"], reverse=True)
+    return {
+        "time_range_hours": hours,
+        "analyzed": total,
+        "count": len(scored[:limit]),
+        "messages": scored[:limit],
+        "timestamp": timezone.now().isoformat().replace("+00:00", "Z"),
+    }

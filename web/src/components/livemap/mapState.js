@@ -4,8 +4,13 @@
  * localStorage so the operator's map setup survives reloads.
  */
 
-import { altitudeOf, categoryOf } from './render/symbology';
+import { altitudeOf, categoryOf, AIRSPACE_CLASSES } from './render/symbology';
 import { FILTER_TESTS } from '../v2/screens/list/listModel';
+
+/** Default per-class airspace visibility (all on). */
+export const DEFAULT_AIRSPACE_CLASSES = Object.fromEntries(
+  AIRSPACE_CLASSES.map((c) => [c.key, true])
+);
 
 const FILTER_KEY = 'skyspy-lm-filters';
 const OVERLAY_KEY = 'skyspy-lm-overlays';
@@ -27,6 +32,7 @@ export const DEFAULT_OVERLAYS = {
   trails: false,
   weatherRadar: false,
   airspace: false,
+  airspaceClasses: DEFAULT_AIRSPACE_CLASSES, // per-class visibility when airspace is on
   navaids: false,
   airports: false,
   notams: false,

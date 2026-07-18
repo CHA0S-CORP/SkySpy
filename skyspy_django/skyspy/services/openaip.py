@@ -24,6 +24,14 @@ OPENAIP_API_BASE = "https://api.core.openaip.net/api"
 AIRSPACE_CACHE_TTL = 3600  # 1 hour
 AIRPORTS_CACHE_TTL = 86400  # 24 hours
 
+# OpenAIP geo-search `dist` ceiling in meters — the Core API rejects larger
+# radii with HTTP 400. Verified empirically: 50 km returns 200 with data, 90 km+
+# returns 400 (the true cap sits between, but is not documented). Requests are
+# clamped to this proven-good value before hitting the wire. NOTE: 50 km ≈ 27 nm,
+# so a single fetch only covers ~27 nm around each region center; wider coverage
+# needs multiple AIRSPACE_EXTRA_REGIONS (tiling), not a larger radius.
+OPENAIP_MAX_DIST_M = 50000
+
 # Airspace types mapping
 AIRSPACE_TYPES = {
     0: "OTHER",
@@ -104,16 +112,54 @@ def _is_enabled() -> bool:
     return bool(getattr(settings, "OPENAIP_ENABLED", False) and _get_api_key())
 
 
+# Ceiling (seconds) for a single backoff wait, including a server-sent
+# Retry-After. Keeps the daily boundary task from stalling a worker for minutes
+# when OpenAIP's free-tier limiter locks the key.
+OPENAIP_RETRY_MAX_WAIT = 30
+
+
 def _is_retryable_http_error(exc: BaseException) -> bool:
-    """Retry on network/timeout errors and 5xx responses, but not 4xx (auth, rate limit)."""
+    """Retry on network/timeout errors, 5xx responses, and 429 (rate limit).
+
+    429 is retried with backoff (honoring Retry-After); other 4xx (400 bad
+    request, 401 auth) are not — they won't succeed on retry.
+    """
     if isinstance(exc, httpx.HTTPStatusError):
-        return exc.response.status_code >= 500
+        code = exc.response.status_code
+        return code == 429 or code >= 500
     return isinstance(exc, (httpx.HTTPError, httpx.TimeoutException))
 
 
+def _retry_wait(retry_state) -> float:
+    """Exponential backoff, but honor a 429 `Retry-After` header when present.
+
+    OpenAIP's free tier rate-limits aggressively; retrying immediately just
+    burns attempts. A server-sent Retry-After (seconds, or an HTTP date) is
+    respected up to OPENAIP_RETRY_MAX_WAIT; otherwise fall back to exponential.
+    """
+    exc = retry_state.outcome.exception() if retry_state.outcome else None
+    if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code == 429:
+        retry_after = exc.response.headers.get("Retry-After")
+        if retry_after:
+            try:
+                return min(float(retry_after), OPENAIP_RETRY_MAX_WAIT)
+            except (TypeError, ValueError):
+                # Retry-After may be an HTTP-date rather than a delta-seconds int.
+                from email.utils import parsedate_to_datetime
+
+                try:
+                    from datetime import datetime, timezone
+
+                    delta = (parsedate_to_datetime(retry_after) - datetime.now(timezone.utc)).total_seconds()
+                    return max(1.0, min(delta, OPENAIP_RETRY_MAX_WAIT))
+                except (TypeError, ValueError):
+                    pass
+    return wait_exponential(multiplier=1, min=1, max=OPENAIP_RETRY_MAX_WAIT)(retry_state)
+
+
 @retry(
-    stop=stop_after_attempt(3),
-    wait=wait_exponential(multiplier=1, min=1, max=10),
+    stop=stop_after_attempt(4),
+    wait=_retry_wait,
     retry=retry_if_exception(_is_retryable_http_error),
     reraise=True,
 )
@@ -155,7 +201,7 @@ def _make_request(endpoint: str, params: dict | None = None, timeout: int = 15) 
 
     except httpx.HTTPStatusError as e:
         if e.response.status_code == 429:
-            logger.warning("OpenAIP rate limit exceeded")
+            logger.warning("OpenAIP rate limit exceeded (retries with backoff exhausted)")
         elif e.response.status_code == 401:
             logger.error("OpenAIP authentication failed - check API key")
         else:
@@ -192,12 +238,14 @@ def get_airspaces(
     if cached:
         return cached
 
-    # Convert nm to km for API
-    radius_km = radius_nm * 1.852
+    # Convert nm to meters for the API, clamped to OpenAIP's max `dist`
+    # (requests above ~200 km return HTTP 400). A larger requested radius is
+    # silently reduced to the ceiling rather than failing the whole fetch.
+    dist_m = min(int(radius_nm * 1852), OPENAIP_MAX_DIST_M)
 
     params = {
         "pos": f"{lat},{lon}",
-        "dist": int(radius_km * 1000),  # API expects meters
+        "dist": dist_m,
         "limit": 200,
     }
 

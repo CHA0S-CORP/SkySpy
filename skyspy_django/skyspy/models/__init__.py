@@ -54,6 +54,7 @@ from skyspy.models.notifications import (
     NotificationTemplate,
     UserNotificationPreference,
 )
+from skyspy.models.rag import RagDocument
 from skyspy.models.safety import SafetyEvent
 from skyspy.models.stats import (
     DailyStats,
@@ -87,6 +88,8 @@ __all__ = [
     "NotificationChannel",
     "NotificationTemplate",
     "UserNotificationPreference",
+    # RAG
+    "RagDocument",
     # Safety
     "SafetyEvent",
     # ACARS

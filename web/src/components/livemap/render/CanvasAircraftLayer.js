@@ -1,9 +1,12 @@
 import L from 'leaflet';
 import {
+  AIRSPACE_CLASSES,
   SELECTED_COLOR,
+  airspaceRings,
   altitudeOf,
   colorFor,
   drawAirport,
+  drawAirspaceDisc,
   drawAirspacePoly,
   drawCoast,
   drawDart,
@@ -18,10 +21,15 @@ import {
   drawTfrDisc,
   drawTfrPoly,
   drawTrail,
+  normAirspaceClass,
   pirepColor,
+  pointInRing,
   rectsOverlap,
   severityColor,
 } from './symbology';
+
+/** class → RGB triplet, derived once from the shared AIRSPACE_CLASSES table. */
+const AIRSPACE_RGB = Object.fromEntries(AIRSPACE_CLASSES.map((c) => [c.key, c.rgb]));
 
 /**
  * Single-canvas aircraft renderer for the Live Map. A `<canvas>` is overlaid on
@@ -38,11 +46,22 @@ export class CanvasAircraftLayer {
    * @param {object} opts
    * @param {(hex: string|null) => void} [opts.onSelect]
    * @param {(hex: string|null) => void} [opts.onHover]
+   * @param {(pirep: object|null, pt: {x:number,y:number}|null) => void} [opts.onPirepHover]
+   * @param {(notam: object|null, pt: {x:number,y:number}|null) => void} [opts.onNotamHover]
+   * @param {(airport: object|null, pt: {x:number,y:number}|null) => void} [opts.onAirportHover]
+   * @param {(airspace: object|null, pt: {x:number,y:number}|null) => void} [opts.onAirspaceHover]
    */
-  constructor(map, { onSelect, onHover } = {}) {
+  constructor(
+    map,
+    { onSelect, onHover, onPirepHover, onNotamHover, onAirportHover, onAirspaceHover } = {}
+  ) {
     this.map = map;
     this.onSelect = onSelect;
     this.onHover = onHover;
+    this.onPirepHover = onPirepHover;
+    this.onNotamHover = onNotamHover;
+    this.onAirportHover = onAirportHover;
+    this.onAirspaceHover = onAirspaceHover;
 
     this.canvas = document.createElement('canvas');
     this.canvas.className = 'lm-canvas';
@@ -91,6 +110,15 @@ export class CanvasAircraftLayer {
 
     this.frame = 0;
     this.screenIndex = []; // [{hex, x, y}] rebuilt each frame for hit-test
+    this.pirepIndex = []; // [{x, y, pr}] rebuilt each frame for pirep hit-test
+    this.hoveredPirep = null;
+    this.notamIndex = []; // [{x, y, r, t}] rebuilt each frame for notam hit-test
+    this.hoveredNotam = null;
+    this.airportIndex = []; // [{x, y, ap}] rebuilt each frame for airport hit-test
+    this.hoveredAirport = null;
+    this.airspaceIndex = []; // [{rings|disc, poly}] rebuilt each frame for airspace hit-test
+    this.hoveredAirspace = null;
+    this.airspaceClasses = null; // {B:true,...} class visibility filter, or null (=all)
     this._raf = null;
     this._dpr = 1;
 
@@ -179,6 +207,10 @@ export class CanvasAircraftLayer {
   }
   setOverlayData(data) {
     this.overlayData = { ...this.overlayData, ...data };
+  }
+  /** Per-class airspace visibility map ({B:true,...}), or null to show all. */
+  setAirspaceClasses(map) {
+    this.airspaceClasses = map || null;
   }
 
   _resize() {
@@ -393,18 +425,44 @@ export class CanvasAircraftLayer {
     const { ctx } = this;
     const o = this.overlays;
     const d = this.overlayData;
+    this.pirepIndex = []; // rebuilt each frame for pirep hover hit-test
+    this.notamIndex = []; // rebuilt each frame for notam hover hit-test
+    this.airportIndex = []; // rebuilt each frame for airport hover hit-test
+    this.airspaceIndex = []; // rebuilt each frame for airspace hover hit-test
     if (o.airspace && d.airspaces?.length) {
+      const classFilter = this.airspaceClasses; // {B:true,...} or null (=all)
       for (const poly of d.airspaces) {
-        // Backend nests a GeoJSON Polygon under `.polygon` ({coordinates:[[[lon,lat]...]]});
-        // also accept a bare ring or {points} for flexibility.
-        const geo = poly.polygon || poly;
-        const ring = geo.coordinates?.[0] || geo.points || (Array.isArray(geo) ? geo : null);
-        if (!Array.isArray(ring)) continue;
-        const pts = ring
-          .map((c) => (Array.isArray(c) ? { lat: c[1], lon: c[0] } : c))
-          .filter((c) => typeof c.lat === 'number')
-          .map((c) => project(c.lat, c.lon));
-        if (pts.length >= 2) drawAirspacePoly(ctx, pts);
+        const cls = normAirspaceClass(poly.class ?? poly.airspace_class);
+        if (classFilter && classFilter[cls] === false) continue;
+        const rgb = AIRSPACE_RGB[cls];
+        // Prefer polygon geometry (Polygon or MultiPolygon); each yields one or
+        // more rings. Index the projected rings for point-in-polygon hover.
+        const rings = airspaceRings(poly.polygon || poly);
+        let drew = false;
+        const projRings = [];
+        for (const ring of rings) {
+          const pts = ring.map((c) => project(c.lat, c.lon));
+          if (pts.length >= 3) {
+            drawAirspacePoly(ctx, pts, rgb);
+            projRings.push(pts);
+            drew = true;
+          }
+        }
+        if (drew) {
+          this.airspaceIndex.push({ rings: projRings, disc: null, poly });
+          continue;
+        }
+        // Fallback: radius-only airspace (center + radius_nm, no polygon).
+        const lat = poly.lat ?? poly.latitude ?? poly.center_lat;
+        const lon = poly.lon ?? poly.lng ?? poly.longitude ?? poly.center_lon;
+        const rNm = poly.radius ?? poly.radius_nm;
+        if (typeof lat !== 'number' || typeof lon !== 'number' || !(rNm > 0)) continue;
+        if (!contains(lat, lon)) continue;
+        const p = project(lat, lon);
+        const edge = project(lat + rNm / 60, lon);
+        const radiusPx = Math.abs(edge.y - p.y);
+        drawAirspaceDisc(ctx, p.x, p.y, radiusPx, rgb);
+        this.airspaceIndex.push({ rings: null, disc: { x: p.x, y: p.y, r: radiusPx }, poly });
       }
     }
     if (o.trails && d.trails) {
@@ -456,6 +514,7 @@ export class CanvasAircraftLayer {
         if (typeof ap.lat !== 'number' || !contains(ap.lat, ap.lon ?? ap.lng)) continue;
         const p = project(ap.lat, ap.lon ?? ap.lng);
         drawAirport(ctx, p.x, p.y, ap.ident || ap.icao || ap.iata || '');
+        this.airportIndex.push({ x: p.x, y: p.y, ap });
       }
     }
     if (o.notams && d.notams?.length) {
@@ -472,6 +531,7 @@ export class CanvasAircraftLayer {
           radiusPx = Math.abs(edge.y - p.y);
         }
         drawNotam(ctx, p.x, p.y, radiusPx, (n.type || '').toUpperCase() === 'TFR');
+        this.notamIndex.push({ x: p.x, y: p.y, r: Math.max(radiusPx, 8), t: n });
       }
     }
     // TFRs share the NOTAMs toggle but render with distinct restriction
@@ -489,6 +549,17 @@ export class CanvasAircraftLayer {
             .map((c) => project(c.lat, c.lon));
           if (pts.length >= 3) {
             drawTfrPoly(ctx, pts, t.notam_id || t.name || 'TFR');
+            let cx = 0;
+            let cy = 0;
+            let maxR = 0;
+            for (const q of pts) {
+              cx += q.x;
+              cy += q.y;
+            }
+            cx /= pts.length;
+            cy /= pts.length;
+            for (const q of pts) maxR = Math.max(maxR, Math.hypot(q.x - cx, q.y - cy));
+            this.notamIndex.push({ x: cx, y: cy, r: Math.max(maxR, 8), t });
             continue;
           }
         }
@@ -503,6 +574,7 @@ export class CanvasAircraftLayer {
           radiusPx = Math.abs(edge.y - p.y);
         }
         drawTfrDisc(ctx, p.x, p.y, radiusPx, t.notam_id || t.name || 'TFR');
+        this.notamIndex.push({ x: p.x, y: p.y, r: Math.max(radiusPx, 8), t });
       }
     }
     // PIREPs: severity-colored dots at the report position (guard missing coords).
@@ -513,6 +585,7 @@ export class CanvasAircraftLayer {
         if (typeof lat !== 'number' || typeof lon !== 'number' || !contains(lat, lon)) continue;
         const p = project(lat, lon);
         drawPirep(ctx, p.x, p.y, pirepColor(pr));
+        this.pirepIndex.push({ x: p.x, y: p.y, pr });
       }
     }
   }
@@ -533,6 +606,81 @@ export class CanvasAircraftLayer {
     return best;
   }
 
+  /** Nearest PIREP within `radius` px of a container point, or null. */
+  hitTestPirep(containerPoint, radius = 10) {
+    let best = null;
+    let bestD = radius * radius;
+    for (const p of this.pirepIndex) {
+      const dx = p.x - containerPoint.x;
+      const dy = p.y - containerPoint.y;
+      const d = dx * dx + dy * dy;
+      if (d <= bestD) {
+        bestD = d;
+        best = p;
+      }
+    }
+    return best;
+  }
+
+  /** NOTAM/TFR whose area contains the point (smallest wins on overlap), or null. */
+  hitTestNotam(containerPoint) {
+    let best = null;
+    let bestR = Infinity;
+    for (const n of this.notamIndex) {
+      const dx = n.x - containerPoint.x;
+      const dy = n.y - containerPoint.y;
+      if (dx * dx + dy * dy <= n.r * n.r && n.r < bestR) {
+        bestR = n.r;
+        best = n;
+      }
+    }
+    return best;
+  }
+
+  /** Nearest airport within `radius` px of a container point, or null. */
+  hitTestAirport(containerPoint, radius = 9) {
+    let best = null;
+    let bestD = radius * radius;
+    for (const a of this.airportIndex) {
+      const dx = a.x - containerPoint.x;
+      const dy = a.y - containerPoint.y;
+      const d = dx * dx + dy * dy;
+      if (d <= bestD) {
+        bestD = d;
+        best = a;
+      }
+    }
+    return best;
+  }
+
+  /** Innermost airspace containing the point (polygon or disc), or null. */
+  hitTestAirspace(containerPoint) {
+    let best = null;
+    let bestArea = Infinity;
+    for (const a of this.airspaceIndex) {
+      let hit = false;
+      let area = Infinity;
+      if (a.rings) {
+        for (const ring of a.rings) {
+          if (pointInRing(containerPoint, ring)) hit = !hit; // even-odd across holes
+        }
+        if (hit) area = ringsArea(a.rings);
+      } else if (a.disc) {
+        const dx = a.disc.x - containerPoint.x;
+        const dy = a.disc.y - containerPoint.y;
+        if (dx * dx + dy * dy <= a.disc.r * a.disc.r) {
+          hit = true;
+          area = Math.PI * a.disc.r * a.disc.r;
+        }
+      }
+      if (hit && area < bestArea) {
+        bestArea = area;
+        best = a;
+      }
+    }
+    return best;
+  }
+
   _onClick(e) {
     const hex = this.hitTest(e.containerPoint);
     if (hex) {
@@ -547,11 +695,33 @@ export class CanvasAircraftLayer {
   _onMouseMove(e) {
     const hex = this.hitTest(e.containerPoint, 12);
     const container = this.map.getContainer();
-    container.style.cursor = hex ? 'pointer' : '';
     if (hex !== this.hoveredHex) {
       this.setHovered(hex);
       this.onHover?.(hex);
     }
+    // Priority: aircraft > point markers (pirep/airport) > area fills
+    // (notam/airspace). Only probe a tier when the ones above it missed.
+    const pr = hex ? null : this.hitTestPirep(e.containerPoint);
+    const airport = hex || pr ? null : this.hitTestAirport(e.containerPoint);
+    const notam = hex || pr || airport ? null : this.hitTestNotam(e.containerPoint);
+    const airspace = hex || pr || airport || notam ? null : this.hitTestAirspace(e.containerPoint);
+    if (pr?.pr !== this.hoveredPirep) {
+      this.hoveredPirep = pr?.pr || null;
+      this.onPirepHover?.(pr?.pr || null, pr ? { x: pr.x, y: pr.y } : null);
+    }
+    if (airport?.ap !== this.hoveredAirport) {
+      this.hoveredAirport = airport?.ap || null;
+      this.onAirportHover?.(airport?.ap || null, airport ? { x: airport.x, y: airport.y } : null);
+    }
+    if (notam?.t !== this.hoveredNotam) {
+      this.hoveredNotam = notam?.t || null;
+      this.onNotamHover?.(notam?.t || null, notam ? { x: notam.x, y: notam.y } : null);
+    }
+    if (airspace?.poly !== this.hoveredAirspace) {
+      this.hoveredAirspace = airspace?.poly || null;
+      this.onAirspaceHover?.(airspace?.poly || null, airspace ? e.containerPoint : null);
+    }
+    container.style.cursor = hex || pr || airport || notam || airspace ? 'pointer' : '';
   }
 
   destroy() {
@@ -561,6 +731,18 @@ export class CanvasAircraftLayer {
     this.map.off('mousemove', this._onMouseMove);
     this.canvas.remove();
   }
+}
+
+/** Shoelace area (px²) of an airspace's outer projected ring; used to prefer
+ * the innermost airspace when several overlap under the cursor. */
+function ringsArea(rings) {
+  const ring = rings[0];
+  if (!ring || ring.length < 3) return Infinity;
+  let a = 0;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    a += (ring[j].x + ring[i].x) * (ring[j].y - ring[i].y);
+  }
+  return Math.abs(a / 2);
 }
 
 /** Measure-only variant of drawLabel for declutter probing (no paint). */

@@ -5,6 +5,7 @@ import { useLiveLeafletMap } from './hooks/useLiveLeafletMap';
 import { useMapOverlayData } from './hooks/useMapOverlayData';
 import { CanvasAircraftLayer } from './render/CanvasAircraftLayer';
 import { DetailPanel } from './panel/DetailPanel';
+import { HoverTip } from './HoverTip';
 import { LiveMapToolbar } from './LiveMapToolbar';
 import { FilterPanel } from './panels/FilterPanel';
 import { LayersPanel } from './panels/LayersPanel';
@@ -64,6 +65,7 @@ export function LiveMapView({
   const [openPanel, setOpenPanel] = useState(null); // 'filters' | 'layers' | 'legend' | null
   const [zoom, setZoom] = useState(9);
   const [coords, setCoords] = useState(null); // {lat, lon, dist, brg}
+  const [hoverTip, setHoverTip] = useState(null); // {kind:'pirep'|'notam', data, x, y}
 
   const feeder = feederLocation ? { lat: feederLocation.lat, lon: feederLocation.lon } : null;
   feederRef.current = feeder;
@@ -121,6 +123,28 @@ export function LiveMapView({
         setSelectedHex(hex);
         if (hex) setPanelOpen(true);
       },
+      // Each callback only clears the tip it owns, so a pirep→notam move (which
+      // fires both a pirep-null and a notam-set in one event) doesn't clobber.
+      onPirepHover: (pr, pt) =>
+        setHoverTip((cur) =>
+          pr ? { kind: 'pirep', data: pr, x: pt.x, y: pt.y } : cur?.kind === 'pirep' ? null : cur
+        ),
+      onNotamHover: (t, pt) =>
+        setHoverTip((cur) =>
+          t ? { kind: 'notam', data: t, x: pt.x, y: pt.y } : cur?.kind === 'notam' ? null : cur
+        ),
+      onAirportHover: (a, pt) =>
+        setHoverTip((cur) =>
+          a ? { kind: 'airport', data: a, x: pt.x, y: pt.y } : cur?.kind === 'airport' ? null : cur
+        ),
+      onAirspaceHover: (a, pt) =>
+        setHoverTip((cur) =>
+          a
+            ? { kind: 'airspace', data: a, x: pt.x, y: pt.y }
+            : cur?.kind === 'airspace'
+              ? null
+              : cur
+        ),
     });
     const onZoomEnd = () => setZoom(map.getZoom());
     const onMouseMove = (e) => {
@@ -170,6 +194,7 @@ export function LiveMapView({
     if (!layer) return;
     layer.setOverlays(overlays);
     layer.setOverlayData(overlayData);
+    layer.setAirspaceClasses(overlays.airspaceClasses || null);
     layer.setDisplay({
       colorMode: overlays.colorMode,
       showPredictor: overlays.showPredictor,
@@ -335,6 +360,8 @@ export function LiveMapView({
               </div>
             )}
           </div>
+
+          <HoverTip tip={hoverTip} />
 
           {/* mini compass */}
           <div className="lm__compass" aria-hidden="true">

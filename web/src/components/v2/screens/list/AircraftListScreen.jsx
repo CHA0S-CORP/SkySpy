@@ -62,7 +62,10 @@ export function AircraftListScreen({ aircraft, onSelectAircraft, apiBase }) {
             aria-label="Search aircraft"
           />
         </div>
-        <label className="v2-list__ghost-toggle" title="Show non-ICAO (TIS-B/ADS-R) duplicate tracks">
+        <label
+          className="v2-list__ghost-toggle"
+          title="Show non-ICAO (TIS-B/ADS-R) duplicate tracks"
+        >
           <span>Ghosts{ghostCount ? ` (${ghostCount})` : ''}</span>
           <Switch checked={showGhosts} onCheckedChange={setShowGhosts} label="Show ghost tracks" />
         </label>

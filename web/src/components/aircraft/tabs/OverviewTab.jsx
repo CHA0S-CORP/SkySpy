@@ -6,10 +6,13 @@ import {
   AirframeCard,
   OperatorCard,
   RegistrationCard,
+  RouteCard,
+  OwnershipCard,
   PhotoCard,
   DataSourcesAccordion,
 } from './info';
 import { MetricCard, MetricsGrid } from '../../ui/metric-card';
+import { FlightHistoryCard } from '../../shared/FlightHistoryCard';
 
 // Stagger animation variants
 const containerVariants = {
@@ -69,6 +72,13 @@ function normalizeAircraftInfo(info) {
     registration: info.registration || info.tail_number || info.reg || info.r,
     is_military: info.is_military ?? info.military ?? info.isMilitary ?? false,
     category: info.category || info.aircraftCategory,
+    // Route (origin/destination) resolved server-side from the callsign.
+    route: info.route || info.route_data || null,
+    // Ownership analysis (shell/trust/sanctions risk) computed server-side.
+    owner_type: info.owner_type || null,
+    is_shell_suspected: info.is_shell_suspected ?? false,
+    shell_score: info.shell_score ?? null,
+    ownership_flags: info.ownership_flags || null,
   };
 }
 
@@ -160,10 +170,19 @@ function LiveTelemetrySection({ aircraft, trackHistory: _trackHistory, calculate
  * - Photo card (if available)
  * - Data sources accordion (if available)
  */
-export function OverviewTab({ info, hex, photoInfo, aircraft, trackHistory, calculateDistance }) {
+export function OverviewTab({
+  info,
+  hex,
+  apiUrl,
+  photoInfo,
+  aircraft,
+  trackHistory,
+  calculateDistance,
+}) {
   // Normalize info data
   const normalized = info ? normalizeAircraftInfo(info) : null;
   const sourceData = info?.source_data || [];
+  const apiBase = (apiUrl || '').replace(/\/$/, '');
 
   return (
     <motion.div
@@ -206,6 +225,11 @@ export function OverviewTab({ info, hex, photoInfo, aircraft, trackHistory, calc
               <AirframeCard data={normalized} />
             </motion.div>
 
+            {/* Route Card (full width on md; self-hides without route data) */}
+            <motion.div variants={itemVariants} className="md:col-span-2">
+              <RouteCard data={normalized} />
+            </motion.div>
+
             {/* Operator Card */}
             <motion.div variants={itemVariants}>
               <OperatorCard data={normalized} />
@@ -215,8 +239,20 @@ export function OverviewTab({ info, hex, photoInfo, aircraft, trackHistory, calc
             <motion.div variants={itemVariants}>
               <RegistrationCard data={normalized} hex={hex} />
             </motion.div>
+
+            {/* Ownership Analysis Card (shell/trust/sanctions; self-hides without data) */}
+            <motion.div variants={itemVariants} className="md:col-span-2">
+              <OwnershipCard data={normalized} />
+            </motion.div>
           </div>
         </motion.section>
+      )}
+
+      {/* LLM flight-history narrative (self-hides when LLM off / no history) */}
+      {hex && (
+        <motion.div variants={itemVariants}>
+          <FlightHistoryCard apiBase={apiBase} hex={hex} variant="legacy" />
+        </motion.div>
       )}
 
       {/* Photo Card (if available) */}

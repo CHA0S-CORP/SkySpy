@@ -116,5 +116,18 @@ export function useDetailData(apiBase, hex, callsign, liveTrack = false) {
     queryFn: async () => getJson(`${apiBase}/api/v1/lookup/route/${encodeURIComponent(callsign)}`),
   });
 
-  return { info, track, safety, sessions, route };
+  // ACARS/VDL2 datalink messages for this airframe (icao_hex is an exact,
+  // case-sensitive filter and the DB stores hex uppercase). Refreshes on the
+  // live cadence so new messages land while the aircraft is in view.
+  const acars = useQuery({
+    queryKey: ['v2-detail-acars', apiBase, hexUC],
+    enabled: !!hex,
+    refetchInterval: liveTrack ? 15000 : 60000,
+    queryFn: async () => {
+      const data = await getJson(`${apiBase}/api/v1/acars?icao_hex=${hexUC}&hours=24&limit=100`);
+      return data?.messages || data?.results || (Array.isArray(data) ? data : []);
+    },
+  });
+
+  return { info, track, safety, sessions, route, acars };
 }

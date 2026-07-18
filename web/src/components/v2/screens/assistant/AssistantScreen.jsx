@@ -1,162 +1,56 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useState } from 'react';
 import { Icon } from '../../primitives';
+import { AssistantThread } from './AssistantThread';
+import { useAssistantChat } from './useAssistantChat';
 
 /**
- * SkySpy Assistant — a chat panel over the LangChain tool-calling agent.
- * Streams the answer token-by-token from POST /api/v1/assistant/stream/ (SSE),
- * and shows a collapsible "tools used" trace with cited airframes.
+ * SkySpy Assistant — full-page chat over the LangChain tool-calling agent.
+ * Streams the answer token-by-token, renders markdown / charts / maps / photos,
+ * and auto-links aviation entities. Chat engine + thread are shared with the
+ * app-wide SupportChatDock (see useAssistantChat / AssistantThread).
  */
 
 const SUGGESTIONS = [
+  // Traffic & analytics
   'How many military aircraft in the last 24h?',
-  'Any safety events today?',
-  'Which tracked airframes are registered to a trust?',
   'Busiest hours and top operators this week',
+  'Chart ACARS message volume per hour for the last 12 hours',
+  'Show me a breakdown of aircraft by type as a chart',
+  'Top 10 operators this week as a bar chart',
+  // Maps
+  'Show the military aircraft being tracked on a map',
+  // Safety
+  'Any safety events today?',
+  'Plot safety events by severity',
+  // Airframes
+  'Which tracked airframes are registered to a trust?',
+  'Show me a photo of the closest aircraft',
+  // Insight & correlation
+  "What's statistically unusual about tonight's traffic?",
+  'Is signal strength correlated with distance?',
+  'Which telemetry fields are most strongly correlated?',
+  // Behavior & surveillance
+  'Is anything orbiting or loitering right now?',
+  'Trace the flight path of the closest aircraft',
+  'Are there any police or surveillance aircraft nearby?',
+  'Is anything watching the receiver?',
+  // Semantic history search
+  'Have we seen a close-proximity conflict like this before?',
+  'Find ACARS messages about a diversion or engine fault',
+  // Weather / reference
+  'Current weather (METAR) at KSEA',
+  'Any recent PIREPs with turbulence?',
+  'Are there active NOTAMs at KLAX?',
 ];
 
-async function streamAsk(query, { onEvent, signal }) {
-  const res = await fetch('/api/v1/assistant/stream/', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query }),
-    signal,
-  });
-  if (!res.ok || !res.body) {
-    onEvent({ type: 'error', message: `HTTP ${res.status}` });
-    return;
-  }
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-  for (;;) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    // SSE frames are separated by a blank line.
-    const frames = buffer.split('\n\n');
-    buffer = frames.pop() || '';
-    for (const frame of frames) {
-      const line = frame.split('\n').find((l) => l.startsWith('data:'));
-      if (!line) continue;
-      const payload = line.slice(5).trim();
-      if (!payload) continue;
-      try {
-        onEvent(JSON.parse(payload));
-      } catch {
-        /* ignore malformed frame */
-      }
-    }
-  }
-}
-
-function ToolTrace({ steps, sources }) {
-  const [open, setOpen] = useState(false);
-  if (!steps?.length && !sources?.length) return null;
-  return (
-    <div className="v2-asst__trace">
-      <button type="button" className="v2-asst__trace-toggle" onClick={() => setOpen((o) => !o)}>
-        <Icon name={open ? 'chevron-down' : 'chevron-right'} size={13} />
-        {steps.length} tool{steps.length === 1 ? '' : 's'} used
-        {sources?.length ? ` · ${sources.length} source${sources.length === 1 ? '' : 's'}` : ''}
-      </button>
-      {open && (
-        <div className="v2-asst__trace-body">
-          {steps.map((s, i) => (
-            <div key={i} className="v2-asst__trace-step">
-              <code>{s.tool}</code>
-              {s.args ? <span className="v2-asst__trace-args"> {JSON.stringify(s.args)}</span> : null}
-            </div>
-          ))}
-          {sources?.length ? (
-            <div className="v2-asst__trace-sources">
-              {sources.map((src, i) => (
-                <a key={i} href={`#airframe/${src.icao_hex || ''}`} className="v2-asst__src">
-                  {src.registration || src.icao_hex}
-                </a>
-              ))}
-            </div>
-          ) : null}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function Message({ msg }) {
-  const isUser = msg.role === 'user';
-  return (
-    <div className={`v2-asst__msg v2-asst__msg--${isUser ? 'user' : 'assistant'}`}>
-      {!isUser && <Icon name="message" size={15} className="v2-asst__avatar" />}
-      <div className="v2-asst__bubble">
-        {msg.error ? (
-          <span className="v2-asst__err">Assistant unavailable: {msg.error}</span>
-        ) : (
-          <span className="v2-asst__text">{msg.text || (msg.pending ? '…' : '')}</span>
-        )}
-        {!isUser && <ToolTrace steps={msg.steps || []} sources={msg.sources || []} />}
-      </div>
-    </div>
-  );
-}
-
 export function AssistantScreen() {
-  const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
-  const [busy, setBusy] = useState(false);
-  const abortRef = useRef(null);
+  const { messages, busy, send, clear } = useAssistantChat();
 
-  const send = useCallback(
-    async (text) => {
-      const query = (text ?? input).trim();
-      if (!query || busy) return;
-      setInput('');
-      setBusy(true);
-      setMessages((m) => [
-        ...m,
-        { role: 'user', text: query },
-        { role: 'assistant', text: '', steps: [], sources: [], pending: true },
-      ]);
-
-      const patchLast = (patch) =>
-        setMessages((m) => {
-          const next = [...m];
-          const last = { ...next[next.length - 1] };
-          next[next.length - 1] = typeof patch === 'function' ? patch(last) : { ...last, ...patch };
-          return next;
-        });
-
-      abortRef.current = new AbortController();
-      try {
-        await streamAsk(query, {
-          signal: abortRef.current.signal,
-          onEvent: (ev) => {
-            if (ev.type === 'token') {
-              patchLast((last) => ({ ...last, text: (last.text || '') + ev.text, pending: false }));
-            } else if (ev.type === 'tool') {
-              patchLast((last) => ({ ...last, steps: [...(last.steps || []), { tool: ev.tool, args: ev.args }] }));
-            } else if (ev.type === 'final') {
-              patchLast((last) => ({
-                ...last,
-                text: last.text || ev.answer || '',
-                sources: ev.sources || [],
-                pending: false,
-              }));
-            } else if (ev.type === 'unavailable') {
-              patchLast({ error: 'not configured (set ASSISTANT_ENABLED + an LLM endpoint)', pending: false });
-            } else if (ev.type === 'error') {
-              patchLast({ error: ev.message || 'error', pending: false });
-            }
-          },
-        });
-      } catch (e) {
-        if (e.name !== 'AbortError') patchLast({ error: String(e.message || e), pending: false });
-      } finally {
-        setBusy(false);
-        abortRef.current = null;
-      }
-    },
-    [input, busy]
-  );
+  const submit = (text) => {
+    setInput('');
+    send(text ?? input);
+  };
 
   return (
     <div className="v2-asst" data-testid="assistant-screen">
@@ -164,30 +58,23 @@ export function AssistantScreen() {
         <Icon name="message" size={17} style={{ color: 'var(--accent)' }} />
         <span>Assistant</span>
         <span className="v2-asst__sub">Ask about traffic, safety, airframes & analytics</span>
+        {messages.length > 0 && (
+          <button type="button" className="v2-asst__clear" onClick={clear} title="Clear chat">
+            <Icon name="x" size={13} />
+            Clear
+          </button>
+        )}
       </div>
 
       <div className="v2-asst__thread">
-        {messages.length === 0 ? (
-          <div className="v2-asst__empty">
-            <p>Ask a question about what SkySpy is tracking.</p>
-            <div className="v2-asst__suggest">
-              {SUGGESTIONS.map((s) => (
-                <button key={s} type="button" className="v2-asst__chip" onClick={() => send(s)}>
-                  {s}
-                </button>
-              ))}
-            </div>
-          </div>
-        ) : (
-          messages.map((msg, i) => <Message key={i} msg={msg} />)
-        )}
+        <AssistantThread messages={messages} suggestions={SUGGESTIONS} onPick={submit} />
       </div>
 
       <form
         className="v2-asst__composer"
         onSubmit={(e) => {
           e.preventDefault();
-          send();
+          submit();
         }}
       >
         <input

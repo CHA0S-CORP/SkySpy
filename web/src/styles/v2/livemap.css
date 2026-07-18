@@ -231,6 +231,29 @@
   font-size: 12px;
   color: var(--dim);
 }
+/* per-class airspace sub-toggles (indented under the Airspace row) */
+.lm-panel-pop__subgroup {
+  margin: 2px 0 4px 10px;
+  padding-left: 8px;
+  border-left: 1px solid var(--bord);
+}
+.lm-panel-pop__row--sub {
+  padding: 4px 0;
+  font-size: 11px;
+  color: var(--dim2, var(--dim));
+}
+.lm-panel-pop__row--sub > span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.lm-airspace-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex: none;
+}
 .lm-panel-pop__range {
   display: flex;
   align-items: center;
@@ -277,6 +300,57 @@
 }
 .lm__coords span {
   color: var(--txt);
+}
+
+/* hover tooltip for PIREP / NOTAM canvas markers */
+.lm__tip {
+  position: absolute;
+  max-width: 320px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--bg1) 92%, transparent);
+  border: 1px solid var(--bord);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--dim);
+  backdrop-filter: blur(4px);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  z-index: 455;
+  pointer-events: none;
+}
+.lm__tip-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 3px;
+}
+.lm__tip-badge {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--txt);
+}
+.lm__tip-badge--tfr {
+  color: var(--danger, #f4506e);
+}
+.lm__tip-alt {
+  color: var(--dim);
+}
+.lm__tip-sub {
+  color: var(--txt);
+  margin-bottom: 2px;
+}
+.lm__tip-haz {
+  color: var(--warn, #f0a23c);
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+.lm__tip-raw {
+  color: var(--dim);
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin-top: 3px;
 }
 
 /* mini compass */

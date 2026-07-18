@@ -236,6 +236,8 @@ class AviationDataMixin:
                     "lat": b.center_lat,
                     "lon": b.center_lon,
                     "radius": b.radius_nm,
+                    "controlling_agency": b.controlling_agency,
+                    "schedule": b.schedule,
                     "polygon": _decimate_polygon(b.polygon),
                 }
             )

@@ -1,0 +1,317 @@
+/* ==========================================================================
+   Support Chat Dock — an app-wide "copilot console" that docks in the corner.
+   Tactical/radar aesthetic to match SkySpy: dark glass, accent signal glow,
+   scanline texture, a live context chip. Cohesive with, and elevated above,
+   the base assistant styling.
+   ========================================================================== */
+
+.v2-dock {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: 1400;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 14px;
+  font-family: var(--font-sans);
+  pointer-events: none;
+}
+.v2-dock > * {
+  pointer-events: auto;
+}
+
+/* --- Corner beacon (the always-present entry point) --------------------- */
+.v2-dock__beacon {
+  position: relative;
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  background: radial-gradient(
+    120% 120% at 30% 25%,
+    color-mix(in srgb, var(--accent) 34%, var(--bg2)) 0%,
+    var(--bg2) 70%
+  );
+  color: var(--accent);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  box-shadow:
+    0 6px 20px rgba(0, 0, 0, 0.45),
+    0 0 0 1px rgba(0, 0, 0, 0.3),
+    0 0 22px color-mix(in srgb, var(--accent) 26%, transparent);
+  transition:
+    transform 0.16s cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 0.2s ease;
+}
+.v2-dock__beacon:hover {
+  transform: translateY(-2px) scale(1.04);
+  box-shadow:
+    0 10px 26px rgba(0, 0, 0, 0.5),
+    0 0 30px color-mix(in srgb, var(--accent) 42%, transparent);
+}
+.v2-dock__beacon:active {
+  transform: scale(0.96);
+}
+.v2-dock.is-open .v2-dock__beacon {
+  color: var(--dim);
+  border-color: var(--bord2);
+  background: var(--bg2);
+}
+
+/* Expanding radar ring — signals a live, listening assistant. */
+.v2-dock__beacon-ring {
+  position: absolute;
+  inset: -1px;
+  border-radius: 50%;
+  border: 1.5px solid color-mix(in srgb, var(--accent) 60%, transparent);
+  animation: v2dock-ring 2.6s ease-out infinite;
+  pointer-events: none;
+}
+.v2-dock.is-open .v2-dock__beacon-ring {
+  display: none;
+}
+@keyframes v2dock-ring {
+  0% {
+    opacity: 0.7;
+    transform: scale(1);
+  }
+  70% {
+    opacity: 0;
+    transform: scale(1.85);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.85);
+  }
+}
+
+/* --- The console panel -------------------------------------------------- */
+.v2-dock__panel {
+  position: relative;
+  width: 390px;
+  max-width: calc(100vw - 32px);
+  height: min(600px, 72vh);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 16px;
+  border: 1px solid var(--bord);
+  border-top: 1px solid color-mix(in srgb, var(--accent) 45%, var(--bord));
+  background:
+    radial-gradient(
+      130% 80% at 100% 0%,
+      color-mix(in srgb, var(--accent) 12%, transparent) 0%,
+      transparent 55%
+    ),
+    linear-gradient(180deg, var(--bg1) 0%, var(--bg0) 100%);
+  box-shadow:
+    0 24px 60px -12px rgba(0, 0, 0, 0.6),
+    0 0 0 1px rgba(0, 0, 0, 0.35),
+    0 0 40px color-mix(in srgb, var(--accent) 10%, transparent);
+  transform-origin: bottom right;
+  animation: v2dock-in 0.26s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes v2dock-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Faint drifting scanline for radar-console texture. */
+.v2-dock__scan {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent 0,
+    transparent 3px,
+    color-mix(in srgb, var(--accent) 5%, transparent) 3px,
+    color-mix(in srgb, var(--accent) 5%, transparent) 4px
+  );
+  opacity: 0.35;
+  mask-image: linear-gradient(180deg, transparent, #000 8%, #000 92%, transparent);
+}
+
+/* --- Header ------------------------------------------------------------- */
+.v2-dock__head {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 12px 11px 14px;
+  border-bottom: 1px solid var(--bord);
+  background: color-mix(in srgb, var(--bg2) 60%, transparent);
+  backdrop-filter: blur(6px);
+}
+.v2-dock__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--txt);
+}
+.v2-dock__brand-icon {
+  color: var(--accent);
+}
+.v2-dock__ctx {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: auto;
+  padding: 3px 9px;
+  border-radius: 20px;
+  border: 1px solid color-mix(in srgb, var(--accent) 26%, var(--bord));
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--dim);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.v2-dock__ctx b {
+  color: var(--accent);
+  font-weight: 600;
+}
+.v2-dock__ctx-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 6px var(--accent);
+  animation: v2dock-dot 1.8s ease-in-out infinite;
+}
+@keyframes v2dock-dot {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.8);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.v2-dock__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.v2-dock__icon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--dim);
+  cursor: pointer;
+  transition:
+    background 0.14s ease,
+    color 0.14s ease;
+}
+.v2-dock__icon:hover {
+  background: var(--bg3);
+  color: var(--txt);
+}
+
+/* --- Thread (reuses .v2-asst__* message styling) ----------------------- */
+.v2-dock__thread {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.v2-dock__thread .v2-asst__msg {
+  max-width: 100%;
+}
+
+/* --- Composer ----------------------------------------------------------- */
+.v2-dock__composer {
+  position: relative;
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--bord);
+  background: color-mix(in srgb, var(--bg2) 55%, transparent);
+}
+.v2-dock__input {
+  flex: 1;
+  min-width: 0;
+  padding: 9px 12px;
+  border: 1px solid var(--bord2);
+  border-radius: 9px;
+  background: var(--bg0);
+  color: var(--txt);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+.v2-dock__input:focus {
+  border-color: var(--accent);
+}
+.v2-dock__send {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  flex-shrink: 0;
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--bord));
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--accent);
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    transform 0.1s ease;
+}
+.v2-dock__send:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
+}
+.v2-dock__send:active:not(:disabled) {
+  transform: scale(0.94);
+}
+.v2-dock__send:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* --- Mobile: full-width bottom sheet ------------------------------------ */
+@media (max-width: 560px) {
+  .v2-dock {
+    right: 14px;
+    bottom: 14px;
+    left: 14px;
+    align-items: flex-end;
+  }
+  .v2-dock__panel {
+    width: 100%;
+    height: min(70vh, 560px);
+  }
+}
+
+/* Respect reduced-motion preferences. */
+@media (prefers-reduced-motion: reduce) {
+  .v2-dock__beacon-ring,
+  .v2-dock__ctx-dot {
+    animation: none;
+  }
+  .v2-dock__panel {
+    animation: none;
+  }
+}

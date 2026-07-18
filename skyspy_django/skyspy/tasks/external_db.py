@@ -62,6 +62,9 @@ def _aircraft_info_defaults(icao: str, data: dict) -> dict:
         registration=data.get("registration"),
         owner_city=data.get("city"),
         owner_state=data.get("state"),
+        owner_address=data.get("owner_address"),
+        registrant_type=data.get("faa_registrant_type"),
+        fractional_owner=data.get("fractional_owner"),
     )
     return {
         "registration": data.get("registration"),
@@ -376,6 +379,59 @@ def fetch_route_info(callsign: str):
         return None
 
 
+# Refresh a stored route at most this often for an unchanged callsign.
+ROUTE_REFRESH_SECONDS = 6 * 60 * 60
+
+
+@shared_task(ignore_result=True)
+def fetch_route_for_icao(icao_hex: str, callsign: str):
+    """
+    Resolve a callsign's origin/destination route and persist it on AircraftInfo.
+
+    Route is per-flight (keyed by callsign), so we record which callsign the
+    stored route belongs to and skip the network fetch while that callsign is
+    unchanged and fresh. Triggered from the stream cold path where callsign is
+    available (see aircraft_stream.process_new_aircraft_lookups).
+    """
+    try:
+        from django.utils import timezone
+
+        from skyspy.models import AircraftInfo
+        from skyspy.services import external_db
+
+        icao = (icao_hex or "").upper().strip().lstrip("~")
+        cs = (callsign or "").upper().strip()
+        if not icao or not cs:
+            return
+
+        info = AircraftInfo.objects.filter(icao_hex=icao).first()
+        # Skip if we already have a fresh route for this exact callsign.
+        if info and info.route_callsign == cs and info.route_data and info.route_fetched_at:
+            age = (timezone.now() - info.route_fetched_at).total_seconds()
+            if age < ROUTE_REFRESH_SECONDS:
+                return
+
+        route = external_db.fetch_route(cs)
+        if not route:
+            return
+
+        AircraftInfo.objects.update_or_create(
+            icao_hex=icao,
+            defaults={
+                "route_data": route,
+                "route_callsign": cs,
+                "route_fetched_at": timezone.now(),
+            },
+        )
+        logger.debug(
+            f"Stored route for {icao} ({cs}): {route.get('origin', {}).get('icao')} -> "
+            f"{route.get('destination', {}).get('icao')}"
+        )
+
+    except Exception as e:  # broad: Celery task top-level guard, route enrichment is best-effort
+        logger.debug(f"Error storing route for {icao_hex}/{callsign}: {e}")
+
+
 @shared_task
 def _planespotters_photo(icao: str, lookup_url: str) -> tuple[str | None, str | None, str | None]:
     """
@@ -427,7 +483,9 @@ def _airport_data_photo(icao: str, param: str, value: str) -> tuple[str | None, 
     from skyspy.models import AircraftInfo
 
     try:
-        url = f"https://www.airport-data.com/api/ac_thumb.json?{param}={value}&n=1"
+        # No www. — the www subdomain serves a cert that doesn't match its host,
+        # so httpx raises an SSL error and the whole fallback silently dies.
+        url = f"https://airport-data.com/api/ac_thumb.json?{param}={value}&n=1"
         response = httpx.get(url, timeout=10.0, headers={"User-Agent": "skyspy/1.0"})
         if response.status_code != 200:
             return None, None, None
@@ -452,6 +510,53 @@ def _airport_data_photo(icao: str, param: str, value: str) -> tuple[str | None, 
         return full, thumb, page_link
     except (DatabaseError, httpx.HTTPError, ValueError, KeyError, TypeError, OSError) as e:
         logger.debug(f"airport-data.com photo check failed for {icao} ({param}={value}): {e}")
+        return None, None, None
+
+
+def _flickr_photo(icao: str, registration: str) -> tuple[str | None, str | None, str | None]:
+    """
+    Last-resort GA fallback: query Flickr's keyless public photo feed by the tail
+    number as a tag. Enthusiasts and owners post small-GA airframes here that the
+    dedicated spotting DBs (Planespotters/airport-data/hexdb) never index.
+
+    This is a *low-trust* source — the feed returns anything a user tagged with
+    the string, so it's gated on a specific-enough registration by the caller and
+    tried only after every curated source misses. ``media.m`` is a 240px thumb;
+    swapping the ``_m`` size suffix for ``_b`` yields the 1024px version.
+
+    Returns ``(photo_url, thumbnail_url, photo_page_link)`` — all ``None`` when no
+    photo is found or the request fails.
+    """
+    from skyspy.models import AircraftInfo
+
+    try:
+        url = "https://www.flickr.com/services/feeds/photos_public.gne"
+        params = {"tags": registration, "format": "json", "nojsoncallback": "1"}
+        response = httpx.get(url, params=params, timeout=10.0, headers={"User-Agent": "skyspy/1.0"})
+        if response.status_code != 200:
+            return None, None, None
+        items = (response.json() or {}).get("items") or []
+        if not items:
+            return None, None, None
+        item = items[0]
+        thumb = (item.get("media") or {}).get("m")
+        if not thumb or not thumb.endswith("_m.jpg"):
+            return None, None, None
+        full = thumb[: -len("_m.jpg")] + "_b.jpg"
+        page_link = item.get("link")
+        # author looks like 'nobody@flickr.com ("Display Name")' — pull the name.
+        author = item.get("author") or ""
+        photographer = author.split('("', 1)[1].rstrip('")') if '("' in author else None
+        AircraftInfo.objects.filter(icao_hex=icao).update(
+            photo_url=full,
+            photo_thumbnail_url=thumb,
+            photo_page_link=page_link,
+            photo_source="flickr",
+            photo_photographer=photographer,
+        )
+        return full, thumb, page_link
+    except (DatabaseError, httpx.HTTPError, ValueError, KeyError, TypeError, IndexError, OSError) as e:
+        logger.debug(f"Flickr photo check failed for {icao} ({registration}): {e}")
         return None, None, None
 
 
@@ -490,6 +595,16 @@ def fetch_aircraft_photos(
                 registration = (info.registration or "").strip() or None
             except AircraftInfo.DoesNotExist:
                 pass
+
+        # US GA airframes are the ones Planespotters lacks by hex, yet they're
+        # indexed by tail on airport-data.com. If the DB has no registration
+        # (FAA registry not loaded / row not enriched yet), derive the N-number
+        # from the hex — it's a bijective mapping for the US block — so the reg
+        # endpoints still fire instead of silently giving up.
+        if not photo_url and not registration:
+            from skyspy.services.nnumber import icao_to_n
+
+            registration = icao_to_n(icao)
 
         # Try planespotters first (higher quality source). General-aviation
         # airframes are frequently absent from the hex index but present under
@@ -530,6 +645,13 @@ def fetch_aircraft_photos(
                     )
             except (DatabaseError, ValueError, KeyError, TypeError, OSError) as e:
                 logger.debug(f"HexDB photo check failed for {icao}: {e}")
+
+        # Last resort for small GA the curated DBs never index: Flickr's keyless
+        # public feed, keyed on the tail number. Low-trust (fuzzy tag match), so
+        # only fire on a specific-enough registration — short tails like "N44"
+        # would match unrelated photos.
+        if not photo_url and registration and len(registration) >= 5:
+            photo_url, thumbnail_url, photo_page_link = _flickr_photo(icao, registration)
 
         # Download photos if we have URLs
         if photo_url:

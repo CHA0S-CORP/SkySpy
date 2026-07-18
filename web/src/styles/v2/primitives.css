@@ -337,7 +337,9 @@
   position: fixed;
   inset: 0;
   background: rgba(4, 6, 10, 0.72);
-  z-index: 50;
+  /* Above the detail-page Leaflet map (~1000) and v2 detail chrome (2000);
+     below toast hosts (9999) so notifications still surface over a dialog. */
+  z-index: 5000;
   overflow-y: auto;
   display: grid;
   place-items: center;

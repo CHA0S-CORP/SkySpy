@@ -2,6 +2,7 @@
 Django settings for SkysPy project.
 """
 
+import json
 import os
 import warnings
 from pathlib import Path
@@ -192,7 +193,11 @@ def parse_database_url(url):
             "CONN_MAX_AGE": 60,
             "ATOMIC_REQUESTS": False,
             "AUTOCOMMIT": True,
-            "CONN_HEALTH_CHECKS": False,
+            # Validate liveness on reuse so a connection the DB/PgBouncer reaped
+            # while idle is discarded instead of raising "the connection is
+            # closed" (long-lived Socket.IO executor threads never recycle via
+            # the request cycle — see main.py _recycle_db_connections).
+            "CONN_HEALTH_CHECKS": True,
             "TIME_ZONE": None,
             "OPTIONS": {
                 "connect_timeout": 10,
@@ -558,12 +563,20 @@ AIRCRAFT_STREAM_PORT = get_env("AIRCRAFT_STREAM_PORT", "30047", int)  # TCP net-
 AIRCRAFT_STREAM_RECONNECT_DELAY = get_env("AIRCRAFT_STREAM_RECONNECT_DELAY", "5", int)
 AIRCRAFT_STREAM_BATCH_MS = get_env("AIRCRAFT_STREAM_BATCH_MS", "100", int)  # Batch broadcasts
 # SSE streaming settings (preferred mode)
-AIRCRAFT_STREAM_MODE = get_env("AIRCRAFT_STREAM_MODE", "sse")  # 'sse', 'tcp', 'adsbx', or 'auto'
+AIRCRAFT_STREAM_MODE = get_env("AIRCRAFT_STREAM_MODE", "sse")  # 'sse', 'tcp', 'adsbx', 'adsblol', or 'auto'
 AIRCRAFT_STREAM_SSE_PORT = get_env("AIRCRAFT_STREAM_SSE_PORT", "80", int)  # HTTP port for SSE
 AIRCRAFT_STREAM_SSE_PATH = get_env("AIRCRAFT_STREAM_SSE_PATH", "/v2/sse")  # SSE endpoint path
 # ADSBexchange API streaming (polling mode)
 AIRCRAFT_STREAM_ADSBX_INTERVAL = get_env("AIRCRAFT_STREAM_ADSBX_INTERVAL", "2", float)  # Poll interval in seconds
 AIRCRAFT_STREAM_ADSBX_RADIUS = get_env("AIRCRAFT_STREAM_ADSBX_RADIUS", "250", int)  # Radius in nautical miles
+# adsb.lol / community API streaming (keyless, readsb schema, radius max 250nm)
+# Politeness guideline is <=1 req/s per source, so keep interval >= 2s.
+AIRCRAFT_STREAM_ADSBLOL_INTERVAL = get_env("AIRCRAFT_STREAM_ADSBLOL_INTERVAL", "2", float)  # Poll interval (s)
+AIRCRAFT_STREAM_ADSBLOL_RADIUS = get_env("AIRCRAFT_STREAM_ADSBLOL_RADIUS", "250", int)  # Radius in nautical miles
+# Round-robin over these keyless sources (comma list). Known names: adsb.lol,
+# adsb.fi, airplanes.live. A full URL template containing {lat}/{lon}/{radius}
+# is also accepted. Rotating spreads per-IP rate limits; a 429 skips to the next.
+AIRCRAFT_STREAM_FREE_SOURCES = get_env("AIRCRAFT_STREAM_FREE_SOURCES", "adsb.lol,adsb.fi,airplanes.live")
 
 # Session Management
 SESSION_TIMEOUT_MINUTES = get_env("SESSION_TIMEOUT_MINUTES", "30", int)
@@ -585,6 +598,30 @@ WATCH_FLIGHT_LIST = get_env("WATCH_FLIGHT_LIST", "")
 ACARS_PORT = get_env("ACARS_PORT", "5555", int)
 VDLM2_PORT = get_env("VDLM2_PORT", "5556", int)
 ACARS_ENABLED = get_env("ACARS_ENABLED", "True", bool)
+
+# Airframes.io live ACARS feed — open community aggregator (api.airframes.io),
+# used as a no-hardware ACARS source. When enabled, `run_acars` polls the global
+# firehose and keeps only the LAX-area ground stations (or a radius around a
+# center point), then ingests them through the same normalize/dedupe/store/
+# broadcast path as the UDP listener. Free/keyless today; set
+# AIRFRAMES_ACARS_API_KEY if you have a feeder key (raises the rate limit).
+AIRFRAMES_ACARS_ENABLED = get_env("AIRFRAMES_ACARS_ENABLED", "False", bool)
+AIRFRAMES_ACARS_URL = get_env("AIRFRAMES_ACARS_URL", "https://api.airframes.io/v1/messages")
+AIRFRAMES_ACARS_API_KEY = get_env("AIRFRAMES_ACARS_API_KEY", "")
+# Poll cadence (s). The firehose's newest 100 msgs span only ~5s, so keep this
+# low enough to avoid gaps; dedupe (30s TTL) absorbs the overlap. Min 2.
+AIRFRAMES_ACARS_POLL_INTERVAL = get_env("AIRFRAMES_ACARS_POLL_INTERVAL", "4", int)
+# Comma-separated ICAOs whose nearest-airport stations we keep (default = LAX
+# metro receivers). Empty = rely on the radius filter only.
+AIRFRAMES_ACARS_AIRPORTS = get_env(
+    "AIRFRAMES_ACARS_AIRPORTS",
+    "KLAX,KVNY,KBUR,KSNA,KLGB,KONT,KHHR,KSMO,KTOA,KRIV,KSBD,KNKX,KSAN,KCRQ,KNTD,KPMD,KWJF,KEMT,KFUL,KCNO,KSLI,KNFG",
+)
+# Geographic fallback: keep stations within this many nm of the center. Defaults
+# to LAX (not FEEDER_LAT/LON — airframes coverage is nationwide). 0 disables.
+AIRFRAMES_ACARS_CENTER_LAT = get_env("AIRFRAMES_ACARS_CENTER_LAT", "33.9416", float)
+AIRFRAMES_ACARS_CENTER_LON = get_env("AIRFRAMES_ACARS_CENTER_LON", "-118.4085", float)
+AIRFRAMES_ACARS_RADIUS_NM = get_env("AIRFRAMES_ACARS_RADIUS_NM", "100", float)
 
 # Notifications
 APPRISE_URLS = get_env("APPRISE_URLS", "")
@@ -657,8 +694,25 @@ EMBEDDING_DIM = get_env("EMBEDDING_DIM", "1536", int)  # text-embedding-3-small 
 # (served by vLLM in prod, or OpenAI/Ollama in dev — any OpenAI-compatible URL).
 ASSISTANT_ENABLED = get_env("ASSISTANT_ENABLED", "False", bool)
 ASSISTANT_MODEL = get_env("ASSISTANT_MODEL", "") or LLM_MODEL
-ASSISTANT_MAX_STEPS = get_env("ASSISTANT_MAX_STEPS", "6", int)  # tool-call budget per query
+ASSISTANT_MAX_STEPS = get_env("ASSISTANT_MAX_STEPS", "10", int)  # tool-call budget per query
 ASSISTANT_TIMEOUT = get_env("ASSISTANT_TIMEOUT", "60", int)
+# Context-window budget knobs. Raise for large-context models to let tools return
+# more and conversations run longer; keep low on RPi/small models. Defaults match
+# the historical hardcoded caps.
+ASSISTANT_MAX_RESULT_CHARS = get_env("ASSISTANT_MAX_RESULT_CHARS", "6000", int)
+ASSISTANT_MAX_HISTORY_MSGS = get_env("ASSISTANT_MAX_HISTORY_MSGS", "16", int)
+ASSISTANT_MAX_HISTORY_CHARS = get_env("ASSISTANT_MAX_HISTORY_CHARS", "3000", int)
+# Inject a compact live-situation snapshot into each assistant query so answers
+# are grounded in current traffic without spending a tool call. Disable on tiny
+# models / RPi if the extra context hurts.
+ASSISTANT_BRIEFING_ENABLED = get_env("ASSISTANT_BRIEFING_ENABLED", "True", bool)
+# Optional override for the assistant's airframe photo <img> src (the app renders
+# the photo from the fetch_airframe_photo tool call, not from LLM-emitted markdown,
+# so the URL can't be hallucinated). Empty (default) auto-infers: a signed S3 URL
+# when S3_ENABLED, else the same-origin /api/v1/photos/<hex> endpoint.
+# Set to a public asset base (e.g. https://sky-spy-assets.s3.amazonaws.com/photos)
+# to force <base>/<HEX>.jpg.
+ASSISTANT_PHOTO_BASE_URL = get_env("ASSISTANT_PHOTO_BASE_URL", "")
 
 # OpenSky Database
 OPENSKY_DB_PATH = get_env("OPENSKY_DB_PATH", "/data/opensky/aircraft-database.csv")
@@ -692,6 +746,15 @@ AVWX_API_KEY = get_env("AVWX_API_KEY", "")
 OPENAIP_ENABLED = get_env("OPENAIP_ENABLED", "False", bool)
 OPENAIP_API_KEY = get_env("OPENAIP_API_KEY", "")
 
+# Aviation reference-data fetch radius (nm) around FEEDER_LAT/LON. Airspace
+# boundaries (OpenAIP) and airports/navaids (AWC) are fetched in a box/disc of
+# this radius so the map layers populate near the antenna instead of a sparse
+# CONUS-wide sample. AIRSPACE_EXTRA_REGIONS is an optional JSON list of
+# [lat, lon, radius_nm] for multi-site coverage.
+AIRSPACE_FETCH_RADIUS_NM = get_env("AIRSPACE_FETCH_RADIUS_NM", "250", float)
+GEODATA_FETCH_RADIUS_NM = get_env("GEODATA_FETCH_RADIUS_NM", "250", float)
+AIRSPACE_EXTRA_REGIONS = json.loads(get_env("AIRSPACE_EXTRA_REGIONS", "[]"))
+
 # OpenSky Network Live API (https://opensky-network.org/)
 # Free tier: 4,000 credits/day (8,000 for contributors)
 OPENSKY_LIVE_ENABLED = get_env("OPENSKY_LIVE_ENABLED", "False", bool)
@@ -702,6 +765,14 @@ OPENSKY_PASSWORD = get_env("OPENSKY_PASSWORD", "")
 # Free tier: Limited calls (check current limits)
 ADSBX_LIVE_ENABLED = get_env("ADSBX_LIVE_ENABLED", "False", bool)
 ADSBX_RAPIDAPI_KEY = get_env("ADSBX_RAPIDAPI_KEY", "")
+
+# OpenSanctions owner screening (https://www.opensanctions.org/api/). Feeds a
+# sanctions/PEP risk signal into ownership analysis. Requires an API key (free
+# for non-commercial use); disabled by default so it is a no-op without a key.
+OPENSANCTIONS_ENABLED = get_env("OPENSANCTIONS_ENABLED", "False", bool)
+OPENSANCTIONS_API_URL = get_env("OPENSANCTIONS_API_URL", "https://api.opensanctions.org")
+OPENSANCTIONS_API_KEY = get_env("OPENSANCTIONS_API_KEY", "")
+OPENSANCTIONS_DATASET = get_env("OPENSANCTIONS_DATASET", "default")  # scope/collection to match against
 
 # Aviationstack Flight Schedules (https://aviationstack.com/)
 # Free tier: 100 requests/month

@@ -643,6 +643,12 @@
     overflow-y: auto;
     border-radius: 12px;
   }
+
+  /* Filter menu owns its own nested scroll — keep the panel fixed so the
+     header + reset stay pinned and only the section list scrolls. */
+  .filter-menu {
+    overflow: hidden;
+  }
 }
 
 /* ============================================================================

@@ -846,3 +846,46 @@ class TimestampTests(TestCase):
 
         self.assertIn("timestamp", result)
         self.assertIn("Z", result["timestamp"])
+
+
+class NotableMessageTests(TestCase):
+    """Tests for interestingness scoring / find_notable_messages."""
+
+    def _msg(self, **kw):
+        defaults = {"source": "acars", "icao_hex": "A1B2C3", "callsign": "UAL1", "label": "B9", "text": ""}
+        defaults.update(kw)
+        return AcarsMessage.objects.create(**defaults)
+
+    def test_emergency_keyword_outranks_routine(self):
+        self._msg(label="SQ", text="SQUITTER GROUND STATION ID")
+        self._msg(label="10", text="OUT KSEA")
+        emergency = self._msg(
+            label="B9", callsign="AAL99", text="FROM CREW: MEDICAL EMERGENCY ON BOARD, REQUEST DIVERSION"
+        )
+
+        result = acars_stats.find_notable_messages(hours=24, limit=10)
+        self.assertGreaterEqual(result["count"], 1)
+        top = result["messages"][0]
+        self.assertEqual(top["id"], emergency.id)
+        self.assertTrue(any("critical" in r for r in top["reasons"]))
+
+    def test_routine_telemetry_below_threshold(self):
+        # Pure telemetry / squitters should not be flagged notable.
+        self._msg(label="SQ", text="SQ")
+        self._msg(label="H1", text="N3411.6,W11904.3,126360,0.26,AIR")
+        result = acars_stats.find_notable_messages(hours=24, limit=10, min_score=15)
+        self.assertEqual(result["count"], 0)
+
+    def test_reports_reasons_and_score(self):
+        self._msg(label="B9", text="ENGINE FAULT DETECTED, HYDRAULIC PRESSURE LOW")
+        result = acars_stats.find_notable_messages(hours=24, limit=5)
+        self.assertEqual(result["count"], 1)
+        msg = result["messages"][0]
+        self.assertGreater(msg["score"], 15)
+        self.assertTrue(msg["reasons"])
+
+    def test_dedupes_repeated_telemetry(self):
+        for _ in range(5):
+            self._msg(icao_hex="ABC123", label="B9", text="ENGINE FAULT DETECTED SAME BODY")
+        result = acars_stats.find_notable_messages(hours=24, limit=10)
+        self.assertEqual(result["count"], 1)

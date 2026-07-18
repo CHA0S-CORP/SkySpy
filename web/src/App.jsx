@@ -7,11 +7,14 @@ import { AppShell } from './components/v2/shell';
 import { AircraftListScreen } from './components/v2/screens/list/AircraftListScreen';
 import { SystemScreen } from './components/v2/screens/system/SystemScreen';
 import { AssistantScreen } from './components/v2/screens/assistant/AssistantScreen';
+import { SupportChatDock } from './components/v2/screens/assistant/SupportChatDock';
+import { PageContextProvider } from './components/v2/screens/assistant/pageContext';
 import { AlertsScreen } from './components/v2/screens/alerts/AlertsScreen';
 import { RadioScreen } from './components/v2/screens/radio/RadioScreen';
 import { HistoryScreen } from './components/v2/screens/history/HistoryScreen';
 import { StatsScreen } from './components/v2/screens/stats/StatsScreen';
 import { AdvancedAnalyticsScreen } from './components/v2/screens/analytics/AdvancedAnalyticsScreen';
+import { AirframesScreen } from './components/v2/screens/airframes/AirframesScreen';
 
 // View components
 // Note: NotamsView and ArchiveView are now integrated into HistoryView
@@ -22,6 +25,7 @@ import { CannonballScreen } from './components/v2/screens/cannonball/CannonballS
 import { MapView } from './components/map';
 
 import { DetailScreen } from './components/v2/screens/detail/DetailScreen';
+import { NotamDetailScreen } from './components/v2/screens/notam/NotamDetailScreen';
 import { LiveMapView } from './components/livemap/LiveMapView';
 
 // Auth components
@@ -58,6 +62,7 @@ const VALID_TABS = [
   'aircraft',
   'stats',
   'analytics',
+  'airframes',
   'history',
   'audio',
   'notams',
@@ -69,6 +74,7 @@ const VALID_TABS = [
   'admin',
   'airframe',
   'event',
+  'notam',
   'login',
   'cannonball',
 ];
@@ -353,7 +359,7 @@ export default function App() {
 
   // Wrap main content with ProtectedRoute for auth-required modes
   const mainContent = (
-    <>
+    <PageContextProvider tab={activeTab} params={hashParams}>
       <AppShell
         activeTab={activeTab}
         onNavigate={setActiveTab}
@@ -417,12 +423,14 @@ export default function App() {
               onSelectAircraft={(hex) => setActiveTab('airframe', { icao: hex })}
             />
           )}
+          {activeTab === 'airframes' && <AirframesScreen />}
           {/* History view includes Sessions/Sightings/ACARS/Safety/NOTAMs/PIREPs/Archive tabs */}
           {activeTab === 'history' && (
             <HistoryScreen
               apiBase={config.apiBaseUrl}
               onSelectAircraft={(hex) => setActiveTab('airframe', { icao: hex })}
               onViewEvent={(eventId) => setActiveTab('event', { id: eventId })}
+              onViewNotam={(notamId) => setActiveTab('notam', { id: notamId })}
               hashParams={hashParams}
             />
           )}
@@ -528,6 +536,13 @@ export default function App() {
               wsConnected={isReady}
             />
           )}
+          {activeTab === 'notam' && hashParams.id && (
+            <NotamDetailScreen
+              notamId={hashParams.id}
+              apiBase={config.apiBaseUrl}
+              onClose={() => window.history.back()}
+            />
+          )}
         </>
       </AppShell>
 
@@ -538,7 +553,13 @@ export default function App() {
           onClose={() => setShowSettings(false)}
         />
       )}
-    </>
+
+      {/* App-wide support chat — available on every shell page except the full
+          assistant screen itself. Sees the current page as context. */}
+      {activeTab !== 'assistant' && (
+        <SupportChatDock onExpand={() => setActiveTab('assistant')} />
+      )}
+    </PageContextProvider>
   );
 
   // Cannonball is a full-screen standalone mode (no shared chrome) — render it
