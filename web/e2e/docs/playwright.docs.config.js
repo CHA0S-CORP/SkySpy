@@ -54,8 +54,9 @@ export default defineConfig({
     // Always capture screenshots
     screenshot: 'on',
 
-    // Collect trace for debugging
-    trace: 'on',
+    // Trace off: doc runs only need video/screenshots, and trace-artifact
+    // finalization was racing the temp dir (ENOENT) and aborting video save.
+    trace: 'off',
 
     // Longer timeouts for complex animations
     actionTimeout: 45000,

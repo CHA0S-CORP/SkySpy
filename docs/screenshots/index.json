@@ -1,90 +1,69 @@
 {
-  "generated": "2026-07-18T06:50:14.634Z",
+  "generated": "2026-07-18T08:16:20.955Z",
   "version": "1.0.0",
   "summary": {
-    "totalAssets": 192,
-    "screenshots": 190,
-    "animations": 2,
+    "totalAssets": 150,
+    "screenshots": 146,
+    "animations": 4,
     "viewports": [
-      "root",
+      "animations",
       "desktop",
       "mobile",
       "tablet"
     ],
     "views": [
-      "aircraft",
-      "airplane1",
-      "airplane2",
-      "airplane3",
-      "crt",
+      "assistant",
+      "cannonball",
       "admin",
+      "aircraft",
       "airframe",
       "alerts",
       "analytics",
-      "assistant",
       "audio",
-      "cannonball",
       "history",
       "login",
       "map",
       "safety",
       "stats",
-      "system",
-      "detail",
-      "history2",
-      "list",
-      "nav",
-      "pirep",
-      "saftey",
-      "saftey1",
-      "saftey2"
+      "system"
     ]
   },
   "assets": [
     {
-      "name": "aircraft-detail.gif",
-      "path": "aircraft-detail.gif",
+      "name": "assistant-conversation.gif",
+      "path": "animations/assistant-conversation.gif",
       "type": "animation",
-      "viewport": "root",
-      "view": "aircraft",
-      "size": 1613938,
-      "modified": "2025-12-27T07:03:52.000Z"
+      "viewport": "animations",
+      "view": "assistant",
+      "size": 1184012,
+      "modified": "2026-07-18T07:57:38.874Z"
     },
     {
-      "name": "airplane1.png",
-      "path": "airplane1.png",
-      "type": "screenshot",
-      "viewport": "root",
-      "view": "airplane1",
-      "size": 1634353,
-      "modified": "2025-12-27T07:19:25.000Z"
-    },
-    {
-      "name": "airplane2.png",
-      "path": "airplane2.png",
-      "type": "screenshot",
-      "viewport": "root",
-      "view": "airplane2",
-      "size": 1452620,
-      "modified": "2025-12-27T07:19:49.000Z"
-    },
-    {
-      "name": "airplane3.png",
-      "path": "airplane3.png",
-      "type": "screenshot",
-      "viewport": "root",
-      "view": "airplane3",
-      "size": 2297087,
-      "modified": "2025-12-27T09:20:52.000Z"
-    },
-    {
-      "name": "crt-mode.gif",
-      "path": "crt-mode.gif",
+      "name": "assistant-conversation.webp",
+      "path": "animations/assistant-conversation.webp",
       "type": "animation",
-      "viewport": "root",
-      "view": "crt",
-      "size": 5240602,
-      "modified": "2025-12-27T07:03:53.000Z"
+      "viewport": "animations",
+      "view": "assistant",
+      "size": 847786,
+      "modified": "2026-07-18T07:58:43.394Z"
+    },
+    {
+      "name": "cannonball-radar-sweep.gif",
+      "path": "animations/cannonball-radar-sweep.gif",
+      "type": "animation",
+      "viewport": "animations",
+      "view": "cannonball",
+      "size": 2023309,
+      "modified": "2026-07-18T07:58:43.808Z"
+    },
+    {
+      "name": "cannonball-radar-sweep.webp",
+      "path": "animations/cannonball-radar-sweep.webp",
+      "type": "animation",
+      "viewport": "animations",
+      "view": "cannonball",
+      "size": 677902,
+      "modified": "2026-07-18T08:00:07.926Z"
     },
     {
       "name": "admin-overview.png",
@@ -92,8 +71,8 @@
       "type": "screenshot",
       "viewport": "desktop",
       "view": "admin",
-      "size": 217847,
-      "modified": "2026-07-18T02:19:13.008Z"
+      "size": 235696,
+      "modified": "2026-07-18T08:16:20.913Z"
     },
     {
       "name": "aircraft-list-column-menu.png",
@@ -101,8 +80,8 @@
       "type": "screenshot",
       "viewport": "desktop",
       "view": "aircraft",
-      "size": 484201,
-      "modified": "2026-07-18T02:19:13.010Z"
+      "size": 547222,
+      "modified": "2026-07-18T08:16:20.914Z"
     },
     {
       "name": "aircraft-list-filtered.png",
@@ -110,8 +89,8 @@
       "type": "screenshot",
       "viewport": "desktop",
       "view": "aircraft",
-      "size": 217236,
-      "modified": "2026-07-18T02:19:13.010Z"
+      "size": 234814,
+      "modified": "2026-07-18T08:16:20.914Z"
     },
     {
       "name": "aircraft-list-mobile.png",
@@ -119,8 +98,8 @@
       "type": "screenshot",
       "viewport": "desktop",
       "view": "aircraft",
-      "size": 480143,
-      "modified": "2026-07-18T02:19:13.012Z"
+      "size": 553492,
+      "modified": "2026-07-18T08:16:20.914Z"
     },
     {
       "name": "aircraft-list-row-expanded.png",
@@ -128,8 +107,8 @@
       "type": "screenshot",
       "viewport": "desktop",
       "view": "aircraft",
-      "size": 481653,
-      "modified": "2026-07-18T02:19:13.014Z"
+      "size": 551035,
+      "modified": "2026-07-18T08:16:20.915Z"
     },
     {
       "name": "aircraft-list-sorted.png",
@@ -137,8 +116,8 @@
       "type": "screenshot",
       "viewport": "desktop",
       "view": "aircraft",
-      "size": 482050,
-      "modified": "2026-07-18T02:19:13.015Z"
+      "size": 545704,
+      "modified": "2026-07-18T08:16:20.915Z"
     },
     {
       "name": "aircraft-list-table.png",
@@ -146,8 +125,8 @@
       "type": "screenshot",
       "viewport": "desktop",
       "view": "aircraft",
-      "size": 482406,
-      "modified": "2026-07-18T02:19:13.017Z"
+      "size": 547905,
+      "modified": "2026-07-18T08:16:20.916Z"
     },
     {
       "name": "airframe-communications-tab.png",
@@ -155,8 +134,8 @@
       "type": "screenshot",
       "viewport": "desktop",
       "view": "airframe",
-      "size": 613860,
-      "modified": "2026-07-18T02:19:13.018Z"
+      "size": 736271,
+      "modified": "2026-07-18T08:16:20.918Z"
     },
     {
       "name": "airframe-info-tab.png",
@@ -164,8 +143,8 @@
       "type": "screenshot",
       "viewport": "desktop",
       "view": "airframe",
-      "size": 614606,
-      "modified": "2026-07-18T02:19:13.020Z"
+      "size": 738763,
+      "modified": "2026-07-18T08:16:20.918Z"
     },
     {
       "name": "airframe-overview.png",
@@ -173,8 +152,8 @@
       "type": "screenshot",
       "viewport": "desktop",
       "view": "airframe",
-      "size": 611676,
-      "modified": "2026-07-18T02:19:13.022Z"
+      "size": 738687,
+      "modified": "2026-07-18T08:16:20.920Z"
     },
     {
       "name": "airframe-safety-tab.png",
@@ -182,8 +161,8 @@
       "type": "screenshot",
       "viewport": "desktop",
       "view": "airframe",
-      "size": 612172,
-      "modified": "2026-07-18T02:19:13.023Z"
+      "size": 736940,
+      "modified": "2026-07-18T08:16:20.921Z"
     },
     {
       "name": "airframe-track-tab.png",
@@ -191,17 +170,17 @@
       "type": "screenshot",
       "viewport": "desktop",
       "view": "airframe",
-      "size": 604182,
-      "modified": "2026-07-18T02:19:13.024Z"
+      "size": 736735,
+      "modified": "2026-07-18T08:16:20.921Z"
     },
     {
-      "name": "alerts-condition-form.png",
-      "path": "desktop/alerts-condition-form.png",
+      "name": "alerts-history.png",
+      "path": "desktop/alerts-history.png",
       "type": "screenshot",
       "viewport": "desktop",
       "view": "alerts",
-      "size": 337018,
-      "modified": "2026-07-18T02:19:13.025Z"
+      "size": 186018,
+      "modified": "2026-07-18T08:16:20.922Z"
     },
     {
       "name": "alerts-notification-settings.png",
@@ -209,8 +188,8 @@
       "type": "screenshot",
       "viewport": "desktop",
       "view": "alerts",
-      "size": 187220,
-      "modified": "2026-07-18T02:19:13.026Z"
+      "size": 215753,
+      "modified": "2026-07-18T08:16:20.922Z"
     },
     {
       "name": "alerts-rule-builder.png",
@@ -218,8 +197,8 @@
       "type": "screenshot",
       "viewport": "desktop",
       "view": "alerts",
-      "size": 337018,
-      "modified": "2026-07-18T02:19:13.027Z"
+      "size": 345070,
+      "modified": "2026-07-18T08:16:20.922Z"
     },
     {
       "name": "alerts-rules-list.png",
@@ -227,26 +206,17 @@
       "type": "screenshot",
       "viewport": "desktop",
       "view": "alerts",
-      "size": 187220,
-      "modified": "2026-07-18T02:19:13.028Z"
+      "size": 206778,
+      "modified": "2026-07-18T08:16:20.922Z"
     },
     {
-      "name": "alerts-test-modal.png",
-      "path": "desktop/alerts-test-modal.png",
-      "type": "screenshot",
-      "viewport": "desktop",
-      "view": "alerts",
-      "size": 187220,
-      "modified": "2026-07-18T02:19:13.029Z"
-    },
-    {
-      "name": "analytics-geographic.png",
-      "path": "desktop/analytics-geographic.png",
+      "name": "analytics-military.png",
+      "path": "desktop/analytics-military.png",
       "type": "screenshot",
       "viewport": "desktop",
       "view": "analytics",
-      "size": 431834,
-      "modified": "2026-07-18T02:19:13.030Z"
+      "size": 450464,
+      "modified": "2026-07-18T08:16:20.922Z"
     },
     {
       "name": "analytics-overview.png",
@@ -254,8 +224,8 @@
       "type": "screenshot",
       "viewport": "desktop",
       "view": "analytics",
-      "size": 432089,
-      "modified": "2026-07-18T02:19:13.031Z"
+      "size": 450543,
+      "modified": "2026-07-18T08:16:20.923Z"
     },
     {
       "name": "assistant-overview.png",
@@ -263,8 +233,8 @@
       "type": "screenshot",
       "viewport": "desktop",
       "view": "assistant",
-      "size": 411901,
-      "modified": "2026-07-18T06:50:14.594Z"
+      "size": 412122,
+      "modified": "2026-07-18T08:16:20.923Z"
     },
     {
       "name": "assistant-prompt.png",
@@ -272,8 +242,8 @@
       "type": "screenshot",
       "viewport": "desktop",
       "view": "assistant",
-      "size": 418101,
-      "modified": "2026-07-18T06:50:14.596Z"
+      "size": 417713,
+      "modified": "2026-07-18T08:16:20.923Z"
     },
     {
       "name": "audio-emergency.png",
@@ -281,17 +251,8 @@
       "type": "screenshot",
       "viewport": "desktop",
       "view": "audio",
-      "size": 197813,
-      "modified": "2026-07-18T02:19:13.034Z"
-    },
-    {
-      "name": "audio-filters.png",
-      "path": "desktop/audio-filters.png",
-      "type": "screenshot",
-      "viewport": "desktop",
-      "view": "audio",
-      "size": 197922,
-      "modified": "2026-07-18T02:19:13.035Z"
+      "size": 244724,
+      "modified": "2026-07-18T08:16:20.923Z"
     },
     {
       "name": "audio-list.png",
@@ -299,35 +260,8 @@
       "type": "screenshot",
       "viewport": "desktop",
       "view": "audio",
-      "size": 197922,
-      "modified": "2026-07-18T02:19:13.036Z"
-    },
-    {
-      "name": "audio-playback.png",
-      "path": "desktop/audio-playback.png",
-      "type": "screenshot",
-      "viewport": "desktop",
-      "view": "audio",
-      "size": 197922,
-      "modified": "2026-07-18T02:19:13.038Z"
-    },
-    {
-      "name": "audio-transcript.png",
-      "path": "desktop/audio-transcript.png",
-      "type": "screenshot",
-      "viewport": "desktop",
-      "view": "audio",
-      "size": 197813,
-      "modified": "2026-07-18T02:19:13.039Z"
-    },
-    {
-      "name": "audio-with-stats.png",
-      "path": "desktop/audio-with-stats.png",
-      "type": "screenshot",
-      "viewport": "desktop",
-      "view": "audio",
-      "size": 197969,
-      "modified": "2026-07-18T02:19:13.039Z"
+      "size": 292999,
+      "modified": "2026-07-18T08:16:20.923Z"
     },
     {
       "name": "cannonball-hud.png",
@@ -335,35 +269,17 @@
       "type": "screenshot",
       "viewport": "desktop",
       "view": "cannonball",
-      "size": 1390379,
-      "modified": "2026-07-18T02:19:13.041Z"
+      "size": 1383768,
+      "modified": "2026-07-18T08:16:20.924Z"
     },
     {
-      "name": "cannonball-mobile-hud.png",
-      "path": "desktop/cannonball-mobile-hud.png",
+      "name": "cannonball-scan.png",
+      "path": "desktop/cannonball-scan.png",
       "type": "screenshot",
       "viewport": "desktop",
       "view": "cannonball",
-      "size": 1391043,
-      "modified": "2026-07-18T02:19:13.043Z"
-    },
-    {
-      "name": "cannonball-radar-view.png",
-      "path": "desktop/cannonball-radar-view.png",
-      "type": "screenshot",
-      "viewport": "desktop",
-      "view": "cannonball",
-      "size": 1389198,
-      "modified": "2026-07-18T02:19:13.045Z"
-    },
-    {
-      "name": "cannonball-settings.png",
-      "path": "desktop/cannonball-settings.png",
-      "type": "screenshot",
-      "viewport": "desktop",
-      "view": "cannonball",
-      "size": 1389491,
-      "modified": "2026-07-18T02:19:13.047Z"
+      "size": 1399578,
+      "modified": "2026-07-18T08:16:20.924Z"
     },
     {
       "name": "history-acars.png",
@@ -371,17 +287,8 @@
       "type": "screenshot",
       "viewport": "desktop",
       "view": "history",
-      "size": 339633,
-      "modified": "2026-07-18T06:50:14.597Z"
-    },
-    {
-      "name": "history-analytics.png",
-      "path": "desktop/history-analytics.png",
-      "type": "screenshot",
-      "viewport": "desktop",
-      "view": "history",
-      "size": 523078,
-      "modified": "2026-07-18T06:50:14.598Z"
+      "size": 343654,
+      "modified": "2026-07-18T08:16:20.925Z"
     },
     {
       "name": "history-archive.png",
@@ -389,17 +296,8 @@
       "type": "screenshot",
       "viewport": "desktop",
       "view": "history",
-      "size": 475275,
-      "modified": "2026-07-18T06:50:14.599Z"
-    },
-    {
-      "name": "history-date-picker.png",
-      "path": "desktop/history-date-picker.png",
-      "type": "screenshot",
-      "viewport": "desktop",
-      "view": "history",
-      "size": 523734,
-      "modified": "2026-07-18T06:50:14.601Z"
+      "size": 486369,
+      "modified": "2026-07-18T08:16:20.925Z"
     },
     {
       "name": "history-notams.png",
@@ -407,8 +305,8 @@
       "type": "screenshot",
       "viewport": "desktop",
       "view": "history",
-      "size": 295484,
-      "modified": "2026-07-18T06:50:14.601Z"
+      "size": 302303,
+      "modified": "2026-07-18T08:16:20.925Z"
     },
     {
       "name": "history-pireps.png",
@@ -416,8 +314,8 @@
       "type": "screenshot",
       "viewport": "desktop",
       "view": "history",
-      "size": 232168,
-      "modified": "2026-07-18T06:50:14.602Z"
+      "size": 240341,
+      "modified": "2026-07-18T08:16:20.925Z"
     },
     {
       "name": "history-safety-events.png",
@@ -425,17 +323,8 @@
       "type": "screenshot",
       "viewport": "desktop",
       "view": "history",
-      "size": 567393,
-      "modified": "2026-07-18T06:50:14.603Z"
-    },
-    {
-      "name": "history-session-detail.png",
-      "path": "desktop/history-session-detail.png",
-      "type": "screenshot",
-      "viewport": "desktop",
-      "view": "history",
-      "size": 523078,
-      "modified": "2026-07-18T06:50:14.604Z"
+      "size": 553776,
+      "modified": "2026-07-18T08:16:20.925Z"
     },
     {
       "name": "history-sessions.png",
@@ -443,8 +332,8 @@
       "type": "screenshot",
       "viewport": "desktop",
       "view": "history",
-      "size": 522311,
-      "modified": "2026-07-18T06:50:14.605Z"
+      "size": 485671,
+      "modified": "2026-07-18T08:16:20.926Z"
     },
     {
       "name": "history-sightings.png",
@@ -452,17 +341,8 @@
       "type": "screenshot",
       "viewport": "desktop",
       "view": "history",
-      "size": 388684,
-      "modified": "2026-07-18T06:50:14.606Z"
-    },
-    {
-      "name": "history-with-replay.png",
-      "path": "desktop/history-with-replay.png",
-      "type": "screenshot",
-      "viewport": "desktop",
-      "view": "history",
-      "size": 523592,
-      "modified": "2026-07-18T06:50:14.607Z"
+      "size": 390864,
+      "modified": "2026-07-18T08:16:20.926Z"
     },
     {
       "name": "login-form.png",
@@ -470,8 +350,8 @@
       "type": "screenshot",
       "viewport": "desktop",
       "view": "login",
-      "size": 1162136,
-      "modified": "2026-07-18T02:19:13.057Z"
+      "size": 1157405,
+      "modified": "2026-07-18T08:16:20.926Z"
     },
     {
       "name": "map-aircraft-popup.png",
@@ -479,8 +359,8 @@
       "type": "screenshot",
       "viewport": "desktop",
       "view": "map",
-      "size": 612133,
-      "modified": "2026-07-18T02:19:13.059Z"
+      "size": 735532,
+      "modified": "2026-07-18T08:16:20.927Z"
     },
     {
       "name": "map-emergency-aircraft.png",
@@ -488,8 +368,8 @@
       "type": "screenshot",
       "viewport": "desktop",
       "view": "map",
-      "size": 600485,
-      "modified": "2026-07-18T02:19:13.061Z"
+      "size": 732043,
+      "modified": "2026-07-18T08:16:20.927Z"
     },
     {
       "name": "map-filters.png",
@@ -497,17 +377,17 @@
       "type": "screenshot",
       "viewport": "desktop",
       "view": "map",
-      "size": 598675,
-      "modified": "2026-07-18T02:19:13.062Z"
+      "size": 756552,
+      "modified": "2026-07-18T08:16:20.927Z"
     },
     {
-      "name": "map-full-controls.png",
-      "path": "desktop/map-full-controls.png",
+      "name": "map-legend.png",
+      "path": "desktop/map-legend.png",
       "type": "screenshot",
       "viewport": "desktop",
       "view": "map",
-      "size": 596306,
-      "modified": "2026-07-18T02:19:13.064Z"
+      "size": 731098,
+      "modified": "2026-07-18T08:16:20.928Z"
     },
     {
       "name": "map-overlays.png",
@@ -515,8 +395,8 @@
       "type": "screenshot",
       "viewport": "desktop",
       "view": "map",
-      "size": 600167,
-      "modified": "2026-07-18T02:19:13.066Z"
+      "size": 770366,
+      "modified": "2026-07-18T08:16:20.928Z"
     },
     {
       "name": "map-overview.png",
@@ -524,8 +404,8 @@
       "type": "screenshot",
       "viewport": "desktop",
       "view": "map",
-      "size": 604375,
-      "modified": "2026-07-18T02:19:13.067Z"
+      "size": 729947,
+      "modified": "2026-07-18T08:16:20.928Z"
     },
     {
       "name": "safety-event-full.png",
@@ -533,8 +413,8 @@
       "type": "screenshot",
       "viewport": "desktop",
       "view": "safety",
-      "size": 604136,
-      "modified": "2026-07-18T02:19:13.068Z"
+      "size": 729273,
+      "modified": "2026-07-18T08:16:20.929Z"
     },
     {
       "name": "safety-event-map.png",
@@ -542,8 +422,8 @@
       "type": "screenshot",
       "viewport": "desktop",
       "view": "safety",
-      "size": 607487,
-      "modified": "2026-07-18T02:19:13.070Z"
+      "size": 732351,
+      "modified": "2026-07-18T08:16:20.930Z"
     },
     {
       "name": "stats-cards-overview.png",
@@ -551,8 +431,8 @@
       "type": "screenshot",
       "viewport": "desktop",
       "view": "stats",
-      "size": 444578,
-      "modified": "2026-07-18T02:19:13.072Z"
+      "size": 459560,
+      "modified": "2026-07-18T08:16:20.930Z"
     },
     {
       "name": "stats-charts.png",
@@ -560,8 +440,8 @@
       "type": "screenshot",
       "viewport": "desktop",
       "view": "stats",
-      "size": 478714,
-      "modified": "2026-07-18T02:19:13.073Z"
+      "size": 460051,
+      "modified": "2026-07-18T08:16:20.930Z"
     },
     {
       "name": "stats-coverage.png",
@@ -569,8 +449,8 @@
       "type": "screenshot",
       "viewport": "desktop",
       "view": "stats",
-      "size": 478292,
-      "modified": "2026-07-18T02:19:13.074Z"
+      "size": 460587,
+      "modified": "2026-07-18T08:16:20.930Z"
     },
     {
       "name": "stats-dashboard.png",
@@ -578,8 +458,8 @@
       "type": "screenshot",
       "viewport": "desktop",
       "view": "stats",
-      "size": 478513,
-      "modified": "2026-07-18T02:19:13.076Z"
+      "size": 462083,
+      "modified": "2026-07-18T08:16:20.931Z"
     },
     {
       "name": "stats-time-range.png",
@@ -587,8 +467,8 @@
       "type": "screenshot",
       "viewport": "desktop",
       "view": "stats",
-      "size": 444718,
-      "modified": "2026-07-18T02:19:13.077Z"
+      "size": 459479,
+      "modified": "2026-07-18T08:16:20.931Z"
     },
     {
       "name": "stats-top-aircraft.png",
@@ -596,8 +476,8 @@
       "type": "screenshot",
       "viewport": "desktop",
       "view": "stats",
-      "size": 477861,
-      "modified": "2026-07-18T02:19:13.078Z"
+      "size": 494054,
+      "modified": "2026-07-18T08:16:20.931Z"
     },
     {
       "name": "system-overview.png",
@@ -605,8 +485,8 @@
       "type": "screenshot",
       "viewport": "desktop",
       "view": "system",
-      "size": 486773,
-      "modified": "2026-07-18T02:19:13.080Z"
+      "size": 503437,
+      "modified": "2026-07-18T08:16:20.931Z"
     },
     {
       "name": "system-services.png",
@@ -614,44 +494,8 @@
       "type": "screenshot",
       "viewport": "desktop",
       "view": "system",
-      "size": 486138,
-      "modified": "2026-07-18T02:19:13.081Z"
-    },
-    {
-      "name": "detail.png",
-      "path": "detail.png",
-      "type": "screenshot",
-      "viewport": "root",
-      "view": "detail",
-      "size": 1295275,
-      "modified": "2025-12-27T07:18:20.000Z"
-    },
-    {
-      "name": "history-1.png",
-      "path": "history-1.png",
-      "type": "screenshot",
-      "viewport": "root",
-      "view": "history",
-      "size": 1927566,
-      "modified": "2025-12-27T09:18:34.000Z"
-    },
-    {
-      "name": "history2.png",
-      "path": "history2.png",
-      "type": "screenshot",
-      "viewport": "root",
-      "view": "history2",
-      "size": 1510849,
-      "modified": "2025-12-27T09:18:57.000Z"
-    },
-    {
-      "name": "list.png",
-      "path": "list.png",
-      "type": "screenshot",
-      "viewport": "root",
-      "view": "list",
-      "size": 604920,
-      "modified": "2025-12-27T07:17:16.000Z"
+      "size": 502171,
+      "modified": "2026-07-18T08:16:20.932Z"
     },
     {
       "name": "admin-overview.png",
@@ -659,8 +503,8 @@
       "type": "screenshot",
       "viewport": "mobile",
       "view": "admin",
-      "size": 127846,
-      "modified": "2026-07-18T02:19:13.144Z"
+      "size": 145982,
+      "modified": "2026-07-18T08:16:20.946Z"
     },
     {
       "name": "aircraft-list-column-menu.png",
@@ -668,8 +512,8 @@
       "type": "screenshot",
       "viewport": "mobile",
       "view": "aircraft",
-      "size": 176050,
-      "modified": "2026-07-18T02:19:13.145Z"
+      "size": 210135,
+      "modified": "2026-07-18T08:16:20.946Z"
     },
     {
       "name": "aircraft-list-filtered.png",
@@ -677,8 +521,8 @@
       "type": "screenshot",
       "viewport": "mobile",
       "view": "aircraft",
-      "size": 145957,
-      "modified": "2026-07-18T02:19:13.145Z"
+      "size": 161324,
+      "modified": "2026-07-18T08:16:20.946Z"
     },
     {
       "name": "aircraft-list-mobile.png",
@@ -686,8 +530,8 @@
       "type": "screenshot",
       "viewport": "mobile",
       "view": "aircraft",
-      "size": 176903,
-      "modified": "2026-07-18T02:19:13.146Z"
+      "size": 204826,
+      "modified": "2026-07-18T08:16:20.946Z"
     },
     {
       "name": "aircraft-list-row-expanded.png",
@@ -695,8 +539,8 @@
       "type": "screenshot",
       "viewport": "mobile",
       "view": "aircraft",
-      "size": 130988,
-      "modified": "2026-07-18T02:19:13.147Z"
+      "size": 203761,
+      "modified": "2026-07-18T08:16:20.946Z"
     },
     {
       "name": "aircraft-list-sorted.png",
@@ -704,8 +548,8 @@
       "type": "screenshot",
       "viewport": "mobile",
       "view": "aircraft",
-      "size": 176324,
-      "modified": "2026-07-18T02:19:13.147Z"
+      "size": 207539,
+      "modified": "2026-07-18T08:16:20.946Z"
     },
     {
       "name": "aircraft-list-table.png",
@@ -713,8 +557,8 @@
       "type": "screenshot",
       "viewport": "mobile",
       "view": "aircraft",
-      "size": 175836,
-      "modified": "2026-07-18T02:19:13.148Z"
+      "size": 203394,
+      "modified": "2026-07-18T08:16:20.946Z"
     },
     {
       "name": "airframe-communications-tab.png",
@@ -722,8 +566,8 @@
       "type": "screenshot",
       "viewport": "mobile",
       "view": "airframe",
-      "size": 241858,
-      "modified": "2026-07-18T02:19:13.149Z"
+      "size": 268309,
+      "modified": "2026-07-18T08:16:20.947Z"
     },
     {
       "name": "airframe-info-tab.png",
@@ -731,8 +575,8 @@
       "type": "screenshot",
       "viewport": "mobile",
       "view": "airframe",
-      "size": 243236,
-      "modified": "2026-07-18T02:19:13.150Z"
+      "size": 267976,
+      "modified": "2026-07-18T08:16:20.947Z"
     },
     {
       "name": "airframe-overview.png",
@@ -740,8 +584,8 @@
       "type": "screenshot",
       "viewport": "mobile",
       "view": "airframe",
-      "size": 242467,
-      "modified": "2026-07-18T02:19:13.151Z"
+      "size": 268412,
+      "modified": "2026-07-18T08:16:20.947Z"
     },
     {
       "name": "airframe-safety-tab.png",
@@ -749,8 +593,8 @@
       "type": "screenshot",
       "viewport": "mobile",
       "view": "airframe",
-      "size": 241757,
-      "modified": "2026-07-18T02:19:13.152Z"
+      "size": 267760,
+      "modified": "2026-07-18T08:16:20.947Z"
     },
     {
       "name": "airframe-track-tab.png",
@@ -758,17 +602,17 @@
       "type": "screenshot",
       "viewport": "mobile",
       "view": "airframe",
-      "size": 243422,
-      "modified": "2026-07-18T02:19:13.152Z"
+      "size": 268082,
+      "modified": "2026-07-18T08:16:20.947Z"
     },
     {
-      "name": "alerts-condition-form.png",
-      "path": "mobile/alerts-condition-form.png",
+      "name": "alerts-history.png",
+      "path": "mobile/alerts-history.png",
       "type": "screenshot",
       "viewport": "mobile",
       "view": "alerts",
-      "size": 147259,
-      "modified": "2026-07-18T02:19:13.153Z"
+      "size": 107844,
+      "modified": "2026-07-18T08:16:20.947Z"
     },
     {
       "name": "alerts-notification-settings.png",
@@ -776,8 +620,8 @@
       "type": "screenshot",
       "viewport": "mobile",
       "view": "alerts",
-      "size": 112505,
-      "modified": "2026-07-18T02:19:13.154Z"
+      "size": 148385,
+      "modified": "2026-07-18T08:16:20.948Z"
     },
     {
       "name": "alerts-rule-builder.png",
@@ -785,8 +629,8 @@
       "type": "screenshot",
       "viewport": "mobile",
       "view": "alerts",
-      "size": 147259,
-      "modified": "2026-07-18T02:19:13.155Z"
+      "size": 147308,
+      "modified": "2026-07-18T08:16:20.948Z"
     },
     {
       "name": "alerts-rules-list.png",
@@ -794,26 +638,17 @@
       "type": "screenshot",
       "viewport": "mobile",
       "view": "alerts",
-      "size": 112505,
-      "modified": "2026-07-18T02:19:13.158Z"
+      "size": 130952,
+      "modified": "2026-07-18T08:16:20.948Z"
     },
     {
-      "name": "alerts-test-modal.png",
-      "path": "mobile/alerts-test-modal.png",
-      "type": "screenshot",
-      "viewport": "mobile",
-      "view": "alerts",
-      "size": 112505,
-      "modified": "2026-07-18T02:19:13.159Z"
-    },
-    {
-      "name": "analytics-geographic.png",
-      "path": "mobile/analytics-geographic.png",
+      "name": "analytics-military.png",
+      "path": "mobile/analytics-military.png",
       "type": "screenshot",
       "viewport": "mobile",
       "view": "analytics",
-      "size": 155894,
-      "modified": "2026-07-18T02:19:13.160Z"
+      "size": 174085,
+      "modified": "2026-07-18T08:16:20.948Z"
     },
     {
       "name": "analytics-overview.png",
@@ -821,8 +656,8 @@
       "type": "screenshot",
       "viewport": "mobile",
       "view": "analytics",
-      "size": 155894,
-      "modified": "2026-07-18T02:19:13.160Z"
+      "size": 173860,
+      "modified": "2026-07-18T08:16:20.948Z"
     },
     {
       "name": "assistant-overview.png",
@@ -831,7 +666,7 @@
       "viewport": "mobile",
       "view": "assistant",
       "size": 189020,
-      "modified": "2026-07-18T06:50:14.623Z"
+      "modified": "2026-07-18T08:16:20.948Z"
     },
     {
       "name": "assistant-prompt.png",
@@ -840,7 +675,7 @@
       "viewport": "mobile",
       "view": "assistant",
       "size": 193593,
-      "modified": "2026-07-18T06:50:14.624Z"
+      "modified": "2026-07-18T08:16:20.948Z"
     },
     {
       "name": "audio-emergency.png",
@@ -848,17 +683,8 @@
       "type": "screenshot",
       "viewport": "mobile",
       "view": "audio",
-      "size": 114240,
-      "modified": "2026-07-18T02:19:13.163Z"
-    },
-    {
-      "name": "audio-filters.png",
-      "path": "mobile/audio-filters.png",
-      "type": "screenshot",
-      "viewport": "mobile",
-      "view": "audio",
-      "size": 114240,
-      "modified": "2026-07-18T02:19:13.164Z"
+      "size": 152776,
+      "modified": "2026-07-18T08:16:20.948Z"
     },
     {
       "name": "audio-list.png",
@@ -866,35 +692,8 @@
       "type": "screenshot",
       "viewport": "mobile",
       "view": "audio",
-      "size": 114240,
-      "modified": "2026-07-18T02:19:13.164Z"
-    },
-    {
-      "name": "audio-playback.png",
-      "path": "mobile/audio-playback.png",
-      "type": "screenshot",
-      "viewport": "mobile",
-      "view": "audio",
-      "size": 114240,
-      "modified": "2026-07-18T02:19:13.165Z"
-    },
-    {
-      "name": "audio-transcript.png",
-      "path": "mobile/audio-transcript.png",
-      "type": "screenshot",
-      "viewport": "mobile",
-      "view": "audio",
-      "size": 114240,
-      "modified": "2026-07-18T02:19:13.166Z"
-    },
-    {
-      "name": "audio-with-stats.png",
-      "path": "mobile/audio-with-stats.png",
-      "type": "screenshot",
-      "viewport": "mobile",
-      "view": "audio",
-      "size": 114240,
-      "modified": "2026-07-18T02:19:13.166Z"
+      "size": 193355,
+      "modified": "2026-07-18T08:16:20.949Z"
     },
     {
       "name": "cannonball-hud.png",
@@ -902,8 +701,8 @@
       "type": "screenshot",
       "viewport": "mobile",
       "view": "cannonball",
-      "size": 416694,
-      "modified": "2026-07-18T02:19:13.167Z"
+      "size": 417916,
+      "modified": "2026-07-18T08:16:20.949Z"
     },
     {
       "name": "cannonball-mobile-hud.png",
@@ -911,26 +710,17 @@
       "type": "screenshot",
       "viewport": "mobile",
       "view": "cannonball",
-      "size": 417420,
-      "modified": "2026-07-18T02:19:13.170Z"
+      "size": 418135,
+      "modified": "2026-07-18T08:16:20.949Z"
     },
     {
-      "name": "cannonball-radar-view.png",
-      "path": "mobile/cannonball-radar-view.png",
+      "name": "cannonball-scan.png",
+      "path": "mobile/cannonball-scan.png",
       "type": "screenshot",
       "viewport": "mobile",
       "view": "cannonball",
-      "size": 416694,
-      "modified": "2026-07-18T02:19:13.171Z"
-    },
-    {
-      "name": "cannonball-settings.png",
-      "path": "mobile/cannonball-settings.png",
-      "type": "screenshot",
-      "viewport": "mobile",
-      "view": "cannonball",
-      "size": 417499,
-      "modified": "2026-07-18T02:19:13.173Z"
+      "size": 484065,
+      "modified": "2026-07-18T08:16:20.949Z"
     },
     {
       "name": "history-acars.png",
@@ -938,17 +728,8 @@
       "type": "screenshot",
       "viewport": "mobile",
       "view": "history",
-      "size": 199286,
-      "modified": "2026-07-18T06:50:14.625Z"
-    },
-    {
-      "name": "history-analytics.png",
-      "path": "mobile/history-analytics.png",
-      "type": "screenshot",
-      "viewport": "mobile",
-      "view": "history",
-      "size": 188505,
-      "modified": "2026-07-18T06:50:14.626Z"
+      "size": 199861,
+      "modified": "2026-07-18T08:16:20.949Z"
     },
     {
       "name": "history-archive.png",
@@ -956,17 +737,8 @@
       "type": "screenshot",
       "viewport": "mobile",
       "view": "history",
-      "size": 137653,
-      "modified": "2026-07-18T06:50:14.627Z"
-    },
-    {
-      "name": "history-date-picker.png",
-      "path": "mobile/history-date-picker.png",
-      "type": "screenshot",
-      "viewport": "mobile",
-      "view": "history",
-      "size": 188505,
-      "modified": "2026-07-18T06:50:14.627Z"
+      "size": 137612,
+      "modified": "2026-07-18T08:16:20.950Z"
     },
     {
       "name": "history-notams.png",
@@ -974,8 +746,8 @@
       "type": "screenshot",
       "viewport": "mobile",
       "view": "history",
-      "size": 183775,
-      "modified": "2026-07-18T06:50:14.628Z"
+      "size": 183474,
+      "modified": "2026-07-18T08:16:20.950Z"
     },
     {
       "name": "history-pireps.png",
@@ -983,8 +755,8 @@
       "type": "screenshot",
       "viewport": "mobile",
       "view": "history",
-      "size": 151885,
-      "modified": "2026-07-18T06:50:14.628Z"
+      "size": 151113,
+      "modified": "2026-07-18T08:16:20.950Z"
     },
     {
       "name": "history-safety-events.png",
@@ -992,17 +764,8 @@
       "type": "screenshot",
       "viewport": "mobile",
       "view": "history",
-      "size": 223786,
-      "modified": "2026-07-18T06:50:14.629Z"
-    },
-    {
-      "name": "history-session-detail.png",
-      "path": "mobile/history-session-detail.png",
-      "type": "screenshot",
-      "viewport": "mobile",
-      "view": "history",
-      "size": 188505,
-      "modified": "2026-07-18T06:50:14.630Z"
+      "size": 218526,
+      "modified": "2026-07-18T08:16:20.950Z"
     },
     {
       "name": "history-sessions.png",
@@ -1010,8 +773,8 @@
       "type": "screenshot",
       "viewport": "mobile",
       "view": "history",
-      "size": 188505,
-      "modified": "2026-07-18T06:50:14.630Z"
+      "size": 188094,
+      "modified": "2026-07-18T08:16:20.950Z"
     },
     {
       "name": "history-sightings.png",
@@ -1019,17 +782,8 @@
       "type": "screenshot",
       "viewport": "mobile",
       "view": "history",
-      "size": 188582,
-      "modified": "2026-07-18T06:50:14.631Z"
-    },
-    {
-      "name": "history-with-replay.png",
-      "path": "mobile/history-with-replay.png",
-      "type": "screenshot",
-      "viewport": "mobile",
-      "view": "history",
-      "size": 188505,
-      "modified": "2026-07-18T06:50:14.632Z"
+      "size": 188260,
+      "modified": "2026-07-18T08:16:20.950Z"
     },
     {
       "name": "login-form.png",
@@ -1037,8 +791,8 @@
       "type": "screenshot",
       "viewport": "mobile",
       "view": "login",
-      "size": 805200,
-      "modified": "2026-07-18T02:19:13.180Z"
+      "size": 813890,
+      "modified": "2026-07-18T08:16:20.951Z"
     },
     {
       "name": "map-aircraft-popup.png",
@@ -1046,8 +800,8 @@
       "type": "screenshot",
       "viewport": "mobile",
       "view": "map",
-      "size": 242839,
-      "modified": "2026-07-18T02:19:13.181Z"
+      "size": 274127,
+      "modified": "2026-07-18T08:16:20.951Z"
     },
     {
       "name": "map-emergency-aircraft.png",
@@ -1055,8 +809,8 @@
       "type": "screenshot",
       "viewport": "mobile",
       "view": "map",
-      "size": 238983,
-      "modified": "2026-07-18T02:19:13.182Z"
+      "size": 270532,
+      "modified": "2026-07-18T08:16:20.951Z"
     },
     {
       "name": "map-filters.png",
@@ -1064,17 +818,17 @@
       "type": "screenshot",
       "viewport": "mobile",
       "view": "map",
-      "size": 238535,
-      "modified": "2026-07-18T02:19:13.182Z"
+      "size": 126358,
+      "modified": "2026-07-18T08:16:20.951Z"
     },
     {
-      "name": "map-full-controls.png",
-      "path": "mobile/map-full-controls.png",
+      "name": "map-legend.png",
+      "path": "mobile/map-legend.png",
       "type": "screenshot",
       "viewport": "mobile",
       "view": "map",
-      "size": 237055,
-      "modified": "2026-07-18T02:19:13.184Z"
+      "size": 270808,
+      "modified": "2026-07-18T08:16:20.951Z"
     },
     {
       "name": "map-overlays.png",
@@ -1082,8 +836,8 @@
       "type": "screenshot",
       "viewport": "mobile",
       "view": "map",
-      "size": 238386,
-      "modified": "2026-07-18T02:19:13.185Z"
+      "size": 109079,
+      "modified": "2026-07-18T08:16:20.951Z"
     },
     {
       "name": "map-overview.png",
@@ -1091,8 +845,8 @@
       "type": "screenshot",
       "viewport": "mobile",
       "view": "map",
-      "size": 239535,
-      "modified": "2026-07-18T02:19:13.187Z"
+      "size": 271271,
+      "modified": "2026-07-18T08:16:20.952Z"
     },
     {
       "name": "safety-event-full.png",
@@ -1100,8 +854,8 @@
       "type": "screenshot",
       "viewport": "mobile",
       "view": "safety",
-      "size": 231971,
-      "modified": "2026-07-18T02:19:13.188Z"
+      "size": 271334,
+      "modified": "2026-07-18T08:16:20.952Z"
     },
     {
       "name": "safety-event-map.png",
@@ -1109,8 +863,8 @@
       "type": "screenshot",
       "viewport": "mobile",
       "view": "safety",
-      "size": 237440,
-      "modified": "2026-07-18T02:19:13.189Z"
+      "size": 270881,
+      "modified": "2026-07-18T08:16:20.952Z"
     },
     {
       "name": "stats-cards-overview.png",
@@ -1118,8 +872,8 @@
       "type": "screenshot",
       "viewport": "mobile",
       "view": "stats",
-      "size": 139167,
-      "modified": "2026-07-18T02:19:13.190Z"
+      "size": 148765,
+      "modified": "2026-07-18T08:16:20.952Z"
     },
     {
       "name": "stats-charts.png",
@@ -1127,8 +881,8 @@
       "type": "screenshot",
       "viewport": "mobile",
       "view": "stats",
-      "size": 138640,
-      "modified": "2026-07-18T02:19:13.190Z"
+      "size": 148813,
+      "modified": "2026-07-18T08:16:20.952Z"
     },
     {
       "name": "stats-coverage.png",
@@ -1136,8 +890,8 @@
       "type": "screenshot",
       "viewport": "mobile",
       "view": "stats",
-      "size": 138759,
-      "modified": "2026-07-18T02:19:13.191Z"
+      "size": 148803,
+      "modified": "2026-07-18T08:16:20.952Z"
     },
     {
       "name": "stats-dashboard.png",
@@ -1145,8 +899,8 @@
       "type": "screenshot",
       "viewport": "mobile",
       "view": "stats",
-      "size": 139132,
-      "modified": "2026-07-18T02:19:13.192Z"
+      "size": 149037,
+      "modified": "2026-07-18T08:16:20.953Z"
     },
     {
       "name": "stats-time-range.png",
@@ -1154,8 +908,8 @@
       "type": "screenshot",
       "viewport": "mobile",
       "view": "stats",
-      "size": 138645,
-      "modified": "2026-07-18T02:19:13.192Z"
+      "size": 149565,
+      "modified": "2026-07-18T08:16:20.953Z"
     },
     {
       "name": "stats-top-aircraft.png",
@@ -1163,8 +917,8 @@
       "type": "screenshot",
       "viewport": "mobile",
       "view": "stats",
-      "size": 138946,
-      "modified": "2026-07-18T02:19:13.193Z"
+      "size": 149322,
+      "modified": "2026-07-18T08:16:20.953Z"
     },
     {
       "name": "system-overview.png",
@@ -1172,8 +926,8 @@
       "type": "screenshot",
       "viewport": "mobile",
       "view": "system",
-      "size": 180196,
-      "modified": "2026-07-18T02:19:13.194Z"
+      "size": 197681,
+      "modified": "2026-07-18T08:16:20.953Z"
     },
     {
       "name": "system-services.png",
@@ -1181,62 +935,8 @@
       "type": "screenshot",
       "viewport": "mobile",
       "view": "system",
-      "size": 180196,
-      "modified": "2026-07-18T02:19:13.195Z"
-    },
-    {
-      "name": "nav.png",
-      "path": "nav.png",
-      "type": "screenshot",
-      "viewport": "root",
-      "view": "nav",
-      "size": 892227,
-      "modified": "2025-12-27T07:15:05.000Z"
-    },
-    {
-      "name": "pirep.png",
-      "path": "pirep.png",
-      "type": "screenshot",
-      "viewport": "root",
-      "view": "pirep",
-      "size": 911596,
-      "modified": "2025-12-27T07:15:29.000Z"
-    },
-    {
-      "name": "saftey-1.png",
-      "path": "saftey-1.png",
-      "type": "screenshot",
-      "viewport": "root",
-      "view": "saftey",
-      "size": 2139265,
-      "modified": "2025-12-27T09:44:16.000Z"
-    },
-    {
-      "name": "saftey1.png",
-      "path": "saftey1.png",
-      "type": "screenshot",
-      "viewport": "root",
-      "view": "saftey1",
-      "size": 2139265,
-      "modified": "2025-12-27T09:19:50.000Z"
-    },
-    {
-      "name": "saftey2.png",
-      "path": "saftey2.png",
-      "type": "screenshot",
-      "viewport": "root",
-      "view": "saftey2",
-      "size": 1058793,
-      "modified": "2025-12-27T07:16:49.000Z"
-    },
-    {
-      "name": "stats.png",
-      "path": "stats.png",
-      "type": "screenshot",
-      "viewport": "root",
-      "view": "stats",
-      "size": 2309927,
-      "modified": "2025-12-27T09:36:05.000Z"
+      "size": 200931,
+      "modified": "2026-07-18T08:16:20.953Z"
     },
     {
       "name": "admin-overview.png",
@@ -1244,8 +944,8 @@
       "type": "screenshot",
       "viewport": "tablet",
       "view": "admin",
-      "size": 212051,
-      "modified": "2026-07-18T02:19:13.082Z"
+      "size": 232575,
+      "modified": "2026-07-18T08:16:20.932Z"
     },
     {
       "name": "aircraft-list-column-menu.png",
@@ -1253,8 +953,8 @@
       "type": "screenshot",
       "viewport": "tablet",
       "view": "aircraft",
-      "size": 411252,
-      "modified": "2026-07-18T02:19:13.083Z"
+      "size": 487550,
+      "modified": "2026-07-18T08:16:20.932Z"
     },
     {
       "name": "aircraft-list-filtered.png",
@@ -1262,8 +962,8 @@
       "type": "screenshot",
       "viewport": "tablet",
       "view": "aircraft",
-      "size": 195645,
-      "modified": "2026-07-18T02:19:13.084Z"
+      "size": 215133,
+      "modified": "2026-07-18T08:16:20.932Z"
     },
     {
       "name": "aircraft-list-mobile.png",
@@ -1271,8 +971,8 @@
       "type": "screenshot",
       "viewport": "tablet",
       "view": "aircraft",
-      "size": 407545,
-      "modified": "2026-07-18T02:19:13.084Z"
+      "size": 483693,
+      "modified": "2026-07-18T08:16:20.932Z"
     },
     {
       "name": "aircraft-list-row-expanded.png",
@@ -1280,8 +980,8 @@
       "type": "screenshot",
       "viewport": "tablet",
       "view": "aircraft",
-      "size": 410995,
-      "modified": "2026-07-18T02:19:13.086Z"
+      "size": 488207,
+      "modified": "2026-07-18T08:16:20.933Z"
     },
     {
       "name": "aircraft-list-sorted.png",
@@ -1289,8 +989,8 @@
       "type": "screenshot",
       "viewport": "tablet",
       "view": "aircraft",
-      "size": 408969,
-      "modified": "2026-07-18T02:19:13.087Z"
+      "size": 490364,
+      "modified": "2026-07-18T08:16:20.933Z"
     },
     {
       "name": "aircraft-list-table.png",
@@ -1298,8 +998,8 @@
       "type": "screenshot",
       "viewport": "tablet",
       "view": "aircraft",
-      "size": 411306,
-      "modified": "2026-07-18T02:19:13.088Z"
+      "size": 487561,
+      "modified": "2026-07-18T08:16:20.933Z"
     },
     {
       "name": "airframe-communications-tab.png",
@@ -1307,8 +1007,8 @@
       "type": "screenshot",
       "viewport": "tablet",
       "view": "airframe",
-      "size": 537131,
-      "modified": "2026-07-18T02:19:13.089Z"
+      "size": 601665,
+      "modified": "2026-07-18T08:16:20.934Z"
     },
     {
       "name": "airframe-info-tab.png",
@@ -1316,8 +1016,8 @@
       "type": "screenshot",
       "viewport": "tablet",
       "view": "airframe",
-      "size": 539344,
-      "modified": "2026-07-18T02:19:13.091Z"
+      "size": 601252,
+      "modified": "2026-07-18T08:16:20.934Z"
     },
     {
       "name": "airframe-overview.png",
@@ -1325,8 +1025,8 @@
       "type": "screenshot",
       "viewport": "tablet",
       "view": "airframe",
-      "size": 541137,
-      "modified": "2026-07-18T02:19:13.091Z"
+      "size": 602287,
+      "modified": "2026-07-18T08:16:20.934Z"
     },
     {
       "name": "airframe-safety-tab.png",
@@ -1334,8 +1034,8 @@
       "type": "screenshot",
       "viewport": "tablet",
       "view": "airframe",
-      "size": 537020,
-      "modified": "2026-07-18T02:19:13.092Z"
+      "size": 601293,
+      "modified": "2026-07-18T08:16:20.935Z"
     },
     {
       "name": "airframe-track-tab.png",
@@ -1343,17 +1043,17 @@
       "type": "screenshot",
       "viewport": "tablet",
       "view": "airframe",
-      "size": 547276,
-      "modified": "2026-07-18T02:19:13.094Z"
+      "size": 600877,
+      "modified": "2026-07-18T08:16:20.935Z"
     },
     {
-      "name": "alerts-condition-form.png",
-      "path": "tablet/alerts-condition-form.png",
+      "name": "alerts-history.png",
+      "path": "tablet/alerts-history.png",
       "type": "screenshot",
       "viewport": "tablet",
       "view": "alerts",
-      "size": 345611,
-      "modified": "2026-07-18T02:19:13.095Z"
+      "size": 162055,
+      "modified": "2026-07-18T08:16:20.935Z"
     },
     {
       "name": "alerts-notification-settings.png",
@@ -1361,8 +1061,8 @@
       "type": "screenshot",
       "viewport": "tablet",
       "view": "alerts",
-      "size": 169400,
-      "modified": "2026-07-18T02:19:13.096Z"
+      "size": 198406,
+      "modified": "2026-07-18T08:16:20.935Z"
     },
     {
       "name": "alerts-rule-builder.png",
@@ -1370,8 +1070,8 @@
       "type": "screenshot",
       "viewport": "tablet",
       "view": "alerts",
-      "size": 345102,
-      "modified": "2026-07-18T02:19:13.096Z"
+      "size": 346914,
+      "modified": "2026-07-18T08:16:20.935Z"
     },
     {
       "name": "alerts-rules-list.png",
@@ -1379,26 +1079,17 @@
       "type": "screenshot",
       "viewport": "tablet",
       "view": "alerts",
-      "size": 169400,
-      "modified": "2026-07-18T02:19:13.097Z"
+      "size": 189757,
+      "modified": "2026-07-18T08:16:20.936Z"
     },
     {
-      "name": "alerts-test-modal.png",
-      "path": "tablet/alerts-test-modal.png",
-      "type": "screenshot",
-      "viewport": "tablet",
-      "view": "alerts",
-      "size": 169400,
-      "modified": "2026-07-18T02:19:13.098Z"
-    },
-    {
-      "name": "analytics-geographic.png",
-      "path": "tablet/analytics-geographic.png",
+      "name": "analytics-military.png",
+      "path": "tablet/analytics-military.png",
       "type": "screenshot",
       "viewport": "tablet",
       "view": "analytics",
-      "size": 340495,
-      "modified": "2026-07-18T02:19:13.099Z"
+      "size": 359728,
+      "modified": "2026-07-18T08:16:20.936Z"
     },
     {
       "name": "analytics-overview.png",
@@ -1406,8 +1097,8 @@
       "type": "screenshot",
       "viewport": "tablet",
       "view": "analytics",
-      "size": 340495,
-      "modified": "2026-07-18T02:19:13.100Z"
+      "size": 359919,
+      "modified": "2026-07-18T08:16:20.936Z"
     },
     {
       "name": "assistant-overview.png",
@@ -1416,7 +1107,7 @@
       "viewport": "tablet",
       "view": "assistant",
       "size": 364893,
-      "modified": "2026-07-18T06:50:14.609Z"
+      "modified": "2026-07-18T08:16:20.936Z"
     },
     {
       "name": "assistant-prompt.png",
@@ -1425,7 +1116,7 @@
       "viewport": "tablet",
       "view": "assistant",
       "size": 370408,
-      "modified": "2026-07-18T06:50:14.611Z"
+      "modified": "2026-07-18T08:16:20.936Z"
     },
     {
       "name": "audio-emergency.png",
@@ -1433,17 +1124,8 @@
       "type": "screenshot",
       "viewport": "tablet",
       "view": "audio",
-      "size": 172884,
-      "modified": "2026-07-18T02:19:13.101Z"
-    },
-    {
-      "name": "audio-filters.png",
-      "path": "tablet/audio-filters.png",
-      "type": "screenshot",
-      "viewport": "tablet",
-      "view": "audio",
-      "size": 172884,
-      "modified": "2026-07-18T02:19:13.102Z"
+      "size": 225954,
+      "modified": "2026-07-18T08:16:20.937Z"
     },
     {
       "name": "audio-list.png",
@@ -1451,35 +1133,8 @@
       "type": "screenshot",
       "viewport": "tablet",
       "view": "audio",
-      "size": 172884,
-      "modified": "2026-07-18T02:19:13.102Z"
-    },
-    {
-      "name": "audio-playback.png",
-      "path": "tablet/audio-playback.png",
-      "type": "screenshot",
-      "viewport": "tablet",
-      "view": "audio",
-      "size": 172884,
-      "modified": "2026-07-18T02:19:13.104Z"
-    },
-    {
-      "name": "audio-transcript.png",
-      "path": "tablet/audio-transcript.png",
-      "type": "screenshot",
-      "viewport": "tablet",
-      "view": "audio",
-      "size": 172884,
-      "modified": "2026-07-18T02:19:13.105Z"
-    },
-    {
-      "name": "audio-with-stats.png",
-      "path": "tablet/audio-with-stats.png",
-      "type": "screenshot",
-      "viewport": "tablet",
-      "view": "audio",
-      "size": 172884,
-      "modified": "2026-07-18T02:19:13.105Z"
+      "size": 279413,
+      "modified": "2026-07-18T08:16:20.937Z"
     },
     {
       "name": "cannonball-hud.png",
@@ -1487,8 +1142,8 @@
       "type": "screenshot",
       "viewport": "tablet",
       "view": "cannonball",
-      "size": 1339348,
-      "modified": "2026-07-18T02:19:13.107Z"
+      "size": 1340809,
+      "modified": "2026-07-18T08:16:20.937Z"
     },
     {
       "name": "cannonball-mobile-hud.png",
@@ -1496,26 +1151,17 @@
       "type": "screenshot",
       "viewport": "tablet",
       "view": "cannonball",
-      "size": 1338675,
-      "modified": "2026-07-18T02:19:13.109Z"
+      "size": 1339986,
+      "modified": "2026-07-18T08:16:20.938Z"
     },
     {
-      "name": "cannonball-radar-view.png",
-      "path": "tablet/cannonball-radar-view.png",
+      "name": "cannonball-scan.png",
+      "path": "tablet/cannonball-scan.png",
       "type": "screenshot",
       "viewport": "tablet",
       "view": "cannonball",
-      "size": 1339348,
-      "modified": "2026-07-18T02:19:13.111Z"
-    },
-    {
-      "name": "cannonball-settings.png",
-      "path": "tablet/cannonball-settings.png",
-      "type": "screenshot",
-      "viewport": "tablet",
-      "view": "cannonball",
-      "size": 1340049,
-      "modified": "2026-07-18T02:19:13.113Z"
+      "size": 1351916,
+      "modified": "2026-07-18T08:16:20.938Z"
     },
     {
       "name": "history-acars.png",
@@ -1523,17 +1169,8 @@
       "type": "screenshot",
       "viewport": "tablet",
       "view": "history",
-      "size": 329016,
-      "modified": "2026-07-18T06:50:14.612Z"
-    },
-    {
-      "name": "history-analytics.png",
-      "path": "tablet/history-analytics.png",
-      "type": "screenshot",
-      "viewport": "tablet",
-      "view": "history",
-      "size": 371574,
-      "modified": "2026-07-18T06:50:14.614Z"
+      "size": 329302,
+      "modified": "2026-07-18T08:16:20.938Z"
     },
     {
       "name": "history-archive.png",
@@ -1541,17 +1178,8 @@
       "type": "screenshot",
       "viewport": "tablet",
       "view": "history",
-      "size": 527506,
-      "modified": "2026-07-18T06:50:14.615Z"
-    },
-    {
-      "name": "history-date-picker.png",
-      "path": "tablet/history-date-picker.png",
-      "type": "screenshot",
-      "viewport": "tablet",
-      "view": "history",
-      "size": 371574,
-      "modified": "2026-07-18T06:50:14.616Z"
+      "size": 528304,
+      "modified": "2026-07-18T08:16:20.939Z"
     },
     {
       "name": "history-notams.png",
@@ -1559,8 +1187,8 @@
       "type": "screenshot",
       "viewport": "tablet",
       "view": "history",
-      "size": 299441,
-      "modified": "2026-07-18T06:50:14.617Z"
+      "size": 297453,
+      "modified": "2026-07-18T08:16:20.939Z"
     },
     {
       "name": "history-pireps.png",
@@ -1568,8 +1196,8 @@
       "type": "screenshot",
       "viewport": "tablet",
       "view": "history",
-      "size": 216958,
-      "modified": "2026-07-18T06:50:14.617Z"
+      "size": 216239,
+      "modified": "2026-07-18T08:16:20.939Z"
     },
     {
       "name": "history-safety-events.png",
@@ -1577,17 +1205,8 @@
       "type": "screenshot",
       "viewport": "tablet",
       "view": "history",
-      "size": 501368,
-      "modified": "2026-07-18T06:50:14.618Z"
-    },
-    {
-      "name": "history-session-detail.png",
-      "path": "tablet/history-session-detail.png",
-      "type": "screenshot",
-      "viewport": "tablet",
-      "view": "history",
-      "size": 371574,
-      "modified": "2026-07-18T06:50:14.619Z"
+      "size": 490071,
+      "modified": "2026-07-18T08:16:20.939Z"
     },
     {
       "name": "history-sessions.png",
@@ -1595,8 +1214,8 @@
       "type": "screenshot",
       "viewport": "tablet",
       "view": "history",
-      "size": 405783,
-      "modified": "2026-07-18T06:50:14.620Z"
+      "size": 392010,
+      "modified": "2026-07-18T08:16:20.940Z"
     },
     {
       "name": "history-sightings.png",
@@ -1604,17 +1223,8 @@
       "type": "screenshot",
       "viewport": "tablet",
       "view": "history",
-      "size": 362281,
-      "modified": "2026-07-18T06:50:14.621Z"
-    },
-    {
-      "name": "history-with-replay.png",
-      "path": "tablet/history-with-replay.png",
-      "type": "screenshot",
-      "viewport": "tablet",
-      "view": "history",
-      "size": 371574,
-      "modified": "2026-07-18T06:50:14.623Z"
+      "size": 361529,
+      "modified": "2026-07-18T08:16:20.940Z"
     },
     {
       "name": "login-form.png",
@@ -1622,8 +1232,8 @@
       "type": "screenshot",
       "viewport": "tablet",
       "view": "login",
-      "size": 2097905,
-      "modified": "2026-07-18T02:19:13.123Z"
+      "size": 2101326,
+      "modified": "2026-07-18T08:16:20.941Z"
     },
     {
       "name": "map-aircraft-popup.png",
@@ -1631,8 +1241,8 @@
       "type": "screenshot",
       "viewport": "tablet",
       "view": "map",
-      "size": 543407,
-      "modified": "2026-07-18T02:19:13.125Z"
+      "size": 597046,
+      "modified": "2026-07-18T08:16:20.941Z"
     },
     {
       "name": "map-emergency-aircraft.png",
@@ -1640,8 +1250,8 @@
       "type": "screenshot",
       "viewport": "tablet",
       "view": "map",
-      "size": 551621,
-      "modified": "2026-07-18T02:19:13.126Z"
+      "size": 592432,
+      "modified": "2026-07-18T08:16:20.942Z"
     },
     {
       "name": "map-filters.png",
@@ -1649,17 +1259,17 @@
       "type": "screenshot",
       "viewport": "tablet",
       "view": "map",
-      "size": 554711,
-      "modified": "2026-07-18T02:19:13.127Z"
+      "size": 564553,
+      "modified": "2026-07-18T08:16:20.942Z"
     },
     {
-      "name": "map-full-controls.png",
-      "path": "tablet/map-full-controls.png",
+      "name": "map-legend.png",
+      "path": "tablet/map-legend.png",
       "type": "screenshot",
       "viewport": "tablet",
       "view": "map",
-      "size": 547332,
-      "modified": "2026-07-18T02:19:13.130Z"
+      "size": 592329,
+      "modified": "2026-07-18T08:16:20.942Z"
     },
     {
       "name": "map-overlays.png",
@@ -1667,8 +1277,8 @@
       "type": "screenshot",
       "viewport": "tablet",
       "view": "map",
-      "size": 551449,
-      "modified": "2026-07-18T02:19:13.131Z"
+      "size": 577067,
+      "modified": "2026-07-18T08:16:20.943Z"
     },
     {
       "name": "map-overview.png",
@@ -1676,8 +1286,8 @@
       "type": "screenshot",
       "viewport": "tablet",
       "view": "map",
-      "size": 555547,
-      "modified": "2026-07-18T02:19:13.132Z"
+      "size": 595108,
+      "modified": "2026-07-18T08:16:20.943Z"
     },
     {
       "name": "safety-event-full.png",
@@ -1685,8 +1295,8 @@
       "type": "screenshot",
       "viewport": "tablet",
       "view": "safety",
-      "size": 535490,
-      "modified": "2026-07-18T02:19:13.134Z"
+      "size": 591927,
+      "modified": "2026-07-18T08:16:20.943Z"
     },
     {
       "name": "safety-event-map.png",
@@ -1694,8 +1304,8 @@
       "type": "screenshot",
       "viewport": "tablet",
       "view": "safety",
-      "size": 547430,
-      "modified": "2026-07-18T02:19:13.135Z"
+      "size": 593147,
+      "modified": "2026-07-18T08:16:20.943Z"
     },
     {
       "name": "stats-cards-overview.png",
@@ -1703,8 +1313,8 @@
       "type": "screenshot",
       "viewport": "tablet",
       "view": "stats",
-      "size": 246915,
-      "modified": "2026-07-18T02:19:13.136Z"
+      "size": 259945,
+      "modified": "2026-07-18T08:16:20.944Z"
     },
     {
       "name": "stats-charts.png",
@@ -1712,8 +1322,8 @@
       "type": "screenshot",
       "viewport": "tablet",
       "view": "stats",
-      "size": 231031,
-      "modified": "2026-07-18T02:19:13.137Z"
+      "size": 244791,
+      "modified": "2026-07-18T08:16:20.944Z"
     },
     {
       "name": "stats-coverage.png",
@@ -1721,8 +1331,8 @@
       "type": "screenshot",
       "viewport": "tablet",
       "view": "stats",
-      "size": 231808,
-      "modified": "2026-07-18T02:19:13.138Z"
+      "size": 246153,
+      "modified": "2026-07-18T08:16:20.944Z"
     },
     {
       "name": "stats-dashboard.png",
@@ -1730,8 +1340,8 @@
       "type": "screenshot",
       "viewport": "tablet",
       "view": "stats",
-      "size": 231504,
-      "modified": "2026-07-18T02:19:13.139Z"
+      "size": 244002,
+      "modified": "2026-07-18T08:16:20.944Z"
     },
     {
       "name": "stats-time-range.png",
@@ -1739,8 +1349,8 @@
       "type": "screenshot",
       "viewport": "tablet",
       "view": "stats",
-      "size": 231783,
-      "modified": "2026-07-18T02:19:13.139Z"
+      "size": 244519,
+      "modified": "2026-07-18T08:16:20.944Z"
     },
     {
       "name": "stats-top-aircraft.png",
@@ -1748,8 +1358,8 @@
       "type": "screenshot",
       "viewport": "tablet",
       "view": "stats",
-      "size": 248470,
-      "modified": "2026-07-18T02:19:13.140Z"
+      "size": 246473,
+      "modified": "2026-07-18T08:16:20.944Z"
     },
     {
       "name": "system-overview.png",
@@ -1757,8 +1367,8 @@
       "type": "screenshot",
       "viewport": "tablet",
       "view": "system",
-      "size": 328493,
-      "modified": "2026-07-18T02:19:13.142Z"
+      "size": 349001,
+      "modified": "2026-07-18T08:16:20.945Z"
     },
     {
       "name": "system-services.png",
@@ -1766,146 +1376,47 @@
       "type": "screenshot",
       "viewport": "tablet",
       "view": "system",
-      "size": 328493,
-      "modified": "2026-07-18T02:19:13.143Z"
+      "size": 348772,
+      "modified": "2026-07-18T08:16:20.945Z"
     }
   ],
   "byViewport": {
-    "root": [
+    "animations": [
       {
-        "name": "aircraft-detail.gif",
-        "path": "aircraft-detail.gif",
+        "name": "assistant-conversation.gif",
+        "path": "animations/assistant-conversation.gif",
         "type": "animation",
-        "viewport": "root",
-        "view": "aircraft",
-        "size": 1613938,
-        "modified": "2025-12-27T07:03:52.000Z"
+        "viewport": "animations",
+        "view": "assistant",
+        "size": 1184012,
+        "modified": "2026-07-18T07:57:38.874Z"
       },
       {
-        "name": "airplane1.png",
-        "path": "airplane1.png",
-        "type": "screenshot",
-        "viewport": "root",
-        "view": "airplane1",
-        "size": 1634353,
-        "modified": "2025-12-27T07:19:25.000Z"
-      },
-      {
-        "name": "airplane2.png",
-        "path": "airplane2.png",
-        "type": "screenshot",
-        "viewport": "root",
-        "view": "airplane2",
-        "size": 1452620,
-        "modified": "2025-12-27T07:19:49.000Z"
-      },
-      {
-        "name": "airplane3.png",
-        "path": "airplane3.png",
-        "type": "screenshot",
-        "viewport": "root",
-        "view": "airplane3",
-        "size": 2297087,
-        "modified": "2025-12-27T09:20:52.000Z"
-      },
-      {
-        "name": "crt-mode.gif",
-        "path": "crt-mode.gif",
+        "name": "assistant-conversation.webp",
+        "path": "animations/assistant-conversation.webp",
         "type": "animation",
-        "viewport": "root",
-        "view": "crt",
-        "size": 5240602,
-        "modified": "2025-12-27T07:03:53.000Z"
+        "viewport": "animations",
+        "view": "assistant",
+        "size": 847786,
+        "modified": "2026-07-18T07:58:43.394Z"
       },
       {
-        "name": "detail.png",
-        "path": "detail.png",
-        "type": "screenshot",
-        "viewport": "root",
-        "view": "detail",
-        "size": 1295275,
-        "modified": "2025-12-27T07:18:20.000Z"
+        "name": "cannonball-radar-sweep.gif",
+        "path": "animations/cannonball-radar-sweep.gif",
+        "type": "animation",
+        "viewport": "animations",
+        "view": "cannonball",
+        "size": 2023309,
+        "modified": "2026-07-18T07:58:43.808Z"
       },
       {
-        "name": "history-1.png",
-        "path": "history-1.png",
-        "type": "screenshot",
-        "viewport": "root",
-        "view": "history",
-        "size": 1927566,
-        "modified": "2025-12-27T09:18:34.000Z"
-      },
-      {
-        "name": "history2.png",
-        "path": "history2.png",
-        "type": "screenshot",
-        "viewport": "root",
-        "view": "history2",
-        "size": 1510849,
-        "modified": "2025-12-27T09:18:57.000Z"
-      },
-      {
-        "name": "list.png",
-        "path": "list.png",
-        "type": "screenshot",
-        "viewport": "root",
-        "view": "list",
-        "size": 604920,
-        "modified": "2025-12-27T07:17:16.000Z"
-      },
-      {
-        "name": "nav.png",
-        "path": "nav.png",
-        "type": "screenshot",
-        "viewport": "root",
-        "view": "nav",
-        "size": 892227,
-        "modified": "2025-12-27T07:15:05.000Z"
-      },
-      {
-        "name": "pirep.png",
-        "path": "pirep.png",
-        "type": "screenshot",
-        "viewport": "root",
-        "view": "pirep",
-        "size": 911596,
-        "modified": "2025-12-27T07:15:29.000Z"
-      },
-      {
-        "name": "saftey-1.png",
-        "path": "saftey-1.png",
-        "type": "screenshot",
-        "viewport": "root",
-        "view": "saftey",
-        "size": 2139265,
-        "modified": "2025-12-27T09:44:16.000Z"
-      },
-      {
-        "name": "saftey1.png",
-        "path": "saftey1.png",
-        "type": "screenshot",
-        "viewport": "root",
-        "view": "saftey1",
-        "size": 2139265,
-        "modified": "2025-12-27T09:19:50.000Z"
-      },
-      {
-        "name": "saftey2.png",
-        "path": "saftey2.png",
-        "type": "screenshot",
-        "viewport": "root",
-        "view": "saftey2",
-        "size": 1058793,
-        "modified": "2025-12-27T07:16:49.000Z"
-      },
-      {
-        "name": "stats.png",
-        "path": "stats.png",
-        "type": "screenshot",
-        "viewport": "root",
-        "view": "stats",
-        "size": 2309927,
-        "modified": "2025-12-27T09:36:05.000Z"
+        "name": "cannonball-radar-sweep.webp",
+        "path": "animations/cannonball-radar-sweep.webp",
+        "type": "animation",
+        "viewport": "animations",
+        "view": "cannonball",
+        "size": 677902,
+        "modified": "2026-07-18T08:00:07.926Z"
       }
     ],
     "desktop": [
@@ -1915,8 +1426,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "admin",
-        "size": 217847,
-        "modified": "2026-07-18T02:19:13.008Z"
+        "size": 235696,
+        "modified": "2026-07-18T08:16:20.913Z"
       },
       {
         "name": "aircraft-list-column-menu.png",
@@ -1924,8 +1435,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "aircraft",
-        "size": 484201,
-        "modified": "2026-07-18T02:19:13.010Z"
+        "size": 547222,
+        "modified": "2026-07-18T08:16:20.914Z"
       },
       {
         "name": "aircraft-list-filtered.png",
@@ -1933,8 +1444,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "aircraft",
-        "size": 217236,
-        "modified": "2026-07-18T02:19:13.010Z"
+        "size": 234814,
+        "modified": "2026-07-18T08:16:20.914Z"
       },
       {
         "name": "aircraft-list-mobile.png",
@@ -1942,8 +1453,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "aircraft",
-        "size": 480143,
-        "modified": "2026-07-18T02:19:13.012Z"
+        "size": 553492,
+        "modified": "2026-07-18T08:16:20.914Z"
       },
       {
         "name": "aircraft-list-row-expanded.png",
@@ -1951,8 +1462,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "aircraft",
-        "size": 481653,
-        "modified": "2026-07-18T02:19:13.014Z"
+        "size": 551035,
+        "modified": "2026-07-18T08:16:20.915Z"
       },
       {
         "name": "aircraft-list-sorted.png",
@@ -1960,8 +1471,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "aircraft",
-        "size": 482050,
-        "modified": "2026-07-18T02:19:13.015Z"
+        "size": 545704,
+        "modified": "2026-07-18T08:16:20.915Z"
       },
       {
         "name": "aircraft-list-table.png",
@@ -1969,8 +1480,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "aircraft",
-        "size": 482406,
-        "modified": "2026-07-18T02:19:13.017Z"
+        "size": 547905,
+        "modified": "2026-07-18T08:16:20.916Z"
       },
       {
         "name": "airframe-communications-tab.png",
@@ -1978,8 +1489,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "airframe",
-        "size": 613860,
-        "modified": "2026-07-18T02:19:13.018Z"
+        "size": 736271,
+        "modified": "2026-07-18T08:16:20.918Z"
       },
       {
         "name": "airframe-info-tab.png",
@@ -1987,8 +1498,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "airframe",
-        "size": 614606,
-        "modified": "2026-07-18T02:19:13.020Z"
+        "size": 738763,
+        "modified": "2026-07-18T08:16:20.918Z"
       },
       {
         "name": "airframe-overview.png",
@@ -1996,8 +1507,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "airframe",
-        "size": 611676,
-        "modified": "2026-07-18T02:19:13.022Z"
+        "size": 738687,
+        "modified": "2026-07-18T08:16:20.920Z"
       },
       {
         "name": "airframe-safety-tab.png",
@@ -2005,8 +1516,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "airframe",
-        "size": 612172,
-        "modified": "2026-07-18T02:19:13.023Z"
+        "size": 736940,
+        "modified": "2026-07-18T08:16:20.921Z"
       },
       {
         "name": "airframe-track-tab.png",
@@ -2014,17 +1525,17 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "airframe",
-        "size": 604182,
-        "modified": "2026-07-18T02:19:13.024Z"
+        "size": 736735,
+        "modified": "2026-07-18T08:16:20.921Z"
       },
       {
-        "name": "alerts-condition-form.png",
-        "path": "desktop/alerts-condition-form.png",
+        "name": "alerts-history.png",
+        "path": "desktop/alerts-history.png",
         "type": "screenshot",
         "viewport": "desktop",
         "view": "alerts",
-        "size": 337018,
-        "modified": "2026-07-18T02:19:13.025Z"
+        "size": 186018,
+        "modified": "2026-07-18T08:16:20.922Z"
       },
       {
         "name": "alerts-notification-settings.png",
@@ -2032,8 +1543,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "alerts",
-        "size": 187220,
-        "modified": "2026-07-18T02:19:13.026Z"
+        "size": 215753,
+        "modified": "2026-07-18T08:16:20.922Z"
       },
       {
         "name": "alerts-rule-builder.png",
@@ -2041,8 +1552,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "alerts",
-        "size": 337018,
-        "modified": "2026-07-18T02:19:13.027Z"
+        "size": 345070,
+        "modified": "2026-07-18T08:16:20.922Z"
       },
       {
         "name": "alerts-rules-list.png",
@@ -2050,26 +1561,17 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "alerts",
-        "size": 187220,
-        "modified": "2026-07-18T02:19:13.028Z"
+        "size": 206778,
+        "modified": "2026-07-18T08:16:20.922Z"
       },
       {
-        "name": "alerts-test-modal.png",
-        "path": "desktop/alerts-test-modal.png",
-        "type": "screenshot",
-        "viewport": "desktop",
-        "view": "alerts",
-        "size": 187220,
-        "modified": "2026-07-18T02:19:13.029Z"
-      },
-      {
-        "name": "analytics-geographic.png",
-        "path": "desktop/analytics-geographic.png",
+        "name": "analytics-military.png",
+        "path": "desktop/analytics-military.png",
         "type": "screenshot",
         "viewport": "desktop",
         "view": "analytics",
-        "size": 431834,
-        "modified": "2026-07-18T02:19:13.030Z"
+        "size": 450464,
+        "modified": "2026-07-18T08:16:20.922Z"
       },
       {
         "name": "analytics-overview.png",
@@ -2077,8 +1579,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "analytics",
-        "size": 432089,
-        "modified": "2026-07-18T02:19:13.031Z"
+        "size": 450543,
+        "modified": "2026-07-18T08:16:20.923Z"
       },
       {
         "name": "assistant-overview.png",
@@ -2086,8 +1588,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "assistant",
-        "size": 411901,
-        "modified": "2026-07-18T06:50:14.594Z"
+        "size": 412122,
+        "modified": "2026-07-18T08:16:20.923Z"
       },
       {
         "name": "assistant-prompt.png",
@@ -2095,8 +1597,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "assistant",
-        "size": 418101,
-        "modified": "2026-07-18T06:50:14.596Z"
+        "size": 417713,
+        "modified": "2026-07-18T08:16:20.923Z"
       },
       {
         "name": "audio-emergency.png",
@@ -2104,17 +1606,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "audio",
-        "size": 197813,
-        "modified": "2026-07-18T02:19:13.034Z"
-      },
-      {
-        "name": "audio-filters.png",
-        "path": "desktop/audio-filters.png",
-        "type": "screenshot",
-        "viewport": "desktop",
-        "view": "audio",
-        "size": 197922,
-        "modified": "2026-07-18T02:19:13.035Z"
+        "size": 244724,
+        "modified": "2026-07-18T08:16:20.923Z"
       },
       {
         "name": "audio-list.png",
@@ -2122,35 +1615,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "audio",
-        "size": 197922,
-        "modified": "2026-07-18T02:19:13.036Z"
-      },
-      {
-        "name": "audio-playback.png",
-        "path": "desktop/audio-playback.png",
-        "type": "screenshot",
-        "viewport": "desktop",
-        "view": "audio",
-        "size": 197922,
-        "modified": "2026-07-18T02:19:13.038Z"
-      },
-      {
-        "name": "audio-transcript.png",
-        "path": "desktop/audio-transcript.png",
-        "type": "screenshot",
-        "viewport": "desktop",
-        "view": "audio",
-        "size": 197813,
-        "modified": "2026-07-18T02:19:13.039Z"
-      },
-      {
-        "name": "audio-with-stats.png",
-        "path": "desktop/audio-with-stats.png",
-        "type": "screenshot",
-        "viewport": "desktop",
-        "view": "audio",
-        "size": 197969,
-        "modified": "2026-07-18T02:19:13.039Z"
+        "size": 292999,
+        "modified": "2026-07-18T08:16:20.923Z"
       },
       {
         "name": "cannonball-hud.png",
@@ -2158,35 +1624,17 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "cannonball",
-        "size": 1390379,
-        "modified": "2026-07-18T02:19:13.041Z"
+        "size": 1383768,
+        "modified": "2026-07-18T08:16:20.924Z"
       },
       {
-        "name": "cannonball-mobile-hud.png",
-        "path": "desktop/cannonball-mobile-hud.png",
+        "name": "cannonball-scan.png",
+        "path": "desktop/cannonball-scan.png",
         "type": "screenshot",
         "viewport": "desktop",
         "view": "cannonball",
-        "size": 1391043,
-        "modified": "2026-07-18T02:19:13.043Z"
-      },
-      {
-        "name": "cannonball-radar-view.png",
-        "path": "desktop/cannonball-radar-view.png",
-        "type": "screenshot",
-        "viewport": "desktop",
-        "view": "cannonball",
-        "size": 1389198,
-        "modified": "2026-07-18T02:19:13.045Z"
-      },
-      {
-        "name": "cannonball-settings.png",
-        "path": "desktop/cannonball-settings.png",
-        "type": "screenshot",
-        "viewport": "desktop",
-        "view": "cannonball",
-        "size": 1389491,
-        "modified": "2026-07-18T02:19:13.047Z"
+        "size": 1399578,
+        "modified": "2026-07-18T08:16:20.924Z"
       },
       {
         "name": "history-acars.png",
@@ -2194,17 +1642,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "history",
-        "size": 339633,
-        "modified": "2026-07-18T06:50:14.597Z"
-      },
-      {
-        "name": "history-analytics.png",
-        "path": "desktop/history-analytics.png",
-        "type": "screenshot",
-        "viewport": "desktop",
-        "view": "history",
-        "size": 523078,
-        "modified": "2026-07-18T06:50:14.598Z"
+        "size": 343654,
+        "modified": "2026-07-18T08:16:20.925Z"
       },
       {
         "name": "history-archive.png",
@@ -2212,17 +1651,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "history",
-        "size": 475275,
-        "modified": "2026-07-18T06:50:14.599Z"
-      },
-      {
-        "name": "history-date-picker.png",
-        "path": "desktop/history-date-picker.png",
-        "type": "screenshot",
-        "viewport": "desktop",
-        "view": "history",
-        "size": 523734,
-        "modified": "2026-07-18T06:50:14.601Z"
+        "size": 486369,
+        "modified": "2026-07-18T08:16:20.925Z"
       },
       {
         "name": "history-notams.png",
@@ -2230,8 +1660,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "history",
-        "size": 295484,
-        "modified": "2026-07-18T06:50:14.601Z"
+        "size": 302303,
+        "modified": "2026-07-18T08:16:20.925Z"
       },
       {
         "name": "history-pireps.png",
@@ -2239,8 +1669,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "history",
-        "size": 232168,
-        "modified": "2026-07-18T06:50:14.602Z"
+        "size": 240341,
+        "modified": "2026-07-18T08:16:20.925Z"
       },
       {
         "name": "history-safety-events.png",
@@ -2248,17 +1678,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "history",
-        "size": 567393,
-        "modified": "2026-07-18T06:50:14.603Z"
-      },
-      {
-        "name": "history-session-detail.png",
-        "path": "desktop/history-session-detail.png",
-        "type": "screenshot",
-        "viewport": "desktop",
-        "view": "history",
-        "size": 523078,
-        "modified": "2026-07-18T06:50:14.604Z"
+        "size": 553776,
+        "modified": "2026-07-18T08:16:20.925Z"
       },
       {
         "name": "history-sessions.png",
@@ -2266,8 +1687,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "history",
-        "size": 522311,
-        "modified": "2026-07-18T06:50:14.605Z"
+        "size": 485671,
+        "modified": "2026-07-18T08:16:20.926Z"
       },
       {
         "name": "history-sightings.png",
@@ -2275,17 +1696,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "history",
-        "size": 388684,
-        "modified": "2026-07-18T06:50:14.606Z"
-      },
-      {
-        "name": "history-with-replay.png",
-        "path": "desktop/history-with-replay.png",
-        "type": "screenshot",
-        "viewport": "desktop",
-        "view": "history",
-        "size": 523592,
-        "modified": "2026-07-18T06:50:14.607Z"
+        "size": 390864,
+        "modified": "2026-07-18T08:16:20.926Z"
       },
       {
         "name": "login-form.png",
@@ -2293,8 +1705,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "login",
-        "size": 1162136,
-        "modified": "2026-07-18T02:19:13.057Z"
+        "size": 1157405,
+        "modified": "2026-07-18T08:16:20.926Z"
       },
       {
         "name": "map-aircraft-popup.png",
@@ -2302,8 +1714,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "map",
-        "size": 612133,
-        "modified": "2026-07-18T02:19:13.059Z"
+        "size": 735532,
+        "modified": "2026-07-18T08:16:20.927Z"
       },
       {
         "name": "map-emergency-aircraft.png",
@@ -2311,8 +1723,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "map",
-        "size": 600485,
-        "modified": "2026-07-18T02:19:13.061Z"
+        "size": 732043,
+        "modified": "2026-07-18T08:16:20.927Z"
       },
       {
         "name": "map-filters.png",
@@ -2320,17 +1732,17 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "map",
-        "size": 598675,
-        "modified": "2026-07-18T02:19:13.062Z"
+        "size": 756552,
+        "modified": "2026-07-18T08:16:20.927Z"
       },
       {
-        "name": "map-full-controls.png",
-        "path": "desktop/map-full-controls.png",
+        "name": "map-legend.png",
+        "path": "desktop/map-legend.png",
         "type": "screenshot",
         "viewport": "desktop",
         "view": "map",
-        "size": 596306,
-        "modified": "2026-07-18T02:19:13.064Z"
+        "size": 731098,
+        "modified": "2026-07-18T08:16:20.928Z"
       },
       {
         "name": "map-overlays.png",
@@ -2338,8 +1750,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "map",
-        "size": 600167,
-        "modified": "2026-07-18T02:19:13.066Z"
+        "size": 770366,
+        "modified": "2026-07-18T08:16:20.928Z"
       },
       {
         "name": "map-overview.png",
@@ -2347,8 +1759,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "map",
-        "size": 604375,
-        "modified": "2026-07-18T02:19:13.067Z"
+        "size": 729947,
+        "modified": "2026-07-18T08:16:20.928Z"
       },
       {
         "name": "safety-event-full.png",
@@ -2356,8 +1768,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "safety",
-        "size": 604136,
-        "modified": "2026-07-18T02:19:13.068Z"
+        "size": 729273,
+        "modified": "2026-07-18T08:16:20.929Z"
       },
       {
         "name": "safety-event-map.png",
@@ -2365,8 +1777,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "safety",
-        "size": 607487,
-        "modified": "2026-07-18T02:19:13.070Z"
+        "size": 732351,
+        "modified": "2026-07-18T08:16:20.930Z"
       },
       {
         "name": "stats-cards-overview.png",
@@ -2374,8 +1786,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "stats",
-        "size": 444578,
-        "modified": "2026-07-18T02:19:13.072Z"
+        "size": 459560,
+        "modified": "2026-07-18T08:16:20.930Z"
       },
       {
         "name": "stats-charts.png",
@@ -2383,8 +1795,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "stats",
-        "size": 478714,
-        "modified": "2026-07-18T02:19:13.073Z"
+        "size": 460051,
+        "modified": "2026-07-18T08:16:20.930Z"
       },
       {
         "name": "stats-coverage.png",
@@ -2392,8 +1804,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "stats",
-        "size": 478292,
-        "modified": "2026-07-18T02:19:13.074Z"
+        "size": 460587,
+        "modified": "2026-07-18T08:16:20.930Z"
       },
       {
         "name": "stats-dashboard.png",
@@ -2401,8 +1813,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "stats",
-        "size": 478513,
-        "modified": "2026-07-18T02:19:13.076Z"
+        "size": 462083,
+        "modified": "2026-07-18T08:16:20.931Z"
       },
       {
         "name": "stats-time-range.png",
@@ -2410,8 +1822,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "stats",
-        "size": 444718,
-        "modified": "2026-07-18T02:19:13.077Z"
+        "size": 459479,
+        "modified": "2026-07-18T08:16:20.931Z"
       },
       {
         "name": "stats-top-aircraft.png",
@@ -2419,8 +1831,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "stats",
-        "size": 477861,
-        "modified": "2026-07-18T02:19:13.078Z"
+        "size": 494054,
+        "modified": "2026-07-18T08:16:20.931Z"
       },
       {
         "name": "system-overview.png",
@@ -2428,8 +1840,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "system",
-        "size": 486773,
-        "modified": "2026-07-18T02:19:13.080Z"
+        "size": 503437,
+        "modified": "2026-07-18T08:16:20.931Z"
       },
       {
         "name": "system-services.png",
@@ -2437,8 +1849,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "system",
-        "size": 486138,
-        "modified": "2026-07-18T02:19:13.081Z"
+        "size": 502171,
+        "modified": "2026-07-18T08:16:20.932Z"
       }
     ],
     "mobile": [
@@ -2448,8 +1860,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "admin",
-        "size": 127846,
-        "modified": "2026-07-18T02:19:13.144Z"
+        "size": 145982,
+        "modified": "2026-07-18T08:16:20.946Z"
       },
       {
         "name": "aircraft-list-column-menu.png",
@@ -2457,8 +1869,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "aircraft",
-        "size": 176050,
-        "modified": "2026-07-18T02:19:13.145Z"
+        "size": 210135,
+        "modified": "2026-07-18T08:16:20.946Z"
       },
       {
         "name": "aircraft-list-filtered.png",
@@ -2466,8 +1878,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "aircraft",
-        "size": 145957,
-        "modified": "2026-07-18T02:19:13.145Z"
+        "size": 161324,
+        "modified": "2026-07-18T08:16:20.946Z"
       },
       {
         "name": "aircraft-list-mobile.png",
@@ -2475,8 +1887,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "aircraft",
-        "size": 176903,
-        "modified": "2026-07-18T02:19:13.146Z"
+        "size": 204826,
+        "modified": "2026-07-18T08:16:20.946Z"
       },
       {
         "name": "aircraft-list-row-expanded.png",
@@ -2484,8 +1896,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "aircraft",
-        "size": 130988,
-        "modified": "2026-07-18T02:19:13.147Z"
+        "size": 203761,
+        "modified": "2026-07-18T08:16:20.946Z"
       },
       {
         "name": "aircraft-list-sorted.png",
@@ -2493,8 +1905,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "aircraft",
-        "size": 176324,
-        "modified": "2026-07-18T02:19:13.147Z"
+        "size": 207539,
+        "modified": "2026-07-18T08:16:20.946Z"
       },
       {
         "name": "aircraft-list-table.png",
@@ -2502,8 +1914,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "aircraft",
-        "size": 175836,
-        "modified": "2026-07-18T02:19:13.148Z"
+        "size": 203394,
+        "modified": "2026-07-18T08:16:20.946Z"
       },
       {
         "name": "airframe-communications-tab.png",
@@ -2511,8 +1923,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "airframe",
-        "size": 241858,
-        "modified": "2026-07-18T02:19:13.149Z"
+        "size": 268309,
+        "modified": "2026-07-18T08:16:20.947Z"
       },
       {
         "name": "airframe-info-tab.png",
@@ -2520,8 +1932,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "airframe",
-        "size": 243236,
-        "modified": "2026-07-18T02:19:13.150Z"
+        "size": 267976,
+        "modified": "2026-07-18T08:16:20.947Z"
       },
       {
         "name": "airframe-overview.png",
@@ -2529,8 +1941,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "airframe",
-        "size": 242467,
-        "modified": "2026-07-18T02:19:13.151Z"
+        "size": 268412,
+        "modified": "2026-07-18T08:16:20.947Z"
       },
       {
         "name": "airframe-safety-tab.png",
@@ -2538,8 +1950,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "airframe",
-        "size": 241757,
-        "modified": "2026-07-18T02:19:13.152Z"
+        "size": 267760,
+        "modified": "2026-07-18T08:16:20.947Z"
       },
       {
         "name": "airframe-track-tab.png",
@@ -2547,17 +1959,17 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "airframe",
-        "size": 243422,
-        "modified": "2026-07-18T02:19:13.152Z"
+        "size": 268082,
+        "modified": "2026-07-18T08:16:20.947Z"
       },
       {
-        "name": "alerts-condition-form.png",
-        "path": "mobile/alerts-condition-form.png",
+        "name": "alerts-history.png",
+        "path": "mobile/alerts-history.png",
         "type": "screenshot",
         "viewport": "mobile",
         "view": "alerts",
-        "size": 147259,
-        "modified": "2026-07-18T02:19:13.153Z"
+        "size": 107844,
+        "modified": "2026-07-18T08:16:20.947Z"
       },
       {
         "name": "alerts-notification-settings.png",
@@ -2565,8 +1977,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "alerts",
-        "size": 112505,
-        "modified": "2026-07-18T02:19:13.154Z"
+        "size": 148385,
+        "modified": "2026-07-18T08:16:20.948Z"
       },
       {
         "name": "alerts-rule-builder.png",
@@ -2574,8 +1986,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "alerts",
-        "size": 147259,
-        "modified": "2026-07-18T02:19:13.155Z"
+        "size": 147308,
+        "modified": "2026-07-18T08:16:20.948Z"
       },
       {
         "name": "alerts-rules-list.png",
@@ -2583,26 +1995,17 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "alerts",
-        "size": 112505,
-        "modified": "2026-07-18T02:19:13.158Z"
+        "size": 130952,
+        "modified": "2026-07-18T08:16:20.948Z"
       },
       {
-        "name": "alerts-test-modal.png",
-        "path": "mobile/alerts-test-modal.png",
-        "type": "screenshot",
-        "viewport": "mobile",
-        "view": "alerts",
-        "size": 112505,
-        "modified": "2026-07-18T02:19:13.159Z"
-      },
-      {
-        "name": "analytics-geographic.png",
-        "path": "mobile/analytics-geographic.png",
+        "name": "analytics-military.png",
+        "path": "mobile/analytics-military.png",
         "type": "screenshot",
         "viewport": "mobile",
         "view": "analytics",
-        "size": 155894,
-        "modified": "2026-07-18T02:19:13.160Z"
+        "size": 174085,
+        "modified": "2026-07-18T08:16:20.948Z"
       },
       {
         "name": "analytics-overview.png",
@@ -2610,8 +2013,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "analytics",
-        "size": 155894,
-        "modified": "2026-07-18T02:19:13.160Z"
+        "size": 173860,
+        "modified": "2026-07-18T08:16:20.948Z"
       },
       {
         "name": "assistant-overview.png",
@@ -2620,7 +2023,7 @@
         "viewport": "mobile",
         "view": "assistant",
         "size": 189020,
-        "modified": "2026-07-18T06:50:14.623Z"
+        "modified": "2026-07-18T08:16:20.948Z"
       },
       {
         "name": "assistant-prompt.png",
@@ -2629,7 +2032,7 @@
         "viewport": "mobile",
         "view": "assistant",
         "size": 193593,
-        "modified": "2026-07-18T06:50:14.624Z"
+        "modified": "2026-07-18T08:16:20.948Z"
       },
       {
         "name": "audio-emergency.png",
@@ -2637,17 +2040,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "audio",
-        "size": 114240,
-        "modified": "2026-07-18T02:19:13.163Z"
-      },
-      {
-        "name": "audio-filters.png",
-        "path": "mobile/audio-filters.png",
-        "type": "screenshot",
-        "viewport": "mobile",
-        "view": "audio",
-        "size": 114240,
-        "modified": "2026-07-18T02:19:13.164Z"
+        "size": 152776,
+        "modified": "2026-07-18T08:16:20.948Z"
       },
       {
         "name": "audio-list.png",
@@ -2655,35 +2049,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "audio",
-        "size": 114240,
-        "modified": "2026-07-18T02:19:13.164Z"
-      },
-      {
-        "name": "audio-playback.png",
-        "path": "mobile/audio-playback.png",
-        "type": "screenshot",
-        "viewport": "mobile",
-        "view": "audio",
-        "size": 114240,
-        "modified": "2026-07-18T02:19:13.165Z"
-      },
-      {
-        "name": "audio-transcript.png",
-        "path": "mobile/audio-transcript.png",
-        "type": "screenshot",
-        "viewport": "mobile",
-        "view": "audio",
-        "size": 114240,
-        "modified": "2026-07-18T02:19:13.166Z"
-      },
-      {
-        "name": "audio-with-stats.png",
-        "path": "mobile/audio-with-stats.png",
-        "type": "screenshot",
-        "viewport": "mobile",
-        "view": "audio",
-        "size": 114240,
-        "modified": "2026-07-18T02:19:13.166Z"
+        "size": 193355,
+        "modified": "2026-07-18T08:16:20.949Z"
       },
       {
         "name": "cannonball-hud.png",
@@ -2691,8 +2058,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "cannonball",
-        "size": 416694,
-        "modified": "2026-07-18T02:19:13.167Z"
+        "size": 417916,
+        "modified": "2026-07-18T08:16:20.949Z"
       },
       {
         "name": "cannonball-mobile-hud.png",
@@ -2700,26 +2067,17 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "cannonball",
-        "size": 417420,
-        "modified": "2026-07-18T02:19:13.170Z"
+        "size": 418135,
+        "modified": "2026-07-18T08:16:20.949Z"
       },
       {
-        "name": "cannonball-radar-view.png",
-        "path": "mobile/cannonball-radar-view.png",
+        "name": "cannonball-scan.png",
+        "path": "mobile/cannonball-scan.png",
         "type": "screenshot",
         "viewport": "mobile",
         "view": "cannonball",
-        "size": 416694,
-        "modified": "2026-07-18T02:19:13.171Z"
-      },
-      {
-        "name": "cannonball-settings.png",
-        "path": "mobile/cannonball-settings.png",
-        "type": "screenshot",
-        "viewport": "mobile",
-        "view": "cannonball",
-        "size": 417499,
-        "modified": "2026-07-18T02:19:13.173Z"
+        "size": 484065,
+        "modified": "2026-07-18T08:16:20.949Z"
       },
       {
         "name": "history-acars.png",
@@ -2727,17 +2085,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "history",
-        "size": 199286,
-        "modified": "2026-07-18T06:50:14.625Z"
-      },
-      {
-        "name": "history-analytics.png",
-        "path": "mobile/history-analytics.png",
-        "type": "screenshot",
-        "viewport": "mobile",
-        "view": "history",
-        "size": 188505,
-        "modified": "2026-07-18T06:50:14.626Z"
+        "size": 199861,
+        "modified": "2026-07-18T08:16:20.949Z"
       },
       {
         "name": "history-archive.png",
@@ -2745,17 +2094,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "history",
-        "size": 137653,
-        "modified": "2026-07-18T06:50:14.627Z"
-      },
-      {
-        "name": "history-date-picker.png",
-        "path": "mobile/history-date-picker.png",
-        "type": "screenshot",
-        "viewport": "mobile",
-        "view": "history",
-        "size": 188505,
-        "modified": "2026-07-18T06:50:14.627Z"
+        "size": 137612,
+        "modified": "2026-07-18T08:16:20.950Z"
       },
       {
         "name": "history-notams.png",
@@ -2763,8 +2103,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "history",
-        "size": 183775,
-        "modified": "2026-07-18T06:50:14.628Z"
+        "size": 183474,
+        "modified": "2026-07-18T08:16:20.950Z"
       },
       {
         "name": "history-pireps.png",
@@ -2772,8 +2112,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "history",
-        "size": 151885,
-        "modified": "2026-07-18T06:50:14.628Z"
+        "size": 151113,
+        "modified": "2026-07-18T08:16:20.950Z"
       },
       {
         "name": "history-safety-events.png",
@@ -2781,17 +2121,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "history",
-        "size": 223786,
-        "modified": "2026-07-18T06:50:14.629Z"
-      },
-      {
-        "name": "history-session-detail.png",
-        "path": "mobile/history-session-detail.png",
-        "type": "screenshot",
-        "viewport": "mobile",
-        "view": "history",
-        "size": 188505,
-        "modified": "2026-07-18T06:50:14.630Z"
+        "size": 218526,
+        "modified": "2026-07-18T08:16:20.950Z"
       },
       {
         "name": "history-sessions.png",
@@ -2799,8 +2130,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "history",
-        "size": 188505,
-        "modified": "2026-07-18T06:50:14.630Z"
+        "size": 188094,
+        "modified": "2026-07-18T08:16:20.950Z"
       },
       {
         "name": "history-sightings.png",
@@ -2808,17 +2139,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "history",
-        "size": 188582,
-        "modified": "2026-07-18T06:50:14.631Z"
-      },
-      {
-        "name": "history-with-replay.png",
-        "path": "mobile/history-with-replay.png",
-        "type": "screenshot",
-        "viewport": "mobile",
-        "view": "history",
-        "size": 188505,
-        "modified": "2026-07-18T06:50:14.632Z"
+        "size": 188260,
+        "modified": "2026-07-18T08:16:20.950Z"
       },
       {
         "name": "login-form.png",
@@ -2826,8 +2148,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "login",
-        "size": 805200,
-        "modified": "2026-07-18T02:19:13.180Z"
+        "size": 813890,
+        "modified": "2026-07-18T08:16:20.951Z"
       },
       {
         "name": "map-aircraft-popup.png",
@@ -2835,8 +2157,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "map",
-        "size": 242839,
-        "modified": "2026-07-18T02:19:13.181Z"
+        "size": 274127,
+        "modified": "2026-07-18T08:16:20.951Z"
       },
       {
         "name": "map-emergency-aircraft.png",
@@ -2844,8 +2166,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "map",
-        "size": 238983,
-        "modified": "2026-07-18T02:19:13.182Z"
+        "size": 270532,
+        "modified": "2026-07-18T08:16:20.951Z"
       },
       {
         "name": "map-filters.png",
@@ -2853,17 +2175,17 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "map",
-        "size": 238535,
-        "modified": "2026-07-18T02:19:13.182Z"
+        "size": 126358,
+        "modified": "2026-07-18T08:16:20.951Z"
       },
       {
-        "name": "map-full-controls.png",
-        "path": "mobile/map-full-controls.png",
+        "name": "map-legend.png",
+        "path": "mobile/map-legend.png",
         "type": "screenshot",
         "viewport": "mobile",
         "view": "map",
-        "size": 237055,
-        "modified": "2026-07-18T02:19:13.184Z"
+        "size": 270808,
+        "modified": "2026-07-18T08:16:20.951Z"
       },
       {
         "name": "map-overlays.png",
@@ -2871,8 +2193,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "map",
-        "size": 238386,
-        "modified": "2026-07-18T02:19:13.185Z"
+        "size": 109079,
+        "modified": "2026-07-18T08:16:20.951Z"
       },
       {
         "name": "map-overview.png",
@@ -2880,8 +2202,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "map",
-        "size": 239535,
-        "modified": "2026-07-18T02:19:13.187Z"
+        "size": 271271,
+        "modified": "2026-07-18T08:16:20.952Z"
       },
       {
         "name": "safety-event-full.png",
@@ -2889,8 +2211,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "safety",
-        "size": 231971,
-        "modified": "2026-07-18T02:19:13.188Z"
+        "size": 271334,
+        "modified": "2026-07-18T08:16:20.952Z"
       },
       {
         "name": "safety-event-map.png",
@@ -2898,8 +2220,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "safety",
-        "size": 237440,
-        "modified": "2026-07-18T02:19:13.189Z"
+        "size": 270881,
+        "modified": "2026-07-18T08:16:20.952Z"
       },
       {
         "name": "stats-cards-overview.png",
@@ -2907,8 +2229,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "stats",
-        "size": 139167,
-        "modified": "2026-07-18T02:19:13.190Z"
+        "size": 148765,
+        "modified": "2026-07-18T08:16:20.952Z"
       },
       {
         "name": "stats-charts.png",
@@ -2916,8 +2238,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "stats",
-        "size": 138640,
-        "modified": "2026-07-18T02:19:13.190Z"
+        "size": 148813,
+        "modified": "2026-07-18T08:16:20.952Z"
       },
       {
         "name": "stats-coverage.png",
@@ -2925,8 +2247,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "stats",
-        "size": 138759,
-        "modified": "2026-07-18T02:19:13.191Z"
+        "size": 148803,
+        "modified": "2026-07-18T08:16:20.952Z"
       },
       {
         "name": "stats-dashboard.png",
@@ -2934,8 +2256,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "stats",
-        "size": 139132,
-        "modified": "2026-07-18T02:19:13.192Z"
+        "size": 149037,
+        "modified": "2026-07-18T08:16:20.953Z"
       },
       {
         "name": "stats-time-range.png",
@@ -2943,8 +2265,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "stats",
-        "size": 138645,
-        "modified": "2026-07-18T02:19:13.192Z"
+        "size": 149565,
+        "modified": "2026-07-18T08:16:20.953Z"
       },
       {
         "name": "stats-top-aircraft.png",
@@ -2952,8 +2274,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "stats",
-        "size": 138946,
-        "modified": "2026-07-18T02:19:13.193Z"
+        "size": 149322,
+        "modified": "2026-07-18T08:16:20.953Z"
       },
       {
         "name": "system-overview.png",
@@ -2961,8 +2283,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "system",
-        "size": 180196,
-        "modified": "2026-07-18T02:19:13.194Z"
+        "size": 197681,
+        "modified": "2026-07-18T08:16:20.953Z"
       },
       {
         "name": "system-services.png",
@@ -2970,8 +2292,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "system",
-        "size": 180196,
-        "modified": "2026-07-18T02:19:13.195Z"
+        "size": 200931,
+        "modified": "2026-07-18T08:16:20.953Z"
       }
     ],
     "tablet": [
@@ -2981,8 +2303,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "admin",
-        "size": 212051,
-        "modified": "2026-07-18T02:19:13.082Z"
+        "size": 232575,
+        "modified": "2026-07-18T08:16:20.932Z"
       },
       {
         "name": "aircraft-list-column-menu.png",
@@ -2990,8 +2312,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "aircraft",
-        "size": 411252,
-        "modified": "2026-07-18T02:19:13.083Z"
+        "size": 487550,
+        "modified": "2026-07-18T08:16:20.932Z"
       },
       {
         "name": "aircraft-list-filtered.png",
@@ -2999,8 +2321,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "aircraft",
-        "size": 195645,
-        "modified": "2026-07-18T02:19:13.084Z"
+        "size": 215133,
+        "modified": "2026-07-18T08:16:20.932Z"
       },
       {
         "name": "aircraft-list-mobile.png",
@@ -3008,8 +2330,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "aircraft",
-        "size": 407545,
-        "modified": "2026-07-18T02:19:13.084Z"
+        "size": 483693,
+        "modified": "2026-07-18T08:16:20.932Z"
       },
       {
         "name": "aircraft-list-row-expanded.png",
@@ -3017,8 +2339,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "aircraft",
-        "size": 410995,
-        "modified": "2026-07-18T02:19:13.086Z"
+        "size": 488207,
+        "modified": "2026-07-18T08:16:20.933Z"
       },
       {
         "name": "aircraft-list-sorted.png",
@@ -3026,8 +2348,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "aircraft",
-        "size": 408969,
-        "modified": "2026-07-18T02:19:13.087Z"
+        "size": 490364,
+        "modified": "2026-07-18T08:16:20.933Z"
       },
       {
         "name": "aircraft-list-table.png",
@@ -3035,8 +2357,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "aircraft",
-        "size": 411306,
-        "modified": "2026-07-18T02:19:13.088Z"
+        "size": 487561,
+        "modified": "2026-07-18T08:16:20.933Z"
       },
       {
         "name": "airframe-communications-tab.png",
@@ -3044,8 +2366,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "airframe",
-        "size": 537131,
-        "modified": "2026-07-18T02:19:13.089Z"
+        "size": 601665,
+        "modified": "2026-07-18T08:16:20.934Z"
       },
       {
         "name": "airframe-info-tab.png",
@@ -3053,8 +2375,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "airframe",
-        "size": 539344,
-        "modified": "2026-07-18T02:19:13.091Z"
+        "size": 601252,
+        "modified": "2026-07-18T08:16:20.934Z"
       },
       {
         "name": "airframe-overview.png",
@@ -3062,8 +2384,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "airframe",
-        "size": 541137,
-        "modified": "2026-07-18T02:19:13.091Z"
+        "size": 602287,
+        "modified": "2026-07-18T08:16:20.934Z"
       },
       {
         "name": "airframe-safety-tab.png",
@@ -3071,8 +2393,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "airframe",
-        "size": 537020,
-        "modified": "2026-07-18T02:19:13.092Z"
+        "size": 601293,
+        "modified": "2026-07-18T08:16:20.935Z"
       },
       {
         "name": "airframe-track-tab.png",
@@ -3080,17 +2402,17 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "airframe",
-        "size": 547276,
-        "modified": "2026-07-18T02:19:13.094Z"
+        "size": 600877,
+        "modified": "2026-07-18T08:16:20.935Z"
       },
       {
-        "name": "alerts-condition-form.png",
-        "path": "tablet/alerts-condition-form.png",
+        "name": "alerts-history.png",
+        "path": "tablet/alerts-history.png",
         "type": "screenshot",
         "viewport": "tablet",
         "view": "alerts",
-        "size": 345611,
-        "modified": "2026-07-18T02:19:13.095Z"
+        "size": 162055,
+        "modified": "2026-07-18T08:16:20.935Z"
       },
       {
         "name": "alerts-notification-settings.png",
@@ -3098,8 +2420,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "alerts",
-        "size": 169400,
-        "modified": "2026-07-18T02:19:13.096Z"
+        "size": 198406,
+        "modified": "2026-07-18T08:16:20.935Z"
       },
       {
         "name": "alerts-rule-builder.png",
@@ -3107,8 +2429,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "alerts",
-        "size": 345102,
-        "modified": "2026-07-18T02:19:13.096Z"
+        "size": 346914,
+        "modified": "2026-07-18T08:16:20.935Z"
       },
       {
         "name": "alerts-rules-list.png",
@@ -3116,26 +2438,17 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "alerts",
-        "size": 169400,
-        "modified": "2026-07-18T02:19:13.097Z"
+        "size": 189757,
+        "modified": "2026-07-18T08:16:20.936Z"
       },
       {
-        "name": "alerts-test-modal.png",
-        "path": "tablet/alerts-test-modal.png",
-        "type": "screenshot",
-        "viewport": "tablet",
-        "view": "alerts",
-        "size": 169400,
-        "modified": "2026-07-18T02:19:13.098Z"
-      },
-      {
-        "name": "analytics-geographic.png",
-        "path": "tablet/analytics-geographic.png",
+        "name": "analytics-military.png",
+        "path": "tablet/analytics-military.png",
         "type": "screenshot",
         "viewport": "tablet",
         "view": "analytics",
-        "size": 340495,
-        "modified": "2026-07-18T02:19:13.099Z"
+        "size": 359728,
+        "modified": "2026-07-18T08:16:20.936Z"
       },
       {
         "name": "analytics-overview.png",
@@ -3143,8 +2456,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "analytics",
-        "size": 340495,
-        "modified": "2026-07-18T02:19:13.100Z"
+        "size": 359919,
+        "modified": "2026-07-18T08:16:20.936Z"
       },
       {
         "name": "assistant-overview.png",
@@ -3153,7 +2466,7 @@
         "viewport": "tablet",
         "view": "assistant",
         "size": 364893,
-        "modified": "2026-07-18T06:50:14.609Z"
+        "modified": "2026-07-18T08:16:20.936Z"
       },
       {
         "name": "assistant-prompt.png",
@@ -3162,7 +2475,7 @@
         "viewport": "tablet",
         "view": "assistant",
         "size": 370408,
-        "modified": "2026-07-18T06:50:14.611Z"
+        "modified": "2026-07-18T08:16:20.936Z"
       },
       {
         "name": "audio-emergency.png",
@@ -3170,17 +2483,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "audio",
-        "size": 172884,
-        "modified": "2026-07-18T02:19:13.101Z"
-      },
-      {
-        "name": "audio-filters.png",
-        "path": "tablet/audio-filters.png",
-        "type": "screenshot",
-        "viewport": "tablet",
-        "view": "audio",
-        "size": 172884,
-        "modified": "2026-07-18T02:19:13.102Z"
+        "size": 225954,
+        "modified": "2026-07-18T08:16:20.937Z"
       },
       {
         "name": "audio-list.png",
@@ -3188,35 +2492,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "audio",
-        "size": 172884,
-        "modified": "2026-07-18T02:19:13.102Z"
-      },
-      {
-        "name": "audio-playback.png",
-        "path": "tablet/audio-playback.png",
-        "type": "screenshot",
-        "viewport": "tablet",
-        "view": "audio",
-        "size": 172884,
-        "modified": "2026-07-18T02:19:13.104Z"
-      },
-      {
-        "name": "audio-transcript.png",
-        "path": "tablet/audio-transcript.png",
-        "type": "screenshot",
-        "viewport": "tablet",
-        "view": "audio",
-        "size": 172884,
-        "modified": "2026-07-18T02:19:13.105Z"
-      },
-      {
-        "name": "audio-with-stats.png",
-        "path": "tablet/audio-with-stats.png",
-        "type": "screenshot",
-        "viewport": "tablet",
-        "view": "audio",
-        "size": 172884,
-        "modified": "2026-07-18T02:19:13.105Z"
+        "size": 279413,
+        "modified": "2026-07-18T08:16:20.937Z"
       },
       {
         "name": "cannonball-hud.png",
@@ -3224,8 +2501,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "cannonball",
-        "size": 1339348,
-        "modified": "2026-07-18T02:19:13.107Z"
+        "size": 1340809,
+        "modified": "2026-07-18T08:16:20.937Z"
       },
       {
         "name": "cannonball-mobile-hud.png",
@@ -3233,26 +2510,17 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "cannonball",
-        "size": 1338675,
-        "modified": "2026-07-18T02:19:13.109Z"
+        "size": 1339986,
+        "modified": "2026-07-18T08:16:20.938Z"
       },
       {
-        "name": "cannonball-radar-view.png",
-        "path": "tablet/cannonball-radar-view.png",
+        "name": "cannonball-scan.png",
+        "path": "tablet/cannonball-scan.png",
         "type": "screenshot",
         "viewport": "tablet",
         "view": "cannonball",
-        "size": 1339348,
-        "modified": "2026-07-18T02:19:13.111Z"
-      },
-      {
-        "name": "cannonball-settings.png",
-        "path": "tablet/cannonball-settings.png",
-        "type": "screenshot",
-        "viewport": "tablet",
-        "view": "cannonball",
-        "size": 1340049,
-        "modified": "2026-07-18T02:19:13.113Z"
+        "size": 1351916,
+        "modified": "2026-07-18T08:16:20.938Z"
       },
       {
         "name": "history-acars.png",
@@ -3260,17 +2528,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "history",
-        "size": 329016,
-        "modified": "2026-07-18T06:50:14.612Z"
-      },
-      {
-        "name": "history-analytics.png",
-        "path": "tablet/history-analytics.png",
-        "type": "screenshot",
-        "viewport": "tablet",
-        "view": "history",
-        "size": 371574,
-        "modified": "2026-07-18T06:50:14.614Z"
+        "size": 329302,
+        "modified": "2026-07-18T08:16:20.938Z"
       },
       {
         "name": "history-archive.png",
@@ -3278,17 +2537,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "history",
-        "size": 527506,
-        "modified": "2026-07-18T06:50:14.615Z"
-      },
-      {
-        "name": "history-date-picker.png",
-        "path": "tablet/history-date-picker.png",
-        "type": "screenshot",
-        "viewport": "tablet",
-        "view": "history",
-        "size": 371574,
-        "modified": "2026-07-18T06:50:14.616Z"
+        "size": 528304,
+        "modified": "2026-07-18T08:16:20.939Z"
       },
       {
         "name": "history-notams.png",
@@ -3296,8 +2546,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "history",
-        "size": 299441,
-        "modified": "2026-07-18T06:50:14.617Z"
+        "size": 297453,
+        "modified": "2026-07-18T08:16:20.939Z"
       },
       {
         "name": "history-pireps.png",
@@ -3305,8 +2555,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "history",
-        "size": 216958,
-        "modified": "2026-07-18T06:50:14.617Z"
+        "size": 216239,
+        "modified": "2026-07-18T08:16:20.939Z"
       },
       {
         "name": "history-safety-events.png",
@@ -3314,17 +2564,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "history",
-        "size": 501368,
-        "modified": "2026-07-18T06:50:14.618Z"
-      },
-      {
-        "name": "history-session-detail.png",
-        "path": "tablet/history-session-detail.png",
-        "type": "screenshot",
-        "viewport": "tablet",
-        "view": "history",
-        "size": 371574,
-        "modified": "2026-07-18T06:50:14.619Z"
+        "size": 490071,
+        "modified": "2026-07-18T08:16:20.939Z"
       },
       {
         "name": "history-sessions.png",
@@ -3332,8 +2573,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "history",
-        "size": 405783,
-        "modified": "2026-07-18T06:50:14.620Z"
+        "size": 392010,
+        "modified": "2026-07-18T08:16:20.940Z"
       },
       {
         "name": "history-sightings.png",
@@ -3341,17 +2582,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "history",
-        "size": 362281,
-        "modified": "2026-07-18T06:50:14.621Z"
-      },
-      {
-        "name": "history-with-replay.png",
-        "path": "tablet/history-with-replay.png",
-        "type": "screenshot",
-        "viewport": "tablet",
-        "view": "history",
-        "size": 371574,
-        "modified": "2026-07-18T06:50:14.623Z"
+        "size": 361529,
+        "modified": "2026-07-18T08:16:20.940Z"
       },
       {
         "name": "login-form.png",
@@ -3359,8 +2591,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "login",
-        "size": 2097905,
-        "modified": "2026-07-18T02:19:13.123Z"
+        "size": 2101326,
+        "modified": "2026-07-18T08:16:20.941Z"
       },
       {
         "name": "map-aircraft-popup.png",
@@ -3368,8 +2600,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "map",
-        "size": 543407,
-        "modified": "2026-07-18T02:19:13.125Z"
+        "size": 597046,
+        "modified": "2026-07-18T08:16:20.941Z"
       },
       {
         "name": "map-emergency-aircraft.png",
@@ -3377,8 +2609,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "map",
-        "size": 551621,
-        "modified": "2026-07-18T02:19:13.126Z"
+        "size": 592432,
+        "modified": "2026-07-18T08:16:20.942Z"
       },
       {
         "name": "map-filters.png",
@@ -3386,17 +2618,17 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "map",
-        "size": 554711,
-        "modified": "2026-07-18T02:19:13.127Z"
+        "size": 564553,
+        "modified": "2026-07-18T08:16:20.942Z"
       },
       {
-        "name": "map-full-controls.png",
-        "path": "tablet/map-full-controls.png",
+        "name": "map-legend.png",
+        "path": "tablet/map-legend.png",
         "type": "screenshot",
         "viewport": "tablet",
         "view": "map",
-        "size": 547332,
-        "modified": "2026-07-18T02:19:13.130Z"
+        "size": 592329,
+        "modified": "2026-07-18T08:16:20.942Z"
       },
       {
         "name": "map-overlays.png",
@@ -3404,8 +2636,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "map",
-        "size": 551449,
-        "modified": "2026-07-18T02:19:13.131Z"
+        "size": 577067,
+        "modified": "2026-07-18T08:16:20.943Z"
       },
       {
         "name": "map-overview.png",
@@ -3413,8 +2645,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "map",
-        "size": 555547,
-        "modified": "2026-07-18T02:19:13.132Z"
+        "size": 595108,
+        "modified": "2026-07-18T08:16:20.943Z"
       },
       {
         "name": "safety-event-full.png",
@@ -3422,8 +2654,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "safety",
-        "size": 535490,
-        "modified": "2026-07-18T02:19:13.134Z"
+        "size": 591927,
+        "modified": "2026-07-18T08:16:20.943Z"
       },
       {
         "name": "safety-event-map.png",
@@ -3431,8 +2663,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "safety",
-        "size": 547430,
-        "modified": "2026-07-18T02:19:13.135Z"
+        "size": 593147,
+        "modified": "2026-07-18T08:16:20.943Z"
       },
       {
         "name": "stats-cards-overview.png",
@@ -3440,8 +2672,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "stats",
-        "size": 246915,
-        "modified": "2026-07-18T02:19:13.136Z"
+        "size": 259945,
+        "modified": "2026-07-18T08:16:20.944Z"
       },
       {
         "name": "stats-charts.png",
@@ -3449,8 +2681,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "stats",
-        "size": 231031,
-        "modified": "2026-07-18T02:19:13.137Z"
+        "size": 244791,
+        "modified": "2026-07-18T08:16:20.944Z"
       },
       {
         "name": "stats-coverage.png",
@@ -3458,8 +2690,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "stats",
-        "size": 231808,
-        "modified": "2026-07-18T02:19:13.138Z"
+        "size": 246153,
+        "modified": "2026-07-18T08:16:20.944Z"
       },
       {
         "name": "stats-dashboard.png",
@@ -3467,8 +2699,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "stats",
-        "size": 231504,
-        "modified": "2026-07-18T02:19:13.139Z"
+        "size": 244002,
+        "modified": "2026-07-18T08:16:20.944Z"
       },
       {
         "name": "stats-time-range.png",
@@ -3476,8 +2708,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "stats",
-        "size": 231783,
-        "modified": "2026-07-18T02:19:13.139Z"
+        "size": 244519,
+        "modified": "2026-07-18T08:16:20.944Z"
       },
       {
         "name": "stats-top-aircraft.png",
@@ -3485,8 +2717,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "stats",
-        "size": 248470,
-        "modified": "2026-07-18T02:19:13.140Z"
+        "size": 246473,
+        "modified": "2026-07-18T08:16:20.944Z"
       },
       {
         "name": "system-overview.png",
@@ -3494,8 +2726,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "system",
-        "size": 328493,
-        "modified": "2026-07-18T02:19:13.142Z"
+        "size": 349001,
+        "modified": "2026-07-18T08:16:20.945Z"
       },
       {
         "name": "system-services.png",
@@ -3503,227 +2735,176 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "system",
-        "size": 328493,
-        "modified": "2026-07-18T02:19:13.143Z"
+        "size": 348772,
+        "modified": "2026-07-18T08:16:20.945Z"
       }
     ]
   },
   "byView": {
-    "aircraft": [
+    "assistant": [
       {
-        "name": "aircraft-detail.gif",
-        "path": "aircraft-detail.gif",
+        "name": "assistant-conversation.gif",
+        "path": "animations/assistant-conversation.gif",
         "type": "animation",
-        "viewport": "root",
-        "view": "aircraft",
-        "size": 1613938,
-        "modified": "2025-12-27T07:03:52.000Z"
+        "viewport": "animations",
+        "view": "assistant",
+        "size": 1184012,
+        "modified": "2026-07-18T07:57:38.874Z"
       },
       {
-        "name": "aircraft-list-column-menu.png",
-        "path": "desktop/aircraft-list-column-menu.png",
-        "type": "screenshot",
-        "viewport": "desktop",
-        "view": "aircraft",
-        "size": 484201,
-        "modified": "2026-07-18T02:19:13.010Z"
-      },
-      {
-        "name": "aircraft-list-filtered.png",
-        "path": "desktop/aircraft-list-filtered.png",
-        "type": "screenshot",
-        "viewport": "desktop",
-        "view": "aircraft",
-        "size": 217236,
-        "modified": "2026-07-18T02:19:13.010Z"
-      },
-      {
-        "name": "aircraft-list-mobile.png",
-        "path": "desktop/aircraft-list-mobile.png",
-        "type": "screenshot",
-        "viewport": "desktop",
-        "view": "aircraft",
-        "size": 480143,
-        "modified": "2026-07-18T02:19:13.012Z"
-      },
-      {
-        "name": "aircraft-list-row-expanded.png",
-        "path": "desktop/aircraft-list-row-expanded.png",
-        "type": "screenshot",
-        "viewport": "desktop",
-        "view": "aircraft",
-        "size": 481653,
-        "modified": "2026-07-18T02:19:13.014Z"
-      },
-      {
-        "name": "aircraft-list-sorted.png",
-        "path": "desktop/aircraft-list-sorted.png",
-        "type": "screenshot",
-        "viewport": "desktop",
-        "view": "aircraft",
-        "size": 482050,
-        "modified": "2026-07-18T02:19:13.015Z"
-      },
-      {
-        "name": "aircraft-list-table.png",
-        "path": "desktop/aircraft-list-table.png",
-        "type": "screenshot",
-        "viewport": "desktop",
-        "view": "aircraft",
-        "size": 482406,
-        "modified": "2026-07-18T02:19:13.017Z"
-      },
-      {
-        "name": "aircraft-list-column-menu.png",
-        "path": "mobile/aircraft-list-column-menu.png",
-        "type": "screenshot",
-        "viewport": "mobile",
-        "view": "aircraft",
-        "size": 176050,
-        "modified": "2026-07-18T02:19:13.145Z"
-      },
-      {
-        "name": "aircraft-list-filtered.png",
-        "path": "mobile/aircraft-list-filtered.png",
-        "type": "screenshot",
-        "viewport": "mobile",
-        "view": "aircraft",
-        "size": 145957,
-        "modified": "2026-07-18T02:19:13.145Z"
-      },
-      {
-        "name": "aircraft-list-mobile.png",
-        "path": "mobile/aircraft-list-mobile.png",
-        "type": "screenshot",
-        "viewport": "mobile",
-        "view": "aircraft",
-        "size": 176903,
-        "modified": "2026-07-18T02:19:13.146Z"
-      },
-      {
-        "name": "aircraft-list-row-expanded.png",
-        "path": "mobile/aircraft-list-row-expanded.png",
-        "type": "screenshot",
-        "viewport": "mobile",
-        "view": "aircraft",
-        "size": 130988,
-        "modified": "2026-07-18T02:19:13.147Z"
-      },
-      {
-        "name": "aircraft-list-sorted.png",
-        "path": "mobile/aircraft-list-sorted.png",
-        "type": "screenshot",
-        "viewport": "mobile",
-        "view": "aircraft",
-        "size": 176324,
-        "modified": "2026-07-18T02:19:13.147Z"
-      },
-      {
-        "name": "aircraft-list-table.png",
-        "path": "mobile/aircraft-list-table.png",
-        "type": "screenshot",
-        "viewport": "mobile",
-        "view": "aircraft",
-        "size": 175836,
-        "modified": "2026-07-18T02:19:13.148Z"
-      },
-      {
-        "name": "aircraft-list-column-menu.png",
-        "path": "tablet/aircraft-list-column-menu.png",
-        "type": "screenshot",
-        "viewport": "tablet",
-        "view": "aircraft",
-        "size": 411252,
-        "modified": "2026-07-18T02:19:13.083Z"
-      },
-      {
-        "name": "aircraft-list-filtered.png",
-        "path": "tablet/aircraft-list-filtered.png",
-        "type": "screenshot",
-        "viewport": "tablet",
-        "view": "aircraft",
-        "size": 195645,
-        "modified": "2026-07-18T02:19:13.084Z"
-      },
-      {
-        "name": "aircraft-list-mobile.png",
-        "path": "tablet/aircraft-list-mobile.png",
-        "type": "screenshot",
-        "viewport": "tablet",
-        "view": "aircraft",
-        "size": 407545,
-        "modified": "2026-07-18T02:19:13.084Z"
-      },
-      {
-        "name": "aircraft-list-row-expanded.png",
-        "path": "tablet/aircraft-list-row-expanded.png",
-        "type": "screenshot",
-        "viewport": "tablet",
-        "view": "aircraft",
-        "size": 410995,
-        "modified": "2026-07-18T02:19:13.086Z"
-      },
-      {
-        "name": "aircraft-list-sorted.png",
-        "path": "tablet/aircraft-list-sorted.png",
-        "type": "screenshot",
-        "viewport": "tablet",
-        "view": "aircraft",
-        "size": 408969,
-        "modified": "2026-07-18T02:19:13.087Z"
-      },
-      {
-        "name": "aircraft-list-table.png",
-        "path": "tablet/aircraft-list-table.png",
-        "type": "screenshot",
-        "viewport": "tablet",
-        "view": "aircraft",
-        "size": 411306,
-        "modified": "2026-07-18T02:19:13.088Z"
-      }
-    ],
-    "airplane1": [
-      {
-        "name": "airplane1.png",
-        "path": "airplane1.png",
-        "type": "screenshot",
-        "viewport": "root",
-        "view": "airplane1",
-        "size": 1634353,
-        "modified": "2025-12-27T07:19:25.000Z"
-      }
-    ],
-    "airplane2": [
-      {
-        "name": "airplane2.png",
-        "path": "airplane2.png",
-        "type": "screenshot",
-        "viewport": "root",
-        "view": "airplane2",
-        "size": 1452620,
-        "modified": "2025-12-27T07:19:49.000Z"
-      }
-    ],
-    "airplane3": [
-      {
-        "name": "airplane3.png",
-        "path": "airplane3.png",
-        "type": "screenshot",
-        "viewport": "root",
-        "view": "airplane3",
-        "size": 2297087,
-        "modified": "2025-12-27T09:20:52.000Z"
-      }
-    ],
-    "crt": [
-      {
-        "name": "crt-mode.gif",
-        "path": "crt-mode.gif",
+        "name": "assistant-conversation.webp",
+        "path": "animations/assistant-conversation.webp",
         "type": "animation",
-        "viewport": "root",
-        "view": "crt",
-        "size": 5240602,
-        "modified": "2025-12-27T07:03:53.000Z"
+        "viewport": "animations",
+        "view": "assistant",
+        "size": 847786,
+        "modified": "2026-07-18T07:58:43.394Z"
+      },
+      {
+        "name": "assistant-overview.png",
+        "path": "desktop/assistant-overview.png",
+        "type": "screenshot",
+        "viewport": "desktop",
+        "view": "assistant",
+        "size": 412122,
+        "modified": "2026-07-18T08:16:20.923Z"
+      },
+      {
+        "name": "assistant-prompt.png",
+        "path": "desktop/assistant-prompt.png",
+        "type": "screenshot",
+        "viewport": "desktop",
+        "view": "assistant",
+        "size": 417713,
+        "modified": "2026-07-18T08:16:20.923Z"
+      },
+      {
+        "name": "assistant-overview.png",
+        "path": "mobile/assistant-overview.png",
+        "type": "screenshot",
+        "viewport": "mobile",
+        "view": "assistant",
+        "size": 189020,
+        "modified": "2026-07-18T08:16:20.948Z"
+      },
+      {
+        "name": "assistant-prompt.png",
+        "path": "mobile/assistant-prompt.png",
+        "type": "screenshot",
+        "viewport": "mobile",
+        "view": "assistant",
+        "size": 193593,
+        "modified": "2026-07-18T08:16:20.948Z"
+      },
+      {
+        "name": "assistant-overview.png",
+        "path": "tablet/assistant-overview.png",
+        "type": "screenshot",
+        "viewport": "tablet",
+        "view": "assistant",
+        "size": 364893,
+        "modified": "2026-07-18T08:16:20.936Z"
+      },
+      {
+        "name": "assistant-prompt.png",
+        "path": "tablet/assistant-prompt.png",
+        "type": "screenshot",
+        "viewport": "tablet",
+        "view": "assistant",
+        "size": 370408,
+        "modified": "2026-07-18T08:16:20.936Z"
+      }
+    ],
+    "cannonball": [
+      {
+        "name": "cannonball-radar-sweep.gif",
+        "path": "animations/cannonball-radar-sweep.gif",
+        "type": "animation",
+        "viewport": "animations",
+        "view": "cannonball",
+        "size": 2023309,
+        "modified": "2026-07-18T07:58:43.808Z"
+      },
+      {
+        "name": "cannonball-radar-sweep.webp",
+        "path": "animations/cannonball-radar-sweep.webp",
+        "type": "animation",
+        "viewport": "animations",
+        "view": "cannonball",
+        "size": 677902,
+        "modified": "2026-07-18T08:00:07.926Z"
+      },
+      {
+        "name": "cannonball-hud.png",
+        "path": "desktop/cannonball-hud.png",
+        "type": "screenshot",
+        "viewport": "desktop",
+        "view": "cannonball",
+        "size": 1383768,
+        "modified": "2026-07-18T08:16:20.924Z"
+      },
+      {
+        "name": "cannonball-scan.png",
+        "path": "desktop/cannonball-scan.png",
+        "type": "screenshot",
+        "viewport": "desktop",
+        "view": "cannonball",
+        "size": 1399578,
+        "modified": "2026-07-18T08:16:20.924Z"
+      },
+      {
+        "name": "cannonball-hud.png",
+        "path": "mobile/cannonball-hud.png",
+        "type": "screenshot",
+        "viewport": "mobile",
+        "view": "cannonball",
+        "size": 417916,
+        "modified": "2026-07-18T08:16:20.949Z"
+      },
+      {
+        "name": "cannonball-mobile-hud.png",
+        "path": "mobile/cannonball-mobile-hud.png",
+        "type": "screenshot",
+        "viewport": "mobile",
+        "view": "cannonball",
+        "size": 418135,
+        "modified": "2026-07-18T08:16:20.949Z"
+      },
+      {
+        "name": "cannonball-scan.png",
+        "path": "mobile/cannonball-scan.png",
+        "type": "screenshot",
+        "viewport": "mobile",
+        "view": "cannonball",
+        "size": 484065,
+        "modified": "2026-07-18T08:16:20.949Z"
+      },
+      {
+        "name": "cannonball-hud.png",
+        "path": "tablet/cannonball-hud.png",
+        "type": "screenshot",
+        "viewport": "tablet",
+        "view": "cannonball",
+        "size": 1340809,
+        "modified": "2026-07-18T08:16:20.937Z"
+      },
+      {
+        "name": "cannonball-mobile-hud.png",
+        "path": "tablet/cannonball-mobile-hud.png",
+        "type": "screenshot",
+        "viewport": "tablet",
+        "view": "cannonball",
+        "size": 1339986,
+        "modified": "2026-07-18T08:16:20.938Z"
+      },
+      {
+        "name": "cannonball-scan.png",
+        "path": "tablet/cannonball-scan.png",
+        "type": "screenshot",
+        "viewport": "tablet",
+        "view": "cannonball",
+        "size": 1351916,
+        "modified": "2026-07-18T08:16:20.938Z"
       }
     ],
     "admin": [
@@ -3733,8 +2914,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "admin",
-        "size": 217847,
-        "modified": "2026-07-18T02:19:13.008Z"
+        "size": 235696,
+        "modified": "2026-07-18T08:16:20.913Z"
       },
       {
         "name": "admin-overview.png",
@@ -3742,8 +2923,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "admin",
-        "size": 127846,
-        "modified": "2026-07-18T02:19:13.144Z"
+        "size": 145982,
+        "modified": "2026-07-18T08:16:20.946Z"
       },
       {
         "name": "admin-overview.png",
@@ -3751,8 +2932,172 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "admin",
-        "size": 212051,
-        "modified": "2026-07-18T02:19:13.082Z"
+        "size": 232575,
+        "modified": "2026-07-18T08:16:20.932Z"
+      }
+    ],
+    "aircraft": [
+      {
+        "name": "aircraft-list-column-menu.png",
+        "path": "desktop/aircraft-list-column-menu.png",
+        "type": "screenshot",
+        "viewport": "desktop",
+        "view": "aircraft",
+        "size": 547222,
+        "modified": "2026-07-18T08:16:20.914Z"
+      },
+      {
+        "name": "aircraft-list-filtered.png",
+        "path": "desktop/aircraft-list-filtered.png",
+        "type": "screenshot",
+        "viewport": "desktop",
+        "view": "aircraft",
+        "size": 234814,
+        "modified": "2026-07-18T08:16:20.914Z"
+      },
+      {
+        "name": "aircraft-list-mobile.png",
+        "path": "desktop/aircraft-list-mobile.png",
+        "type": "screenshot",
+        "viewport": "desktop",
+        "view": "aircraft",
+        "size": 553492,
+        "modified": "2026-07-18T08:16:20.914Z"
+      },
+      {
+        "name": "aircraft-list-row-expanded.png",
+        "path": "desktop/aircraft-list-row-expanded.png",
+        "type": "screenshot",
+        "viewport": "desktop",
+        "view": "aircraft",
+        "size": 551035,
+        "modified": "2026-07-18T08:16:20.915Z"
+      },
+      {
+        "name": "aircraft-list-sorted.png",
+        "path": "desktop/aircraft-list-sorted.png",
+        "type": "screenshot",
+        "viewport": "desktop",
+        "view": "aircraft",
+        "size": 545704,
+        "modified": "2026-07-18T08:16:20.915Z"
+      },
+      {
+        "name": "aircraft-list-table.png",
+        "path": "desktop/aircraft-list-table.png",
+        "type": "screenshot",
+        "viewport": "desktop",
+        "view": "aircraft",
+        "size": 547905,
+        "modified": "2026-07-18T08:16:20.916Z"
+      },
+      {
+        "name": "aircraft-list-column-menu.png",
+        "path": "mobile/aircraft-list-column-menu.png",
+        "type": "screenshot",
+        "viewport": "mobile",
+        "view": "aircraft",
+        "size": 210135,
+        "modified": "2026-07-18T08:16:20.946Z"
+      },
+      {
+        "name": "aircraft-list-filtered.png",
+        "path": "mobile/aircraft-list-filtered.png",
+        "type": "screenshot",
+        "viewport": "mobile",
+        "view": "aircraft",
+        "size": 161324,
+        "modified": "2026-07-18T08:16:20.946Z"
+      },
+      {
+        "name": "aircraft-list-mobile.png",
+        "path": "mobile/aircraft-list-mobile.png",
+        "type": "screenshot",
+        "viewport": "mobile",
+        "view": "aircraft",
+        "size": 204826,
+        "modified": "2026-07-18T08:16:20.946Z"
+      },
+      {
+        "name": "aircraft-list-row-expanded.png",
+        "path": "mobile/aircraft-list-row-expanded.png",
+        "type": "screenshot",
+        "viewport": "mobile",
+        "view": "aircraft",
+        "size": 203761,
+        "modified": "2026-07-18T08:16:20.946Z"
+      },
+      {
+        "name": "aircraft-list-sorted.png",
+        "path": "mobile/aircraft-list-sorted.png",
+        "type": "screenshot",
+        "viewport": "mobile",
+        "view": "aircraft",
+        "size": 207539,
+        "modified": "2026-07-18T08:16:20.946Z"
+      },
+      {
+        "name": "aircraft-list-table.png",
+        "path": "mobile/aircraft-list-table.png",
+        "type": "screenshot",
+        "viewport": "mobile",
+        "view": "aircraft",
+        "size": 203394,
+        "modified": "2026-07-18T08:16:20.946Z"
+      },
+      {
+        "name": "aircraft-list-column-menu.png",
+        "path": "tablet/aircraft-list-column-menu.png",
+        "type": "screenshot",
+        "viewport": "tablet",
+        "view": "aircraft",
+        "size": 487550,
+        "modified": "2026-07-18T08:16:20.932Z"
+      },
+      {
+        "name": "aircraft-list-filtered.png",
+        "path": "tablet/aircraft-list-filtered.png",
+        "type": "screenshot",
+        "viewport": "tablet",
+        "view": "aircraft",
+        "size": 215133,
+        "modified": "2026-07-18T08:16:20.932Z"
+      },
+      {
+        "name": "aircraft-list-mobile.png",
+        "path": "tablet/aircraft-list-mobile.png",
+        "type": "screenshot",
+        "viewport": "tablet",
+        "view": "aircraft",
+        "size": 483693,
+        "modified": "2026-07-18T08:16:20.932Z"
+      },
+      {
+        "name": "aircraft-list-row-expanded.png",
+        "path": "tablet/aircraft-list-row-expanded.png",
+        "type": "screenshot",
+        "viewport": "tablet",
+        "view": "aircraft",
+        "size": 488207,
+        "modified": "2026-07-18T08:16:20.933Z"
+      },
+      {
+        "name": "aircraft-list-sorted.png",
+        "path": "tablet/aircraft-list-sorted.png",
+        "type": "screenshot",
+        "viewport": "tablet",
+        "view": "aircraft",
+        "size": 490364,
+        "modified": "2026-07-18T08:16:20.933Z"
+      },
+      {
+        "name": "aircraft-list-table.png",
+        "path": "tablet/aircraft-list-table.png",
+        "type": "screenshot",
+        "viewport": "tablet",
+        "view": "aircraft",
+        "size": 487561,
+        "modified": "2026-07-18T08:16:20.933Z"
       }
     ],
     "airframe": [
@@ -3762,8 +3107,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "airframe",
-        "size": 613860,
-        "modified": "2026-07-18T02:19:13.018Z"
+        "size": 736271,
+        "modified": "2026-07-18T08:16:20.918Z"
       },
       {
         "name": "airframe-info-tab.png",
@@ -3771,8 +3116,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "airframe",
-        "size": 614606,
-        "modified": "2026-07-18T02:19:13.020Z"
+        "size": 738763,
+        "modified": "2026-07-18T08:16:20.918Z"
       },
       {
         "name": "airframe-overview.png",
@@ -3780,8 +3125,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "airframe",
-        "size": 611676,
-        "modified": "2026-07-18T02:19:13.022Z"
+        "size": 738687,
+        "modified": "2026-07-18T08:16:20.920Z"
       },
       {
         "name": "airframe-safety-tab.png",
@@ -3789,8 +3134,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "airframe",
-        "size": 612172,
-        "modified": "2026-07-18T02:19:13.023Z"
+        "size": 736940,
+        "modified": "2026-07-18T08:16:20.921Z"
       },
       {
         "name": "airframe-track-tab.png",
@@ -3798,8 +3143,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "airframe",
-        "size": 604182,
-        "modified": "2026-07-18T02:19:13.024Z"
+        "size": 736735,
+        "modified": "2026-07-18T08:16:20.921Z"
       },
       {
         "name": "airframe-communications-tab.png",
@@ -3807,8 +3152,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "airframe",
-        "size": 241858,
-        "modified": "2026-07-18T02:19:13.149Z"
+        "size": 268309,
+        "modified": "2026-07-18T08:16:20.947Z"
       },
       {
         "name": "airframe-info-tab.png",
@@ -3816,8 +3161,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "airframe",
-        "size": 243236,
-        "modified": "2026-07-18T02:19:13.150Z"
+        "size": 267976,
+        "modified": "2026-07-18T08:16:20.947Z"
       },
       {
         "name": "airframe-overview.png",
@@ -3825,8 +3170,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "airframe",
-        "size": 242467,
-        "modified": "2026-07-18T02:19:13.151Z"
+        "size": 268412,
+        "modified": "2026-07-18T08:16:20.947Z"
       },
       {
         "name": "airframe-safety-tab.png",
@@ -3834,8 +3179,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "airframe",
-        "size": 241757,
-        "modified": "2026-07-18T02:19:13.152Z"
+        "size": 267760,
+        "modified": "2026-07-18T08:16:20.947Z"
       },
       {
         "name": "airframe-track-tab.png",
@@ -3843,8 +3188,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "airframe",
-        "size": 243422,
-        "modified": "2026-07-18T02:19:13.152Z"
+        "size": 268082,
+        "modified": "2026-07-18T08:16:20.947Z"
       },
       {
         "name": "airframe-communications-tab.png",
@@ -3852,8 +3197,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "airframe",
-        "size": 537131,
-        "modified": "2026-07-18T02:19:13.089Z"
+        "size": 601665,
+        "modified": "2026-07-18T08:16:20.934Z"
       },
       {
         "name": "airframe-info-tab.png",
@@ -3861,8 +3206,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "airframe",
-        "size": 539344,
-        "modified": "2026-07-18T02:19:13.091Z"
+        "size": 601252,
+        "modified": "2026-07-18T08:16:20.934Z"
       },
       {
         "name": "airframe-overview.png",
@@ -3870,8 +3215,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "airframe",
-        "size": 541137,
-        "modified": "2026-07-18T02:19:13.091Z"
+        "size": 602287,
+        "modified": "2026-07-18T08:16:20.934Z"
       },
       {
         "name": "airframe-safety-tab.png",
@@ -3879,8 +3224,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "airframe",
-        "size": 537020,
-        "modified": "2026-07-18T02:19:13.092Z"
+        "size": 601293,
+        "modified": "2026-07-18T08:16:20.935Z"
       },
       {
         "name": "airframe-track-tab.png",
@@ -3888,19 +3233,19 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "airframe",
-        "size": 547276,
-        "modified": "2026-07-18T02:19:13.094Z"
+        "size": 600877,
+        "modified": "2026-07-18T08:16:20.935Z"
       }
     ],
     "alerts": [
       {
-        "name": "alerts-condition-form.png",
-        "path": "desktop/alerts-condition-form.png",
+        "name": "alerts-history.png",
+        "path": "desktop/alerts-history.png",
         "type": "screenshot",
         "viewport": "desktop",
         "view": "alerts",
-        "size": 337018,
-        "modified": "2026-07-18T02:19:13.025Z"
+        "size": 186018,
+        "modified": "2026-07-18T08:16:20.922Z"
       },
       {
         "name": "alerts-notification-settings.png",
@@ -3908,8 +3253,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "alerts",
-        "size": 187220,
-        "modified": "2026-07-18T02:19:13.026Z"
+        "size": 215753,
+        "modified": "2026-07-18T08:16:20.922Z"
       },
       {
         "name": "alerts-rule-builder.png",
@@ -3917,8 +3262,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "alerts",
-        "size": 337018,
-        "modified": "2026-07-18T02:19:13.027Z"
+        "size": 345070,
+        "modified": "2026-07-18T08:16:20.922Z"
       },
       {
         "name": "alerts-rules-list.png",
@@ -3926,26 +3271,17 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "alerts",
-        "size": 187220,
-        "modified": "2026-07-18T02:19:13.028Z"
+        "size": 206778,
+        "modified": "2026-07-18T08:16:20.922Z"
       },
       {
-        "name": "alerts-test-modal.png",
-        "path": "desktop/alerts-test-modal.png",
-        "type": "screenshot",
-        "viewport": "desktop",
-        "view": "alerts",
-        "size": 187220,
-        "modified": "2026-07-18T02:19:13.029Z"
-      },
-      {
-        "name": "alerts-condition-form.png",
-        "path": "mobile/alerts-condition-form.png",
+        "name": "alerts-history.png",
+        "path": "mobile/alerts-history.png",
         "type": "screenshot",
         "viewport": "mobile",
         "view": "alerts",
-        "size": 147259,
-        "modified": "2026-07-18T02:19:13.153Z"
+        "size": 107844,
+        "modified": "2026-07-18T08:16:20.947Z"
       },
       {
         "name": "alerts-notification-settings.png",
@@ -3953,8 +3289,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "alerts",
-        "size": 112505,
-        "modified": "2026-07-18T02:19:13.154Z"
+        "size": 148385,
+        "modified": "2026-07-18T08:16:20.948Z"
       },
       {
         "name": "alerts-rule-builder.png",
@@ -3962,8 +3298,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "alerts",
-        "size": 147259,
-        "modified": "2026-07-18T02:19:13.155Z"
+        "size": 147308,
+        "modified": "2026-07-18T08:16:20.948Z"
       },
       {
         "name": "alerts-rules-list.png",
@@ -3971,26 +3307,17 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "alerts",
-        "size": 112505,
-        "modified": "2026-07-18T02:19:13.158Z"
+        "size": 130952,
+        "modified": "2026-07-18T08:16:20.948Z"
       },
       {
-        "name": "alerts-test-modal.png",
-        "path": "mobile/alerts-test-modal.png",
-        "type": "screenshot",
-        "viewport": "mobile",
-        "view": "alerts",
-        "size": 112505,
-        "modified": "2026-07-18T02:19:13.159Z"
-      },
-      {
-        "name": "alerts-condition-form.png",
-        "path": "tablet/alerts-condition-form.png",
+        "name": "alerts-history.png",
+        "path": "tablet/alerts-history.png",
         "type": "screenshot",
         "viewport": "tablet",
         "view": "alerts",
-        "size": 345611,
-        "modified": "2026-07-18T02:19:13.095Z"
+        "size": 162055,
+        "modified": "2026-07-18T08:16:20.935Z"
       },
       {
         "name": "alerts-notification-settings.png",
@@ -3998,8 +3325,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "alerts",
-        "size": 169400,
-        "modified": "2026-07-18T02:19:13.096Z"
+        "size": 198406,
+        "modified": "2026-07-18T08:16:20.935Z"
       },
       {
         "name": "alerts-rule-builder.png",
@@ -4007,8 +3334,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "alerts",
-        "size": 345102,
-        "modified": "2026-07-18T02:19:13.096Z"
+        "size": 346914,
+        "modified": "2026-07-18T08:16:20.935Z"
       },
       {
         "name": "alerts-rules-list.png",
@@ -4016,28 +3343,19 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "alerts",
-        "size": 169400,
-        "modified": "2026-07-18T02:19:13.097Z"
-      },
-      {
-        "name": "alerts-test-modal.png",
-        "path": "tablet/alerts-test-modal.png",
-        "type": "screenshot",
-        "viewport": "tablet",
-        "view": "alerts",
-        "size": 169400,
-        "modified": "2026-07-18T02:19:13.098Z"
+        "size": 189757,
+        "modified": "2026-07-18T08:16:20.936Z"
       }
     ],
     "analytics": [
       {
-        "name": "analytics-geographic.png",
-        "path": "desktop/analytics-geographic.png",
+        "name": "analytics-military.png",
+        "path": "desktop/analytics-military.png",
         "type": "screenshot",
         "viewport": "desktop",
         "view": "analytics",
-        "size": 431834,
-        "modified": "2026-07-18T02:19:13.030Z"
+        "size": 450464,
+        "modified": "2026-07-18T08:16:20.922Z"
       },
       {
         "name": "analytics-overview.png",
@@ -4045,17 +3363,17 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "analytics",
-        "size": 432089,
-        "modified": "2026-07-18T02:19:13.031Z"
+        "size": 450543,
+        "modified": "2026-07-18T08:16:20.923Z"
       },
       {
-        "name": "analytics-geographic.png",
-        "path": "mobile/analytics-geographic.png",
+        "name": "analytics-military.png",
+        "path": "mobile/analytics-military.png",
         "type": "screenshot",
         "viewport": "mobile",
         "view": "analytics",
-        "size": 155894,
-        "modified": "2026-07-18T02:19:13.160Z"
+        "size": 174085,
+        "modified": "2026-07-18T08:16:20.948Z"
       },
       {
         "name": "analytics-overview.png",
@@ -4063,17 +3381,17 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "analytics",
-        "size": 155894,
-        "modified": "2026-07-18T02:19:13.160Z"
+        "size": 173860,
+        "modified": "2026-07-18T08:16:20.948Z"
       },
       {
-        "name": "analytics-geographic.png",
-        "path": "tablet/analytics-geographic.png",
+        "name": "analytics-military.png",
+        "path": "tablet/analytics-military.png",
         "type": "screenshot",
         "viewport": "tablet",
         "view": "analytics",
-        "size": 340495,
-        "modified": "2026-07-18T02:19:13.099Z"
+        "size": 359728,
+        "modified": "2026-07-18T08:16:20.936Z"
       },
       {
         "name": "analytics-overview.png",
@@ -4081,64 +3399,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "analytics",
-        "size": 340495,
-        "modified": "2026-07-18T02:19:13.100Z"
-      }
-    ],
-    "assistant": [
-      {
-        "name": "assistant-overview.png",
-        "path": "desktop/assistant-overview.png",
-        "type": "screenshot",
-        "viewport": "desktop",
-        "view": "assistant",
-        "size": 411901,
-        "modified": "2026-07-18T06:50:14.594Z"
-      },
-      {
-        "name": "assistant-prompt.png",
-        "path": "desktop/assistant-prompt.png",
-        "type": "screenshot",
-        "viewport": "desktop",
-        "view": "assistant",
-        "size": 418101,
-        "modified": "2026-07-18T06:50:14.596Z"
-      },
-      {
-        "name": "assistant-overview.png",
-        "path": "mobile/assistant-overview.png",
-        "type": "screenshot",
-        "viewport": "mobile",
-        "view": "assistant",
-        "size": 189020,
-        "modified": "2026-07-18T06:50:14.623Z"
-      },
-      {
-        "name": "assistant-prompt.png",
-        "path": "mobile/assistant-prompt.png",
-        "type": "screenshot",
-        "viewport": "mobile",
-        "view": "assistant",
-        "size": 193593,
-        "modified": "2026-07-18T06:50:14.624Z"
-      },
-      {
-        "name": "assistant-overview.png",
-        "path": "tablet/assistant-overview.png",
-        "type": "screenshot",
-        "viewport": "tablet",
-        "view": "assistant",
-        "size": 364893,
-        "modified": "2026-07-18T06:50:14.609Z"
-      },
-      {
-        "name": "assistant-prompt.png",
-        "path": "tablet/assistant-prompt.png",
-        "type": "screenshot",
-        "viewport": "tablet",
-        "view": "assistant",
-        "size": 370408,
-        "modified": "2026-07-18T06:50:14.611Z"
+        "size": 359919,
+        "modified": "2026-07-18T08:16:20.936Z"
       }
     ],
     "audio": [
@@ -4148,17 +3410,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "audio",
-        "size": 197813,
-        "modified": "2026-07-18T02:19:13.034Z"
-      },
-      {
-        "name": "audio-filters.png",
-        "path": "desktop/audio-filters.png",
-        "type": "screenshot",
-        "viewport": "desktop",
-        "view": "audio",
-        "size": 197922,
-        "modified": "2026-07-18T02:19:13.035Z"
+        "size": 244724,
+        "modified": "2026-07-18T08:16:20.923Z"
       },
       {
         "name": "audio-list.png",
@@ -4166,35 +3419,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "audio",
-        "size": 197922,
-        "modified": "2026-07-18T02:19:13.036Z"
-      },
-      {
-        "name": "audio-playback.png",
-        "path": "desktop/audio-playback.png",
-        "type": "screenshot",
-        "viewport": "desktop",
-        "view": "audio",
-        "size": 197922,
-        "modified": "2026-07-18T02:19:13.038Z"
-      },
-      {
-        "name": "audio-transcript.png",
-        "path": "desktop/audio-transcript.png",
-        "type": "screenshot",
-        "viewport": "desktop",
-        "view": "audio",
-        "size": 197813,
-        "modified": "2026-07-18T02:19:13.039Z"
-      },
-      {
-        "name": "audio-with-stats.png",
-        "path": "desktop/audio-with-stats.png",
-        "type": "screenshot",
-        "viewport": "desktop",
-        "view": "audio",
-        "size": 197969,
-        "modified": "2026-07-18T02:19:13.039Z"
+        "size": 292999,
+        "modified": "2026-07-18T08:16:20.923Z"
       },
       {
         "name": "audio-emergency.png",
@@ -4202,17 +3428,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "audio",
-        "size": 114240,
-        "modified": "2026-07-18T02:19:13.163Z"
-      },
-      {
-        "name": "audio-filters.png",
-        "path": "mobile/audio-filters.png",
-        "type": "screenshot",
-        "viewport": "mobile",
-        "view": "audio",
-        "size": 114240,
-        "modified": "2026-07-18T02:19:13.164Z"
+        "size": 152776,
+        "modified": "2026-07-18T08:16:20.948Z"
       },
       {
         "name": "audio-list.png",
@@ -4220,35 +3437,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "audio",
-        "size": 114240,
-        "modified": "2026-07-18T02:19:13.164Z"
-      },
-      {
-        "name": "audio-playback.png",
-        "path": "mobile/audio-playback.png",
-        "type": "screenshot",
-        "viewport": "mobile",
-        "view": "audio",
-        "size": 114240,
-        "modified": "2026-07-18T02:19:13.165Z"
-      },
-      {
-        "name": "audio-transcript.png",
-        "path": "mobile/audio-transcript.png",
-        "type": "screenshot",
-        "viewport": "mobile",
-        "view": "audio",
-        "size": 114240,
-        "modified": "2026-07-18T02:19:13.166Z"
-      },
-      {
-        "name": "audio-with-stats.png",
-        "path": "mobile/audio-with-stats.png",
-        "type": "screenshot",
-        "viewport": "mobile",
-        "view": "audio",
-        "size": 114240,
-        "modified": "2026-07-18T02:19:13.166Z"
+        "size": 193355,
+        "modified": "2026-07-18T08:16:20.949Z"
       },
       {
         "name": "audio-emergency.png",
@@ -4256,17 +3446,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "audio",
-        "size": 172884,
-        "modified": "2026-07-18T02:19:13.101Z"
-      },
-      {
-        "name": "audio-filters.png",
-        "path": "tablet/audio-filters.png",
-        "type": "screenshot",
-        "viewport": "tablet",
-        "view": "audio",
-        "size": 172884,
-        "modified": "2026-07-18T02:19:13.102Z"
+        "size": 225954,
+        "modified": "2026-07-18T08:16:20.937Z"
       },
       {
         "name": "audio-list.png",
@@ -4274,145 +3455,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "audio",
-        "size": 172884,
-        "modified": "2026-07-18T02:19:13.102Z"
-      },
-      {
-        "name": "audio-playback.png",
-        "path": "tablet/audio-playback.png",
-        "type": "screenshot",
-        "viewport": "tablet",
-        "view": "audio",
-        "size": 172884,
-        "modified": "2026-07-18T02:19:13.104Z"
-      },
-      {
-        "name": "audio-transcript.png",
-        "path": "tablet/audio-transcript.png",
-        "type": "screenshot",
-        "viewport": "tablet",
-        "view": "audio",
-        "size": 172884,
-        "modified": "2026-07-18T02:19:13.105Z"
-      },
-      {
-        "name": "audio-with-stats.png",
-        "path": "tablet/audio-with-stats.png",
-        "type": "screenshot",
-        "viewport": "tablet",
-        "view": "audio",
-        "size": 172884,
-        "modified": "2026-07-18T02:19:13.105Z"
-      }
-    ],
-    "cannonball": [
-      {
-        "name": "cannonball-hud.png",
-        "path": "desktop/cannonball-hud.png",
-        "type": "screenshot",
-        "viewport": "desktop",
-        "view": "cannonball",
-        "size": 1390379,
-        "modified": "2026-07-18T02:19:13.041Z"
-      },
-      {
-        "name": "cannonball-mobile-hud.png",
-        "path": "desktop/cannonball-mobile-hud.png",
-        "type": "screenshot",
-        "viewport": "desktop",
-        "view": "cannonball",
-        "size": 1391043,
-        "modified": "2026-07-18T02:19:13.043Z"
-      },
-      {
-        "name": "cannonball-radar-view.png",
-        "path": "desktop/cannonball-radar-view.png",
-        "type": "screenshot",
-        "viewport": "desktop",
-        "view": "cannonball",
-        "size": 1389198,
-        "modified": "2026-07-18T02:19:13.045Z"
-      },
-      {
-        "name": "cannonball-settings.png",
-        "path": "desktop/cannonball-settings.png",
-        "type": "screenshot",
-        "viewport": "desktop",
-        "view": "cannonball",
-        "size": 1389491,
-        "modified": "2026-07-18T02:19:13.047Z"
-      },
-      {
-        "name": "cannonball-hud.png",
-        "path": "mobile/cannonball-hud.png",
-        "type": "screenshot",
-        "viewport": "mobile",
-        "view": "cannonball",
-        "size": 416694,
-        "modified": "2026-07-18T02:19:13.167Z"
-      },
-      {
-        "name": "cannonball-mobile-hud.png",
-        "path": "mobile/cannonball-mobile-hud.png",
-        "type": "screenshot",
-        "viewport": "mobile",
-        "view": "cannonball",
-        "size": 417420,
-        "modified": "2026-07-18T02:19:13.170Z"
-      },
-      {
-        "name": "cannonball-radar-view.png",
-        "path": "mobile/cannonball-radar-view.png",
-        "type": "screenshot",
-        "viewport": "mobile",
-        "view": "cannonball",
-        "size": 416694,
-        "modified": "2026-07-18T02:19:13.171Z"
-      },
-      {
-        "name": "cannonball-settings.png",
-        "path": "mobile/cannonball-settings.png",
-        "type": "screenshot",
-        "viewport": "mobile",
-        "view": "cannonball",
-        "size": 417499,
-        "modified": "2026-07-18T02:19:13.173Z"
-      },
-      {
-        "name": "cannonball-hud.png",
-        "path": "tablet/cannonball-hud.png",
-        "type": "screenshot",
-        "viewport": "tablet",
-        "view": "cannonball",
-        "size": 1339348,
-        "modified": "2026-07-18T02:19:13.107Z"
-      },
-      {
-        "name": "cannonball-mobile-hud.png",
-        "path": "tablet/cannonball-mobile-hud.png",
-        "type": "screenshot",
-        "viewport": "tablet",
-        "view": "cannonball",
-        "size": 1338675,
-        "modified": "2026-07-18T02:19:13.109Z"
-      },
-      {
-        "name": "cannonball-radar-view.png",
-        "path": "tablet/cannonball-radar-view.png",
-        "type": "screenshot",
-        "viewport": "tablet",
-        "view": "cannonball",
-        "size": 1339348,
-        "modified": "2026-07-18T02:19:13.111Z"
-      },
-      {
-        "name": "cannonball-settings.png",
-        "path": "tablet/cannonball-settings.png",
-        "type": "screenshot",
-        "viewport": "tablet",
-        "view": "cannonball",
-        "size": 1340049,
-        "modified": "2026-07-18T02:19:13.113Z"
+        "size": 279413,
+        "modified": "2026-07-18T08:16:20.937Z"
       }
     ],
     "history": [
@@ -4422,17 +3466,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "history",
-        "size": 339633,
-        "modified": "2026-07-18T06:50:14.597Z"
-      },
-      {
-        "name": "history-analytics.png",
-        "path": "desktop/history-analytics.png",
-        "type": "screenshot",
-        "viewport": "desktop",
-        "view": "history",
-        "size": 523078,
-        "modified": "2026-07-18T06:50:14.598Z"
+        "size": 343654,
+        "modified": "2026-07-18T08:16:20.925Z"
       },
       {
         "name": "history-archive.png",
@@ -4440,17 +3475,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "history",
-        "size": 475275,
-        "modified": "2026-07-18T06:50:14.599Z"
-      },
-      {
-        "name": "history-date-picker.png",
-        "path": "desktop/history-date-picker.png",
-        "type": "screenshot",
-        "viewport": "desktop",
-        "view": "history",
-        "size": 523734,
-        "modified": "2026-07-18T06:50:14.601Z"
+        "size": 486369,
+        "modified": "2026-07-18T08:16:20.925Z"
       },
       {
         "name": "history-notams.png",
@@ -4458,8 +3484,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "history",
-        "size": 295484,
-        "modified": "2026-07-18T06:50:14.601Z"
+        "size": 302303,
+        "modified": "2026-07-18T08:16:20.925Z"
       },
       {
         "name": "history-pireps.png",
@@ -4467,8 +3493,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "history",
-        "size": 232168,
-        "modified": "2026-07-18T06:50:14.602Z"
+        "size": 240341,
+        "modified": "2026-07-18T08:16:20.925Z"
       },
       {
         "name": "history-safety-events.png",
@@ -4476,17 +3502,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "history",
-        "size": 567393,
-        "modified": "2026-07-18T06:50:14.603Z"
-      },
-      {
-        "name": "history-session-detail.png",
-        "path": "desktop/history-session-detail.png",
-        "type": "screenshot",
-        "viewport": "desktop",
-        "view": "history",
-        "size": 523078,
-        "modified": "2026-07-18T06:50:14.604Z"
+        "size": 553776,
+        "modified": "2026-07-18T08:16:20.925Z"
       },
       {
         "name": "history-sessions.png",
@@ -4494,8 +3511,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "history",
-        "size": 522311,
-        "modified": "2026-07-18T06:50:14.605Z"
+        "size": 485671,
+        "modified": "2026-07-18T08:16:20.926Z"
       },
       {
         "name": "history-sightings.png",
@@ -4503,26 +3520,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "history",
-        "size": 388684,
-        "modified": "2026-07-18T06:50:14.606Z"
-      },
-      {
-        "name": "history-with-replay.png",
-        "path": "desktop/history-with-replay.png",
-        "type": "screenshot",
-        "viewport": "desktop",
-        "view": "history",
-        "size": 523592,
-        "modified": "2026-07-18T06:50:14.607Z"
-      },
-      {
-        "name": "history-1.png",
-        "path": "history-1.png",
-        "type": "screenshot",
-        "viewport": "root",
-        "view": "history",
-        "size": 1927566,
-        "modified": "2025-12-27T09:18:34.000Z"
+        "size": 390864,
+        "modified": "2026-07-18T08:16:20.926Z"
       },
       {
         "name": "history-acars.png",
@@ -4530,17 +3529,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "history",
-        "size": 199286,
-        "modified": "2026-07-18T06:50:14.625Z"
-      },
-      {
-        "name": "history-analytics.png",
-        "path": "mobile/history-analytics.png",
-        "type": "screenshot",
-        "viewport": "mobile",
-        "view": "history",
-        "size": 188505,
-        "modified": "2026-07-18T06:50:14.626Z"
+        "size": 199861,
+        "modified": "2026-07-18T08:16:20.949Z"
       },
       {
         "name": "history-archive.png",
@@ -4548,17 +3538,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "history",
-        "size": 137653,
-        "modified": "2026-07-18T06:50:14.627Z"
-      },
-      {
-        "name": "history-date-picker.png",
-        "path": "mobile/history-date-picker.png",
-        "type": "screenshot",
-        "viewport": "mobile",
-        "view": "history",
-        "size": 188505,
-        "modified": "2026-07-18T06:50:14.627Z"
+        "size": 137612,
+        "modified": "2026-07-18T08:16:20.950Z"
       },
       {
         "name": "history-notams.png",
@@ -4566,8 +3547,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "history",
-        "size": 183775,
-        "modified": "2026-07-18T06:50:14.628Z"
+        "size": 183474,
+        "modified": "2026-07-18T08:16:20.950Z"
       },
       {
         "name": "history-pireps.png",
@@ -4575,8 +3556,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "history",
-        "size": 151885,
-        "modified": "2026-07-18T06:50:14.628Z"
+        "size": 151113,
+        "modified": "2026-07-18T08:16:20.950Z"
       },
       {
         "name": "history-safety-events.png",
@@ -4584,17 +3565,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "history",
-        "size": 223786,
-        "modified": "2026-07-18T06:50:14.629Z"
-      },
-      {
-        "name": "history-session-detail.png",
-        "path": "mobile/history-session-detail.png",
-        "type": "screenshot",
-        "viewport": "mobile",
-        "view": "history",
-        "size": 188505,
-        "modified": "2026-07-18T06:50:14.630Z"
+        "size": 218526,
+        "modified": "2026-07-18T08:16:20.950Z"
       },
       {
         "name": "history-sessions.png",
@@ -4602,8 +3574,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "history",
-        "size": 188505,
-        "modified": "2026-07-18T06:50:14.630Z"
+        "size": 188094,
+        "modified": "2026-07-18T08:16:20.950Z"
       },
       {
         "name": "history-sightings.png",
@@ -4611,17 +3583,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "history",
-        "size": 188582,
-        "modified": "2026-07-18T06:50:14.631Z"
-      },
-      {
-        "name": "history-with-replay.png",
-        "path": "mobile/history-with-replay.png",
-        "type": "screenshot",
-        "viewport": "mobile",
-        "view": "history",
-        "size": 188505,
-        "modified": "2026-07-18T06:50:14.632Z"
+        "size": 188260,
+        "modified": "2026-07-18T08:16:20.950Z"
       },
       {
         "name": "history-acars.png",
@@ -4629,17 +3592,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "history",
-        "size": 329016,
-        "modified": "2026-07-18T06:50:14.612Z"
-      },
-      {
-        "name": "history-analytics.png",
-        "path": "tablet/history-analytics.png",
-        "type": "screenshot",
-        "viewport": "tablet",
-        "view": "history",
-        "size": 371574,
-        "modified": "2026-07-18T06:50:14.614Z"
+        "size": 329302,
+        "modified": "2026-07-18T08:16:20.938Z"
       },
       {
         "name": "history-archive.png",
@@ -4647,17 +3601,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "history",
-        "size": 527506,
-        "modified": "2026-07-18T06:50:14.615Z"
-      },
-      {
-        "name": "history-date-picker.png",
-        "path": "tablet/history-date-picker.png",
-        "type": "screenshot",
-        "viewport": "tablet",
-        "view": "history",
-        "size": 371574,
-        "modified": "2026-07-18T06:50:14.616Z"
+        "size": 528304,
+        "modified": "2026-07-18T08:16:20.939Z"
       },
       {
         "name": "history-notams.png",
@@ -4665,8 +3610,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "history",
-        "size": 299441,
-        "modified": "2026-07-18T06:50:14.617Z"
+        "size": 297453,
+        "modified": "2026-07-18T08:16:20.939Z"
       },
       {
         "name": "history-pireps.png",
@@ -4674,8 +3619,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "history",
-        "size": 216958,
-        "modified": "2026-07-18T06:50:14.617Z"
+        "size": 216239,
+        "modified": "2026-07-18T08:16:20.939Z"
       },
       {
         "name": "history-safety-events.png",
@@ -4683,17 +3628,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "history",
-        "size": 501368,
-        "modified": "2026-07-18T06:50:14.618Z"
-      },
-      {
-        "name": "history-session-detail.png",
-        "path": "tablet/history-session-detail.png",
-        "type": "screenshot",
-        "viewport": "tablet",
-        "view": "history",
-        "size": 371574,
-        "modified": "2026-07-18T06:50:14.619Z"
+        "size": 490071,
+        "modified": "2026-07-18T08:16:20.939Z"
       },
       {
         "name": "history-sessions.png",
@@ -4701,8 +3637,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "history",
-        "size": 405783,
-        "modified": "2026-07-18T06:50:14.620Z"
+        "size": 392010,
+        "modified": "2026-07-18T08:16:20.940Z"
       },
       {
         "name": "history-sightings.png",
@@ -4710,17 +3646,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "history",
-        "size": 362281,
-        "modified": "2026-07-18T06:50:14.621Z"
-      },
-      {
-        "name": "history-with-replay.png",
-        "path": "tablet/history-with-replay.png",
-        "type": "screenshot",
-        "viewport": "tablet",
-        "view": "history",
-        "size": 371574,
-        "modified": "2026-07-18T06:50:14.623Z"
+        "size": 361529,
+        "modified": "2026-07-18T08:16:20.940Z"
       }
     ],
     "login": [
@@ -4730,8 +3657,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "login",
-        "size": 1162136,
-        "modified": "2026-07-18T02:19:13.057Z"
+        "size": 1157405,
+        "modified": "2026-07-18T08:16:20.926Z"
       },
       {
         "name": "login-form.png",
@@ -4739,8 +3666,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "login",
-        "size": 805200,
-        "modified": "2026-07-18T02:19:13.180Z"
+        "size": 813890,
+        "modified": "2026-07-18T08:16:20.951Z"
       },
       {
         "name": "login-form.png",
@@ -4748,8 +3675,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "login",
-        "size": 2097905,
-        "modified": "2026-07-18T02:19:13.123Z"
+        "size": 2101326,
+        "modified": "2026-07-18T08:16:20.941Z"
       }
     ],
     "map": [
@@ -4759,8 +3686,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "map",
-        "size": 612133,
-        "modified": "2026-07-18T02:19:13.059Z"
+        "size": 735532,
+        "modified": "2026-07-18T08:16:20.927Z"
       },
       {
         "name": "map-emergency-aircraft.png",
@@ -4768,8 +3695,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "map",
-        "size": 600485,
-        "modified": "2026-07-18T02:19:13.061Z"
+        "size": 732043,
+        "modified": "2026-07-18T08:16:20.927Z"
       },
       {
         "name": "map-filters.png",
@@ -4777,17 +3704,17 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "map",
-        "size": 598675,
-        "modified": "2026-07-18T02:19:13.062Z"
+        "size": 756552,
+        "modified": "2026-07-18T08:16:20.927Z"
       },
       {
-        "name": "map-full-controls.png",
-        "path": "desktop/map-full-controls.png",
+        "name": "map-legend.png",
+        "path": "desktop/map-legend.png",
         "type": "screenshot",
         "viewport": "desktop",
         "view": "map",
-        "size": 596306,
-        "modified": "2026-07-18T02:19:13.064Z"
+        "size": 731098,
+        "modified": "2026-07-18T08:16:20.928Z"
       },
       {
         "name": "map-overlays.png",
@@ -4795,8 +3722,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "map",
-        "size": 600167,
-        "modified": "2026-07-18T02:19:13.066Z"
+        "size": 770366,
+        "modified": "2026-07-18T08:16:20.928Z"
       },
       {
         "name": "map-overview.png",
@@ -4804,8 +3731,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "map",
-        "size": 604375,
-        "modified": "2026-07-18T02:19:13.067Z"
+        "size": 729947,
+        "modified": "2026-07-18T08:16:20.928Z"
       },
       {
         "name": "map-aircraft-popup.png",
@@ -4813,8 +3740,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "map",
-        "size": 242839,
-        "modified": "2026-07-18T02:19:13.181Z"
+        "size": 274127,
+        "modified": "2026-07-18T08:16:20.951Z"
       },
       {
         "name": "map-emergency-aircraft.png",
@@ -4822,8 +3749,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "map",
-        "size": 238983,
-        "modified": "2026-07-18T02:19:13.182Z"
+        "size": 270532,
+        "modified": "2026-07-18T08:16:20.951Z"
       },
       {
         "name": "map-filters.png",
@@ -4831,17 +3758,17 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "map",
-        "size": 238535,
-        "modified": "2026-07-18T02:19:13.182Z"
+        "size": 126358,
+        "modified": "2026-07-18T08:16:20.951Z"
       },
       {
-        "name": "map-full-controls.png",
-        "path": "mobile/map-full-controls.png",
+        "name": "map-legend.png",
+        "path": "mobile/map-legend.png",
         "type": "screenshot",
         "viewport": "mobile",
         "view": "map",
-        "size": 237055,
-        "modified": "2026-07-18T02:19:13.184Z"
+        "size": 270808,
+        "modified": "2026-07-18T08:16:20.951Z"
       },
       {
         "name": "map-overlays.png",
@@ -4849,8 +3776,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "map",
-        "size": 238386,
-        "modified": "2026-07-18T02:19:13.185Z"
+        "size": 109079,
+        "modified": "2026-07-18T08:16:20.951Z"
       },
       {
         "name": "map-overview.png",
@@ -4858,8 +3785,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "map",
-        "size": 239535,
-        "modified": "2026-07-18T02:19:13.187Z"
+        "size": 271271,
+        "modified": "2026-07-18T08:16:20.952Z"
       },
       {
         "name": "map-aircraft-popup.png",
@@ -4867,8 +3794,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "map",
-        "size": 543407,
-        "modified": "2026-07-18T02:19:13.125Z"
+        "size": 597046,
+        "modified": "2026-07-18T08:16:20.941Z"
       },
       {
         "name": "map-emergency-aircraft.png",
@@ -4876,8 +3803,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "map",
-        "size": 551621,
-        "modified": "2026-07-18T02:19:13.126Z"
+        "size": 592432,
+        "modified": "2026-07-18T08:16:20.942Z"
       },
       {
         "name": "map-filters.png",
@@ -4885,17 +3812,17 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "map",
-        "size": 554711,
-        "modified": "2026-07-18T02:19:13.127Z"
+        "size": 564553,
+        "modified": "2026-07-18T08:16:20.942Z"
       },
       {
-        "name": "map-full-controls.png",
-        "path": "tablet/map-full-controls.png",
+        "name": "map-legend.png",
+        "path": "tablet/map-legend.png",
         "type": "screenshot",
         "viewport": "tablet",
         "view": "map",
-        "size": 547332,
-        "modified": "2026-07-18T02:19:13.130Z"
+        "size": 592329,
+        "modified": "2026-07-18T08:16:20.942Z"
       },
       {
         "name": "map-overlays.png",
@@ -4903,8 +3830,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "map",
-        "size": 551449,
-        "modified": "2026-07-18T02:19:13.131Z"
+        "size": 577067,
+        "modified": "2026-07-18T08:16:20.943Z"
       },
       {
         "name": "map-overview.png",
@@ -4912,8 +3839,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "map",
-        "size": 555547,
-        "modified": "2026-07-18T02:19:13.132Z"
+        "size": 595108,
+        "modified": "2026-07-18T08:16:20.943Z"
       }
     ],
     "safety": [
@@ -4923,8 +3850,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "safety",
-        "size": 604136,
-        "modified": "2026-07-18T02:19:13.068Z"
+        "size": 729273,
+        "modified": "2026-07-18T08:16:20.929Z"
       },
       {
         "name": "safety-event-map.png",
@@ -4932,8 +3859,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "safety",
-        "size": 607487,
-        "modified": "2026-07-18T02:19:13.070Z"
+        "size": 732351,
+        "modified": "2026-07-18T08:16:20.930Z"
       },
       {
         "name": "safety-event-full.png",
@@ -4941,8 +3868,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "safety",
-        "size": 231971,
-        "modified": "2026-07-18T02:19:13.188Z"
+        "size": 271334,
+        "modified": "2026-07-18T08:16:20.952Z"
       },
       {
         "name": "safety-event-map.png",
@@ -4950,8 +3877,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "safety",
-        "size": 237440,
-        "modified": "2026-07-18T02:19:13.189Z"
+        "size": 270881,
+        "modified": "2026-07-18T08:16:20.952Z"
       },
       {
         "name": "safety-event-full.png",
@@ -4959,8 +3886,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "safety",
-        "size": 535490,
-        "modified": "2026-07-18T02:19:13.134Z"
+        "size": 591927,
+        "modified": "2026-07-18T08:16:20.943Z"
       },
       {
         "name": "safety-event-map.png",
@@ -4968,8 +3895,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "safety",
-        "size": 547430,
-        "modified": "2026-07-18T02:19:13.135Z"
+        "size": 593147,
+        "modified": "2026-07-18T08:16:20.943Z"
       }
     ],
     "stats": [
@@ -4979,8 +3906,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "stats",
-        "size": 444578,
-        "modified": "2026-07-18T02:19:13.072Z"
+        "size": 459560,
+        "modified": "2026-07-18T08:16:20.930Z"
       },
       {
         "name": "stats-charts.png",
@@ -4988,8 +3915,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "stats",
-        "size": 478714,
-        "modified": "2026-07-18T02:19:13.073Z"
+        "size": 460051,
+        "modified": "2026-07-18T08:16:20.930Z"
       },
       {
         "name": "stats-coverage.png",
@@ -4997,8 +3924,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "stats",
-        "size": 478292,
-        "modified": "2026-07-18T02:19:13.074Z"
+        "size": 460587,
+        "modified": "2026-07-18T08:16:20.930Z"
       },
       {
         "name": "stats-dashboard.png",
@@ -5006,8 +3933,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "stats",
-        "size": 478513,
-        "modified": "2026-07-18T02:19:13.076Z"
+        "size": 462083,
+        "modified": "2026-07-18T08:16:20.931Z"
       },
       {
         "name": "stats-time-range.png",
@@ -5015,8 +3942,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "stats",
-        "size": 444718,
-        "modified": "2026-07-18T02:19:13.077Z"
+        "size": 459479,
+        "modified": "2026-07-18T08:16:20.931Z"
       },
       {
         "name": "stats-top-aircraft.png",
@@ -5024,8 +3951,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "stats",
-        "size": 477861,
-        "modified": "2026-07-18T02:19:13.078Z"
+        "size": 494054,
+        "modified": "2026-07-18T08:16:20.931Z"
       },
       {
         "name": "stats-cards-overview.png",
@@ -5033,8 +3960,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "stats",
-        "size": 139167,
-        "modified": "2026-07-18T02:19:13.190Z"
+        "size": 148765,
+        "modified": "2026-07-18T08:16:20.952Z"
       },
       {
         "name": "stats-charts.png",
@@ -5042,8 +3969,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "stats",
-        "size": 138640,
-        "modified": "2026-07-18T02:19:13.190Z"
+        "size": 148813,
+        "modified": "2026-07-18T08:16:20.952Z"
       },
       {
         "name": "stats-coverage.png",
@@ -5051,8 +3978,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "stats",
-        "size": 138759,
-        "modified": "2026-07-18T02:19:13.191Z"
+        "size": 148803,
+        "modified": "2026-07-18T08:16:20.952Z"
       },
       {
         "name": "stats-dashboard.png",
@@ -5060,8 +3987,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "stats",
-        "size": 139132,
-        "modified": "2026-07-18T02:19:13.192Z"
+        "size": 149037,
+        "modified": "2026-07-18T08:16:20.953Z"
       },
       {
         "name": "stats-time-range.png",
@@ -5069,8 +3996,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "stats",
-        "size": 138645,
-        "modified": "2026-07-18T02:19:13.192Z"
+        "size": 149565,
+        "modified": "2026-07-18T08:16:20.953Z"
       },
       {
         "name": "stats-top-aircraft.png",
@@ -5078,17 +4005,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "stats",
-        "size": 138946,
-        "modified": "2026-07-18T02:19:13.193Z"
-      },
-      {
-        "name": "stats.png",
-        "path": "stats.png",
-        "type": "screenshot",
-        "viewport": "root",
-        "view": "stats",
-        "size": 2309927,
-        "modified": "2025-12-27T09:36:05.000Z"
+        "size": 149322,
+        "modified": "2026-07-18T08:16:20.953Z"
       },
       {
         "name": "stats-cards-overview.png",
@@ -5096,8 +4014,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "stats",
-        "size": 246915,
-        "modified": "2026-07-18T02:19:13.136Z"
+        "size": 259945,
+        "modified": "2026-07-18T08:16:20.944Z"
       },
       {
         "name": "stats-charts.png",
@@ -5105,8 +4023,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "stats",
-        "size": 231031,
-        "modified": "2026-07-18T02:19:13.137Z"
+        "size": 244791,
+        "modified": "2026-07-18T08:16:20.944Z"
       },
       {
         "name": "stats-coverage.png",
@@ -5114,8 +4032,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "stats",
-        "size": 231808,
-        "modified": "2026-07-18T02:19:13.138Z"
+        "size": 246153,
+        "modified": "2026-07-18T08:16:20.944Z"
       },
       {
         "name": "stats-dashboard.png",
@@ -5123,8 +4041,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "stats",
-        "size": 231504,
-        "modified": "2026-07-18T02:19:13.139Z"
+        "size": 244002,
+        "modified": "2026-07-18T08:16:20.944Z"
       },
       {
         "name": "stats-time-range.png",
@@ -5132,8 +4050,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "stats",
-        "size": 231783,
-        "modified": "2026-07-18T02:19:13.139Z"
+        "size": 244519,
+        "modified": "2026-07-18T08:16:20.944Z"
       },
       {
         "name": "stats-top-aircraft.png",
@@ -5141,8 +4059,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "stats",
-        "size": 248470,
-        "modified": "2026-07-18T02:19:13.140Z"
+        "size": 246473,
+        "modified": "2026-07-18T08:16:20.944Z"
       }
     ],
     "system": [
@@ -5152,8 +4070,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "system",
-        "size": 486773,
-        "modified": "2026-07-18T02:19:13.080Z"
+        "size": 503437,
+        "modified": "2026-07-18T08:16:20.931Z"
       },
       {
         "name": "system-services.png",
@@ -5161,8 +4079,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "system",
-        "size": 486138,
-        "modified": "2026-07-18T02:19:13.081Z"
+        "size": 502171,
+        "modified": "2026-07-18T08:16:20.932Z"
       },
       {
         "name": "system-overview.png",
@@ -5170,8 +4088,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "system",
-        "size": 180196,
-        "modified": "2026-07-18T02:19:13.194Z"
+        "size": 197681,
+        "modified": "2026-07-18T08:16:20.953Z"
       },
       {
         "name": "system-services.png",
@@ -5179,8 +4097,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "system",
-        "size": 180196,
-        "modified": "2026-07-18T02:19:13.195Z"
+        "size": 200931,
+        "modified": "2026-07-18T08:16:20.953Z"
       },
       {
         "name": "system-overview.png",
@@ -5188,8 +4106,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "system",
-        "size": 328493,
-        "modified": "2026-07-18T02:19:13.142Z"
+        "size": 349001,
+        "modified": "2026-07-18T08:16:20.945Z"
       },
       {
         "name": "system-services.png",
@@ -5197,96 +4115,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "system",
-        "size": 328493,
-        "modified": "2026-07-18T02:19:13.143Z"
-      }
-    ],
-    "detail": [
-      {
-        "name": "detail.png",
-        "path": "detail.png",
-        "type": "screenshot",
-        "viewport": "root",
-        "view": "detail",
-        "size": 1295275,
-        "modified": "2025-12-27T07:18:20.000Z"
-      }
-    ],
-    "history2": [
-      {
-        "name": "history2.png",
-        "path": "history2.png",
-        "type": "screenshot",
-        "viewport": "root",
-        "view": "history2",
-        "size": 1510849,
-        "modified": "2025-12-27T09:18:57.000Z"
-      }
-    ],
-    "list": [
-      {
-        "name": "list.png",
-        "path": "list.png",
-        "type": "screenshot",
-        "viewport": "root",
-        "view": "list",
-        "size": 604920,
-        "modified": "2025-12-27T07:17:16.000Z"
-      }
-    ],
-    "nav": [
-      {
-        "name": "nav.png",
-        "path": "nav.png",
-        "type": "screenshot",
-        "viewport": "root",
-        "view": "nav",
-        "size": 892227,
-        "modified": "2025-12-27T07:15:05.000Z"
-      }
-    ],
-    "pirep": [
-      {
-        "name": "pirep.png",
-        "path": "pirep.png",
-        "type": "screenshot",
-        "viewport": "root",
-        "view": "pirep",
-        "size": 911596,
-        "modified": "2025-12-27T07:15:29.000Z"
-      }
-    ],
-    "saftey": [
-      {
-        "name": "saftey-1.png",
-        "path": "saftey-1.png",
-        "type": "screenshot",
-        "viewport": "root",
-        "view": "saftey",
-        "size": 2139265,
-        "modified": "2025-12-27T09:44:16.000Z"
-      }
-    ],
-    "saftey1": [
-      {
-        "name": "saftey1.png",
-        "path": "saftey1.png",
-        "type": "screenshot",
-        "viewport": "root",
-        "view": "saftey1",
-        "size": 2139265,
-        "modified": "2025-12-27T09:19:50.000Z"
-      }
-    ],
-    "saftey2": [
-      {
-        "name": "saftey2.png",
-        "path": "saftey2.png",
-        "type": "screenshot",
-        "viewport": "root",
-        "view": "saftey2",
-        "size": 1058793,
-        "modified": "2025-12-27T07:16:49.000Z"
+        "size": 348772,
+        "modified": "2026-07-18T08:16:20.945Z"
       }
     ]
   }

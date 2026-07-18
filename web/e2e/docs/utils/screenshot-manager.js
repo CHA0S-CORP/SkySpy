@@ -107,17 +107,29 @@ export class ScreenshotManager {
         timeout: 15000,
       });
 
-      // Wait for tiles to load (optional)
-      await this.page.waitForFunction(
-        () => {
-          const tiles = document.querySelectorAll('.leaflet-tile-loaded');
-          return tiles.length >= 4;
-        },
-        { timeout: 10000 }
-      ).catch(() => {});
+      // Wait for basemap tiles to actually load. This must NOT be swallowed
+      // silently — a blank (tile-less) map is the #1 doc-screenshot defect.
+      // Give the CDN generous time, then assert we got a real basemap.
+      const tilesLoaded = await this.page
+        .waitForFunction(
+          () => document.querySelectorAll('.leaflet-tile-loaded').length >= 8,
+          { timeout: 30000 }
+        )
+        .then(() => true)
+        .catch(() => false);
 
-      // Wait for markers to render
-      await this.page.waitForTimeout(1000);
+      if (!tilesLoaded) {
+        const count = await this.page
+          .evaluate(() => document.querySelectorAll('.leaflet-tile-loaded').length)
+          .catch(() => 0);
+        console.warn(
+          `[docs] WARNING: basemap tiles did not load (only ${count} tiles) — ` +
+            'map screenshot will be blank. Check network access to the tile CDN.'
+        );
+      }
+
+      // Settle: let tiles paint and markers render.
+      await this.page.waitForTimeout(1500);
 
       // Wait for any loading overlays to disappear
       await this.page
@@ -248,7 +260,11 @@ export class ScreenshotManager {
    * Prepare page for screenshot (common setup)
    */
   async prepare() {
-    // Disable animations
+    // Disable animations. NOTE: forcing `transition-duration: 0s` breaks
+    // Leaflet's tile fade-in — Leaflet clears the tile's opacity via the
+    // `transitionend` event, which never fires when the duration is 0, so tiles
+    // get stuck at opacity:0 and the map renders as a blank #ddd container.
+    // The `.leaflet-tile` override below keeps the basemap visible.
     await this.page.addStyleTag({
       content: `
         *, *::before, *::after {
@@ -256,6 +272,11 @@ export class ScreenshotManager {
           animation-delay: 0s !important;
           transition-duration: 0s !important;
           transition-delay: 0s !important;
+        }
+        .leaflet-tile,
+        .leaflet-fade-anim .leaflet-tile,
+        .leaflet-fade-anim .leaflet-tile-container {
+          opacity: 1 !important;
         }
       `,
     });

@@ -127,6 +127,14 @@ export function screenshotState(page) {
             transition-duration: 0s !important;
             transition-delay: 0s !important;
           }
+          /* Forcing transitions to 0s stalls Leaflet's tile fade (its
+             transitionend handler never fires), leaving tiles at opacity:0 and
+             the basemap blank. Keep tiles opaque. */
+          .leaflet-tile,
+          .leaflet-fade-anim .leaflet-tile,
+          .leaflet-fade-anim .leaflet-tile-container {
+            opacity: 1 !important;
+          }
         `,
       });
     },

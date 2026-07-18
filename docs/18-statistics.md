@@ -1329,7 +1329,7 @@ socket.emit('stats.request', {
 ### Advanced Analytics
 
 <!-- SCREENSHOTS:analytics:START -->
-![Analytics Geographic](screenshots/desktop/analytics-geographic.png)
+![Analytics Military](screenshots/desktop/analytics-military.png)
 ![Analytics Overview](screenshots/desktop/analytics-overview.png)
 
 <sub>Also captured for: mobile, tablet (see `docs/screenshots/`).</sub>

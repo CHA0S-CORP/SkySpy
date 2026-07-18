@@ -1,25 +1,22 @@
 // @ts-check
-import { test, expect, docMockData } from '../fixtures/doc-test-setup.js';
+import { test, docMockData } from '../fixtures/doc-test-setup.js';
 
 /**
  * Map View Documentation Screenshots
  *
- * Captures:
- * - Map overview with aircraft markers
- * - Aircraft popup/tooltip
- * - Map overlays (weather, airspace)
- * - Conflict/safety banner
+ * The v2 Live Map (`[data-testid="lm-live-map"]`) is a Leaflet map on a CARTO
+ * dark basemap with a toolbar of `.lm__tbtn` buttons:
+ *   - lm-filters-btn  (aria "Traffic filters")
+ *   - lm-layers-btn   (aria "Map layers")
+ *   - aria "Legend" / "Recenter on feeder" / "Fullscreen"
+ * waitForMapReady() now asserts the basemap tiles actually loaded, so these are
+ * no longer blank-canvas captures.
  */
 
 test.describe('Map View Screenshots', () => {
-  test.beforeEach(async ({ page, docMockApi,screenshotState }) => {
-    // Set up all mocks
+  test.beforeEach(async ({ page, docMockApi, screenshotState }) => {
     await docMockApi.setupAllMocks();
-
-    // Prepare page for screenshots
     await screenshotState.setupForScreenshot();
-
-    // Navigate to map view
     await page.goto('/#map');
     await page.waitForLoadState('domcontentloaded');
   });
@@ -27,101 +24,85 @@ test.describe('Map View Screenshots', () => {
   test('map-overview', async ({ page, screenshotHelper }) => {
     await screenshotHelper.waitForMapReady();
     await screenshotHelper.prepare();
-
     await screenshotHelper.capture('map-overview', {
-      description: 'Main map view showing aircraft positions and coverage area',
+      description: 'Live map showing aircraft positions over the coverage area',
     });
   });
 
-  test('map-aircraft-popup', async ({ page, screenshotHelper,screenshotState }) => {
+  test('map-aircraft-popup', async ({ page, screenshotHelper }) => {
     await screenshotHelper.waitForMapReady();
     await screenshotHelper.prepare();
 
-    // Click on an aircraft marker to show popup
-    // Look for aircraft marker icons
-    const markers = page.locator('.leaflet-marker-icon, .aircraft-marker, [data-aircraft-hex]');
-    const markerCount = await markers.count();
-
-    if (markerCount > 0) {
-      // Click on first visible marker
+    // Click a rendered aircraft marker to open its info popup.
+    const markers = page.locator('.leaflet-marker-icon, [data-aircraft-hex]');
+    if ((await markers.count()) > 0) {
       await markers.first().click({ force: true });
-      await page.waitForTimeout(500);
+      await page.waitForTimeout(600);
     }
 
     await screenshotHelper.capture('map-aircraft-popup', {
-      description: 'Aircraft information popup showing flight details',
-    });
-  });
-
-  test('map-overlays', async ({ page, screenshotHelper }) => {
-    await screenshotHelper.waitForMapReady();
-    await screenshotHelper.prepare();
-
-    // Open overlay menu if available
-    const overlayButton = page.locator('[data-testid="overlay-menu"], [aria-label*="overlay"], .overlay-toggle');
-    if (await overlayButton.isVisible()) {
-      await overlayButton.click();
-      await page.waitForTimeout(300);
-    }
-
-    await screenshotHelper.capture('map-overlays', {
-      description: 'Map overlay menu showing available layers',
+      description: 'Aircraft popup showing flight details',
     });
   });
 
   test('map-filters', async ({ page, screenshotHelper }) => {
     await screenshotHelper.waitForMapReady();
-    await screenshotHelper.prepare();
 
-    // Open filter menu if available
-    const filterButton = page.locator('[data-testid="filter-menu"], [aria-label*="filter"], .filter-toggle');
-    if (await filterButton.isVisible()) {
-      await filterButton.click();
-      await page.waitForTimeout(300);
+    const btn = page.locator('[data-testid="lm-filters-btn"]');
+    if (await btn.isVisible()) {
+      await btn.click();
+      await page.waitForTimeout(400);
     }
 
+    await screenshotHelper.prepare();
     await screenshotHelper.capture('map-filters', {
-      description: 'Aircraft filter menu for customizing display',
+      description: 'Traffic filter panel for customizing which aircraft display',
     });
   });
 
-  test('map-with-emergency', async ({ page, screenshotHelper, docMockApi }) => {
-    // Re-mock with emergency aircraft emphasized
+  test('map-overlays', async ({ page, screenshotHelper }) => {
+    await screenshotHelper.waitForMapReady();
+
+    const btn = page.locator('[data-testid="lm-layers-btn"]');
+    if (await btn.isVisible()) {
+      await btn.click();
+      await page.waitForTimeout(400);
+    }
+
+    await screenshotHelper.prepare();
+    await screenshotHelper.capture('map-overlays', {
+      description: 'Map layers panel (weather, airspace, navaids)',
+    });
+  });
+
+  test('map-legend', async ({ page, screenshotHelper }) => {
+    await screenshotHelper.waitForMapReady();
+
+    const btn = page.locator('button[aria-label="Legend"]');
+    if (await btn.isVisible()) {
+      await btn.click();
+      await page.waitForTimeout(400);
+    }
+
+    await screenshotHelper.prepare();
+    await screenshotHelper.capture('map-legend', {
+      description: 'Map legend explaining aircraft categories and markers',
+    });
+  });
+
+  test('map-with-emergency', async ({ page, screenshotHelper }) => {
     const aircraft = docMockData.generateCuratedAircraft();
     const emergencyAircraft = aircraft.find((a) => a.emergency);
-
     if (emergencyAircraft) {
-      // Ensure emergency aircraft is visible
       await page.evaluate((hex) => {
-        // Dispatch event to highlight/center on emergency aircraft
-        window.dispatchEvent(
-          new CustomEvent('test-highlight-aircraft', { detail: { hex } })
-        );
+        window.dispatchEvent(new CustomEvent('test-highlight-aircraft', { detail: { hex } }));
       }, emergencyAircraft.hex);
     }
 
     await screenshotHelper.waitForMapReady();
     await screenshotHelper.prepare();
-
     await screenshotHelper.capture('map-emergency-aircraft', {
-      description: 'Map highlighting emergency squawk (7700) aircraft',
-    });
-  });
-
-  test('map-controls', async ({ page, screenshotHelper }) => {
-    await screenshotHelper.waitForMapReady();
-    await screenshotHelper.prepare();
-
-    // Capture map controls panel
-    const controls = page.locator('.map-controls, [data-testid="map-controls"]');
-    if (await controls.isVisible()) {
-      await screenshotHelper.captureElement('.map-controls, [data-testid="map-controls"]', 'map-controls-panel', {
-        description: 'Map control buttons for zoom, center, and settings',
-      });
-    }
-
-    await screenshotHelper.capture('map-full-controls', {
-      description: 'Map view with control panel visible',
+      description: 'Map highlighting an emergency squawk (7700) aircraft',
     });
   });
 });

@@ -990,7 +990,7 @@ flowchart LR
 ![Map Aircraft Popup](screenshots/desktop/map-aircraft-popup.png)
 ![Map Emergency Aircraft](screenshots/desktop/map-emergency-aircraft.png)
 ![Map Filters](screenshots/desktop/map-filters.png)
-![Map Full Controls](screenshots/desktop/map-full-controls.png)
+![Map Legend](screenshots/desktop/map-legend.png)
 ![Map Overlays](screenshots/desktop/map-overlays.png)
 ![Map Overview](screenshots/desktop/map-overview.png)
 
