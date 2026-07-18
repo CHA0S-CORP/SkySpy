@@ -8,7 +8,7 @@
   Real-time ADS-B aircraft tracking and monitoring system with a web-based dashboard.
 </p>
 
-![SkySpy Demo](docs/screenshots/map-view.gif)
+![SkySpy Demo](docs/screenshots/desktop/map-overview.png)
 
 ## Overview
 
@@ -93,13 +93,7 @@ Interactive navigation aid markers showing VORs, NDBs, and waypoints with freque
 
 Create custom alert rules with flexible conditions and scheduling.
 
-![Alerts View](docs/screenshots/alerts-view.gif)
-
-### Settings
-
-Configure API endpoints, map display modes, and themes.
-
-![Settings](docs/screenshots/settings.gif)
+![Alerts View](docs/screenshots/desktop/alerts-rules-list.png)
 
 ### Full Interface Gallery
 
