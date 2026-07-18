@@ -120,22 +120,33 @@ class LLMClient:
             "temperature": kwargs.get("temperature", self.temperature),
         }
 
-        # Retry with exponential backoff
+        # Retry with exponential backoff. `attempt` counts genuine tries; a 429
+        # backs off without consuming the attempt budget (bounded separately so a
+        # persistently rate-limited endpoint can't spin forever).
         last_error = None
-        for attempt in range(self.max_retries):
+        _MAX_RATE_LIMIT_WAITS = 5
+        rl_waits = 0
+        attempt = 0
+        while attempt < self.max_retries:
+            is_last = attempt == self.max_retries - 1
             try:
                 _stats["requests"] += 1
 
                 with httpx.Client(timeout=self.timeout) as client:
                     response = client.post(endpoint, headers=headers, json=payload)
 
-                    # Handle rate limiting
+                    # Handle rate limiting — retry without burning an attempt.
                     if response.status_code == 429:
                         _stats["rate_limits"] += 1
-                        retry_after = int(response.headers.get("Retry-After", 2 ** (attempt + 1)))
+                        if rl_waits >= _MAX_RATE_LIMIT_WAITS:
+                            logger.error(f"LLM rate limited {rl_waits}x, giving up")
+                            _stats["failures"] += 1
+                            return None
+                        retry_after = int(response.headers.get("Retry-After", 2 ** (rl_waits + 1)))
                         logger.warning(f"LLM rate limited, waiting {retry_after}s")
                         time.sleep(min(retry_after, 60))
                         _stats["retries"] += 1
+                        rl_waits += 1
                         continue
 
                     response.raise_for_status()
@@ -166,7 +177,8 @@ class LLMClient:
                 last_error = "timeout"
                 logger.warning(f"LLM request timeout (attempt {attempt + 1}/{self.max_retries})")
                 _stats["retries"] += 1
-                time.sleep(2**attempt)
+                if not is_last:
+                    time.sleep(2**attempt)
 
             except httpx.HTTPStatusError as e:
                 last_error = str(e)
@@ -174,7 +186,9 @@ class LLMClient:
                 _stats["failures"] += 1
                 if e.response.status_code >= 500:
                     _stats["retries"] += 1
-                    time.sleep(2**attempt)
+                    if not is_last:
+                        time.sleep(2**attempt)
+                    attempt += 1
                     continue
                 return None
 
@@ -183,6 +197,8 @@ class LLMClient:
                 logger.warning(f"LLM error: {e}")
                 _stats["failures"] += 1
                 return None
+
+            attempt += 1
 
         logger.error(f"LLM request failed after {self.max_retries} retries: {last_error}")
         _stats["failures"] += 1
@@ -222,13 +238,22 @@ class LLMClient:
         if api_key:
             headers["Authorization"] = f"Bearer {api_key}"
 
-        for attempt in range(self.max_retries):
+        _MAX_RATE_LIMIT_WAITS = 5
+        rl_waits = 0
+        attempt = 0
+        while attempt < self.max_retries:
+            is_last = attempt == self.max_retries - 1
             try:
                 with httpx.Client(timeout=self.timeout) as client:
                     response = client.post(endpoint, headers=headers, json={"model": model, "input": texts})
+                    # Rate limit — back off without consuming an attempt (bounded).
                     if response.status_code == 429:
                         _stats["rate_limits"] += 1
-                        time.sleep(min(int(response.headers.get("Retry-After", 2 ** (attempt + 1))), 60))
+                        if rl_waits >= _MAX_RATE_LIMIT_WAITS:
+                            logger.error(f"Embeddings rate limited {rl_waits}x, giving up")
+                            return None
+                        time.sleep(min(int(response.headers.get("Retry-After", 2 ** (rl_waits + 1))), 60))
+                        rl_waits += 1
                         continue
                     response.raise_for_status()
                     data = response.json()
@@ -244,12 +269,16 @@ class LLMClient:
             except httpx.HTTPStatusError as e:
                 logger.warning(f"Embeddings HTTP error: {e.response.status_code}")
                 if e.response.status_code >= 500:
-                    time.sleep(2**attempt)
+                    if not is_last:
+                        time.sleep(2**attempt)
+                    attempt += 1
                     continue
                 return None
             except (httpx.HTTPError, ConnectionError, OSError, ValueError, KeyError, TypeError) as e:
                 logger.warning(f"Embeddings error: {e}")
                 return None
+
+            attempt += 1
 
         return None
 
@@ -612,6 +641,17 @@ def enhance_callsign_extraction(
         return extracted
 
 
+def _api_url_domain(url: str | None) -> str | None:
+    """Host of an API URL for stats display, tolerant of a scheme-less value
+    (``split('/')[2]`` used to IndexError on e.g. 'localhost:8000')."""
+    if not url:
+        return None
+    from urllib.parse import urlparse
+
+    parsed = urlparse(url if "//" in url else f"//{url}")
+    return parsed.hostname or url
+
+
 def get_llm_stats() -> dict:
     """
     Get LLM service statistics.
@@ -623,7 +663,7 @@ def get_llm_stats() -> dict:
         "enabled": settings.LLM_ENABLED,
         "available": llm_client.is_available(),
         "model": settings.LLM_MODEL,
-        "api_url": settings.LLM_API_URL.split("/")[2] if settings.LLM_API_URL else None,  # Domain only
+        "api_url": _api_url_domain(settings.LLM_API_URL),  # Domain only
         "cache": _llm_cache.get_stats(),
         "cache_ttl": settings.LLM_CACHE_TTL,
         **_stats,

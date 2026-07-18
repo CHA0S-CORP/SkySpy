@@ -291,6 +291,7 @@ UPSTREAM_API_MIN_INTERVAL = 5
 PHOTO_CACHE_ENABLED = False
 PHOTO_CACHE_DIR = "/tmp/skyspy-test-photos"
 PHOTO_AUTO_DOWNLOAD = False
+PHOTO_PLANESPOTTERS_USER_AGENT = "skyspy-test/1.0 (+https://example.com/contact)"
 
 # S3 Storage - disabled for tests
 S3_ENABLED = False
@@ -356,6 +357,7 @@ ASSISTANT_TIMEOUT = 60
 ASSISTANT_MAX_RESULT_CHARS = 6000
 ASSISTANT_MAX_HISTORY_MSGS = 16
 ASSISTANT_MAX_HISTORY_CHARS = 3000
+ASSISTANT_CONTEXT_WINDOW = 0
 # Off in tests so tool-selection assertions see a clean query (no live snapshot).
 ASSISTANT_BRIEFING_ENABLED = False
 ASSISTANT_PHOTO_BASE_URL = ""

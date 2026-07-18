@@ -46,6 +46,10 @@ DATA_DIR = Path(os.environ.get("EXTERNAL_DB_DIR", "/data/external_db"))
 _adsbx_db: dict[str, dict] = {}
 _tar1090_db: dict[str, dict] = {}
 _faa_db: dict[str, dict] = {}
+# FAA ACFTREF.txt reference table: MFR MDL CODE -> {manufacturer, model}. Joined
+# into _faa_db during load so US regs carry manufacturer/model (MASTER.txt has
+# neither — only the code that points here).
+_faa_acftref: dict[str, dict] = {}
 _opensky_db: dict[str, dict] = {}
 
 # Database locks for thread safety
@@ -324,6 +328,10 @@ def _get_faa_path() -> Path:
     return DATA_DIR / "faa-master.csv"
 
 
+def _get_faa_acftref_path() -> Path:
+    return DATA_DIR / "faa-acftref.csv"
+
+
 def _get_opensky_path() -> Path | None:
     """Find the OpenSky database file."""
     env_path = getattr(settings, "OPENSKY_DB_PATH", None)
@@ -575,10 +583,13 @@ def download_faa_database() -> Path | None:
 
         with zipfile.ZipFile(zip_path, "r") as zf:
             master_file = None
+            acftref_file = None
             for name in zf.namelist():
-                if name.upper().endswith("MASTER.TXT"):
+                upper = name.upper()
+                if upper.endswith("MASTER.TXT"):
                     master_file = name
-                    break
+                elif upper.endswith("ACFTREF.TXT"):
+                    acftref_file = name
 
             if master_file:
                 with zf.open(master_file) as src:
@@ -591,12 +602,56 @@ def download_faa_database() -> Path | None:
                 logger.error("MASTER.txt not found in FAA zip")
                 return None
 
+            # ACFTREF.txt supplies manufacturer/model (joined by MFR MDL CODE).
+            # Non-fatal if absent — the registry still yields reg/owner/year.
+            if acftref_file:
+                with zf.open(acftref_file) as src:
+                    _get_faa_acftref_path().write_bytes(src.read())
+                logger.info("Extracted FAA ACFTREF (manufacturer/model reference)")
+            else:
+                logger.warning("ACFTREF.txt not found in FAA zip; manufacturer/model will be blank")
+
         zip_path.unlink()
         return target_path
 
     except (httpx.HTTPError, ConnectionError, OSError, zipfile.BadZipFile, RetryError) as e:
         logger.error(f"Failed to download FAA Registry: {type(e).__name__}: {e}")
         return None
+
+
+def _load_faa_acftref(path: Path) -> int:
+    """Load FAA ACFTREF.txt (aircraft reference) into ``_faa_acftref``.
+
+    Keyed by the ``CODE`` column (the ``MFR MDL CODE`` that MASTER.txt rows point
+    at) -> {manufacturer, model}. Best-effort: a missing/garbled file just leaves
+    the table empty and manufacturer/model stay blank.
+    """
+    global _faa_acftref
+
+    _faa_acftref.clear()
+    try:
+        with open(path, encoding="utf-8-sig", errors="replace") as f:
+            reader = csv.DictReader(f)
+            reader.fieldnames = [name.strip() for name in reader.fieldnames]
+
+            code_col = next((c for c in reader.fieldnames if c.strip().upper() == "CODE"), None)
+            if not code_col:
+                logger.error("Could not find 'CODE' column in FAA ACFTREF headers")
+                return 0
+
+            for row in reader:
+                code = row.get(code_col, "").strip()
+                if not code:
+                    continue
+                manufacturer = row.get("MFR", "").strip() or None
+                model = row.get("MODEL", "").strip() or None
+                if manufacturer or model:
+                    _faa_acftref[code] = {"manufacturer": manufacturer, "model": model}
+    except (csv.Error, ValueError, OSError) as e:
+        logger.error(f"Error parsing FAA ACFTREF: {type(e).__name__}: {e}")
+        return 0
+
+    return len(_faa_acftref)
 
 
 def _load_faa_master(path: Path) -> int:
@@ -633,16 +688,26 @@ def _load_faa_master(path: Path) -> int:
                     owner_address = ", ".join(p for p in (street, street2) if p) or None
                     reg_type = FAA_REGISTRANT_TYPES.get(row.get("TYPE REGISTRANT", "").strip())
                     fractional = row.get("FRACT OWNER", "").strip().upper() == "Y"
+                    # FAA "TYPE AIRCRAFT": 6=Rotorcraft, 9=Gyroplane -> helicopter-ish.
+                    # Lets us classify police/public-safety helos without an ICAO type.
+                    faa_rotorcraft = row.get("TYPE AIRCRAFT", "").strip() in ("6", "9")
+
+                    # Join ACFTREF by MFR MDL CODE for manufacturer/model (MASTER
+                    # has neither — only this code). Empty when ACFTREF is absent.
+                    ref = _faa_acftref.get(row.get("MFR MDL CODE", "").strip())
 
                     _faa_db[mode_s_hex] = {
                         "registration": f"N{n_number}" if n_number else None,
                         "serial_number": row.get("SERIAL NUMBER", "").strip() or None,
                         "year_built": _safe_int(row.get("YEAR MFR", "").strip()),
+                        "manufacturer": ref.get("manufacturer") if ref else None,
+                        "model": ref.get("model") if ref else None,
                         "owner": row.get("NAME", "").strip(),
                         "owner_address": owner_address,
                         "owner_zip": row.get("ZIP CODE", "").strip() or None,
                         "faa_registrant_type": reg_type,
                         "fractional_owner": fractional or None,
+                        "faa_is_rotorcraft": faa_rotorcraft or None,
                         "city": row.get("CITY", "").strip() or None,
                         "state": row.get("STATE", "").strip() or None,
                         "country": "United States",
@@ -659,19 +724,26 @@ def _load_faa_master(path: Path) -> int:
 def load_faa_database(auto_download: bool = True) -> bool:
     """Load FAA database into memory."""
     path = _get_faa_path()
+    acftref_path = _get_faa_acftref_path()
 
-    if not path.exists():
+    # Re-download when MASTER is missing OR when the ACFTREF reference (added
+    # later) hasn't been extracted yet — otherwise installs with an old cached
+    # MASTER would never gain manufacturer/model.
+    if not path.exists() or not acftref_path.exists():
         if auto_download:
             path = download_faa_database()
             if not path:
                 return False
-        else:
+        elif not path.exists():
             return False
 
     start_time = time.time()
     try:
         logger.info("Loading FAA Registry...")
+        with _faa_lock:
+            ref_count = _load_faa_acftref(acftref_path) if acftref_path.exists() else 0
         count = _load_faa_master(path)
+        logger.info(f"Loaded {ref_count:,} FAA ACFTREF manufacturer/model entries")
 
         duration = time.time() - start_time
         _db_metadata["faa"]["loaded"] = True

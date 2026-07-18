@@ -5,6 +5,31 @@ const CARTO_DARK = 'https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{
 const CARTO_ATTR = '© OpenStreetMap contributors © CARTO';
 const RING_NM = [25, 50, 100];
 const NM_TO_M = 1852;
+const VIEW_KEY = 'skyspy:livemap:view';
+
+/** Load a persisted {lat, lon, zoom} map view, or null if none/invalid. */
+function loadSavedView() {
+  try {
+    const raw = localStorage.getItem(VIEW_KEY);
+    if (!raw) return null;
+    const v = JSON.parse(raw);
+    if (typeof v?.lat === 'number' && typeof v?.lon === 'number' && typeof v?.zoom === 'number') {
+      return v;
+    }
+  } catch {
+    // ignore corrupt/blocked storage
+  }
+  return null;
+}
+
+function saveView(map) {
+  try {
+    const c = map.getCenter();
+    localStorage.setItem(VIEW_KEY, JSON.stringify({ lat: c.lat, lon: c.lng, zoom: map.getZoom() }));
+  } catch {
+    // ignore quota/blocked storage
+  }
+}
 
 /**
  * Live Map Leaflet setup: CARTO dark basemap, feeder-centered range rings in
@@ -25,14 +50,19 @@ export function useLiveLeafletMap({ containerRef, feeder, active }) {
   useEffect(() => {
     if (!active || !containerRef.current || mapRef.current) return undefined;
 
+    const saved = loadSavedView();
+    // rings/sensor always sit on the feeder; only the *view* honors saved state
     const center = [feeder?.lat ?? 32.8, feeder?.lon ?? -117.2];
     const map = L.map(containerRef.current, {
-      center,
-      zoom: 9,
+      center: saved ? [saved.lat, saved.lon] : center,
+      zoom: saved ? saved.zoom : 9,
       zoomControl: true,
       attributionControl: true,
     });
     mapRef.current = map;
+
+    // persist center + zoom so a refresh restores the user's view
+    map.on('moveend', () => saveView(map));
 
     L.tileLayer(CARTO_DARK, { attribution: CARTO_ATTR, subdomains: 'abcd', maxZoom: 19 }).addTo(
       map
@@ -63,7 +93,9 @@ export function useLiveLeafletMap({ containerRef, feeder, active }) {
       iconAnchor: [6, 6],
     });
     sensorRef.current = L.marker(center, { icon: sensor, interactive: false, pane: 'lm-rings' }).addTo(map);
-    centeredOnFeederRef.current = feeder?.lat != null;
+    // a restored view already positions the map — don't let the async feeder
+    // resolve yank it back to the antenna
+    centeredOnFeederRef.current = saved != null || feeder?.lat != null;
 
     setTimeout(() => map.invalidateSize(), 100);
 

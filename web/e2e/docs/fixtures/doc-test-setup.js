@@ -570,6 +570,205 @@ export const docMockData = {
   },
 
   /**
+   * Generate curated NOTAMs for the History → NOTAMs / Archive tabs
+   * (`/api/v1/notams/`). Shape mirrors the backend NOTAM serializer.
+   */
+  generateCuratedNotams() {
+    const baseTime = Date.now();
+    return [
+      {
+        id: 1,
+        notam_id: 'KLAX-A0842/25',
+        notam_type: 'D',
+        location: 'KLAX',
+        text: 'RWY 07L/25R CLSD FOR MAINT. TWY B BTN TWY C AND TWY D CLSD.',
+        latitude: 33.9425,
+        longitude: -118.4081,
+        radius_nm: 5,
+        floor_ft: 0,
+        ceiling_ft: 0,
+        is_permanent: false,
+        is_active: true,
+        effective_start: new Date(baseTime - 2 * 86400000).toISOString(),
+        effective_end: new Date(baseTime + 5 * 86400000).toISOString(),
+      },
+      {
+        id: 2,
+        notam_id: 'FDC 5/1234',
+        notam_type: 'FDC',
+        location: 'KVNY',
+        text: 'IAP VAN NUYS, VAN NUYS, CA. RNAV (GPS) RWY 16R, AMDT 1B... MINIMA NA.',
+        latitude: 34.2098,
+        longitude: -118.4899,
+        radius_nm: 3,
+        floor_ft: 0,
+        ceiling_ft: 5000,
+        is_permanent: false,
+        is_active: true,
+        effective_start: new Date(baseTime - 6 * 86400000).toISOString(),
+        effective_end: new Date(baseTime + 12 * 86400000).toISOString(),
+      },
+      {
+        id: 3,
+        notam_id: 'GPS 12/045',
+        notam_type: 'GPS',
+        location: 'KBUR',
+        text: 'GPS RAIM OUTAGE PREDICTED WI 20NM RADIUS OF BUR.',
+        latitude: 34.2007,
+        longitude: -118.359,
+        radius_nm: 20,
+        floor_ft: 0,
+        ceiling_ft: 18000,
+        is_permanent: false,
+        is_active: true,
+        effective_start: new Date(baseTime - 1 * 86400000).toISOString(),
+        effective_end: new Date(baseTime + 3 * 86400000).toISOString(),
+      },
+      {
+        id: 4,
+        notam_id: 'KLAX-A0901/25',
+        notam_type: 'MIL',
+        location: 'KLAX',
+        text: 'MIL OPS WI 15NM RADIUS OF LAX SFC-8000FT. CTC ATC.',
+        latitude: 33.9416,
+        longitude: -118.4085,
+        radius_nm: 15,
+        floor_ft: 0,
+        ceiling_ft: 8000,
+        is_permanent: false,
+        is_active: true,
+        effective_start: new Date(baseTime - 3 * 86400000).toISOString(),
+        effective_end: new Date(baseTime + 8 * 86400000).toISOString(),
+      },
+    ];
+  },
+
+  /**
+   * Generate curated national TFRs for the History → NOTAMs / Archive tabs
+   * (`/api/v1/notams/tfrs/`).
+   */
+  generateCuratedTfrs() {
+    const baseTime = Date.now();
+    return [
+      {
+        id: 'tfr-1',
+        notam_id: 'TFR 5/2871',
+        notam_type: 'TFR',
+        is_tfr: true,
+        location: 'KLAX',
+        text: 'AIRSPACE SPECIAL SECURITY INSTRUCTIONS WI AN AREA DEFINED AS 10NM RADIUS OF LAX SFC-4000FT.',
+        latitude: 33.9416,
+        longitude: -118.4085,
+        radius_nm: 10,
+        floor_ft: 0,
+        ceiling_ft: 4000,
+        is_permanent: false,
+        is_active: true,
+        effective_start: new Date(baseTime - 1 * 86400000).toISOString(),
+        effective_end: new Date(baseTime + 2 * 86400000).toISOString(),
+      },
+    ];
+  },
+
+  /**
+   * Generate curated PIREPs for the History → PIREPs / Archive tabs
+   * (`/api/v1/aviation/pireps/`, payload keyed under `data`).
+   */
+  generateCuratedPireps() {
+    const baseTime = Date.now();
+    return [
+      {
+        pirep_id: 'PIREP-1001',
+        report_type: 'UUA',
+        location: 'KLAX',
+        observation_time: new Date(baseTime - 2 * 3600000).toISOString(),
+        aircraft_type: 'B738',
+        altitude_ft: 12000,
+        flight_level: 120,
+        sky_cover: 'BKN',
+        visibility_sm: 6,
+        weather: 'RA',
+        temperature_c: 4,
+        wind_dir: 250,
+        wind_speed_kt: 35,
+        turbulence_type: 'CHOP',
+        turbulence_freq: 'OCNL',
+        turbulence_intensity: 'MOD',
+        turbulence_base_ft: 10000,
+        turbulence_top_ft: 14000,
+        icing_type: 'RIME',
+        icing_intensity: 'LGT',
+        icing_base_ft: 11000,
+        icing_top_ft: 13000,
+        raw_text: 'LAX UUA /OV LAX180010/TM 1830/FL120/TP B738/TB MOD/IC LGT RIME/RM DURGC',
+      },
+      {
+        pirep_id: 'PIREP-1002',
+        report_type: 'UA',
+        location: 'KVNY',
+        observation_time: new Date(baseTime - 5 * 3600000).toISOString(),
+        aircraft_type: 'C172',
+        altitude_ft: 6500,
+        flight_level: null,
+        sky_cover: 'SCT',
+        visibility_sm: 10,
+        weather: null,
+        temperature_c: 12,
+        wind_dir: 270,
+        wind_speed_kt: 15,
+        turbulence_type: null,
+        turbulence_freq: null,
+        turbulence_intensity: 'SMTH',
+        turbulence_base_ft: null,
+        turbulence_top_ft: null,
+        icing_type: null,
+        icing_intensity: 'NEG',
+        icing_base_ft: null,
+        icing_top_ft: null,
+        raw_text: 'VNY UA /OV VNY/TM 1530/FL065/TP C172/SK SCT/TA 12/WV 27015/TB SMTH',
+      },
+      {
+        pirep_id: 'PIREP-1003',
+        report_type: 'UUA',
+        location: 'KBUR',
+        observation_time: new Date(baseTime - 8 * 3600000).toISOString(),
+        aircraft_type: 'A320',
+        altitude_ft: 34000,
+        flight_level: 340,
+        sky_cover: 'CLR',
+        visibility_sm: null,
+        weather: null,
+        temperature_c: -48,
+        wind_dir: 290,
+        wind_speed_kt: 95,
+        turbulence_type: 'CAT',
+        turbulence_freq: 'CONS',
+        turbulence_intensity: 'SEV',
+        turbulence_base_ft: 33000,
+        turbulence_top_ft: 35000,
+        icing_type: null,
+        icing_intensity: 'NEG',
+        icing_base_ft: null,
+        icing_top_ft: null,
+        raw_text: 'BUR UUA /OV BUR/TM 1200/FL340/TP A320/TB SEV CAT/RM DURGC',
+      },
+    ];
+  },
+
+  /**
+   * Generate curated NOTAM summary stats for the History → Archive tab
+   * (`/api/v1/notams/stats/`; shape consumed by ArchiveTab.adaptNotamStats).
+   */
+  generateCuratedNotamStats() {
+    return {
+      active_notams: 214,
+      active_tfrs: 6,
+      last_refresh: new Date().toISOString(),
+      by_type: { D: 118, FDC: 52, TFR: 6, GPS: 21, MIL: 14, POINTER: 3 },
+    };
+  },
+
+  /**
    * Generate curated stats for dashboard
    */
   generateCuratedStats() {
@@ -1058,6 +1257,14 @@ export const test = base.extend({
         await this.mock('/history/sessions', {
           sessions: docMockData.generateCuratedHistorySessions(),
         });
+
+        // History → NOTAMs / PIREPs / Archive tabs. Register the /notams/stats/
+        // sub-path AFTER the base /notams/ so it wins under Playwright's
+        // most-recent-route-first matching.
+        await this.mock('/notams/', { notams: docMockData.generateCuratedNotams() });
+        await this.mock('/notams/tfrs/', { tfrs: docMockData.generateCuratedTfrs() });
+        await this.mock('/notams/stats/', docMockData.generateCuratedNotamStats());
+        await this.mock('/aviation/pireps/', { data: docMockData.generateCuratedPireps() });
 
         // Safety events
         await this.mock('/safety/events', {

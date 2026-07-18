@@ -571,7 +571,7 @@ func (m *Model) renderStatusBar() string {
 	sb.WriteString(borderDim.Render("│"))
 	sb.WriteString(secondaryBright.Render(fmt.Sprintf(" %3d ", len(m.aircraft))))
 	sb.WriteString(borderDim.Render("│"))
-	sb.WriteString(primaryBright.Render(fmt.Sprintf(" %dnm ", int(m.maxRange))))
+	sb.WriteString(primaryBright.Render(fmt.Sprintf(" %dnm ", int(m.targetRange))))
 	sb.WriteString(borderDim.Render("│"))
 
 	// Active filters

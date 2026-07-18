@@ -105,6 +105,22 @@ def _record_failure(source: str, threshold: int = _CB_FAIL_THRESHOLD, cooldown: 
         return
 
 
+def _counts_as_breaker_failure(exc: BaseException) -> bool:
+    """Whether an exception should count toward opening the circuit breaker.
+
+    A 4xx (except 429) is a definitive answer about a *specific* resource —
+    "not found" / "bad request" — not a sign the source itself is unhealthy.
+    Counting it would let a normal stream of 404s (e.g. hexdb's callsign-route
+    for unknown callsigns, or an unknown hex) black out an otherwise-healthy
+    source for every other lookup. Connection/timeout errors and exhausted-retry
+    server errors (5xx / 429, which arrive here as _RetryableHTTP) do count.
+    """
+    if isinstance(exc, httpx.HTTPStatusError):
+        code = exc.response.status_code
+        return not (400 <= code < 500 and code != 429)
+    return True
+
+
 # =============================================================================
 # Rate limiting (fixed window, shared across processes)
 # =============================================================================
@@ -178,8 +194,8 @@ def _request(
 
     try:
         resp = _do()
-    except Exception:
-        if source:
+    except Exception as exc:
+        if source and _counts_as_breaker_failure(exc):
             _record_failure(source)
         raise
     if source:
@@ -368,7 +384,7 @@ def download(
     try:
         result = _do()
     except (httpx.HTTPError, ConnectionError, OSError) as e:
-        if source:
+        if source and _counts_as_breaker_failure(e):
             _record_failure(source)
         logger.warning(f"Download {url} failed: {type(e).__name__}: {e}")
         return None

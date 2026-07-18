@@ -54,7 +54,7 @@ def _aircraft_info_defaults(icao: str, data: dict) -> dict:
     Includes field-level provenance (``field_sources``) and ownership analysis
     (owner_type / shell-company signals) derived from the owner/city/state.
     """
-    from skyspy.services import registration_analysis
+    from skyspy.services import law_enforcement_db, registration_analysis
 
     ownership = registration_analysis.analyze_ownership(
         icao_hex=icao,
@@ -66,6 +66,30 @@ def _aircraft_info_defaults(icao: str, data: dict) -> dict:
         registrant_type=data.get("faa_registrant_type"),
         fractional_owner=data.get("fractional_owner"),
     )
+
+    # Flag law-enforcement / public-safety aircraft by owner (e.g. a police or
+    # sheriff helo, or "CITY OF SAN DIEGO" on a helicopter). Marks is_interesting
+    # and records the classification in ownership_flags.law_enforcement.
+    le = law_enforcement_db.identify_law_enforcement(
+        hex_code=icao,
+        operator=data.get("operator_icao"),
+        registration=data.get("registration"),
+        category=data.get("category"),
+        type_code=data.get("type_code"),
+        owner=data.get("owner"),
+        is_helicopter_hint=bool(data.get("faa_is_rotorcraft")),
+    )
+    is_le = le["is_law_enforcement"] or "owner" in le["identifiers"]
+    flags = ownership["ownership_flags"]
+    if is_le:
+        flags = flags or {}
+        flags["law_enforcement"] = {
+            "category": le["category"],
+            "description": le["description"],
+            "confidence": le["confidence"],
+            "identifiers": le["identifiers"],
+        }
+
     return {
         "registration": data.get("registration"),
         "type_code": data.get("type_code"),
@@ -79,7 +103,7 @@ def _aircraft_info_defaults(icao: str, data: dict) -> dict:
         "country": data.get("country"),
         "category": data.get("category"),
         "is_military": data.get("is_military", False),
-        "is_interesting": data.get("is_interesting", False),
+        "is_interesting": data.get("is_interesting", False) or is_le,
         "is_pia": data.get("is_pia", False),
         "is_ladd": data.get("is_ladd", False),
         "city": data.get("city"),
@@ -89,7 +113,7 @@ def _aircraft_info_defaults(icao: str, data: dict) -> dict:
         "owner_type": ownership["owner_type"],
         "is_shell_suspected": ownership["is_shell_suspected"],
         "shell_score": ownership["shell_score"],
-        "ownership_flags": ownership["ownership_flags"],
+        "ownership_flags": flags,
         "fetch_failed": False,
     }
 
@@ -254,23 +278,49 @@ def fetch_aircraft_info(icao_hex: str):
 
     try:
         from skyspy.models import AircraftInfo
+        from skyspy.services import aircraft_info as aircraft_info_service
         from skyspy.services import external_db
 
-        # Check if already cached in database
+        # Skip only when the row is fully enriched: identity present AND the
+        # ownership/LE analysis has run (owner_type set, or no owner to analyze).
+        # A partial row (e.g. saved by the bulk/map path without analysis) falls
+        # through and gets re-resolved so the LE badge fills in.
         try:
             existing = AircraftInfo.objects.get(icao_hex=icao)
-            if not existing.fetch_failed:
-                # Still try to fetch photos if not cached
+            fully_enriched = (
+                not existing.fetch_failed
+                and existing.manufacturer
+                and existing.model
+                and (existing.owner_type or not existing.owner)
+            )
+            if fully_enriched:
                 if not existing.photo_url:
                     _trigger_photo_fetch_if_enabled(icao)
-                return  # Already have valid data
+                return
         except AircraftInfo.DoesNotExist:
             pass
 
-        # Try in-memory databases first
+        # In-memory databases first (FAA now carries manufacturer/model via the
+        # ACFTREF join). This path runs the full ownership/LE analysis in
+        # _aircraft_info_defaults using FAA's owner/city/state + rotorcraft hint.
         data = external_db.lookup_all(icao)
 
         if data:
+            # FAA can still lack manufacturer/model (non-US, or an ACFTREF gap).
+            # Gap-fill ONLY the aircraft-type identity from the external-API path
+            # (HexDB etc.) — never owner/operator, which FAA owns authoritatively.
+            if not data.get("manufacturer") or not data.get("model"):
+                ext = aircraft_info_service._fetch_from_external_apis(icao)
+                if ext:
+                    for field in ("manufacturer", "model", "type_code", "type_name"):
+                        if not data.get(field) and ext.get(field):
+                            data[field] = ext[field]
+                    sources = list(data.get("sources") or [])
+                    for src in ext.get("sources", []):
+                        if src not in sources:
+                            sources.append(src)
+                    data["sources"] = sources
+
             AircraftInfo.objects.update_or_create(
                 icao_hex=icao,
                 defaults=_aircraft_info_defaults(icao, data),
@@ -279,51 +329,18 @@ def fetch_aircraft_info(icao_hex: str):
             _trigger_photo_fetch_if_enabled(icao)
             return
 
-        # Try HexDB API
-        try:
-            url = f"https://hexdb.io/api/v1/aircraft/{icao}"
-            response = httpx.get(url, timeout=10.0)
-
-            if response.status_code == 200:
-                hexdb_data = response.json()
-
-                AircraftInfo.objects.update_or_create(
-                    icao_hex=icao,
-                    defaults={
-                        "registration": hexdb_data.get("Registration"),
-                        "type_code": hexdb_data.get("ICAOTypeCode"),
-                        "manufacturer": hexdb_data.get("Manufacturer"),
-                        "model": hexdb_data.get("Type"),
-                        "operator": hexdb_data.get("RegisteredOwners"),
-                        "source": "hexdb",
-                        "fetch_failed": False,
-                    },
-                )
-                logger.debug(f"Got info for {icao} from HexDB")
-                _trigger_photo_fetch_if_enabled(icao)
-                return
-
-        except (DatabaseError, httpx.HTTPError, ValueError, KeyError, TypeError, OSError) as e:
-            logger.debug(f"HexDB lookup failed for {icao}: {e}")
-
-        # Try adsb.lol API
-        try:
-            lol_data = external_db.fetch_aircraft_from_adsb_lol(icao)
-            if lol_data:
-                AircraftInfo.objects.update_or_create(
-                    icao_hex=icao,
-                    defaults={
-                        "registration": lol_data.get("r"),
-                        "type_code": lol_data.get("t"),
-                        "source": "adsb.lol",
-                        "fetch_failed": False,
-                    },
-                )
-                logger.debug(f"Got info for {icao} from adsb.lol")
-                _trigger_photo_fetch_if_enabled(icao)
-                return
-        except (DatabaseError, httpx.HTTPError, ValueError, KeyError, TypeError, OSError) as e:
-            logger.debug(f"adsb.lol lookup failed for {icao}: {e}")
+        # No local record at all (e.g. a non-US hex with no FAA/OpenSky entry):
+        # fall back to the external-API sources, still routed through
+        # _aircraft_info_defaults so the ownership/LE analysis runs on it too.
+        ext = aircraft_info_service._fetch_from_external_apis(icao)
+        if ext:
+            AircraftInfo.objects.update_or_create(
+                icao_hex=icao,
+                defaults=_aircraft_info_defaults(icao, ext),
+            )
+            logger.debug(f"Got info for {icao} from external APIs: {ext.get('sources', [])}")
+            _trigger_photo_fetch_if_enabled(icao)
+            return
 
         # Mark as failed if all sources failed
         AircraftInfo.objects.update_or_create(
@@ -444,7 +461,9 @@ def _planespotters_photo(icao: str, lookup_url: str) -> tuple[str | None, str | 
     from skyspy.models import AircraftInfo
 
     try:
-        response = httpx.get(lookup_url, timeout=10.0)
+        # Planespotters 403s any request whose UA lacks a contact URL/email.
+        ua = getattr(settings, "PHOTO_PLANESPOTTERS_USER_AGENT", "skyspy/2.6 (+https://github.com/skyspy/skyspy)")
+        response = httpx.get(lookup_url, timeout=10.0, headers={"User-Agent": ua})
         if response.status_code != 200:
             return None, None, None
         photos = response.json().get("photos")
@@ -497,9 +516,15 @@ def _airport_data_photo(icao: str, param: str, value: str) -> tuple[str | None, 
         thumb = row.get("image")
         if not thumb:
             return None, None, None
-        # The full-size image lives at the same path without the /thumbnails segment.
-        full = thumb.replace("/thumbnails", "")
         page_link = row.get("link")
+        # The full-size image lives on a DIFFERENT host, keyed by the numeric photo
+        # id from the link (…/aircraft/photo/<ID>): https://image.airport-data.com/
+        # aircraft/<ID>.jpg. Stripping /thumbnails from the thumb path 404s. Fall
+        # back to the thumbnail's own filename when the link is missing.
+        photo_id = page_link.rstrip("/").split("/")[-1] if page_link else ""
+        if not photo_id:
+            photo_id = thumb.rsplit("/", 1)[-1].removesuffix(".jpg")
+        full = f"https://image.airport-data.com/aircraft/{photo_id}.jpg" if photo_id else thumb
         AircraftInfo.objects.filter(icao_hex=icao).update(
             photo_url=full,
             photo_thumbnail_url=thumb,
@@ -724,7 +749,11 @@ def upgrade_aircraft_photo(icao_hex: str):
         ):
             try:
                 ps_url = f"https://api.planespotters.net/pub/photos/hex/{icao}"
-                response = httpx.get(ps_url, timeout=10.0)
+                # Planespotters 403s a UA without a contact URL/email.
+                ps_ua = getattr(
+                    settings, "PHOTO_PLANESPOTTERS_USER_AGENT", "skyspy/2.6 (+https://github.com/skyspy/skyspy)"
+                )
+                response = httpx.get(ps_url, timeout=10.0, headers={"User-Agent": ps_ua})
                 if response.status_code == 200:
                     data = response.json()
                     if data.get("photos"):

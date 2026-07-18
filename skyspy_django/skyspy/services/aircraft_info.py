@@ -15,6 +15,7 @@ from datetime import datetime
 from threading import Lock
 
 import httpx
+from django.conf import settings
 from django.db import DatabaseError
 from kombu.exceptions import OperationalError as KombuOperationalError
 
@@ -78,6 +79,12 @@ def get_aircraft_info(icao_hex: str, include_photo: bool = True) -> dict | None:
         db_info = AircraftInfo.objects.filter(icao_hex=icao).first()
         if db_info and not db_info.fetch_failed:
             info = _serialize_db_info(db_info)
+            # Local (FAA) data supplies registration/owner but no manufacturer/
+            # model. Gap-fill from the external-API path exactly once, then the
+            # persisted record is returned as-is on every later read.
+            if _needs_identity(info) and not _identity_enriched(db_info) and _can_fetch_from_api(icao):
+                info, attempted = _gap_fill_identity(icao, info)
+                _save_to_database(icao, info, identity_enriched=attempted)
             _update_cache(icao, info)
             return info
     except DatabaseError as e:
@@ -87,8 +94,11 @@ def get_aircraft_info(icao_hex: str, include_photo: bool = True) -> dict | None:
     data = external_db.lookup_all(icao)
     if data:
         info = _normalize_external_data(icao, data)
+        attempted = False
+        if _needs_identity(info) and _can_fetch_from_api(icao):
+            info, attempted = _gap_fill_identity(icao, info)
         _update_cache(icao, info)
-        _save_to_database(icao, info)
+        _save_to_database(icao, info, identity_enriched=attempted)
         return info
 
     # 4. Try external APIs (with rate limiting)
@@ -96,7 +106,7 @@ def get_aircraft_info(icao_hex: str, include_photo: bool = True) -> dict | None:
         info = _fetch_from_external_apis(icao)
         if info:
             _update_cache(icao, info)
-            _save_to_database(icao, info)
+            _save_to_database(icao, info, identity_enriched=True)
             return info
 
     return None
@@ -341,6 +351,54 @@ def _evict_old_cache_entries():
             _cache_ttl.pop(k, None)
 
 
+# Fields that local FAA MASTER data cannot supply (it only has registration/
+# serial/year/owner). When a local hit leaves these blank we consult the
+# external-API path once to fill them.
+_IDENTITY_FILL_FIELDS = ("manufacturer", "model", "type_code", "type_name")
+
+
+def _needs_identity(info: dict) -> bool:
+    """True when the record is missing manufacturer or model."""
+    return not info.get("manufacturer") or not info.get("model")
+
+
+def _identity_enriched(db_info: AircraftInfo) -> bool:
+    """True once we've already run an external-API identity gap-fill for a row."""
+    return bool((db_info.extra_data or {}).get("identity_enriched"))
+
+
+def _gap_fill_identity(icao: str, info: dict) -> tuple[dict, bool]:
+    """Fill missing manufacturer/model/type from the external-API sources.
+
+    Local FAA data has registration/owner but no manufacturer/model. When those
+    are blank, consult HexDB/adsb.lol/adsbdb once and merge whatever they
+    supply. Returns ``(merged_info, attempted)`` where ``attempted`` is True only
+    if a source was actually reachable — so a transient open circuit is not
+    cached as a permanent miss and can be retried later.
+    """
+    external = _fetch_from_external_apis(icao)
+    if not external:
+        return info, False
+
+    # Only the aircraft-type identity fields — never operator/owner/country.
+    # FAA is authoritative for ownership (e.g. "CITY OF SAN DIEGO"); HexDB's
+    # RegisteredOwners ("Airbus Helicopters Inc") must not clobber or shadow it.
+    for field in _IDENTITY_FILL_FIELDS:
+        if not info.get(field) and external.get(field):
+            info[field] = external[field]
+    if not info.get("photo_url") and external.get("photo_url"):
+        for field in ("photo_url", "photo_thumbnail_url", "photo_page_link", "photo_photographer", "photo_source"):
+            if external.get(field):
+                info[field] = external[field]
+
+    merged_sources = list(info.get("sources") or [])
+    for source in external.get("sources", []):
+        if source not in merged_sources:
+            merged_sources.append(source)
+    info["sources"] = merged_sources
+    return info, True
+
+
 def _can_fetch_from_api(icao: str) -> bool:
     """Check if we can make an API call for this aircraft."""
     now = time.time()
@@ -450,20 +508,30 @@ def _fetch_from_external_apis(icao: str) -> dict | None:
     # Try planespotters for photo if we don't have one. Shared client returns
     # None on any failure (incl. 403/exhausted retries) instead of raising, and
     # only retries transient errors — a 4xx no longer burns the retry budget.
+    # Planespotters 403s any request whose UA lacks a contact URL/email, so send
+    # the configured contact UA. Many airframes (esp. US GA / helicopters like
+    # N882SD) are indexed only by registration, not hex — so try /reg after /hex.
     if info and not info.get("photo_url"):
-        ps_url = f"https://api.planespotters.net/pub/photos/hex/{icao}"
-        data = http_client.get_json(ps_url, source="planespotters", timeout=10.0)
-        if isinstance(data, dict) and data.get("photos"):
-            photo = data["photos"][0]
-            large_thumb = photo.get("thumbnail_large", {})
-            if isinstance(large_thumb, dict):
-                info["photo_url"] = large_thumb.get("src")
-            small_thumb = photo.get("thumbnail", {})
-            if isinstance(small_thumb, dict):
-                info["photo_thumbnail_url"] = small_thumb.get("src")
-            info["photo_page_link"] = photo.get("link")
-            info["photo_photographer"] = photo.get("photographer")
-            info["photo_source"] = "planespotters.net"
+        ua = getattr(settings, "PHOTO_PLANESPOTTERS_USER_AGENT", "skyspy/2.6 (+https://github.com/skyspy/skyspy)")
+        ps_headers = {"User-Agent": ua}
+        ps_urls = [f"https://api.planespotters.net/pub/photos/hex/{icao}"]
+        reg = info.get("registration")
+        if reg:
+            ps_urls.append(f"https://api.planespotters.net/pub/photos/reg/{reg}")
+        for ps_url in ps_urls:
+            data = http_client.get_json(ps_url, source="planespotters", timeout=10.0, headers=ps_headers)
+            if isinstance(data, dict) and data.get("photos"):
+                photo = data["photos"][0]
+                large_thumb = photo.get("thumbnail_large", {})
+                if isinstance(large_thumb, dict):
+                    info["photo_url"] = large_thumb.get("src")
+                small_thumb = photo.get("thumbnail", {})
+                if isinstance(small_thumb, dict):
+                    info["photo_thumbnail_url"] = small_thumb.get("src")
+                info["photo_page_link"] = photo.get("link")
+                info["photo_photographer"] = photo.get("photographer")
+                info["photo_source"] = "planespotters.net"
+                break
 
     if info:
         info["sources"] = sources
@@ -525,10 +593,14 @@ def _serialize_db_info(info: AircraftInfo) -> dict:
     }
 
 
-def _save_to_database(icao: str, info: dict):
-    """Save aircraft info to database."""
+def _save_to_database(icao: str, info: dict, identity_enriched: bool = False):
+    """Save aircraft info to database.
+
+    ``identity_enriched=True`` records that the external-API identity gap-fill
+    has run for this row, so the lookup is never repeated on later reads.
+    """
     try:
-        AircraftInfo.objects.update_or_create(
+        obj, _ = AircraftInfo.objects.update_or_create(
             icao_hex=icao,
             defaults={
                 "registration": info.get("registration"),
@@ -555,6 +627,11 @@ def _save_to_database(icao: str, info: dict):
                 "fetch_failed": False,
             },
         )
+        if identity_enriched and not (obj.extra_data or {}).get("identity_enriched"):
+            extra = dict(obj.extra_data or {})
+            extra["identity_enriched"] = True
+            obj.extra_data = extra
+            obj.save(update_fields=["extra_data", "updated_at"])
     except DatabaseError as e:
         logger.debug(f"Failed to save aircraft info for {icao}: {type(e).__name__}: {e}")
 

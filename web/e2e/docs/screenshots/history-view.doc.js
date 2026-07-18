@@ -50,12 +50,9 @@ test.describe('History View Screenshots', () => {
     await screenshotHelper.waitForContentReady();
     await screenshotHelper.prepare();
 
-    // Click on safety tab if available
-    const safetyTab = page.locator('[data-tab="safety"], button:has-text("Safety")');
-    if (await safetyTab.isVisible()) {
-      await safetyTab.click();
-      await page.waitForTimeout(500);
-    }
+    // Click on safety tab (scoped to the v2 tab bar to avoid strict-mode
+    // matches against other "Safety"-labelled elements).
+    await openTab(page, 'Safety');
 
     await screenshotHelper.capture('history-safety-events', {
       description: 'Safety event timeline showing TCAS alerts and deviations',
@@ -124,6 +121,57 @@ test.describe('History View Screenshots', () => {
 
     await screenshotHelper.capture('history-analytics', {
       description: 'History analytics showing patterns and trends',
+    });
+  });
+
+  // Click a History tab by its visible label. Tabs render as `.v2-hist__tab`
+  // role="tab" buttons (see v2/screens/history/HistoryScreen.jsx). These sub-tabs
+  // (ACARS/NOTAMs/PIREPs/Archive) each fetch their own REST endpoint, mocked in
+  // doc-test-setup.js, and need their own capture jobs.
+  async function openTab(page, label) {
+    const tab = page.locator('button.v2-hist__tab', { hasText: label }).first();
+    await tab.click();
+    // Let the tab's REST query resolve + render before capture.
+    await page.waitForTimeout(900);
+  }
+
+  test('history-acars', async ({ page, screenshotHelper }) => {
+    await screenshotHelper.waitForContentReady();
+    await openTab(page, 'ACARS');
+    await screenshotHelper.prepare();
+
+    await screenshotHelper.capture('history-acars', {
+      description: 'Decoded ACARS/VDL message log for tracked aircraft',
+    });
+  });
+
+  test('history-notams', async ({ page, screenshotHelper }) => {
+    await screenshotHelper.waitForContentReady();
+    await openTab(page, 'NOTAMs');
+    await screenshotHelper.prepare();
+
+    await screenshotHelper.capture('history-notams', {
+      description: 'Live NOTAMs & TFRs affecting the coverage area',
+    });
+  });
+
+  test('history-pireps', async ({ page, screenshotHelper }) => {
+    await screenshotHelper.waitForContentReady();
+    await openTab(page, 'PIREPs');
+    await screenshotHelper.prepare();
+
+    await screenshotHelper.capture('history-pireps', {
+      description: 'Archived pilot reports (turbulence, icing, sky cover)',
+    });
+  });
+
+  test('history-archive', async ({ page, screenshotHelper }) => {
+    await screenshotHelper.waitForContentReady();
+    await openTab(page, 'Archive');
+    await screenshotHelper.prepare();
+
+    await screenshotHelper.capture('history-archive', {
+      description: 'Expired NOTAMs archive with type and date filters',
     });
   });
 });

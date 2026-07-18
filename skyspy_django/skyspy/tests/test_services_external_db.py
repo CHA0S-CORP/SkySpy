@@ -446,6 +446,41 @@ class FAADatabaseTests(TestCase):
         self.assertEqual(result["city"], "Seattle")
         self.assertEqual(result["country"], "United States")
 
+    def test_load_faa_master_joins_acftref_manufacturer_model(self):
+        """MASTER rows join ACFTREF by MFR MDL CODE to gain manufacturer/model."""
+        master = external_db._get_faa_path()
+        acftref = external_db._get_faa_acftref_path()
+        master.write_text(
+            "MODE S CODE HEX,N-NUMBER,SERIAL NUMBER,YEAR MFR,NAME,MFR MDL CODE,TYPE AIRCRAFT\n"
+            "AC26D7,882SD,9553,2024,CITY OF SAN DIEGO,3070033,6\n"
+        )
+        acftref.write_text("CODE,MFR,MODEL,TYPE-ACFT\n3070033,AIRBUS HELICOPTERS INC,AS350B3,6\n")
+
+        self.assertEqual(external_db._load_faa_acftref(acftref), 1)
+        self.assertEqual(external_db._load_faa_master(master), 1)
+
+        rec = external_db._faa_db["AC26D7"]
+        self.assertEqual(rec["manufacturer"], "AIRBUS HELICOPTERS INC")
+        self.assertEqual(rec["model"], "AS350B3")
+        self.assertEqual(rec["owner"], "CITY OF SAN DIEGO")  # FAA owner untouched
+        self.assertEqual(rec["registration"], "N882SD")
+
+    def test_load_faa_master_without_acftref_leaves_manufacturer_blank(self):
+        """Missing ACFTREF -> manufacturer/model None, rest of the row still loads."""
+        external_db._faa_acftref.clear()
+        master = external_db._get_faa_path()
+        master.write_text(
+            "MODE S CODE HEX,N-NUMBER,SERIAL NUMBER,YEAR MFR,NAME,MFR MDL CODE\n"
+            "AC26D7,882SD,9553,2024,CITY OF SAN DIEGO,3070033\n"
+        )
+
+        self.assertEqual(external_db._load_faa_master(master), 1)
+
+        rec = external_db._faa_db["AC26D7"]
+        self.assertIsNone(rec["manufacturer"])
+        self.assertIsNone(rec["model"])
+        self.assertEqual(rec["registration"], "N882SD")
+
 
 class OpenSkyDatabaseTests(TestCase):
     """Tests for OpenSky Network database operations."""

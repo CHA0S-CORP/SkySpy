@@ -557,3 +557,58 @@ class EdgeCaseTests(TestCase):
         # (Note: "CHPX" WOULD match ^CHP\d* since \d* allows zero digits.)
         result = law_enforcement_db.identify_by_callsign("XCHP1")
         self.assertIsNone(result)
+
+
+class IdentifyByOwnerTests(TestCase):
+    """Tests for FAA registered-owner based LE/public-safety detection."""
+
+    def test_returns_none_for_empty_owner(self):
+        self.assertIsNone(law_enforcement_db.identify_by_owner(""))
+        self.assertIsNone(law_enforcement_db.identify_by_owner(None))
+
+    def test_police_owner_flagged_regardless_of_type(self):
+        result = law_enforcement_db.identify_by_owner("METROPOLITAN POLICE DEPARTMENT")
+        self.assertIsNotNone(result)
+        self.assertTrue(result["is_law_enforcement"])
+        self.assertEqual(result["category"], "Police Aviation")
+
+    def test_sheriff_owner_flagged(self):
+        result = law_enforcement_db.identify_by_owner("LOS ANGELES COUNTY SHERIFF")
+        self.assertIsNotNone(result)
+        self.assertTrue(result["is_law_enforcement"])
+
+    def test_municipal_owner_needs_public_safety_airframe(self):
+        # City owner alone is not conclusive...
+        self.assertIsNone(law_enforcement_db.identify_by_owner("CITY OF SAN DIEGO"))
+        # ...but a city-owned helicopter is (N882SD case).
+        result = law_enforcement_db.identify_by_owner("CITY OF SAN DIEGO", is_public_safety_airframe=True)
+        self.assertIsNotNone(result)
+        self.assertTrue(result["is_law_enforcement"])
+        self.assertEqual(result["category"], "Municipal Aviation")
+
+    def test_private_owner_not_flagged(self):
+        self.assertIsNone(law_enforcement_db.identify_by_owner("JOHN SMITH", is_public_safety_airframe=True))
+
+
+class IdentifyLawEnforcementOwnerIntegrationTests(TestCase):
+    """identify_law_enforcement wiring for owner + helicopter hint."""
+
+    def test_city_helo_flagged_via_owner_and_hint(self):
+        # N882SD: CITY OF SAN DIEGO H125, flagged via owner + FAA rotorcraft hint.
+        result = law_enforcement_db.identify_law_enforcement(
+            owner="CITY OF SAN DIEGO", registration="N882SD", is_helicopter_hint=True
+        )
+        self.assertTrue(result["is_law_enforcement"])
+        self.assertIn("owner", result["identifiers"])
+        self.assertEqual(result["category"], "Municipal Aviation")
+
+    def test_city_airliner_not_flagged(self):
+        # A city-owned non-helicopter is not flagged (avoids buses/fixed-wing FPs).
+        result = law_enforcement_db.identify_law_enforcement(owner="CITY OF SAN DIEGO", type_code="B738")
+        self.assertFalse(result["is_law_enforcement"])
+        self.assertNotIn("owner", result["identifiers"])
+
+    def test_sheriff_owner_flagged_without_hint(self):
+        result = law_enforcement_db.identify_law_enforcement(owner="RIVERSIDE COUNTY SHERIFF")
+        self.assertTrue(result["is_law_enforcement"])
+        self.assertIn("owner", result["identifiers"])

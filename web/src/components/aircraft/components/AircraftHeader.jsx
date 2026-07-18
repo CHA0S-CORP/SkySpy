@@ -20,6 +20,17 @@ export function AircraftHeader({ hex, aircraft, info, tailInfo, shareSuccess, on
               </span>
             )}
             {info?.is_military && <span className="detail-military-badge">MILITARY</span>}
+            {info?.ownership_flags?.law_enforcement && (
+              <span
+                className="detail-le-badge"
+                title={
+                  info.ownership_flags.law_enforcement.description ||
+                  'Law enforcement / public safety'
+                }
+              >
+                {info.ownership_flags.law_enforcement.category || 'Law Enforcement'}
+              </span>
+            )}
             {!info?.is_military && info?.operator && (
               <span className="detail-airline-badge" title={info.operator}>
                 {info.operator}

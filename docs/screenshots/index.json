@@ -1,9 +1,9 @@
 {
-  "generated": "2026-07-18T02:19:13.198Z",
+  "generated": "2026-07-18T06:50:14.634Z",
   "version": "1.0.0",
   "summary": {
-    "totalAssets": 174,
-    "screenshots": 172,
+    "totalAssets": 192,
+    "screenshots": 190,
     "animations": 2,
     "viewports": [
       "root",
@@ -263,8 +263,17 @@
       "type": "screenshot",
       "viewport": "desktop",
       "view": "assistant",
-      "size": 213266,
-      "modified": "2026-07-18T02:19:13.032Z"
+      "size": 411901,
+      "modified": "2026-07-18T06:50:14.594Z"
+    },
+    {
+      "name": "assistant-prompt.png",
+      "path": "desktop/assistant-prompt.png",
+      "type": "screenshot",
+      "viewport": "desktop",
+      "view": "assistant",
+      "size": 418101,
+      "modified": "2026-07-18T06:50:14.596Z"
     },
     {
       "name": "audio-emergency.png",
@@ -357,13 +366,31 @@
       "modified": "2026-07-18T02:19:13.047Z"
     },
     {
+      "name": "history-acars.png",
+      "path": "desktop/history-acars.png",
+      "type": "screenshot",
+      "viewport": "desktop",
+      "view": "history",
+      "size": 339633,
+      "modified": "2026-07-18T06:50:14.597Z"
+    },
+    {
       "name": "history-analytics.png",
       "path": "desktop/history-analytics.png",
       "type": "screenshot",
       "viewport": "desktop",
       "view": "history",
-      "size": 524723,
-      "modified": "2026-07-18T02:19:13.049Z"
+      "size": 523078,
+      "modified": "2026-07-18T06:50:14.598Z"
+    },
+    {
+      "name": "history-archive.png",
+      "path": "desktop/history-archive.png",
+      "type": "screenshot",
+      "viewport": "desktop",
+      "view": "history",
+      "size": 475275,
+      "modified": "2026-07-18T06:50:14.599Z"
     },
     {
       "name": "history-date-picker.png",
@@ -371,8 +398,35 @@
       "type": "screenshot",
       "viewport": "desktop",
       "view": "history",
-      "size": 507795,
-      "modified": "2026-07-18T02:19:13.050Z"
+      "size": 523734,
+      "modified": "2026-07-18T06:50:14.601Z"
+    },
+    {
+      "name": "history-notams.png",
+      "path": "desktop/history-notams.png",
+      "type": "screenshot",
+      "viewport": "desktop",
+      "view": "history",
+      "size": 295484,
+      "modified": "2026-07-18T06:50:14.601Z"
+    },
+    {
+      "name": "history-pireps.png",
+      "path": "desktop/history-pireps.png",
+      "type": "screenshot",
+      "viewport": "desktop",
+      "view": "history",
+      "size": 232168,
+      "modified": "2026-07-18T06:50:14.602Z"
+    },
+    {
+      "name": "history-safety-events.png",
+      "path": "desktop/history-safety-events.png",
+      "type": "screenshot",
+      "viewport": "desktop",
+      "view": "history",
+      "size": 567393,
+      "modified": "2026-07-18T06:50:14.603Z"
     },
     {
       "name": "history-session-detail.png",
@@ -380,8 +434,8 @@
       "type": "screenshot",
       "viewport": "desktop",
       "view": "history",
-      "size": 509204,
-      "modified": "2026-07-18T02:19:13.052Z"
+      "size": 523078,
+      "modified": "2026-07-18T06:50:14.604Z"
     },
     {
       "name": "history-sessions.png",
@@ -389,8 +443,8 @@
       "type": "screenshot",
       "viewport": "desktop",
       "view": "history",
-      "size": 493010,
-      "modified": "2026-07-18T02:19:13.053Z"
+      "size": 522311,
+      "modified": "2026-07-18T06:50:14.605Z"
     },
     {
       "name": "history-sightings.png",
@@ -398,8 +452,8 @@
       "type": "screenshot",
       "viewport": "desktop",
       "view": "history",
-      "size": 406199,
-      "modified": "2026-07-18T02:19:13.054Z"
+      "size": 388684,
+      "modified": "2026-07-18T06:50:14.606Z"
     },
     {
       "name": "history-with-replay.png",
@@ -407,8 +461,8 @@
       "type": "screenshot",
       "viewport": "desktop",
       "view": "history",
-      "size": 526031,
-      "modified": "2026-07-18T02:19:13.055Z"
+      "size": 523592,
+      "modified": "2026-07-18T06:50:14.607Z"
     },
     {
       "name": "login-form.png",
@@ -776,8 +830,17 @@
       "type": "screenshot",
       "viewport": "mobile",
       "view": "assistant",
-      "size": 131035,
-      "modified": "2026-07-18T02:19:13.162Z"
+      "size": 189020,
+      "modified": "2026-07-18T06:50:14.623Z"
+    },
+    {
+      "name": "assistant-prompt.png",
+      "path": "mobile/assistant-prompt.png",
+      "type": "screenshot",
+      "viewport": "mobile",
+      "view": "assistant",
+      "size": 193593,
+      "modified": "2026-07-18T06:50:14.624Z"
     },
     {
       "name": "audio-emergency.png",
@@ -870,13 +933,31 @@
       "modified": "2026-07-18T02:19:13.173Z"
     },
     {
+      "name": "history-acars.png",
+      "path": "mobile/history-acars.png",
+      "type": "screenshot",
+      "viewport": "mobile",
+      "view": "history",
+      "size": 199286,
+      "modified": "2026-07-18T06:50:14.625Z"
+    },
+    {
       "name": "history-analytics.png",
       "path": "mobile/history-analytics.png",
       "type": "screenshot",
       "viewport": "mobile",
       "view": "history",
-      "size": 164023,
-      "modified": "2026-07-18T02:19:13.173Z"
+      "size": 188505,
+      "modified": "2026-07-18T06:50:14.626Z"
+    },
+    {
+      "name": "history-archive.png",
+      "path": "mobile/history-archive.png",
+      "type": "screenshot",
+      "viewport": "mobile",
+      "view": "history",
+      "size": 137653,
+      "modified": "2026-07-18T06:50:14.627Z"
     },
     {
       "name": "history-date-picker.png",
@@ -884,8 +965,35 @@
       "type": "screenshot",
       "viewport": "mobile",
       "view": "history",
-      "size": 164023,
-      "modified": "2026-07-18T02:19:13.174Z"
+      "size": 188505,
+      "modified": "2026-07-18T06:50:14.627Z"
+    },
+    {
+      "name": "history-notams.png",
+      "path": "mobile/history-notams.png",
+      "type": "screenshot",
+      "viewport": "mobile",
+      "view": "history",
+      "size": 183775,
+      "modified": "2026-07-18T06:50:14.628Z"
+    },
+    {
+      "name": "history-pireps.png",
+      "path": "mobile/history-pireps.png",
+      "type": "screenshot",
+      "viewport": "mobile",
+      "view": "history",
+      "size": 151885,
+      "modified": "2026-07-18T06:50:14.628Z"
+    },
+    {
+      "name": "history-safety-events.png",
+      "path": "mobile/history-safety-events.png",
+      "type": "screenshot",
+      "viewport": "mobile",
+      "view": "history",
+      "size": 223786,
+      "modified": "2026-07-18T06:50:14.629Z"
     },
     {
       "name": "history-session-detail.png",
@@ -893,8 +1001,8 @@
       "type": "screenshot",
       "viewport": "mobile",
       "view": "history",
-      "size": 164023,
-      "modified": "2026-07-18T02:19:13.175Z"
+      "size": 188505,
+      "modified": "2026-07-18T06:50:14.630Z"
     },
     {
       "name": "history-sessions.png",
@@ -902,8 +1010,8 @@
       "type": "screenshot",
       "viewport": "mobile",
       "view": "history",
-      "size": 164023,
-      "modified": "2026-07-18T02:19:13.176Z"
+      "size": 188505,
+      "modified": "2026-07-18T06:50:14.630Z"
     },
     {
       "name": "history-sightings.png",
@@ -911,8 +1019,8 @@
       "type": "screenshot",
       "viewport": "mobile",
       "view": "history",
-      "size": 160030,
-      "modified": "2026-07-18T02:19:13.176Z"
+      "size": 188582,
+      "modified": "2026-07-18T06:50:14.631Z"
     },
     {
       "name": "history-with-replay.png",
@@ -920,8 +1028,8 @@
       "type": "screenshot",
       "viewport": "mobile",
       "view": "history",
-      "size": 164023,
-      "modified": "2026-07-18T02:19:13.177Z"
+      "size": 188505,
+      "modified": "2026-07-18T06:50:14.632Z"
     },
     {
       "name": "login-form.png",
@@ -1307,8 +1415,17 @@
       "type": "screenshot",
       "viewport": "tablet",
       "view": "assistant",
-      "size": 183006,
-      "modified": "2026-07-18T02:19:13.100Z"
+      "size": 364893,
+      "modified": "2026-07-18T06:50:14.609Z"
+    },
+    {
+      "name": "assistant-prompt.png",
+      "path": "tablet/assistant-prompt.png",
+      "type": "screenshot",
+      "viewport": "tablet",
+      "view": "assistant",
+      "size": 370408,
+      "modified": "2026-07-18T06:50:14.611Z"
     },
     {
       "name": "audio-emergency.png",
@@ -1401,13 +1518,31 @@
       "modified": "2026-07-18T02:19:13.113Z"
     },
     {
+      "name": "history-acars.png",
+      "path": "tablet/history-acars.png",
+      "type": "screenshot",
+      "viewport": "tablet",
+      "view": "history",
+      "size": 329016,
+      "modified": "2026-07-18T06:50:14.612Z"
+    },
+    {
       "name": "history-analytics.png",
       "path": "tablet/history-analytics.png",
       "type": "screenshot",
       "viewport": "tablet",
       "view": "history",
-      "size": 396769,
-      "modified": "2026-07-18T02:19:13.114Z"
+      "size": 371574,
+      "modified": "2026-07-18T06:50:14.614Z"
+    },
+    {
+      "name": "history-archive.png",
+      "path": "tablet/history-archive.png",
+      "type": "screenshot",
+      "viewport": "tablet",
+      "view": "history",
+      "size": 527506,
+      "modified": "2026-07-18T06:50:14.615Z"
     },
     {
       "name": "history-date-picker.png",
@@ -1415,8 +1550,35 @@
       "type": "screenshot",
       "viewport": "tablet",
       "view": "history",
-      "size": 382181,
-      "modified": "2026-07-18T02:19:13.116Z"
+      "size": 371574,
+      "modified": "2026-07-18T06:50:14.616Z"
+    },
+    {
+      "name": "history-notams.png",
+      "path": "tablet/history-notams.png",
+      "type": "screenshot",
+      "viewport": "tablet",
+      "view": "history",
+      "size": 299441,
+      "modified": "2026-07-18T06:50:14.617Z"
+    },
+    {
+      "name": "history-pireps.png",
+      "path": "tablet/history-pireps.png",
+      "type": "screenshot",
+      "viewport": "tablet",
+      "view": "history",
+      "size": 216958,
+      "modified": "2026-07-18T06:50:14.617Z"
+    },
+    {
+      "name": "history-safety-events.png",
+      "path": "tablet/history-safety-events.png",
+      "type": "screenshot",
+      "viewport": "tablet",
+      "view": "history",
+      "size": 501368,
+      "modified": "2026-07-18T06:50:14.618Z"
     },
     {
       "name": "history-session-detail.png",
@@ -1424,8 +1586,8 @@
       "type": "screenshot",
       "viewport": "tablet",
       "view": "history",
-      "size": 383442,
-      "modified": "2026-07-18T02:19:13.117Z"
+      "size": 371574,
+      "modified": "2026-07-18T06:50:14.619Z"
     },
     {
       "name": "history-sessions.png",
@@ -1433,8 +1595,8 @@
       "type": "screenshot",
       "viewport": "tablet",
       "view": "history",
-      "size": 377383,
-      "modified": "2026-07-18T02:19:13.118Z"
+      "size": 405783,
+      "modified": "2026-07-18T06:50:14.620Z"
     },
     {
       "name": "history-sightings.png",
@@ -1442,8 +1604,8 @@
       "type": "screenshot",
       "viewport": "tablet",
       "view": "history",
-      "size": 346651,
-      "modified": "2026-07-18T02:19:13.120Z"
+      "size": 362281,
+      "modified": "2026-07-18T06:50:14.621Z"
     },
     {
       "name": "history-with-replay.png",
@@ -1451,8 +1613,8 @@
       "type": "screenshot",
       "viewport": "tablet",
       "view": "history",
-      "size": 380472,
-      "modified": "2026-07-18T02:19:13.121Z"
+      "size": 371574,
+      "modified": "2026-07-18T06:50:14.623Z"
     },
     {
       "name": "login-form.png",
@@ -1924,8 +2086,17 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "assistant",
-        "size": 213266,
-        "modified": "2026-07-18T02:19:13.032Z"
+        "size": 411901,
+        "modified": "2026-07-18T06:50:14.594Z"
+      },
+      {
+        "name": "assistant-prompt.png",
+        "path": "desktop/assistant-prompt.png",
+        "type": "screenshot",
+        "viewport": "desktop",
+        "view": "assistant",
+        "size": 418101,
+        "modified": "2026-07-18T06:50:14.596Z"
       },
       {
         "name": "audio-emergency.png",
@@ -2018,13 +2189,31 @@
         "modified": "2026-07-18T02:19:13.047Z"
       },
       {
+        "name": "history-acars.png",
+        "path": "desktop/history-acars.png",
+        "type": "screenshot",
+        "viewport": "desktop",
+        "view": "history",
+        "size": 339633,
+        "modified": "2026-07-18T06:50:14.597Z"
+      },
+      {
         "name": "history-analytics.png",
         "path": "desktop/history-analytics.png",
         "type": "screenshot",
         "viewport": "desktop",
         "view": "history",
-        "size": 524723,
-        "modified": "2026-07-18T02:19:13.049Z"
+        "size": 523078,
+        "modified": "2026-07-18T06:50:14.598Z"
+      },
+      {
+        "name": "history-archive.png",
+        "path": "desktop/history-archive.png",
+        "type": "screenshot",
+        "viewport": "desktop",
+        "view": "history",
+        "size": 475275,
+        "modified": "2026-07-18T06:50:14.599Z"
       },
       {
         "name": "history-date-picker.png",
@@ -2032,8 +2221,35 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "history",
-        "size": 507795,
-        "modified": "2026-07-18T02:19:13.050Z"
+        "size": 523734,
+        "modified": "2026-07-18T06:50:14.601Z"
+      },
+      {
+        "name": "history-notams.png",
+        "path": "desktop/history-notams.png",
+        "type": "screenshot",
+        "viewport": "desktop",
+        "view": "history",
+        "size": 295484,
+        "modified": "2026-07-18T06:50:14.601Z"
+      },
+      {
+        "name": "history-pireps.png",
+        "path": "desktop/history-pireps.png",
+        "type": "screenshot",
+        "viewport": "desktop",
+        "view": "history",
+        "size": 232168,
+        "modified": "2026-07-18T06:50:14.602Z"
+      },
+      {
+        "name": "history-safety-events.png",
+        "path": "desktop/history-safety-events.png",
+        "type": "screenshot",
+        "viewport": "desktop",
+        "view": "history",
+        "size": 567393,
+        "modified": "2026-07-18T06:50:14.603Z"
       },
       {
         "name": "history-session-detail.png",
@@ -2041,8 +2257,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "history",
-        "size": 509204,
-        "modified": "2026-07-18T02:19:13.052Z"
+        "size": 523078,
+        "modified": "2026-07-18T06:50:14.604Z"
       },
       {
         "name": "history-sessions.png",
@@ -2050,8 +2266,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "history",
-        "size": 493010,
-        "modified": "2026-07-18T02:19:13.053Z"
+        "size": 522311,
+        "modified": "2026-07-18T06:50:14.605Z"
       },
       {
         "name": "history-sightings.png",
@@ -2059,8 +2275,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "history",
-        "size": 406199,
-        "modified": "2026-07-18T02:19:13.054Z"
+        "size": 388684,
+        "modified": "2026-07-18T06:50:14.606Z"
       },
       {
         "name": "history-with-replay.png",
@@ -2068,8 +2284,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "history",
-        "size": 526031,
-        "modified": "2026-07-18T02:19:13.055Z"
+        "size": 523592,
+        "modified": "2026-07-18T06:50:14.607Z"
       },
       {
         "name": "login-form.png",
@@ -2403,8 +2619,17 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "assistant",
-        "size": 131035,
-        "modified": "2026-07-18T02:19:13.162Z"
+        "size": 189020,
+        "modified": "2026-07-18T06:50:14.623Z"
+      },
+      {
+        "name": "assistant-prompt.png",
+        "path": "mobile/assistant-prompt.png",
+        "type": "screenshot",
+        "viewport": "mobile",
+        "view": "assistant",
+        "size": 193593,
+        "modified": "2026-07-18T06:50:14.624Z"
       },
       {
         "name": "audio-emergency.png",
@@ -2497,13 +2722,31 @@
         "modified": "2026-07-18T02:19:13.173Z"
       },
       {
+        "name": "history-acars.png",
+        "path": "mobile/history-acars.png",
+        "type": "screenshot",
+        "viewport": "mobile",
+        "view": "history",
+        "size": 199286,
+        "modified": "2026-07-18T06:50:14.625Z"
+      },
+      {
         "name": "history-analytics.png",
         "path": "mobile/history-analytics.png",
         "type": "screenshot",
         "viewport": "mobile",
         "view": "history",
-        "size": 164023,
-        "modified": "2026-07-18T02:19:13.173Z"
+        "size": 188505,
+        "modified": "2026-07-18T06:50:14.626Z"
+      },
+      {
+        "name": "history-archive.png",
+        "path": "mobile/history-archive.png",
+        "type": "screenshot",
+        "viewport": "mobile",
+        "view": "history",
+        "size": 137653,
+        "modified": "2026-07-18T06:50:14.627Z"
       },
       {
         "name": "history-date-picker.png",
@@ -2511,8 +2754,35 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "history",
-        "size": 164023,
-        "modified": "2026-07-18T02:19:13.174Z"
+        "size": 188505,
+        "modified": "2026-07-18T06:50:14.627Z"
+      },
+      {
+        "name": "history-notams.png",
+        "path": "mobile/history-notams.png",
+        "type": "screenshot",
+        "viewport": "mobile",
+        "view": "history",
+        "size": 183775,
+        "modified": "2026-07-18T06:50:14.628Z"
+      },
+      {
+        "name": "history-pireps.png",
+        "path": "mobile/history-pireps.png",
+        "type": "screenshot",
+        "viewport": "mobile",
+        "view": "history",
+        "size": 151885,
+        "modified": "2026-07-18T06:50:14.628Z"
+      },
+      {
+        "name": "history-safety-events.png",
+        "path": "mobile/history-safety-events.png",
+        "type": "screenshot",
+        "viewport": "mobile",
+        "view": "history",
+        "size": 223786,
+        "modified": "2026-07-18T06:50:14.629Z"
       },
       {
         "name": "history-session-detail.png",
@@ -2520,8 +2790,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "history",
-        "size": 164023,
-        "modified": "2026-07-18T02:19:13.175Z"
+        "size": 188505,
+        "modified": "2026-07-18T06:50:14.630Z"
       },
       {
         "name": "history-sessions.png",
@@ -2529,8 +2799,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "history",
-        "size": 164023,
-        "modified": "2026-07-18T02:19:13.176Z"
+        "size": 188505,
+        "modified": "2026-07-18T06:50:14.630Z"
       },
       {
         "name": "history-sightings.png",
@@ -2538,8 +2808,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "history",
-        "size": 160030,
-        "modified": "2026-07-18T02:19:13.176Z"
+        "size": 188582,
+        "modified": "2026-07-18T06:50:14.631Z"
       },
       {
         "name": "history-with-replay.png",
@@ -2547,8 +2817,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "history",
-        "size": 164023,
-        "modified": "2026-07-18T02:19:13.177Z"
+        "size": 188505,
+        "modified": "2026-07-18T06:50:14.632Z"
       },
       {
         "name": "login-form.png",
@@ -2882,8 +3152,17 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "assistant",
-        "size": 183006,
-        "modified": "2026-07-18T02:19:13.100Z"
+        "size": 364893,
+        "modified": "2026-07-18T06:50:14.609Z"
+      },
+      {
+        "name": "assistant-prompt.png",
+        "path": "tablet/assistant-prompt.png",
+        "type": "screenshot",
+        "viewport": "tablet",
+        "view": "assistant",
+        "size": 370408,
+        "modified": "2026-07-18T06:50:14.611Z"
       },
       {
         "name": "audio-emergency.png",
@@ -2976,13 +3255,31 @@
         "modified": "2026-07-18T02:19:13.113Z"
       },
       {
+        "name": "history-acars.png",
+        "path": "tablet/history-acars.png",
+        "type": "screenshot",
+        "viewport": "tablet",
+        "view": "history",
+        "size": 329016,
+        "modified": "2026-07-18T06:50:14.612Z"
+      },
+      {
         "name": "history-analytics.png",
         "path": "tablet/history-analytics.png",
         "type": "screenshot",
         "viewport": "tablet",
         "view": "history",
-        "size": 396769,
-        "modified": "2026-07-18T02:19:13.114Z"
+        "size": 371574,
+        "modified": "2026-07-18T06:50:14.614Z"
+      },
+      {
+        "name": "history-archive.png",
+        "path": "tablet/history-archive.png",
+        "type": "screenshot",
+        "viewport": "tablet",
+        "view": "history",
+        "size": 527506,
+        "modified": "2026-07-18T06:50:14.615Z"
       },
       {
         "name": "history-date-picker.png",
@@ -2990,8 +3287,35 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "history",
-        "size": 382181,
-        "modified": "2026-07-18T02:19:13.116Z"
+        "size": 371574,
+        "modified": "2026-07-18T06:50:14.616Z"
+      },
+      {
+        "name": "history-notams.png",
+        "path": "tablet/history-notams.png",
+        "type": "screenshot",
+        "viewport": "tablet",
+        "view": "history",
+        "size": 299441,
+        "modified": "2026-07-18T06:50:14.617Z"
+      },
+      {
+        "name": "history-pireps.png",
+        "path": "tablet/history-pireps.png",
+        "type": "screenshot",
+        "viewport": "tablet",
+        "view": "history",
+        "size": 216958,
+        "modified": "2026-07-18T06:50:14.617Z"
+      },
+      {
+        "name": "history-safety-events.png",
+        "path": "tablet/history-safety-events.png",
+        "type": "screenshot",
+        "viewport": "tablet",
+        "view": "history",
+        "size": 501368,
+        "modified": "2026-07-18T06:50:14.618Z"
       },
       {
         "name": "history-session-detail.png",
@@ -2999,8 +3323,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "history",
-        "size": 383442,
-        "modified": "2026-07-18T02:19:13.117Z"
+        "size": 371574,
+        "modified": "2026-07-18T06:50:14.619Z"
       },
       {
         "name": "history-sessions.png",
@@ -3008,8 +3332,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "history",
-        "size": 377383,
-        "modified": "2026-07-18T02:19:13.118Z"
+        "size": 405783,
+        "modified": "2026-07-18T06:50:14.620Z"
       },
       {
         "name": "history-sightings.png",
@@ -3017,8 +3341,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "history",
-        "size": 346651,
-        "modified": "2026-07-18T02:19:13.120Z"
+        "size": 362281,
+        "modified": "2026-07-18T06:50:14.621Z"
       },
       {
         "name": "history-with-replay.png",
@@ -3026,8 +3350,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "history",
-        "size": 380472,
-        "modified": "2026-07-18T02:19:13.121Z"
+        "size": 371574,
+        "modified": "2026-07-18T06:50:14.623Z"
       },
       {
         "name": "login-form.png",
@@ -3768,8 +4092,17 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "assistant",
-        "size": 213266,
-        "modified": "2026-07-18T02:19:13.032Z"
+        "size": 411901,
+        "modified": "2026-07-18T06:50:14.594Z"
+      },
+      {
+        "name": "assistant-prompt.png",
+        "path": "desktop/assistant-prompt.png",
+        "type": "screenshot",
+        "viewport": "desktop",
+        "view": "assistant",
+        "size": 418101,
+        "modified": "2026-07-18T06:50:14.596Z"
       },
       {
         "name": "assistant-overview.png",
@@ -3777,8 +4110,17 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "assistant",
-        "size": 131035,
-        "modified": "2026-07-18T02:19:13.162Z"
+        "size": 189020,
+        "modified": "2026-07-18T06:50:14.623Z"
+      },
+      {
+        "name": "assistant-prompt.png",
+        "path": "mobile/assistant-prompt.png",
+        "type": "screenshot",
+        "viewport": "mobile",
+        "view": "assistant",
+        "size": 193593,
+        "modified": "2026-07-18T06:50:14.624Z"
       },
       {
         "name": "assistant-overview.png",
@@ -3786,8 +4128,17 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "assistant",
-        "size": 183006,
-        "modified": "2026-07-18T02:19:13.100Z"
+        "size": 364893,
+        "modified": "2026-07-18T06:50:14.609Z"
+      },
+      {
+        "name": "assistant-prompt.png",
+        "path": "tablet/assistant-prompt.png",
+        "type": "screenshot",
+        "viewport": "tablet",
+        "view": "assistant",
+        "size": 370408,
+        "modified": "2026-07-18T06:50:14.611Z"
       }
     ],
     "audio": [
@@ -4066,13 +4417,31 @@
     ],
     "history": [
       {
+        "name": "history-acars.png",
+        "path": "desktop/history-acars.png",
+        "type": "screenshot",
+        "viewport": "desktop",
+        "view": "history",
+        "size": 339633,
+        "modified": "2026-07-18T06:50:14.597Z"
+      },
+      {
         "name": "history-analytics.png",
         "path": "desktop/history-analytics.png",
         "type": "screenshot",
         "viewport": "desktop",
         "view": "history",
-        "size": 524723,
-        "modified": "2026-07-18T02:19:13.049Z"
+        "size": 523078,
+        "modified": "2026-07-18T06:50:14.598Z"
+      },
+      {
+        "name": "history-archive.png",
+        "path": "desktop/history-archive.png",
+        "type": "screenshot",
+        "viewport": "desktop",
+        "view": "history",
+        "size": 475275,
+        "modified": "2026-07-18T06:50:14.599Z"
       },
       {
         "name": "history-date-picker.png",
@@ -4080,8 +4449,35 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "history",
-        "size": 507795,
-        "modified": "2026-07-18T02:19:13.050Z"
+        "size": 523734,
+        "modified": "2026-07-18T06:50:14.601Z"
+      },
+      {
+        "name": "history-notams.png",
+        "path": "desktop/history-notams.png",
+        "type": "screenshot",
+        "viewport": "desktop",
+        "view": "history",
+        "size": 295484,
+        "modified": "2026-07-18T06:50:14.601Z"
+      },
+      {
+        "name": "history-pireps.png",
+        "path": "desktop/history-pireps.png",
+        "type": "screenshot",
+        "viewport": "desktop",
+        "view": "history",
+        "size": 232168,
+        "modified": "2026-07-18T06:50:14.602Z"
+      },
+      {
+        "name": "history-safety-events.png",
+        "path": "desktop/history-safety-events.png",
+        "type": "screenshot",
+        "viewport": "desktop",
+        "view": "history",
+        "size": 567393,
+        "modified": "2026-07-18T06:50:14.603Z"
       },
       {
         "name": "history-session-detail.png",
@@ -4089,8 +4485,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "history",
-        "size": 509204,
-        "modified": "2026-07-18T02:19:13.052Z"
+        "size": 523078,
+        "modified": "2026-07-18T06:50:14.604Z"
       },
       {
         "name": "history-sessions.png",
@@ -4098,8 +4494,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "history",
-        "size": 493010,
-        "modified": "2026-07-18T02:19:13.053Z"
+        "size": 522311,
+        "modified": "2026-07-18T06:50:14.605Z"
       },
       {
         "name": "history-sightings.png",
@@ -4107,8 +4503,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "history",
-        "size": 406199,
-        "modified": "2026-07-18T02:19:13.054Z"
+        "size": 388684,
+        "modified": "2026-07-18T06:50:14.606Z"
       },
       {
         "name": "history-with-replay.png",
@@ -4116,8 +4512,8 @@
         "type": "screenshot",
         "viewport": "desktop",
         "view": "history",
-        "size": 526031,
-        "modified": "2026-07-18T02:19:13.055Z"
+        "size": 523592,
+        "modified": "2026-07-18T06:50:14.607Z"
       },
       {
         "name": "history-1.png",
@@ -4129,13 +4525,31 @@
         "modified": "2025-12-27T09:18:34.000Z"
       },
       {
+        "name": "history-acars.png",
+        "path": "mobile/history-acars.png",
+        "type": "screenshot",
+        "viewport": "mobile",
+        "view": "history",
+        "size": 199286,
+        "modified": "2026-07-18T06:50:14.625Z"
+      },
+      {
         "name": "history-analytics.png",
         "path": "mobile/history-analytics.png",
         "type": "screenshot",
         "viewport": "mobile",
         "view": "history",
-        "size": 164023,
-        "modified": "2026-07-18T02:19:13.173Z"
+        "size": 188505,
+        "modified": "2026-07-18T06:50:14.626Z"
+      },
+      {
+        "name": "history-archive.png",
+        "path": "mobile/history-archive.png",
+        "type": "screenshot",
+        "viewport": "mobile",
+        "view": "history",
+        "size": 137653,
+        "modified": "2026-07-18T06:50:14.627Z"
       },
       {
         "name": "history-date-picker.png",
@@ -4143,8 +4557,35 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "history",
-        "size": 164023,
-        "modified": "2026-07-18T02:19:13.174Z"
+        "size": 188505,
+        "modified": "2026-07-18T06:50:14.627Z"
+      },
+      {
+        "name": "history-notams.png",
+        "path": "mobile/history-notams.png",
+        "type": "screenshot",
+        "viewport": "mobile",
+        "view": "history",
+        "size": 183775,
+        "modified": "2026-07-18T06:50:14.628Z"
+      },
+      {
+        "name": "history-pireps.png",
+        "path": "mobile/history-pireps.png",
+        "type": "screenshot",
+        "viewport": "mobile",
+        "view": "history",
+        "size": 151885,
+        "modified": "2026-07-18T06:50:14.628Z"
+      },
+      {
+        "name": "history-safety-events.png",
+        "path": "mobile/history-safety-events.png",
+        "type": "screenshot",
+        "viewport": "mobile",
+        "view": "history",
+        "size": 223786,
+        "modified": "2026-07-18T06:50:14.629Z"
       },
       {
         "name": "history-session-detail.png",
@@ -4152,8 +4593,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "history",
-        "size": 164023,
-        "modified": "2026-07-18T02:19:13.175Z"
+        "size": 188505,
+        "modified": "2026-07-18T06:50:14.630Z"
       },
       {
         "name": "history-sessions.png",
@@ -4161,8 +4602,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "history",
-        "size": 164023,
-        "modified": "2026-07-18T02:19:13.176Z"
+        "size": 188505,
+        "modified": "2026-07-18T06:50:14.630Z"
       },
       {
         "name": "history-sightings.png",
@@ -4170,8 +4611,8 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "history",
-        "size": 160030,
-        "modified": "2026-07-18T02:19:13.176Z"
+        "size": 188582,
+        "modified": "2026-07-18T06:50:14.631Z"
       },
       {
         "name": "history-with-replay.png",
@@ -4179,8 +4620,17 @@
         "type": "screenshot",
         "viewport": "mobile",
         "view": "history",
-        "size": 164023,
-        "modified": "2026-07-18T02:19:13.177Z"
+        "size": 188505,
+        "modified": "2026-07-18T06:50:14.632Z"
+      },
+      {
+        "name": "history-acars.png",
+        "path": "tablet/history-acars.png",
+        "type": "screenshot",
+        "viewport": "tablet",
+        "view": "history",
+        "size": 329016,
+        "modified": "2026-07-18T06:50:14.612Z"
       },
       {
         "name": "history-analytics.png",
@@ -4188,8 +4638,17 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "history",
-        "size": 396769,
-        "modified": "2026-07-18T02:19:13.114Z"
+        "size": 371574,
+        "modified": "2026-07-18T06:50:14.614Z"
+      },
+      {
+        "name": "history-archive.png",
+        "path": "tablet/history-archive.png",
+        "type": "screenshot",
+        "viewport": "tablet",
+        "view": "history",
+        "size": 527506,
+        "modified": "2026-07-18T06:50:14.615Z"
       },
       {
         "name": "history-date-picker.png",
@@ -4197,8 +4656,35 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "history",
-        "size": 382181,
-        "modified": "2026-07-18T02:19:13.116Z"
+        "size": 371574,
+        "modified": "2026-07-18T06:50:14.616Z"
+      },
+      {
+        "name": "history-notams.png",
+        "path": "tablet/history-notams.png",
+        "type": "screenshot",
+        "viewport": "tablet",
+        "view": "history",
+        "size": 299441,
+        "modified": "2026-07-18T06:50:14.617Z"
+      },
+      {
+        "name": "history-pireps.png",
+        "path": "tablet/history-pireps.png",
+        "type": "screenshot",
+        "viewport": "tablet",
+        "view": "history",
+        "size": 216958,
+        "modified": "2026-07-18T06:50:14.617Z"
+      },
+      {
+        "name": "history-safety-events.png",
+        "path": "tablet/history-safety-events.png",
+        "type": "screenshot",
+        "viewport": "tablet",
+        "view": "history",
+        "size": 501368,
+        "modified": "2026-07-18T06:50:14.618Z"
       },
       {
         "name": "history-session-detail.png",
@@ -4206,8 +4692,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "history",
-        "size": 383442,
-        "modified": "2026-07-18T02:19:13.117Z"
+        "size": 371574,
+        "modified": "2026-07-18T06:50:14.619Z"
       },
       {
         "name": "history-sessions.png",
@@ -4215,8 +4701,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "history",
-        "size": 377383,
-        "modified": "2026-07-18T02:19:13.118Z"
+        "size": 405783,
+        "modified": "2026-07-18T06:50:14.620Z"
       },
       {
         "name": "history-sightings.png",
@@ -4224,8 +4710,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "history",
-        "size": 346651,
-        "modified": "2026-07-18T02:19:13.120Z"
+        "size": 362281,
+        "modified": "2026-07-18T06:50:14.621Z"
       },
       {
         "name": "history-with-replay.png",
@@ -4233,8 +4719,8 @@
         "type": "screenshot",
         "viewport": "tablet",
         "view": "history",
-        "size": 380472,
-        "modified": "2026-07-18T02:19:13.121Z"
+        "size": 371574,
+        "modified": "2026-07-18T06:50:14.623Z"
       }
     ],
     "login": [

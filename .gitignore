@@ -25,3 +25,6 @@ skyspy_acars_*.csv
 skyspy_acars_*.json
 skyspy_screenshot_*.html
 skyspy_screenshot_*.txt
+
+# Local env backups
+.env.test.bak.*

@@ -351,6 +351,12 @@ services:
   #   LLM_API_URL=http://vllm:8000/v1
   #   ASSISTANT_MODEL / LLM_MODEL=<the served model>
   # Use a tool-calling-capable model; the parser must match it (hermes shown).
+  # Context window: --max-model-len sets how many tokens the server accepts. The
+  # SkySpy assistant's prompt + 31 tool schemas need well over 8k, so this defaults
+  # to 32768 (Qwen2.5-7B's native max). Raise VLLM_MAX_MODEL_LEN up to the model's
+  # limit; if vLLM logs it auto-reduced the window (KV cache won't fit), lower it
+  # or bump VLLM_GPU_MEMORY_UTILIZATION / use a bigger GPU. It must be <= the
+  # model's native max_position_embeddings.
   vllm:
     image: vllm/vllm-openai:latest
     container_name: skyspy-vllm
@@ -362,6 +368,8 @@ services:
     command: >
       --model ${VLLM_MODEL:-Qwen/Qwen2.5-7B-Instruct}
       --served-model-name ${ASSISTANT_MODEL:-Qwen/Qwen2.5-7B-Instruct}
+      --max-model-len ${VLLM_MAX_MODEL_LEN:-32768}
+      --gpu-memory-utilization ${VLLM_GPU_MEMORY_UTILIZATION:-0.90}
       --enable-auto-tool-choice
       --tool-call-parser ${VLLM_TOOL_PARSER:-hermes}
       --port 8000

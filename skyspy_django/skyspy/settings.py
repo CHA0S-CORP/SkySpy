@@ -635,6 +635,12 @@ UPSTREAM_API_MIN_INTERVAL = get_env("UPSTREAM_API_MIN_INTERVAL", "60", int)
 PHOTO_CACHE_ENABLED = get_env("PHOTO_CACHE_ENABLED", "True", bool)
 PHOTO_CACHE_DIR = get_env("PHOTO_CACHE_DIR", "/data/photos")
 PHOTO_AUTO_DOWNLOAD = get_env("PHOTO_AUTO_DOWNLOAD", "True", bool)
+# Planespotters photo API rejects (HTTP 403) any request whose User-Agent lacks
+# a contact URL or email. Must include a "(+https://…)" or an address — set your
+# own so they can reach the operator. Default is compliant but generic.
+PHOTO_PLANESPOTTERS_USER_AGENT = get_env(
+    "PHOTO_PLANESPOTTERS_USER_AGENT", "skyspy/2.6 (+https://github.com/skyspy/skyspy)"
+)
 
 # S3 Storage
 S3_ENABLED = get_env("S3_ENABLED", "False", bool)
@@ -702,6 +708,13 @@ ASSISTANT_TIMEOUT = get_env("ASSISTANT_TIMEOUT", "60", int)
 ASSISTANT_MAX_RESULT_CHARS = get_env("ASSISTANT_MAX_RESULT_CHARS", "6000", int)
 ASSISTANT_MAX_HISTORY_MSGS = get_env("ASSISTANT_MAX_HISTORY_MSGS", "16", int)
 ASSISTANT_MAX_HISTORY_CHARS = get_env("ASSISTANT_MAX_HISTORY_CHARS", "3000", int)
+# The chat model's max context window in tokens. When set to a small value
+# (<=16000, e.g. a local 8k vLLM/Ollama model) the assistant auto-switches to
+# COMPACT MODE: a short system prompt, first-sentence-only tool descriptions, and
+# tighter result/history/briefing caps — so the fixed prompt + 31 tool schemas
+# stop overflowing the window on the very first model call. 0 (default) = assume a
+# large context, no compaction.
+ASSISTANT_CONTEXT_WINDOW = get_env("ASSISTANT_CONTEXT_WINDOW", "0", int)
 # Inject a compact live-situation snapshot into each assistant query so answers
 # are grounded in current traffic without spending a tool call. Disable on tiny
 # models / RPi if the extra context hurts.

@@ -256,12 +256,28 @@ ASSISTANT_BRIEFING_ENABLED=True
 ASSISTANT_MAX_RESULT_CHARS=6000   # per-tool result cap
 ASSISTANT_MAX_HISTORY_MSGS=16     # prior turns carried
 ASSISTANT_MAX_HISTORY_CHARS=3000  # per-message cap
+# Model's max context window (tokens). Set for small local models (e.g. 8192 vLLM/
+# Ollama). When <=16000 the assistant auto-switches to COMPACT MODE: a short system
+# prompt (COMPACT_SYSTEM_PROMPT), first-sentence-only tool descriptions, and tighter
+# result/history/briefing/page-context caps — the fixed SYSTEM_PROMPT (~3k tokens) +
+# 31 tool schemas would otherwise overflow an 8k window on the first model call
+# ("prompt contains at least 8193 input tokens"). 0 (default) = assume large, no
+# compaction.
+ASSISTANT_CONTEXT_WINDOW=0
 # Airframe photos in assistant answers are rendered from the fetch_airframe_photo
 # tool call with a server-templated <img> src (NOT LLM markdown — the model was
 # hallucinating photo URLs). Empty (default) auto-infers: a signed S3 URL when
 # S3_ENABLED, else same-origin /api/v1/photos/<hex>. Set a public asset base to
 # force <base>/<HEX>.jpg (e.g. https://sky-spy-assets.s3.amazonaws.com/photos).
 ASSISTANT_PHOTO_BASE_URL=
+
+# Aircraft photo enrichment. The photo chain is planespotters (hex then reg) →
+# airport-data.com (hex/reg) → hexdb.io → flickr (GA tail fallback). Planespotters'
+# free photo API 403s any request whose User-Agent lacks a contact URL or email —
+# so ALL planespotters photo calls send this UA. Set your own contact so they can
+# reach the operator. Registration fallback matters: many US GA airframes and
+# helicopters (e.g. N882SD) are indexed by tail only, not by Mode-S hex.
+PHOTO_PLANESPOTTERS_USER_AGENT=skyspy/2.6 (+https://github.com/skyspy/skyspy)
 ```
 
 ### Redis Layout

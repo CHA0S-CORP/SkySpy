@@ -24,11 +24,21 @@ logger = logging.getLogger(__name__)
 _MAX_RESULT_CHARS = 6000
 
 
+# On small context windows a single 6000-char tool result (~1500 tokens) is too
+# big — several tool rounds accumulate and overflow. Cap results harder there.
+_COMPACT_WINDOW_THRESHOLD = 16000
+_COMPACT_RESULT_CHARS = 1200
+
+
 def _max_result_chars() -> int:
     try:
         from django.conf import settings
 
-        return int(getattr(settings, "ASSISTANT_MAX_RESULT_CHARS", _MAX_RESULT_CHARS))
+        configured = int(getattr(settings, "ASSISTANT_MAX_RESULT_CHARS", _MAX_RESULT_CHARS))
+        window = int(getattr(settings, "ASSISTANT_CONTEXT_WINDOW", 0) or 0)
+        if 0 < window <= _COMPACT_WINDOW_THRESHOLD:
+            return min(configured, _COMPACT_RESULT_CHARS)
+        return configured
     except Exception:  # broad: settings unconfigured (bare import/test) → safe default
         return _MAX_RESULT_CHARS
 
@@ -57,7 +67,16 @@ def _json(obj: Any) -> str:
         return json.dumps({"error": f"unserializable result: {e}"})
     cap = _max_result_chars()
     if len(text) > cap:
-        text = text[:cap] + '…","_truncated":true}'
+        # Wrap the trimmed content as a JSON *string* so the result stays valid
+        # JSON (the old sentinel append produced un-parseable output, which the
+        # model — and json.loads — choked on). Shave the preview until the whole
+        # object fits the cap even after escaping expands it.
+        preview = text[:cap]
+        out = json.dumps({"_truncated": True, "preview": preview}, separators=(",", ":"))
+        while len(out) > cap and preview:
+            preview = preview[: -(len(out) - cap) - 1]
+            out = json.dumps({"_truncated": True, "preview": preview}, separators=(",", ":"))
+        return out
     return text
 
 
@@ -304,16 +323,26 @@ def acars_timeline(hours: int = 24, interval: str = "hour") -> str:
 
 
 @_guarded
-def lookup_airframe(icao_hex: str) -> str:
-    """Look up everything known about one airframe by its 6-char ICAO hex:
-    registration, type, manufacturer, operator, owner + ownership-risk signals,
-    per-field provenance, country, and photo. Returns {} if unknown."""
+def lookup_airframe(identifier: str) -> str:
+    """Look up everything known about one airframe by ICAO hex, tail number
+    (registration, e.g. 'N882SD'), OR a live callsign/flight number — the tool
+    resolves any of them to the hex itself, so pass whatever the user gave you.
+    Returns registration, type, manufacturer, operator, owner + ownership-risk
+    signals, per-field provenance, country, and photo. Returns
+    {"error": ...} only when the identifier can't be resolved to any aircraft."""
     from skyspy.services import aircraft_info
 
-    return _json(aircraft_info.get_aircraft_info((icao_hex or "").strip()) or {})
+    ident = (identifier or "").strip()
+    hex_code = _resolve_to_hex(ident)
+    if not hex_code:
+        return _json({"error": f"could not resolve '{identifier}' to an aircraft", "identifier": identifier})
+    info = aircraft_info.get_aircraft_info(hex_code) or {}
+    # Even with no DB/live record, a resolved US tail still yields hex + reg so the
+    # answer is never an empty "unknown" — surface what we do know.
+    info.setdefault("icao_hex", hex_code)
+    return _json(info)
 
 
-@_guarded
 def _resolve_to_hex(identifier: str) -> str | None:
     """Resolve an ICAO hex, live callsign/flight number, or tail number to a hex.
 
@@ -321,6 +350,8 @@ def _resolve_to_hex(identifier: str) -> str | None:
     - Otherwise matched against the live-aircraft cache on callsign OR
       registration (e.g. 'ASA111' or 'N842UA' -> 'A1B2C3').
     - A tail number not currently airborne falls back to the airframe DB.
+    - A US N-number is finally converted deterministically (N882SD -> hex), so a
+      tail that's never been tracked still resolves.
     """
     ident = (identifier or "").strip().upper()
     if not ident:
@@ -341,7 +372,15 @@ def _resolve_to_hex(identifier: str) -> str | None:
     from skyspy.models import AircraftInfo
 
     hex_code = AircraftInfo.objects.filter(registration__iexact=ident).values_list("icao_hex", flat=True).first()
-    return hex_code.upper() if hex_code else None
+    if hex_code:
+        return hex_code.upper()
+
+    # Last resort: US N-numbers map deterministically to an ICAO hex, no data
+    # needed. Covers tails never seen by the receiver or stored in any DB.
+    from skyspy.services.nnumber import n_to_icao
+
+    n_hex = n_to_icao(ident)
+    return n_hex.upper() if n_hex else None
 
 
 def fetch_airframe_photo(aircraft: str, force: bool = False) -> str:
@@ -450,10 +489,11 @@ def find_safety_events(hours: int = 24, event_type: str = "", severity: str = ""
         qs = qs.filter(event_type=event_type)
     if severity:
         qs = qs.filter(severity=severity)
+    total = qs.count()
     rows = list(
         qs.order_by("-timestamp").values("event_type", "severity", "icao_hex", "callsign", "message", "timestamp")[:25]
     )
-    return _json({"count": qs.count(), "events": rows})
+    return _json({"count": len(rows), "total_matching": total, "events": rows})
 
 
 @_guarded
@@ -630,7 +670,9 @@ def aircraft_track(identifier: str, hours: int = 6, points: int = 60) -> str:
         .values("latitude", "longitude", "altitude_baro", "track", "vertical_rate", "timestamp")
     )
     n = max(10, min(200, int(points or 60)))
-    step = max(1, len(rows) // n)
+    # Ceil division so the downsampled track never exceeds the requested point count
+    # (plain floor-div leaves step=1 when len(rows) is just above n, returning all rows).
+    step = max(1, -(-len(rows) // n))
     track = [
         {
             "lat": r["latitude"],
@@ -652,6 +694,22 @@ def aircraft_track(identifier: str, hours: int = 6, points: int = 60) -> str:
             "track": track,
         }
     )
+
+
+@_guarded
+def detect_unusual_patterns(hours: int = 6, limit: int = 15) -> str:
+    """Scan recent flown tracks and return aircraft whose FLIGHT PATH is unusual —
+    orbiting/holding, circling, grid or zig-zag survey lines, meandering, and
+    especially the multi_orbit_survey shape (several tight orbits joined by long
+    transit legs, typical of surveillance/aerial-survey work). Each hit has a
+    pattern label, an unusualness score (higher = stranger), geometry metrics
+    (loiter_count, revolutions, reversals, tortuosity, path/net nm) and a map-able
+    center. Use for 'anything flying a strange/suspicious pattern', 'is anyone
+    surveying/orbiting the area', or to explain an odd shape on the map. Drill into
+    a specific hit with aircraft_track."""
+    from skyspy.services import flight_anomaly
+
+    return _json(flight_anomaly.scan_unusual_patterns(hours=_clamp_hours(hours, hi=168), limit=limit))
 
 
 @_guarded
@@ -734,14 +792,33 @@ TOOL_FUNCS = [
     semantic_event_search,
     metric_correlations,
     aircraft_track,
+    detect_unusual_patterns,
     identify_law_enforcement,
     threat_assessment,
 ]
 
 
-def get_tools() -> list:
+def _short_description(doc: str | None) -> str:
+    """First sentence of a tool docstring, whitespace-collapsed and length-capped —
+    the compact-mode tool description, so 31 tool schemas fit a small window."""
+    text = " ".join((doc or "").split())
+    m = re.match(r"(.+?[.!?])(\s|$)", text)
+    first = m.group(1) if m else text
+    return first[:200]
+
+
+def get_tools(compact: bool = False) -> list:
     """Wrap the plain functions as LangChain StructuredTools (lazy import so this
-    module stays importable/testable without LangChain installed)."""
+    module stays importable/testable without LangChain installed).
+
+    In ``compact`` mode each tool's description is trimmed to its first sentence so
+    the combined tool schemas don't overflow a small-context model."""
     from langchain_core.tools import StructuredTool
 
-    return [StructuredTool.from_function(fn) for fn in TOOL_FUNCS]
+    tools = []
+    for fn in TOOL_FUNCS:
+        if compact:
+            tools.append(StructuredTool.from_function(fn, description=_short_description(fn.__doc__)))
+        else:
+            tools.append(StructuredTool.from_function(fn))
+    return tools

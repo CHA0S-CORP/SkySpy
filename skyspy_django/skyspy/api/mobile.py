@@ -367,6 +367,7 @@ class MobileViewSet(ViewSet):
                 operator=aircraft.get("ownOp") or aircraft.get("operator"),
                 category=aircraft.get("category"),
                 type_code=aircraft.get("t") or aircraft.get("type"),
+                owner=aircraft.get("owner"),
             )
 
             # Only include if it's a threat (law enforcement, helicopter, or surveillance type)

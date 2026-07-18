@@ -36,6 +36,13 @@ SYSTEM_PROMPT = (
     "keywords, free-text and rarity) instead of semantic search. "
     "Reach for the counts/recency tools (acars_summary, airport_notams, "
     "recent_pireps) when the ask is 'how many' or 'at airport X', not 'about'.\n"
+    "- Aircraft identifiers: a user may give an ICAO hex (6 hex chars, e.g. "
+    "AC26D7), a tail number/registration (e.g. N882SD, G-ABCD), or a live callsign "
+    "(e.g. UAL123). Pass whatever they gave straight to lookup_airframe / "
+    "aircraft_track / fetch_airframe_photo — those tools resolve any form to the "
+    "hex themselves (US tails convert deterministically, so they resolve even if "
+    "never tracked). Never call a tail number an 'ICAO hex', and don't declare an "
+    "aircraft unknown just because it isn't live — try lookup_airframe first.\n"
     "- Cite ICAO hex codes and the numbers the tools return. If a tool returns "
     "an error or no data, say so plainly rather than guessing.\n"
     "- Never invent the meaning of a code (ACARS label, squawk, category). Use "
@@ -54,11 +61,16 @@ SYSTEM_PROMPT = (
     "unusual and why, not only what happened.\n"
     "- Behavior & detection tools: metric_correlations (relationships in "
     "telemetry), aircraft_track (an aircraft's flown path + orbit/loiter/climb/"
-    "descent flags — renders a map), identify_law_enforcement (police/gov/"
-    "surveillance classification by hex/callsign/tail), threat_assessment (live "
-    "traffic closing on/loitering over the receiver). Use aircraft_track for 'is "
-    "anything orbiting/holding/loitering' and identify_law_enforcement/"
-    "threat_assessment for 'is this/anything a police or surveillance aircraft'.\n"
+    "descent flags — renders a map), detect_unusual_patterns (SCANS every recent "
+    "track and ranks aircraft flying strange geometry — orbits, holding, grid/"
+    "zig-zag survey lines, or the multi_orbit_survey shape of several orbits joined "
+    "by long legs), identify_law_enforcement (police/gov/surveillance classification "
+    "by hex/callsign/tail), threat_assessment (live traffic closing on/loitering "
+    "over the receiver). Use detect_unusual_patterns for 'is anyone flying a strange/"
+    "suspicious pattern' or 'anything surveying the area' (then aircraft_track to "
+    "drill into one hit); aircraft_track for a NAMED aircraft's path; and "
+    "identify_law_enforcement/threat_assessment for 'is this/anything a police or "
+    "surveillance aircraft'.\n"
     "- Example synthesis — 'anything unusual tonight?': call platform_activity + "
     "time_comparison (vs baseline), find_safety_events (emergencies), and "
     "metric_correlations (odd telemetry); then lead with the one or two genuinely "
@@ -150,6 +162,53 @@ SYSTEM_PROMPT = (
 )
 
 
+# Compact system prompt for small-context models (see ASSISTANT_CONTEXT_WINDOW).
+# Keeps the load-bearing rules — never hallucinate facts/codes, resolve any
+# identifier form, and let the app (not the model) render photos/maps from tool
+# calls — but drops the verbose chart/breakdown/formatting example blocks that an
+# 8k model can't spend tokens on anyway.
+COMPACT_SYSTEM_PROMPT = (
+    "You are SkySpy's analytics assistant. Answer questions about tracked "
+    "aircraft and platform activity by calling the provided tools and reasoning "
+    "over their results.\n"
+    "- Use tools for every fact; never invent numbers, registrations, codes, or "
+    "events. If a tool errors or returns no data, say so plainly.\n"
+    "- Pick the most specific tool. semantic_* tools FIND content by meaning; the "
+    "counts/recency tools (acars_summary, airport_notams, recent_pireps) answer "
+    "'how many' / 'at airport X'.\n"
+    "- Identifiers: a user may give an ICAO hex, a tail number, or a live "
+    "callsign. Pass whatever they gave straight to lookup_airframe / "
+    "aircraft_track / fetch_airframe_photo — those tools resolve any form to the "
+    "hex. Never call a tail number an 'ICAO hex'.\n"
+    "- Never invent the meaning of a code (ACARS label, squawk, category); use the "
+    "name/description the tool returns, or report the raw code.\n"
+    "- Photos: call fetch_airframe_photo — the app renders the image itself, so do "
+    "NOT write an image URL or a Markdown image.\n"
+    "- Maps: for 'where' questions call live_aircraft_map / recent_pireps / "
+    "aircraft_track — the app renders the map from the tool's coordinates, so "
+    "never type lat/lon yourself.\n"
+    "- Surface what's interesting (anomalies, rare/military/law-enforcement "
+    "traffic, high/low vs normal), not just a lone number.\n"
+    "- Be concise: a direct answer first in GitHub-flavored Markdown, then brief "
+    "supporting detail."
+)
+
+# Models at/below this context window (tokens) run in compact mode.
+_COMPACT_WINDOW_THRESHOLD = 16000
+
+
+def _context_window() -> int:
+    return int(getattr(settings, "ASSISTANT_CONTEXT_WINDOW", 0) or 0)
+
+
+def compact_mode() -> bool:
+    """True when the configured model context window is small enough that the full
+    prompt + tool schemas would overflow it — trims prompt, tool descriptions and
+    caps. 0/unset means assume a large window (no compaction)."""
+    window = _context_window()
+    return 0 < window <= _COMPACT_WINDOW_THRESHOLD
+
+
 def is_available() -> bool:
     """True when the assistant is enabled and an LLM endpoint is configured."""
     if not (getattr(settings, "ASSISTANT_ENABLED", False) and getattr(settings, "LLM_ENABLED", False)):
@@ -162,7 +221,7 @@ def is_available() -> bool:
 
 def _recursion_limit() -> int:
     # Each tool round is ~2 graph steps (model call + tool). Leave headroom.
-    return getattr(settings, "ASSISTANT_MAX_STEPS", 6) * 2 + 2
+    return getattr(settings, "ASSISTANT_MAX_STEPS", 10) * 2 + 2
 
 
 def _build_agent():
@@ -180,7 +239,9 @@ def _build_agent():
         timeout=getattr(settings, "ASSISTANT_TIMEOUT", 60),
         max_retries=1,
     )
-    return create_agent(llm, get_tools(), system_prompt=SYSTEM_PROMPT)
+    compact = compact_mode()
+    prompt = COMPACT_SYSTEM_PROMPT if compact else SYSTEM_PROMPT
+    return create_agent(llm, get_tools(compact=compact), system_prompt=prompt)
 
 
 # Cap injected page context so a huge DOM snapshot can't blow the context window.
@@ -203,6 +264,9 @@ def _normalize_history(history) -> list[dict]:
         return []
     max_msgs = int(getattr(settings, "ASSISTANT_MAX_HISTORY_MSGS", _DEFAULT_MAX_HISTORY_MSGS))
     max_chars = int(getattr(settings, "ASSISTANT_MAX_HISTORY_CHARS", _DEFAULT_MAX_HISTORY_CHARS))
+    if compact_mode():
+        # Carry only the last couple of turns, tightly trimmed, on small windows.
+        max_msgs, max_chars = min(max_msgs, 4), min(max_chars, 800)
     out = []
     for m in history[-max_msgs:]:
         if not isinstance(m, dict):
@@ -256,7 +320,8 @@ def _situation_briefing() -> str:
         }
         # Drop empty keys so the block stays terse.
         snapshot = {k: v for k, v in snapshot.items() if v not in (None, "")}
-        text = json.dumps(snapshot, default=str, separators=(",", ":"))[:_MAX_BRIEFING_CHARS] if snapshot else ""
+        cap = min(_MAX_BRIEFING_CHARS, 600) if compact_mode() else _MAX_BRIEFING_CHARS
+        text = json.dumps(snapshot, default=str, separators=(",", ":"))[:cap] if snapshot else ""
         cache.set(_BRIEFING_CACHE_KEY, text, _BRIEFING_TTL)
         return text
     except Exception as e:  # broad: briefing is a best-effort grounding hint, never fatal
@@ -277,7 +342,8 @@ def _compose_query(query: str, context: str | None) -> str:
         )
     context = (context or "").strip()
     if context:
-        context = context[:_MAX_CONTEXT_CHARS]
+        cap = min(_MAX_CONTEXT_CHARS, 1000) if compact_mode() else _MAX_CONTEXT_CHARS
+        context = context[:cap]
         parts.append(
             "[The user is currently viewing a page in the SkySpy app. Use the page "
             "context below as background — they may or may not be asking about it. "
@@ -553,6 +619,10 @@ async def astream(query: str, context: str | None = None, history=None):
         ):
             kind = event.get("event")
             if kind == "on_tool_start":
+                # Any tokens streamed before a tool call are intermediate reasoning,
+                # not the final answer — drop them so final.answer holds only the
+                # last model turn's text (matches sync ask()'s last-message behavior).
+                final_text.clear()
                 yield {"type": "tool", "tool": event.get("name"), "args": event.get("data", {}).get("input")}
             elif kind == "on_tool_end":
                 obs = _as_str(_obs_output(event))

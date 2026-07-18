@@ -2,6 +2,7 @@
 package app
 
 import (
+	"math"
 	"path/filepath"
 	"strings"
 	"time"
@@ -51,7 +52,8 @@ type Model struct {
 	selectedHex    string
 	rangeIdx       int
 	rangeOptions   []int
-	maxRange       float64
+	maxRange       float64 // animated current range (eases toward targetRange)
+	targetRange    float64 // selected range the scope zooms toward
 	settingsCursor int
 	overlayCursor  int
 
@@ -146,6 +148,7 @@ func NewModel(cfg *config.Config) *Model {
 		rangeIdx:         rangeIdx,
 		rangeOptions:     rangeOptions,
 		maxRange:         maxRange,
+		targetRange:      maxRange,
 		sweepAngle:       0,
 		blink:            false,
 		frame:            0,
@@ -219,6 +222,7 @@ func NewModelWithAuth(cfg *config.Config, authMgr *auth.Manager) *Model {
 		rangeIdx:         rangeIdx,
 		rangeOptions:     rangeOptions,
 		maxRange:         maxRange,
+		targetRange:      maxRange,
 		sweepAngle:       0,
 		blink:            false,
 		frame:            0,
@@ -496,6 +500,16 @@ func (m *Model) handleTick() (tea.Model, tea.Cmd) {
 	m.sweepAngle = float64(int(m.sweepAngle+float64(m.config.Radar.SweepSpeed)) % 360)
 	m.blink = !m.blink
 	m.frame++
+
+	// Ease the scope range toward the selected range so zoom glides
+	// instead of snapping (exponential smoothing, snap when close).
+	if m.maxRange != m.targetRange {
+		const zoomEase = 0.35
+		m.maxRange += (m.targetRange - m.maxRange) * zoomEase
+		if math.Abs(m.targetRange-m.maxRange) < 0.5 {
+			m.maxRange = m.targetRange
+		}
+	}
 
 	// Update VU meters based on real signal activity
 	m.updateVUMeters()
@@ -846,16 +860,16 @@ func (m *Model) selectPrev() {
 func (m *Model) zoomIn() {
 	if m.rangeIdx > 0 {
 		m.rangeIdx--
-		m.maxRange = float64(m.rangeOptions[m.rangeIdx])
-		m.notify("Range: " + itoa(int(m.maxRange)) + "nm")
+		m.targetRange = float64(m.rangeOptions[m.rangeIdx])
+		m.notify("Range: " + itoa(int(m.targetRange)) + "nm")
 	}
 }
 
 func (m *Model) zoomOut() {
 	if m.rangeIdx < len(m.rangeOptions)-1 {
 		m.rangeIdx++
-		m.maxRange = float64(m.rangeOptions[m.rangeIdx])
-		m.notify("Range: " + itoa(int(m.maxRange)) + "nm")
+		m.targetRange = float64(m.rangeOptions[m.rangeIdx])
+		m.notify("Range: " + itoa(int(m.targetRange)) + "nm")
 	}
 }
 

@@ -109,7 +109,16 @@ class FetchAircraftPhotosTests(TestCase):
             if "planespotters" in url:
                 return _resp(200, photos=[])  # miss on hex + reg
             if "airport-data.com" in url and "m=A1B2C3" in url:
-                return _ad_resp(200, rows=[{"image": AD_THUMB, "link": "https://x", "photographer": "Sam"}])
+                return _ad_resp(
+                    200,
+                    rows=[
+                        {
+                            "image": AD_THUMB,
+                            "link": "https://airport-data.com/aircraft/photo/001234",
+                            "photographer": "Sam",
+                        }
+                    ],
+                )
             return _resp(404)
 
         mock_get.side_effect = _by_url
@@ -118,8 +127,9 @@ class FetchAircraftPhotosTests(TestCase):
 
         info = AircraftInfo.objects.get(icao_hex="A1B2C3")
         self.assertEqual(info.photo_source, "airport-data.com")
-        # full-size derived by dropping the /thumbnails path segment
-        self.assertNotIn("/thumbnails", info.photo_url)
+        # Full-size lives on image.airport-data.com keyed by the link's photo id,
+        # NOT the thumbnail path minus /thumbnails (that 404s).
+        self.assertEqual(info.photo_url, "https://image.airport-data.com/aircraft/001234.jpg")
         self.assertIn("/thumbnails", info.photo_thumbnail_url)
 
     @patch("skyspy.tasks.external_db.http_client.head_ok", return_value=False)

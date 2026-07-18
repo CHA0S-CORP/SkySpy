@@ -650,6 +650,7 @@ class CannonballNamespace(socketio.AsyncNamespace):
                 operator=aircraft.get("ownOp") or aircraft.get("operator"),
                 category=aircraft.get("category"),
                 type_code=aircraft.get("t") or aircraft.get("type"),
+                owner=aircraft.get("owner"),
             )
 
             # Only include if it's a threat (law enforcement, helicopter, or surveillance type)
@@ -925,6 +926,7 @@ class CannonballNamespace(socketio.AsyncNamespace):
             operator=params.get("operator"),
             category=params.get("category"),
             type_code=params.get("type_code"),
+            owner=params.get("owner"),
         )
 
         return {

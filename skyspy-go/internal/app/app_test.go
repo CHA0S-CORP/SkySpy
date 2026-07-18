@@ -606,13 +606,14 @@ func TestModel_ZoomIn(t *testing.T) {
 	if initialIdx == 0 {
 		m.rangeIdx = 2
 		m.maxRange = float64(m.rangeOptions[2])
+		m.targetRange = m.maxRange
 	}
 
-	prevRange := m.maxRange
+	prevRange := m.targetRange
 	m.zoomIn()
 
-	if m.maxRange >= prevRange {
-		t.Errorf("expected range to decrease, was %f, now %f", prevRange, m.maxRange)
+	if m.targetRange >= prevRange {
+		t.Errorf("expected range to decrease, was %f, now %f", prevRange, m.targetRange)
 	}
 
 	if m.rangeIdx >= len(m.rangeOptions) {
@@ -634,12 +635,13 @@ func TestModel_ZoomOut(t *testing.T) {
 	// Start at a lower zoom level
 	m.rangeIdx = 1
 	m.maxRange = float64(m.rangeOptions[1])
+	m.targetRange = m.maxRange
 
-	prevRange := m.maxRange
+	prevRange := m.targetRange
 	m.zoomOut()
 
-	if m.maxRange <= prevRange {
-		t.Errorf("expected range to increase, was %f, now %f", prevRange, m.maxRange)
+	if m.targetRange <= prevRange {
+		t.Errorf("expected range to increase, was %f, now %f", prevRange, m.targetRange)
 	}
 
 	// Notification should be set

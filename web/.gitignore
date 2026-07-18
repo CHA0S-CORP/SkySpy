@@ -1,0 +1,6 @@
+
+# Playwright docs-pipeline artifacts (transient run output, wiped each run)
+e2e/docs/output/
+e2e/docs/report/
+e2e/docs/e2e/
+verify_final.png

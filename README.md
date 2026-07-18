@@ -171,8 +171,13 @@ Configure API endpoints, map display modes, and themes.
 #### Flight History
 
 <!-- SCREENSHOTS:history:START -->
+![History Acars](docs/screenshots/desktop/history-acars.png)
 ![History Analytics](docs/screenshots/desktop/history-analytics.png)
+![History Archive](docs/screenshots/desktop/history-archive.png)
 ![History Date Picker](docs/screenshots/desktop/history-date-picker.png)
+![History Notams](docs/screenshots/desktop/history-notams.png)
+![History Pireps](docs/screenshots/desktop/history-pireps.png)
+![History Safety Events](docs/screenshots/desktop/history-safety-events.png)
 ![History Session Detail](docs/screenshots/desktop/history-session-detail.png)
 ![History Sessions](docs/screenshots/desktop/history-sessions.png)
 ![History Sightings](docs/screenshots/desktop/history-sightings.png)
@@ -228,6 +233,7 @@ Configure API endpoints, map display modes, and themes.
 
 <!-- SCREENSHOTS:assistant:START -->
 ![Assistant Overview](docs/screenshots/desktop/assistant-overview.png)
+![Assistant Prompt](docs/screenshots/desktop/assistant-prompt.png)
 
 <sub>Also captured for: mobile, tablet (see `docs/screenshots/`).</sub>
 <!-- SCREENSHOTS:assistant:END -->

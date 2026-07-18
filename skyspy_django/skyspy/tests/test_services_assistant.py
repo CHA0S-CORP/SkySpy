@@ -55,6 +55,19 @@ class TestToolShapes:
         assert json.loads(tools.threat_assessment()) is not None
         assert json.loads(tools.semantic_event_search("close proximity conflict", 3)) is not None
 
+    def test_resolve_to_hex_accepts_hex_and_us_tail(self, db):
+        # A raw hex passes through; a US N-number resolves deterministically even
+        # when the aircraft was never tracked and isn't in any DB.
+        assert tools._resolve_to_hex("AC26D7") == "AC26D7"
+        assert tools._resolve_to_hex("N882SD") == "AC26D7"
+        assert tools._resolve_to_hex("not-a-plane") is None
+
+    def test_lookup_airframe_resolves_tail_number(self, db):
+        # The failing case: a tail must not be treated as an unknown ICAO hex.
+        data = json.loads(tools.lookup_airframe("N882SD"))
+        assert "error" not in data
+        assert data["icao_hex"] == "AC26D7"
+
     def test_track_pattern_flags_orbit(self):
         # A closed loop (returns near its start after a long path) → orbit_or_loiter.
         import math
@@ -103,6 +116,37 @@ class TestGetTools:
         assert {"platform_activity", "semantic_airframe_search", "lookup_airframe"} <= names
         # Every tool exposes a non-empty description (the docstring the model reads).
         assert all(t.description for t in lc_tools)
+
+    def test_compact_descriptions_are_shorter(self):
+        pytest.importorskip("langchain_core")
+        full = {t.name: t.description for t in tools.get_tools(compact=False)}
+        compact = {t.name: t.description for t in tools.get_tools(compact=True)}
+        assert full.keys() == compact.keys()
+        # Compact keeps every tool but trims each multi-sentence docstring.
+        assert all(d for d in compact.values())
+        assert all(len(compact[n]) <= len(full[n]) for n in full)
+        assert sum(len(d) for d in compact.values()) < sum(len(d) for d in full.values())
+
+
+class TestCompactMode:
+    @override_settings(ASSISTANT_CONTEXT_WINDOW=0)
+    def test_large_window_is_not_compact(self):
+        assert agent.compact_mode() is False
+
+    @override_settings(ASSISTANT_CONTEXT_WINDOW=8192)
+    def test_small_window_is_compact(self):
+        assert agent.compact_mode() is True
+
+    @override_settings(ASSISTANT_CONTEXT_WINDOW=8192, ASSISTANT_MAX_RESULT_CHARS=6000)
+    def test_compact_shrinks_result_cap(self):
+        assert tools._max_result_chars() == tools._COMPACT_RESULT_CHARS
+
+    @override_settings(ASSISTANT_CONTEXT_WINDOW=8192, ASSISTANT_MAX_HISTORY_MSGS=16, ASSISTANT_MAX_HISTORY_CHARS=3000)
+    def test_compact_trims_history(self):
+        history = [{"role": "user", "content": "x" * 5000} for _ in range(20)]
+        out = agent._normalize_history(history)
+        assert len(out) <= 4
+        assert all(len(m["content"]) <= 800 for m in out)
 
     # ---------------------------------------------------------------------------
     # Agent helpers + gating
