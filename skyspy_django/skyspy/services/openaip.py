@@ -8,6 +8,7 @@ Free tier: Unlimited with API key registration
 """
 
 import logging
+from datetime import UTC
 from typing import Any
 
 import httpx
@@ -153,9 +154,9 @@ def _retry_wait(retry_state) -> float:
                 from email.utils import parsedate_to_datetime
 
                 try:
-                    from datetime import datetime, timezone
+                    from datetime import datetime
 
-                    delta = (parsedate_to_datetime(retry_after) - datetime.now(timezone.utc)).total_seconds()
+                    delta = (parsedate_to_datetime(retry_after) - datetime.now(UTC)).total_seconds()
                     return max(1.0, min(delta, OPENAIP_RETRY_MAX_WAIT))
                 except (TypeError, ValueError):
                     pass

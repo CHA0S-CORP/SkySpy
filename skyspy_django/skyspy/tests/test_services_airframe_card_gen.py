@@ -101,8 +101,9 @@ def test_generate_card_validates_and_snaps():
         "wtc": "M — Medium",
         "confidence": 0.8,
     }
-    with patch.object(gen.llm_client, "is_available", return_value=True), patch.object(
-        gen.llm_client, "complete", return_value=_fake_llm(payload)
+    with (
+        patch.object(gen.llm_client, "is_available", return_value=True),
+        patch.object(gen.llm_client, "complete", return_value=_fake_llm(payload)),
     ):
         card = gen.generate_card("SU95")
 
@@ -160,7 +161,9 @@ def test_generate_card_falls_back_to_tail_photo_without_image():
         patch.object(gen.llm_client, "is_available", return_value=True),
         patch.object(gen.llm_client, "complete", return_value=_fake_llm(payload)),
         patch.object(gen.web_search, "is_enabled", return_value=True),
-        patch.object(gen.web_search, "gather_airframe_context", return_value={"text": "", "sources": [], "image": None}),
+        patch.object(
+            gen.web_search, "gather_airframe_context", return_value={"text": "", "sources": [], "image": None}
+        ),
     ):
         card = gen.generate_card("XYZ1")
     assert card["photo_cached"] is False
@@ -170,8 +173,9 @@ def test_generate_card_falls_back_to_tail_photo_without_image():
 @pytest.mark.django_db
 def test_generate_card_low_confidence_is_stub():
     payload = {"known": False, "name": "Mystery", "category": "ga", "confidence": 0.1}
-    with patch.object(gen.llm_client, "is_available", return_value=True), patch.object(
-        gen.llm_client, "complete", return_value=_fake_llm(payload)
+    with (
+        patch.object(gen.llm_client, "is_available", return_value=True),
+        patch.object(gen.llm_client, "complete", return_value=_fake_llm(payload)),
     ):
         card = gen.generate_card("ZZZZ")
     assert card["status"] == "stub"
@@ -196,8 +200,9 @@ def test_generate_card_bad_number_dropped():
         "archetype": "ga_single_high",
         "confidence": 0.9,
     }
-    with patch.object(gen.llm_client, "is_available", return_value=True), patch.object(
-        gen.llm_client, "complete", return_value=_fake_llm(payload)
+    with (
+        patch.object(gen.llm_client, "is_available", return_value=True),
+        patch.object(gen.llm_client, "complete", return_value=_fake_llm(payload)),
     ):
         card = gen.generate_card("XYZ1")
     assert card["length_m"] is None

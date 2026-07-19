@@ -48,6 +48,7 @@ def _feeder_bbox(radius_nm: float | None = None) -> str:
     d_lon = r / (60.0 * max(cos(radians(lat)), 0.1))
     return f"{lat - d_lat:.4f},{lon - d_lon:.4f},{lat + d_lat:.4f},{lon + d_lon:.4f}"
 
+
 # GeoJSON data sources (Natural Earth via GitHub)
 GEOJSON_SOURCES = {
     "countries": "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson",

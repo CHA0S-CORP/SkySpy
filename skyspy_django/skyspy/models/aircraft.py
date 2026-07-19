@@ -328,7 +328,9 @@ class AirframeTypeCard(models.Model):
     # card still stores something useful.
     name = models.CharField(max_length=120, blank=True, null=True)
     manufacturer = models.CharField(max_length=120, blank=True, null=True)
-    category = models.CharField(max_length=20, blank=True, null=True)  # airliner/regional/bizjet/turboprop/ga/military/rotor
+    category = models.CharField(
+        max_length=20, blank=True, null=True
+    )  # airliner/regional/bizjet/turboprop/ga/military/rotor
     role = models.CharField(max_length=120, blank=True, null=True)
 
     length_m = models.FloatField(blank=True, null=True)

@@ -373,7 +373,6 @@ class AlertServiceClassFilterTests(TestCase):
         ac = {"flight": "UAL123", "category": "A5"}
         self.assertEqual(self.service._classify_aircraft(ac), "commercial")
 
-
     def test_class_condition_matches_via_eq(self):
         result = self.service._evaluate_simple_condition({"military": True}, "class", "eq", "military")
         self.assertTrue(result)

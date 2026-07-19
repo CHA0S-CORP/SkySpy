@@ -835,7 +835,8 @@ class TestConnectionLifecycle:
 
         with patch("skyspy.socketio.namespaces.main.sio", mock_sio_server):
             with patch(
-                "skyspy.socketio.namespaces.main.authenticate_socket", AsyncMock(return_value=(AnonymousUser(), None, None))
+                "skyspy.socketio.namespaces.main.authenticate_socket",
+                AsyncMock(return_value=(AnonymousUser(), None, None)),
             ):
                 with patch("skyspy.socketio.namespaces.main.check_topic_permission", AsyncMock(return_value=True)):
                     namespace = MainNamespace("/")
