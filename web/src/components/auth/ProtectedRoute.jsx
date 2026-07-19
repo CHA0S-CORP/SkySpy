@@ -15,7 +15,14 @@ export default function ProtectedRoute({ children, requiredPermissions = [], req
   // are marked "Public (anonymous)"; NavRail's canAccessFeature (and each
   // screen) gate the rest. Only `private` mode requires a global sign-in — so a
   // feature set to Public no longer gets blocked by a blanket login wall.
-  const globalLoginRequired = config.authEnabled && config.authMode === 'private';
+  //
+  // Exception: in hybrid mode where NOTHING is public (no enabled feature is
+  // anonymously readable), the shell would be empty for anon visitors — so treat
+  // it like private and route straight to login.
+  const nothingPublic =
+    config.authEnabled &&
+    !Object.values(config.features || {}).some((f) => f?.is_enabled && f?.read_access === 'public');
+  const globalLoginRequired = config.authEnabled && (config.authMode === 'private' || nothingPublic);
   if (!globalLoginRequired) {
     return children;
   }
