@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Sparkles, RefreshCw, Info } from 'lucide-react';
+import { LockedFeature } from '../shared/LockedFeature';
+import { withAuth } from '../../lib/authHeader';
 
 /**
  * AI Analysis card for the Safety Event page. Fetches a plain-English
@@ -22,7 +24,12 @@ export function EventAiSummary({ eventId, apiBase, accent = '#00d4ff' }) {
       try {
         const res = await fetch(`${apiBase}/api/v1/safety/events/${eventId}/ai-summary`, {
           signal,
+          headers: withAuth(),
         });
+        if (res.status === 401 || res.status === 403) {
+          if (!signal?.aborted) setState({ status: 'locked', summary: null });
+          return;
+        }
         const data = res.ok ? await res.json() : null;
         if (signal?.aborted) return;
         if (data?.summary) setState({ status: 'ready', summary: data.summary });
@@ -45,6 +52,17 @@ export function EventAiSummary({ eventId, apiBase, accent = '#00d4ff' }) {
   // Nothing to show and nothing pending — keep the layout clean.
   if (state.status === 'disabled' || state.status === 'empty' || state.status === 'error') {
     return null;
+  }
+
+  // AI gated for anonymous users — offer sign-in instead of hiding.
+  if (state.status === 'locked') {
+    return (
+      <LockedFeature
+        variant="card"
+        title="Sign in to unlock the AI analysis"
+        subtitle="A plain-English explanation of this safety event is available to signed-in users."
+      />
+    );
   }
 
   return (

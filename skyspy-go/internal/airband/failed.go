@@ -1,6 +1,7 @@
 package airband
 
 import (
+	"context"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -55,7 +56,7 @@ func (fq *FailedQueue) MoveToFailed(fpath string) {
 
 // RetryFailed attempts to re-upload all MP3s in the failed directory.
 // It re-parses each filename so updated frequency maps take effect.
-func (fq *FailedQueue) RetryFailed(chanMap *ChannelMap, uploader *Uploader) {
+func (fq *FailedQueue) RetryFailed(ctx context.Context, chanMap *ChannelMap, uploader *Uploader) {
 	entries, err := os.ReadDir(fq.failedDir)
 	if err != nil {
 		return // directory may not exist yet
@@ -76,8 +77,11 @@ func (fq *FailedQueue) RetryFailed(chanMap *ChannelMap, uploader *Uploader) {
 	fq.logger.Info("retrying failed uploads", "count", len(mp3s))
 
 	for _, fpath := range mp3s {
+		if ctx.Err() != nil {
+			return // shutting down; stop retrying
+		}
 		meta := ParseFilename(fpath, chanMap)
-		if uploader.Upload(meta) {
+		if uploader.Upload(ctx, meta) {
 			cleanupFiles(fpath)
 		}
 	}

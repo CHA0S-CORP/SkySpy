@@ -29,6 +29,8 @@ export function createUserData(data) {
       username: '',
       email: '',
       displayName: '',
+      isSuperuser: false,
+      isStaff: false,
       permissions: [],
       roles: [],
     };
@@ -40,6 +42,8 @@ export function createUserData(data) {
     email: data.email || '',
     // Support both snake_case (display_name) and camelCase (displayName)
     displayName: data.display_name || data.displayName || '',
+    isSuperuser: data.is_superuser ?? data.isSuperuser ?? false,
+    isStaff: data.is_staff ?? data.isStaff ?? false,
     permissions: data.permissions || [],
     roles: data.roles || [],
   };
@@ -51,10 +55,12 @@ export function createUserData(data) {
 export function createDefaultConfig(authEnabled = true) {
   return {
     authEnabled,
+    authMode: authEnabled ? 'hybrid' : 'public',
     publicMode: !authEnabled,
     oidcEnabled: false,
     localAuthEnabled: authEnabled,
     apiKeyEnabled: false,
+    devMode: false,
     features: {},
   };
 }

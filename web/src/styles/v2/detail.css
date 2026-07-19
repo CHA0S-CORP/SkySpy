@@ -503,6 +503,57 @@ a.v2-det__route-code--link:hover {
   color: var(--dim2);
 }
 
+/* history window + flight picker */
+.v2-det__flights {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px 0;
+  flex-wrap: wrap;
+}
+.v2-det__windows {
+  flex: 0 0 auto;
+}
+.v2-det__flight-chips {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  flex: 1 1 auto;
+  padding-bottom: 2px;
+}
+.v2-det__flight-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  flex: 0 0 auto;
+  padding: 5px 9px;
+  border-radius: 8px;
+  background: var(--bg2);
+  border: 1px solid var(--bord);
+  cursor: pointer;
+  text-align: left;
+}
+.v2-det__flight-chip--on {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, var(--bg2));
+}
+.v2-det__flight-chip-cs {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--fg);
+  letter-spacing: 0.02em;
+}
+.v2-det__flight-chip--on .v2-det__flight-chip-cs {
+  color: var(--accent);
+}
+.v2-det__flight-chip-when {
+  font-size: 10px;
+  color: var(--dim);
+  white-space: nowrap;
+}
+
 /* mini graphs */
 .v2-det__minis {
   display: grid;
@@ -1699,6 +1750,22 @@ a.v2-det__route-code--link:hover {
   color: var(--txt);
 }
 
+.acars-ai__turb {
+  margin: 10px 0 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 9px;
+  border: 1px solid;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--txt);
+}
+.acars-ai__turb svg {
+  flex-shrink: 0;
+}
+
 .acars-ai__fields {
   margin: 10px 0 0;
   display: grid;
@@ -1789,5 +1856,180 @@ a.v2-det__route-code--link:hover {
   .acars-ai__panel,
   .acars-ai__loading span {
     animation: none;
+  }
+}
+
+/* =========================================================================
+   Opt-in 3-zone "ops console" layout (#airframe?icao=...&layout=console).
+   Every rule is scoped under .v2-det--console (or the console-only
+   .v2-det__disc* classes) so the default 2-column layout is byte-for-byte
+   unaffected. Promote later by defaulting DetailScreen to consoleLayout.
+   ========================================================================= */
+.v2-det--console {
+  padding: 0 0 28px;
+}
+
+/* Sticky command bar — identity + live telemetry stay pinned while the long
+   page scrolls, so you never lose who/what you're looking at. Must sit above the
+   Leaflet map, whose internal panes paint at z-index 200-700; the stage zone is
+   isolated (below) so those can't escape, but keep the bar high + OPAQUE so
+   scrolled content hides cleanly behind it rather than bleeding through. */
+.v2-det--console .v2-det__command {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  flex: 0 0 auto;
+  padding: 14px 24px 10px;
+  background: var(--bg0, #080b11);
+  border-bottom: 1px solid var(--bord);
+}
+.v2-det--console .v2-det__identity {
+  margin-bottom: 12px;
+}
+.v2-det--console .v2-det__strip {
+  margin: 0;
+}
+
+/* Three zones: identity rail | center stage (widest) | meta rail. Capped +
+   centered so the center column doesn't stretch thin cards on ultrawide. */
+.v2-det--console .v2-det__grid {
+  grid-template-columns: clamp(320px, 24vw, 400px) minmax(0, 1fr) clamp(300px, 22vw, 380px);
+  gap: 20px;
+  max-width: 1720px;
+  width: 100%;
+  margin-inline: auto;
+  padding: 20px 24px 0;
+  align-items: start;
+}
+.v2-det--console .v2-det__zone {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+/* Contain Leaflet's high internal z-indexes so the map never paints over the
+   sticky command bar (the "map clips" bug). */
+.v2-det--console .v2-det__zone--stage {
+  isolation: isolate;
+}
+/* Top-align the reception / transponder-disclosure pair so a collapsed
+   disclosure doesn't stretch to the taller card's height. */
+.v2-det--console .v2-det__two-col {
+  align-items: start;
+}
+/* Stage sub-grid: the map is a full-width hero; everything below it (reception,
+   transponder, flight history, ACARS, radio, sources) flows in 2 columns so the
+   center stage stays roughly as tall as the side rails instead of running long. */
+.v2-det--console .v2-det__stage-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+/* Visual hierarchy: the track/map card leads the stage (hero tier). */
+.v2-det--console .v2-det__zone--stage > .v2-det__card:first-child {
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--bord));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+/* Taller photo hero in the wider console identity rail. */
+.v2-det--console .v2-det__photo {
+  min-height: 220px;
+}
+
+/* Collapsible disclosure (console-only: data sources, transponder, sightings).
+   These classes only ever render inside the console layout. */
+.v2-det__card--muted {
+  background: color-mix(in srgb, var(--bg1, #0d131b) 55%, transparent);
+}
+.v2-det__disc-head {
+  width: 100%;
+  cursor: pointer;
+  border: none;
+  background: none;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+}
+.v2-det__disc-chevron {
+  flex: 0 0 auto;
+  color: var(--dim);
+  transition: transform 0.18s ease;
+}
+.v2-det__disc-chevron--open {
+  transform: rotate(180deg);
+}
+.v2-det__disc-head:hover .v2-det__disc-chevron {
+  color: var(--txt);
+}
+
+/* Responsive: 3 -> 2 -> 1 zones (replaces the default layout's single 1100 bp
+   for the console variant only). */
+@media (max-width: 1440px) {
+  .v2-det--console .v2-det__grid {
+    grid-template-columns: clamp(320px, 32vw, 400px) minmax(0, 1fr);
+  }
+  /* Fold the META rail beneath the IDENTITY rail (shares the left column). */
+  .v2-det--console .v2-det__zone--meta {
+    grid-column: 1;
+  }
+}
+/* At the true 3-column width the page fits the window: it doesn't scroll as a
+   whole — the command bar is fixed at the top and each column scrolls on its
+   own. Gated to >=1441px because below that the meta rail wraps to a 2nd row,
+   which per-column scrolling can't model — there the page scrolls normally. */
+@media (min-width: 1441px) {
+  .v2-det--console {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    padding: 0;
+    overflow: hidden;
+  }
+  .v2-det--console .v2-det__grid {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+    align-items: stretch;
+  }
+  .v2-det--console .v2-det__zone {
+    min-height: 0;
+    overflow-y: auto;
+    padding-bottom: 20px;
+  }
+}
+
+@media (max-width: 1024px) {
+  .v2-det--console .v2-det__grid {
+    grid-template-columns: 1fr;
+  }
+  /* Identity (photo) first, then the track stage, then the reference metadata —
+     so the map is never buried below 8 cards. */
+  .v2-det--console .v2-det__zone--stage {
+    order: 1;
+  }
+  .v2-det--console .v2-det__zone--meta {
+    order: 2;
+  }
+  .v2-det--console .v2-det__stage-grid {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 640px) {
+  .v2-det--console .v2-det__command {
+    padding: 12px 14px 10px;
+  }
+  .v2-det--console .v2-det__grid {
+    gap: 12px;
+    padding: 14px 14px 0;
+  }
+  .v2-det--console .v2-det__strip {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .v2-det__disc-chevron {
+    transition: none;
   }
 }

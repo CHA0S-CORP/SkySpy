@@ -897,8 +897,9 @@ export function drawAllAircraft(ctx, geo, data) {
         ctx.fillText(line.text, blockX, blockY + index * lineHeight);
       });
 
-      // Draw status badges (MIL, EMG) after callsign line
-      if (labelLines.length > 0 && (isMilitary || isEmergency)) {
+      // Draw status badges (MIL, EMG, TURB) after callsign line
+      const isTurbulent = ac.turbulenceLevel === 'moderate' || ac.turbulenceLevel === 'severe';
+      if (labelLines.length > 0 && (isMilitary || isEmergency || isTurbulent)) {
         ctx.save();
         ctx.font = 'bold 9px "JetBrains Mono", monospace';
         const callsignWidth = ctx.measureText(labelLines[0]?.text || '').width;
@@ -930,6 +931,21 @@ export function drawAllAircraft(ctx, geo, data) {
           ctx.strokeRect(badgeX, badgeY, emgWidth, 12);
           ctx.fillStyle = 'rgba(255, 100, 100, 0.95)';
           ctx.fillText(emgText, badgeX + 3, badgeY + 9);
+          badgeX += emgWidth + 4;
+        }
+
+        // Turbulence badge (amber moderate, red-orange severe)
+        if (isTurbulent) {
+          const severe = ac.turbulenceLevel === 'severe';
+          const turbText = 'TURB';
+          const turbWidth = ctx.measureText(turbText).width + 6;
+          ctx.fillStyle = severe ? 'rgba(255, 80, 0, 0.3)' : 'rgba(255, 165, 0, 0.3)';
+          ctx.fillRect(badgeX, badgeY, turbWidth, 12);
+          ctx.strokeStyle = severe ? 'rgba(255, 80, 0, 0.7)' : 'rgba(255, 165, 0, 0.7)';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(badgeX, badgeY, turbWidth, 12);
+          ctx.fillStyle = severe ? 'rgba(255, 140, 90, 0.95)' : 'rgba(255, 200, 90, 0.95)';
+          ctx.fillText(turbText, badgeX + 3, badgeY + 9);
         }
         ctx.restore();
       }

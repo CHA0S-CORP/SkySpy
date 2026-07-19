@@ -99,9 +99,27 @@ export function AssistantMap({ spec }) {
     return () => group.remove();
   }, [spec]);
 
+  // Deep-link to the radar page filtered to these aircraft. Prefer the rich
+  // match spec (filters the radar to ALL matches, e.g. every GA aircraft), else
+  // fall back to the explicit id list.
+  const radarHref = spec?.radar?.match
+    ? `#map?rf=${encodeURIComponent(JSON.stringify(spec.radar))}`
+    : spec?.filter?.length
+      ? `#map?filter=${encodeURIComponent(spec.filter.join(','))}`
+      : null;
+
   return (
     <figure className="v2-asst-map">
-      {spec?.title ? <figcaption className="v2-asst-chart__title">{spec.title}</figcaption> : null}
+      {spec?.title || radarHref ? (
+        <figcaption className="v2-asst-chart__title v2-asst-map__caption">
+          <span>{spec?.title}</span>
+          {radarHref ? (
+            <a className="v2-asst-map__radar-link" href={radarHref}>
+              Open in radar →
+            </a>
+          ) : null}
+        </figcaption>
+      ) : null}
       <div ref={containerRef} className="v2-asst-map__canvas" />
     </figure>
   );

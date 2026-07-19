@@ -33,4 +33,5 @@ from skyspy.tasks import (
     registration_analysis,
     terrain,
     transcription,
+    turbulence,
 )

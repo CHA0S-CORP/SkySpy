@@ -106,17 +106,26 @@ def refresh_airspace_advisories():
                         with contextlib.suppress(ValueError, TypeError):
                             valid_to = datetime.fromisoformat(adv["validTimeTo"].replace("Z", "+00:00"))
 
-                    # Parse geometry - handle new 'coords' format
+                    # Parse geometry - handle new 'coords' format. G-AIRMETs carry
+                    # a geometryType: AREA -> a closed/filled polygon; LINE -> an
+                    # open line (e.g. freezing level, some LLWS). Preserve that so
+                    # the map can stroke lines instead of drawing a bogus closed
+                    # polygon.
                     polygon = None
+                    geom_type = str(adv.get("geometryType") or adv.get("geom") or "AREA").upper()
+                    is_line = geom_type == "LINE"
                     coords = adv.get("coords")
                     if coords and isinstance(coords, list):
-                        # Convert coords array to GeoJSON polygon
+                        # Convert coords array to GeoJSON geometry
                         try:
                             ring = [[float(c["lon"]), float(c["lat"])] for c in coords]
-                            # Close the ring if not already closed
-                            if ring and ring[0] != ring[-1]:
-                                ring.append(ring[0])
-                            polygon = {"type": "Polygon", "coordinates": [ring]}
+                            if is_line:
+                                polygon = {"type": "LineString", "coordinates": ring}
+                            else:
+                                # Close the ring if not already closed
+                                if ring and ring[0] != ring[-1]:
+                                    ring.append(ring[0])
+                                polygon = {"type": "Polygon", "coordinates": [ring]}
                         except (KeyError, ValueError, TypeError) as e:
                             logger.debug(f"Failed to parse coords: {e}")
 
@@ -240,9 +249,11 @@ def refresh_airspace_boundaries(self):
                     if not airspace_id:
                         continue
 
-                    # Map OpenAIP type to airspace class
+                    # Prefer the authoritative ICAO class (A–G) when OpenAIP
+                    # supplies it; fall back to the type-based mapping for
+                    # unclassified / special-use airspace (restricted, MOA, …).
                     airspace_type = airspace.get("type", "OTHER")
-                    airspace_class = _map_openaip_type_to_class(airspace_type)
+                    airspace_class = airspace.get("icao_class") or _map_openaip_type_to_class(airspace_type)
 
                     # Calculate center from geometry
                     center_lat, center_lon = _calculate_geometry_center(geometry)

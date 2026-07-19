@@ -97,8 +97,8 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.Connection.Host != "localhost" {
 		t.Errorf("Connection.Host = %q, want %q", cfg.Connection.Host, "localhost")
 	}
-	if cfg.Connection.Port != 80 {
-		t.Errorf("Connection.Port = %d, want 80", cfg.Connection.Port)
+	if cfg.Connection.Port != 8000 {
+		t.Errorf("Connection.Port = %d, want 8000", cfg.Connection.Port)
 	}
 	if cfg.Connection.ReceiverLat != 0.0 {
 		t.Errorf("Connection.ReceiverLat = %f, want 0.0", cfg.Connection.ReceiverLat)

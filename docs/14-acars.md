@@ -24,6 +24,11 @@ Get ACARS messages flowing in under 5 minutes:
 > - SDR hardware (RTL-SDR or similar)
 > - SkySpy Django backend running
 
+> 📡 **No SDR?** Skip the radio entirely — set `AIRFRAMES_ACARS_ENABLED=True`
+> to ingest real ACARS from the keyless [airframes.io](https://airframes.io)
+> firehose through the same pipeline. See
+> [Feeding with Open Data](./22-open-data-feeds.md#-acars--airframesio-open-firehose).
+
 ```bash
 # 1. Add ACARS services to your docker-compose.yml
 # 2. Start the stack

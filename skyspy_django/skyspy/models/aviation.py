@@ -136,6 +136,55 @@ class CachedGeoJSON(models.Model):
         return f"{self.data_type} - {self.name}"
 
 
+class CachedWildfire(models.Model):
+    """Cached active wildfire (Watch Duty geo_event) near the feeder.
+
+    Populated by ``services.wildfires.refresh_wildfires`` from the libwatchduty
+    client. Watch Duty geo_events are points (no perimeter polygons) — the map
+    renders threat-colored markers and opens a per-fire detail panel on click.
+    """
+
+    fetched_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    # Watch Duty geo_event id (stable across refreshes)
+    event_id = models.IntegerField(unique=True, db_index=True)
+    name = models.CharField(max_length=200, blank=True, null=True)
+    is_active = models.BooleanField(default=True, db_index=True)
+
+    # Location
+    latitude = models.FloatField(db_index=True)
+    longitude = models.FloatField(db_index=True)
+    address = models.CharField(max_length=300, blank=True, null=True)
+
+    # Fire metrics (from geo_event.data)
+    acreage = models.FloatField(blank=True, null=True)
+    containment = models.FloatField(blank=True, null=True)  # percent 0-100
+    is_prescribed = models.BooleanField(default=False)
+
+    # Evacuation zone summaries (free-text strings from Watch Duty)
+    evacuation_orders = models.TextField(blank=True, null=True)
+    evacuation_warnings = models.TextField(blank=True, null=True)
+    evacuation_advisories = models.TextField(blank=True, null=True)
+
+    # Composite threat score [0, 100] from libwatchduty.compute_threat
+    threat_score = models.FloatField(blank=True, null=True, db_index=True)
+
+    date_modified = models.DateTimeField(blank=True, null=True, db_index=True)
+
+    # Full geo_event payload for anything not promoted to a column
+    source_data = models.JSONField(blank=True, null=True)
+
+    class Meta:
+        db_table = "cached_wildfires"
+        indexes = [
+            models.Index(fields=["latitude", "longitude"], name="idx_cached_wildfire_location"),
+        ]
+        ordering = ["-threat_score"]
+
+    def __str__(self):
+        return f"{self.event_id} - {self.name}"
+
+
 class CachedPirep(models.Model):
     """Cached Pilot Reports (PIREPs) from Aviation Weather Center."""
 

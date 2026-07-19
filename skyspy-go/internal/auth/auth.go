@@ -174,8 +174,11 @@ func (m *Manager) loginOIDC(ctx context.Context) error {
 		return err
 	}
 
-	// Verify the returned state matches the one we were issued (CSRF protection)
-	if authResp.State != "" && result.State != authResp.State {
+	// Verify the returned state matches the one we were issued (CSRF protection).
+	// Compare unconditionally (fail closed): the callback state must equal exactly
+	// what the authorize step issued, so a server that omits state can't silently
+	// disable the CSRF check by returning an empty/attacker-supplied value.
+	if result.State != authResp.State {
 		return fmt.Errorf("OIDC state mismatch: expected %q, got %q", authResp.State, result.State)
 	}
 

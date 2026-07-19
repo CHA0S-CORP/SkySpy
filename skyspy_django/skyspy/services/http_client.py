@@ -93,6 +93,13 @@ def _record_failure(source: str, threshold: int = _CB_FAIL_THRESHOLD, cooldown: 
         if not cache.add(key, 1, cooldown):
             try:
                 fails = cache.incr(key)
+                # incr does NOT reset the key's TTL, so without this the counter
+                # would expire `cooldown` seconds after the FIRST failure no matter
+                # how many follow — a source failing slowly (one timeout every
+                # ~30s) could reset before reaching threshold and never open the
+                # breaker. Slide the window on every failure.
+                with contextlib.suppress(ConnectionError, OSError):
+                    cache.touch(key, cooldown)
             except ValueError:
                 cache.add(key, 1, cooldown)
                 fails = 1

@@ -27,7 +27,7 @@ from rest_framework.response import Response
 
 from skyspy.api.throttles import UploadRateThrottle
 from skyspy.auth.authentication import APIKeyAuthentication, OptionalJWTAuthentication
-from skyspy.auth.permissions import FeatureBasedPermission
+from skyspy.auth.permissions import FeatureBasedPermission, RequireAuthenticated
 from skyspy.models import AudioTransmission
 from skyspy.serializers.audio import (
     AudioStatsSerializer,
@@ -63,6 +63,16 @@ class AudioViewSet(viewsets.ModelViewSet):
     filterset_fields = ["transcription_status", "frequency_mhz", "channel_name"]
     parser_classes = [MultiPartParser, FormParser]
     http_method_names = ["get", "post", "delete"]
+
+    # Expensive/mutating actions (transcription is an LLM/STT workload) require an
+    # authenticated user even in AUTH_MODE=public, so anonymous visitors can't queue
+    # unbounded transcription jobs.
+    _AUTH_REQUIRED_ACTIONS = {"upload", "transcribe", "match_airframes", "create", "destroy"}
+
+    def get_permissions(self):
+        if getattr(self, "action", None) in self._AUTH_REQUIRED_ACTIONS:
+            return [RequireAuthenticated()]
+        return super().get_permissions()
 
     def get_queryset(self):
         """Apply query filters."""

@@ -14,6 +14,7 @@ from skyspy.models.aircraft import (
     AircraftSighting,
     AirframeDocument,
     AirframeSourceData,
+    AirframeTypeCard,
 )
 from skyspy.models.airspace import AirspaceAdvisory, AirspaceBoundary
 from skyspy.models.alerts import AlertAggregate, AlertHistory, AlertRule, AlertSubscription
@@ -30,7 +31,7 @@ from skyspy.models.auth import (
     SkyspyUser,
     UserRole,
 )
-from skyspy.models.aviation import CachedAirport, CachedGeoJSON, CachedNavaid, CachedPirep
+from skyspy.models.aviation import CachedAirport, CachedGeoJSON, CachedNavaid, CachedPirep, CachedWildfire
 from skyspy.models.cannonball import (
     CannonballAlert,
     CannonballKnownAircraft,
@@ -44,6 +45,7 @@ from skyspy.models.cannonball import (
     RegistrationTransfer,
     SubmitterReputation,
 )
+from skyspy.models.chat import ChatMessage, ChatSession
 from skyspy.models.config import ConfigAuditLog, SystemConfig
 from skyspy.models.engagement import AircraftFavorite, SessionTrackingQuality
 from skyspy.models.notams import CachedAircraftType, CachedAirline, CachedNotam
@@ -77,6 +79,7 @@ __all__ = [
     "AircraftInfo",
     "AirframeDocument",
     "AirframeSourceData",
+    "AirframeTypeCard",
     # Alerts
     "AlertRule",
     "AlertHistory",
@@ -102,6 +105,7 @@ __all__ = [
     "CachedNavaid",
     "CachedGeoJSON",
     "CachedPirep",
+    "CachedWildfire",
     # Audio
     "AudioTransmission",
     # Antenna
@@ -145,6 +149,9 @@ __all__ = [
     "RegistrationTransfer",
     "CommunitySubmission",
     "SubmitterReputation",
+    # Assistant chat
+    "ChatSession",
+    "ChatMessage",
     # System Configuration
     "SystemConfig",
     "ConfigAuditLog",

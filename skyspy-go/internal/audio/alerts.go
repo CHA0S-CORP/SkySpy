@@ -167,9 +167,14 @@ func (p *AlertPlayer) playPlatformSound(soundPath string) bool {
 		return false
 	}
 
-	// Run in background, don't block
+	// Start synchronously so a launch failure (e.g. the player binary is
+	// missing) reports false and the caller falls back to the terminal bell.
+	// Reap asynchronously so we neither block nor leave a zombie.
+	if err := cmd.Start(); err != nil {
+		return false
+	}
 	go func() {
-		_ = cmd.Run()
+		_ = cmd.Wait()
 	}()
 
 	return true

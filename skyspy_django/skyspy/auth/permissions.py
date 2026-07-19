@@ -43,6 +43,33 @@ class IsAuthenticatedOrPublic(permissions.BasePermission):
         return request.user and request.user.is_authenticated
 
 
+def _dev_bypass() -> bool:
+    """True on a local dev instance (DEV_MODE) so auth gates don't get in the way.
+
+    Keyed on the explicit DEV_MODE setting (default False), NOT DEBUG — the dev
+    stack and a public deploy both run DEBUG=False, so only DEV_MODE distinguishes
+    them. Public deployments leave DEV_MODE=False and the gates enforce.
+    """
+    return bool(getattr(settings, "DEV_MODE", False))
+
+
+class RequireAuthenticated(permissions.BasePermission):
+    """Require an authenticated user regardless of ``AUTH_MODE``.
+
+    Unlike ``IsAuthenticatedOrPublic`` and ``FeatureBasedPermission``, this does
+    NOT honor ``AUTH_MODE=public``. Use it to keep sensitive infrastructure
+    endpoints (system status/metrics that leak feeder location, worker PIDs, and
+    internal state) closed even on a public dashboard. Relaxed in DEBUG for local
+    development.
+    """
+
+    def has_permission(self, request, view):
+        if _dev_bypass():
+            return True
+        user = request.user
+        return bool(user and user.is_authenticated)
+
+
 class FeatureBasedPermission(permissions.BasePermission):
     """
     Permission class that checks feature-level access configuration.
@@ -50,6 +77,10 @@ class FeatureBasedPermission(permissions.BasePermission):
     Maps view classes to features and checks the FeatureAccess model
     to determine if access is allowed.
     """
+
+    # Views that use POST as a read (Q&A over a JSON body), so they must be gated
+    # on the feature's READ access, not write access, despite the HTTP method.
+    READ_ONLY_POST_VIEWS = {"AssistantAskView", "AssistantSuggestView", "AssistantStreamView"}
 
     # Map view class names to feature names
     FEATURE_MAP = {
@@ -76,6 +107,11 @@ class FeatureBasedPermission(permissions.BasePermission):
         # ACARS
         "AcarsViewSet": "acars",
         "AcarsMessageViewSet": "acars",
+        # Assistant chat sessions + the Q&A/stream/suggest endpoints
+        "ChatSessionViewSet": "assistant",
+        "AssistantAskView": "assistant",
+        "AssistantSuggestView": "assistant",
+        "AssistantStreamView": "assistant",
         # History
         "HistoryViewSet": "history",
         "SightingViewSet": "history",
@@ -108,6 +144,15 @@ class FeatureBasedPermission(permissions.BasePermission):
         "APIKeyViewSet": "users",
         "FeatureAccessViewSet": "users",
         "OIDCClaimMappingViewSet": "users",
+        # Cannonball Mode (counter-surveillance)
+        "CannonballThreatsView": "cannonball",
+        "CannonballLocationView": "cannonball",
+        "CannonballActivateView": "cannonball",
+        "CannonballSessionViewSet": "cannonball",
+        "CannonballPatternViewSet": "cannonball",
+        "CannonballAlertViewSet": "cannonball",
+        "CannonballKnownAircraftViewSet": "cannonball",
+        "CannonballStatsViewSet": "cannonball",
         # Role management
         "RoleViewSet": "roles",
     }
@@ -121,6 +166,13 @@ class FeatureBasedPermission(permissions.BasePermission):
         "partial_update": "edit",
         "destroy": "delete",
     }
+
+    def __init__(self, feature=None):
+        # Optional explicit feature binding. Lets a multi-feature ViewSet (e.g.
+        # AviationViewSet, which serves aircraft + weather + wildfires actions)
+        # gate a subset of actions on a specific feature via get_permissions(),
+        # overriding the class-name lookup in FEATURE_MAP. None = default behavior.
+        self._feature_override = feature
 
     def has_permission(self, request, view):
         """Check if user has access to this feature."""
@@ -155,8 +207,12 @@ class FeatureBasedPermission(permissions.BasePermission):
             if not config.is_enabled:
                 return False
 
-            # Determine if this is a read or write operation
-            is_write = request.method not in permissions.SAFE_METHODS
+            # Determine if this is a read or write operation. POST-as-read views
+            # (assistant Q&A) are gated on read access despite the HTTP method.
+            is_write = (
+                request.method not in permissions.SAFE_METHODS
+                and view.__class__.__name__ not in self.READ_ONLY_POST_VIEWS
+            )
             access_level = config.write_access if is_write else config.read_access
 
             return self._check_access_level(request, access_level, feature, is_write)
@@ -191,6 +247,8 @@ class FeatureBasedPermission(permissions.BasePermission):
 
     def _get_feature(self, view):
         """Get feature name from view."""
+        if self._feature_override:
+            return self._feature_override
         view_name = view.__class__.__name__
         return self.FEATURE_MAP.get(view_name)
 
@@ -564,6 +622,63 @@ class HasSystemManagePermission(permissions.BasePermission):
         except DatabaseError as e:
             logger.warning(f"Unexpected error checking system.manage permission: {e}")
             return False
+
+
+class CanUseLLM(permissions.BasePermission):
+    """Auth gate for any LLM-backed endpoint (a cost/abuse vector).
+
+    Requires an authenticated user holding ``assistant.view`` (the unified
+    AI-access permission) — enforced even when ``AUTH_MODE=public`` so a public
+    dashboard never lets anonymous visitors spend LLM tokens. Superusers and API
+    keys carrying the ``assistant.view`` scope pass. Relaxed on a local dev
+    instance (``DEV_MODE``).
+
+    Unlike :class:`CanUseAssistant`, this does NOT require ``ASSISTANT_ENABLED`` —
+    it guards ancillary LLM features (aviation/ACARS explainers, airframe text)
+    that manage their own enablement and degrade gracefully when the LLM is off.
+    """
+
+    def has_permission(self, request, view):
+        # Dev convenience: don't enforce auth locally so AI features work without
+        # logging in. Production (DEV_MODE off) always enforces.
+        if _dev_bypass():
+            return True
+
+        # Scoped API keys must explicitly carry the assistant.view scope
+        # (empty scopes = all of the owning user's permissions).
+        api_key_scopes = getattr(request, "api_key_scopes", None)
+        if api_key_scopes and not _scope_covers_permission(api_key_scopes, "assistant.view"):
+            return False
+
+        user = request.user
+        if not user or not user.is_authenticated:
+            return False
+
+        if user.is_superuser:
+            return True
+
+        try:
+            return user.skyspy_profile.has_permission("assistant.view")
+        except AttributeError:
+            return False
+        except DatabaseError as e:
+            logger.warning(f"Unexpected error checking LLM permission: {e}")
+            return False
+
+
+class CanUseAssistant(CanUseLLM):
+    """AI assistant / chat access gate.
+
+    Same auth requirement as :class:`CanUseLLM` (authenticated + ``assistant.view``,
+    DEV_MODE bypass), plus it requires the assistant feature to be enabled.
+    """
+
+    def has_permission(self, request, view):
+        # Feature must be turned on at all — checked before the dev bypass so a
+        # disabled assistant is unavailable even locally.
+        if not getattr(settings, "ASSISTANT_ENABLED", False):
+            return False
+        return super().has_permission(request, view)
 
 
 class CanAccessAlert(permissions.BasePermission):

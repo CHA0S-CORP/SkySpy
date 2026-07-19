@@ -1,0 +1,25 @@
+# Release-tracking overlay: run the published multi-arch image from GHCR instead
+# of building from source on the VM. Layered on top of docker-compose.yml +
+# docker-compose.prod.yml. Pin a specific release with SKYSPY_TAG=vX.Y.Z, else
+# :latest (auto-updated by the skyspy-update.timer).
+#
+#   docker compose -f docker-compose.yml \
+#                  -f deploy/proxmox/docker-compose.prod.yml \
+#                  -f deploy/proxmox/docker-compose.release.yml \
+#                  --profile acars pull && ... up -d
+#
+# The `skyspyctl` wrapper + skyspy-update.sh bake in this file list.
+
+services:
+  api:
+    image: ghcr.io/cha0s-corp/skyspy:${SKYSPY_TAG:-latest}
+    pull_policy: always
+  celery-worker:
+    image: ghcr.io/cha0s-corp/skyspy:${SKYSPY_TAG:-latest}
+    pull_policy: always
+  celery-beat:
+    image: ghcr.io/cha0s-corp/skyspy:${SKYSPY_TAG:-latest}
+    pull_policy: always
+  acars-listener:
+    image: ghcr.io/cha0s-corp/skyspy:${SKYSPY_TAG:-latest}
+    pull_policy: always

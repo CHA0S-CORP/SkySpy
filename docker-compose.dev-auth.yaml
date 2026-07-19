@@ -1,0 +1,28 @@
+# Dev overlay that runs the dev stack with AUTHENTICATION ENFORCED, so you can
+# exercise login, roles/permissions, and the AI/LLM + sensitive-endpoint gates
+# locally (instead of the default public/DEV_MODE dev stack which bypasses them).
+#
+# Usage (or just `make dev-auth`, which also seeds users):
+#   docker compose --env-file ./.env.test \
+#     -f ./docker-compose.test.yaml -f ./docker-compose.dev-auth.yaml \
+#     --profile dev up -d
+#
+# `environment:` here overrides the values from `.env.test` (env_file) for these
+# services. AUTH_MODE=hybrid = per-feature access with login required for writes;
+# DEV_MODE=False = the AI/LLM + sensitive-endpoint gates actually enforce.
+
+services:
+  api:
+    environment:
+      - AUTH_MODE=hybrid
+      - DEV_MODE=False
+
+  celery-worker:
+    environment:
+      - AUTH_MODE=hybrid
+      - DEV_MODE=False
+
+  celery-beat:
+    environment:
+      - AUTH_MODE=hybrid
+      - DEV_MODE=False

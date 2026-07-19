@@ -81,7 +81,7 @@ func (w *Watcher) Run(ctx context.Context) {
 	_ = w.failedQueue.EnsureDir()
 
 	// Process any backlog
-	w.pollOnce()
+	w.pollOnce(ctx)
 
 	ticker := time.NewTicker(w.pollInterval)
 	defer ticker.Stop()
@@ -96,17 +96,17 @@ func (w *Watcher) Run(ctx context.Context) {
 			close(w.eventCh)
 			return
 		case <-ticker.C:
-			w.pollOnce()
+			w.pollOnce(ctx)
 		case <-retryTicker.C:
 			if !w.dryRun {
-				w.failedQueue.RetryFailed(w.chanMap, w.uploader)
+				w.failedQueue.RetryFailed(ctx, w.chanMap, w.uploader)
 			}
 		}
 	}
 }
 
 // pollOnce reads the recordings directory and processes each MP3 file.
-func (w *Watcher) pollOnce() {
+func (w *Watcher) pollOnce(ctx context.Context) {
 	entries, err := os.ReadDir(w.recordingsDir)
 	if err != nil {
 		w.logger.Error("failed to read recordings directory", "err", err)
@@ -135,12 +135,12 @@ func (w *Watcher) pollOnce() {
 		}
 
 		fpath := filepath.Join(w.recordingsDir, name)
-		w.processFile(fpath)
+		w.processFile(ctx, fpath)
 	}
 }
 
 // processFile handles a single MP3 file: stability check, filter, upload/discard.
-func (w *Watcher) processFile(fpath string) {
+func (w *Watcher) processFile(ctx context.Context, fpath string) {
 	// Stability check: file must not have been modified recently
 	info, err := os.Stat(fpath)
 	if err != nil {
@@ -183,7 +183,7 @@ func (w *Watcher) processFile(fpath string) {
 	}
 
 	// Upload
-	if w.uploader.Upload(meta) {
+	if w.uploader.Upload(ctx, meta) {
 		cleanupFiles(fpath)
 		result := ProcessResult{Metadata: meta, Action: ActionUploaded}
 		w.emit(result)

@@ -254,7 +254,9 @@ export function useAviationDataFetch({
       overlays.usRefueling ||
       overlays.ukMilZones ||
       overlays.euMilAwacs ||
-      overlays.trainingAreas;
+      overlays.trainingAreas ||
+      overlays.usAirways ||
+      overlays.usFixes;
     if (!needsAny) return;
 
     const apiBase = config.apiBaseUrl || '';
@@ -381,6 +383,18 @@ export function useAviationDataFetch({
         // Training Areas data loaded
       }
 
+      // US IFR airways (FAA ATS_Route lines) - near-feeder reference lattice
+      if (overlays.usAirways && !aviationOverlayData.usAirways) {
+        const features = await fetchAviationGeoJSON(['us_airways']);
+        updates.usAirways = processFeatures(features, filterBounds);
+      }
+
+      // US named waypoints/fixes (FAA Designated_Point)
+      if (overlays.usFixes && !aviationOverlayData.usFixes) {
+        const features = await fetchAviationGeoJSON(['us_fixes']);
+        updates.usFixes = processFeatures(features, filterBounds);
+      }
+
       if (Object.keys(updates).length > 0) {
         // Updating aviation overlay data
         setAviationOverlayData((prev) => ({ ...prev, ...updates }));
@@ -396,6 +410,8 @@ export function useAviationDataFetch({
     overlays.ukMilZones,
     overlays.euMilAwacs,
     overlays.trainingAreas,
+    overlays.usAirways,
+    overlays.usFixes,
     feederLat,
     feederLon,
     radarRange,
@@ -404,6 +420,8 @@ export function useAviationDataFetch({
     aviationOverlayData.ukMilZones,
     aviationOverlayData.euMilAwacs,
     aviationOverlayData.trainingAreas,
+    aviationOverlayData.usAirways,
+    aviationOverlayData.usFixes,
     setAviationOverlayData,
   ]);
 }

@@ -48,8 +48,20 @@ class TemplateEngine:
         "heading": "Aircraft heading in degrees",
         "registration": "Aircraft registration (e.g., N12345)",
         "type": "Aircraft type code (e.g., B738)",
+        "type_name": "Aircraft type name / description",
+        "manufacturer": "Aircraft manufacturer",
+        "model": "Aircraft model",
+        "operator": "Operator / owner name",
+        "owner": "Registered owner",
+        "year_built": "Year the aircraft was built",
         "category": "Aircraft category",
         "military": "Whether aircraft is military (true/false)",
+        "law_enforcement": "Whether aircraft is law enforcement (true/false)",
+        "law_enforcement_category": "LE category (e.g. Federal Law Enforcement)",
+        "law_enforcement_description": "LE description (e.g. Customs & Border Protection)",
+        "is_ladd": "Limiting Aircraft Data Displayed (privacy) flag",
+        "is_pia": "Privacy ICAO Address flag",
+        "badges": "Compact flag string (e.g. 'MIL · LE: CBP · LADD'); blank if none",
         "latitude": "Aircraft latitude",
         "longitude": "Aircraft longitude",
         # Alert context
@@ -193,12 +205,21 @@ class TemplateEngine:
             "distance": aircraft.get("distance_nm"),
             "bearing": aircraft.get("bearing"),
             "heading": aircraft.get("track"),
-            "registration": aircraft.get("r"),
-            "type": aircraft.get("t"),
+            "registration": aircraft.get("r") or aircraft.get("registration"),
+            "type": aircraft.get("t") or aircraft.get("type"),
+            "type_name": aircraft.get("type_name") or aircraft.get("desc"),
+            "manufacturer": aircraft.get("manufacturer"),
+            "model": aircraft.get("model"),
+            "operator": (aircraft.get("ownOp") or aircraft.get("operator") or aircraft.get("owner")),
+            "owner": aircraft.get("owner") or aircraft.get("ownOp"),
+            "year_built": aircraft.get("year") or aircraft.get("year_built"),
             "category": aircraft.get("category"),
-            "military": aircraft.get("military", False),
+            "military": self._is_military(aircraft),
             "latitude": aircraft.get("lat"),
             "longitude": aircraft.get("lon"),
+            # Airframe role flags
+            "is_ladd": bool(aircraft.get("ladd") or aircraft.get("is_ladd")),
+            "is_pia": bool(aircraft.get("pia") or aircraft.get("is_pia")),
             # Full aircraft object for nested access
             "aircraft": aircraft,
             # Timestamps
@@ -208,7 +229,57 @@ class TemplateEngine:
             "date": ts.strftime("%Y-%m-%d"),
         }
 
+        # Law-enforcement classification via the network-free pattern DB
+        # (callsign / operator / type / registration matching — no external call,
+        # cheap enough for the notification path). Failure is non-fatal.
+        le = self._identify_law_enforcement(aircraft)
+        context["law_enforcement"] = le.get("is_law_enforcement", False)
+        context["law_enforcement_category"] = le.get("category")
+        context["law_enforcement_description"] = le.get("description")
+
+        # Compact, ready-to-print flag string for templates that can't branch
+        # (the engine has no conditionals; empty vars render blank). Only the
+        # flags that are actually set appear — e.g. "MIL · LE: Customs & Border
+        # Protection · LADD"; empty string when nothing notable.
+        badges = []
+        if context["military"]:
+            badges.append("MIL")
+        if context["law_enforcement"]:
+            badges.append("LE: " + (le.get("description") or le.get("category") or "yes"))
+        if context["is_ladd"]:
+            badges.append("LADD")
+        if context["is_pia"]:
+            badges.append("PIA")
+        context["badges"] = " · ".join(badges)
+
         return context
+
+    @staticmethod
+    def _is_military(aircraft: dict[str, Any]) -> bool:
+        """Military via the 'military' key or dbFlags bit 0 (matches AlertService)."""
+        if aircraft.get("military"):
+            return True
+        db_flags = aircraft.get("dbFlags", 0)
+        return bool(db_flags & 1) if isinstance(db_flags, int) else False
+
+    @staticmethod
+    def _identify_law_enforcement(aircraft: dict[str, Any]) -> dict[str, Any]:
+        """Best-effort LE lookup. Lazy import keeps the service graph acyclic."""
+        try:
+            from skyspy.services import law_enforcement_db
+
+            return law_enforcement_db.identify_law_enforcement(
+                hex_code=aircraft.get("hex"),
+                callsign=aircraft.get("flight") or aircraft.get("callsign"),
+                operator=aircraft.get("ownOp") or aircraft.get("operator"),
+                registration=aircraft.get("r") or aircraft.get("registration"),
+                category=aircraft.get("category"),
+                type_code=aircraft.get("t") or aircraft.get("type"),
+                owner=aircraft.get("ownOp") or aircraft.get("owner"),
+            )
+        except (ImportError, KeyError, TypeError, ValueError) as e:
+            logger.warning(f"LE classification failed for notification context: {e}")
+            return {}
 
     def build_context_from_safety_event(
         self, event_data: dict[str, Any], timestamp: datetime | None = None

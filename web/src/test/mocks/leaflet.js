@@ -26,17 +26,21 @@ const L = {
   map: () => chainable(),
   tileLayer: () => chainable(),
   polyline: () => chainable(),
+  layerGroup: () => chainable(),
   marker: () => chainable(),
   circle: () => chainable(),
   circleMarker: () => chainable(),
   divIcon: () => ({}),
+  latLngBounds: () => ({ pad: () => ({ contains: () => true }) }),
 };
 
 export default L;
 export const map = L.map;
 export const tileLayer = L.tileLayer;
 export const polyline = L.polyline;
+export const layerGroup = L.layerGroup;
 export const marker = L.marker;
 export const circle = L.circle;
 export const circleMarker = L.circleMarker;
 export const divIcon = L.divIcon;
+export const latLngBounds = L.latLngBounds;

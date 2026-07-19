@@ -113,6 +113,15 @@
   transform-origin: bottom right;
   animation: v2dock-in 0.26s cubic-bezier(0.16, 1, 0.3, 1);
 }
+/* Floating (user-dragged): break out of the bottom-right dock anchor and
+   position against the viewport via inline left/top. */
+.v2-dock__panel.is-floating {
+  position: fixed;
+  right: auto;
+  bottom: auto;
+  animation: none;
+}
+
 @keyframes v2dock-in {
   from {
     opacity: 0;
@@ -140,6 +149,33 @@
   mask-image: linear-gradient(180deg, transparent, #000 8%, #000 92%, transparent);
 }
 
+/* --- Resize grip (top-left; panel anchored bottom-right) ---------------- */
+.v2-dock__resize {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 18px;
+  height: 18px;
+  z-index: 3;
+  cursor: nwse-resize;
+  touch-action: none;
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--accent) 55%, transparent) 0 2px,
+    transparent 2px 5px,
+    color-mix(in srgb, var(--accent) 45%, transparent) 5px 7px,
+    transparent 7px 10px,
+    color-mix(in srgb, var(--accent) 35%, transparent) 10px 12px,
+    transparent 12px
+  );
+  border-top-left-radius: 16px;
+  opacity: 0.5;
+  transition: opacity 0.15s ease;
+}
+.v2-dock__resize:hover {
+  opacity: 1;
+}
+
 /* --- Header ------------------------------------------------------------- */
 .v2-dock__head {
   position: relative;
@@ -150,6 +186,16 @@
   border-bottom: 1px solid var(--bord);
   background: color-mix(in srgb, var(--bg2) 60%, transparent);
   backdrop-filter: blur(6px);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+.v2-dock__head:active {
+  cursor: grabbing;
+}
+/* Keep interactive header controls on the default cursor. */
+.v2-dock__head button {
+  cursor: pointer;
 }
 .v2-dock__brand {
   display: inline-flex;
@@ -224,6 +270,10 @@
   background: var(--bg3);
   color: var(--txt);
 }
+.v2-dock__icon.is-active {
+  background: var(--bg3);
+  color: var(--accent);
+}
 
 /* --- Thread (reuses .v2-asst__* message styling) ----------------------- */
 .v2-dock__thread {
@@ -292,16 +342,26 @@
 }
 
 /* --- Mobile: full-width bottom sheet ------------------------------------ */
-@media (max-width: 560px) {
+@media (max-width: 768px) {
   .v2-dock {
-    right: 14px;
-    bottom: 14px;
-    left: 14px;
+    right: 10px;
+    bottom: 10px;
+    left: 10px;
     align-items: flex-end;
   }
-  .v2-dock__panel {
+  /* Full-width sheet regardless of any persisted desktop float (JS drops the
+     is-floating class + inline size/pos on mobile). */
+  .v2-dock__panel,
+  .v2-dock__panel.is-floating {
+    position: relative;
+    left: auto;
+    top: auto;
     width: 100%;
-    height: min(70vh, 560px);
+    max-width: 100%;
+    height: min(78vh, 620px);
+  }
+  .v2-dock__resize {
+    display: none;
   }
 }
 

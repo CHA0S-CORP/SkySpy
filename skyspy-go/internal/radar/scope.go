@@ -335,6 +335,11 @@ func (s *Scope) Render() string {
 
 	// Top border with range
 	rangeStr := fmt.Sprintf(" %dnm ", int(s.maxRange))
+	// Guard against an over-wide range label (maxRange is an unbounded float set
+	// via SetRange/animation) that would make the repeat counts negative and panic.
+	if len(rangeStr) > RadarWidth {
+		rangeStr = rangeStr[:RadarWidth]
+	}
 	pad := (RadarWidth - len(rangeStr)) / 2
 
 	borderStyle := lipgloss.NewStyle().Foreground(s.theme.Border)

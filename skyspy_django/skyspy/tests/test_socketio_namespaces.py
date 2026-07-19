@@ -156,7 +156,7 @@ class TestAuthMiddleware:
         with patch("skyspy.socketio.middleware.auth.settings") as mock_settings:
             mock_settings.AUTH_MODE = "public"
 
-            user, error = await authenticate_socket({})
+            user, error, _scopes = await authenticate_socket({})
 
             assert error is None
             assert isinstance(user, AnonymousUser)
@@ -170,7 +170,7 @@ class TestAuthMiddleware:
         with patch("skyspy.socketio.middleware.auth.settings") as mock_settings:
             mock_settings.AUTH_MODE = "private"
 
-            user, error = await authenticate_socket({})
+            user, error, _scopes = await authenticate_socket({})
 
             assert error is not None
             assert "required" in error.lower()
@@ -184,7 +184,7 @@ class TestAuthMiddleware:
         with patch("skyspy.socketio.middleware.auth.settings") as mock_settings:
             mock_settings.AUTH_MODE = "private"
 
-            user, error = await authenticate_socket({"token": "invalid_jwt_token"})
+            user, error, _scopes = await authenticate_socket({"token": "invalid_jwt_token"})
 
             assert error is not None
 
@@ -469,7 +469,7 @@ class TestCannonballBroadcastRooms:
 
         with patch(
             "skyspy.socketio.namespaces.cannonball.authenticate_socket",
-            AsyncMock(return_value=(AnonymousUser(), None)),
+            AsyncMock(return_value=(AnonymousUser(), None, None)),
         ):
             with patch(
                 "skyspy.socketio.namespaces.cannonball.check_topic_permission",
@@ -695,7 +695,7 @@ class TestConcurrentSubscriptionState:
             await asyncio.sleep(0)  # yield, like the real session store
             sessions[sid] = session
 
-        async def fake_permission(user, topic):
+        async def fake_permission(user, topic, scopes=None):
             await asyncio.sleep(0)  # yield, like the sync_to_async DB permission check
             return True
 
@@ -735,7 +735,7 @@ class TestConcurrentSubscriptionState:
             await asyncio.sleep(0)
             sessions[sid] = session
 
-        async def fake_permission(user, topic):
+        async def fake_permission(user, topic, scopes=None):
             await asyncio.sleep(0)
             return True
 

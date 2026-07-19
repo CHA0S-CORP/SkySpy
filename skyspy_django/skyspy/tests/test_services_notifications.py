@@ -86,6 +86,22 @@ class UrlSafetyValidationTests(TestCase):
         """Test that link-local addresses are blocked."""
         assert _is_safe_url("http://169.254.0.1/webhook") is False
 
+    def test_private_ip_blocked_without_allowlist(self):
+        """A private IP stays blocked when the allowlist is empty (default)."""
+        assert _is_safe_url("http://10.42.252.10:5678/webhook/abc") is False
+
+    @override_settings(NOTIFICATION_WEBHOOK_ALLOWED_PRIVATE_CIDRS="10.42.0.0/16")
+    def test_allowlisted_private_cidr_permitted(self):
+        """Private IPs inside an allowlisted CIDR pass (self-hosted n8n on LAN)."""
+        assert _is_safe_url("http://10.42.252.10:5678/webhook/abc") is True
+
+    @override_settings(NOTIFICATION_WEBHOOK_ALLOWED_PRIVATE_CIDRS="10.42.252.10")
+    def test_allowlisted_single_ip_permitted(self):
+        """A bare IP in the allowlist is treated as a /32 and permitted."""
+        assert _is_safe_url("http://10.42.252.10/webhook") is True
+        # A different private IP not on the list stays blocked.
+        assert _is_safe_url("http://10.42.252.11/webhook") is False
+
     def test_ipv6_loopback(self):
         """Test that IPv6 loopback is blocked."""
         assert _is_safe_url("http://[::1]/webhook") is False

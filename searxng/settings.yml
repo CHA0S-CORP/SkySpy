@@ -1,0 +1,34 @@
+# SearXNG configuration for SkySpy's runtime web search (services/web_search.py).
+#
+# Layers on top of the image's shipped defaults (use_default_settings: true) and
+# only overrides what SkySpy needs:
+#   - the JSON output format (web_search.py calls /search?format=json)
+#   - the bot limiter disabled (internal server-to-server calls have no browser
+#     headers / cookies and would otherwise be rejected)
+#
+# Reachable in-stack at http://searxng:8080. Set WEB_SEARCH_PROVIDER=searxng and
+# WEB_SEARCH_URL=http://searxng:8080 for the app to use it.
+use_default_settings: true
+
+server:
+  # Override via the SEARXNG_SECRET env var in the compose file.
+  secret_key: "skyspy-searxng-change-me"
+  limiter: false
+  image_proxy: true
+
+search:
+  # JSON is what web_search.py consumes; keep html for the debugging UI.
+  formats:
+    - html
+    - json
+
+engines:
+  # A lean, reliable general-web set. Trim/extend as desired.
+  - name: wikipedia
+    disabled: false
+  - name: duckduckgo
+    disabled: false
+  - name: bing
+    disabled: false
+  - name: brave
+    disabled: false

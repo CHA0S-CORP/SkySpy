@@ -1,6 +1,7 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Icon } from '../../primitives';
+import { useHashParamState, boolParam } from '../../../../hooks/useHashParamState';
 import {
   activityByHour,
   altitudeDistribution,
@@ -69,9 +70,10 @@ export function StatsScreen({
   connected,
   onSelectAircraft,
 }) {
-  const [range, setRange] = useState('24h');
-  const [milOnly, setMilOnly] = useState(false);
-  const [histTab, setHistTab] = useState('Trends');
+  // Deep-linked view state (#stats?range=&mil=&histTab=)
+  const [range, setRange] = useHashParamState('range', '24h');
+  const [milOnly, setMilOnly] = useHashParamState('mil', false, boolParam);
+  const [histTab, setHistTab] = useHashParamState('histTab', 'Trends');
 
   const hours = RANGE_HOURS[range] ?? 24;
 

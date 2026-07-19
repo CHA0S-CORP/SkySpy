@@ -11,11 +11,31 @@ const NAV_ITEMS = [
   { id: 'stats', icon: 'bar-chart', label: 'Statistics', feature: 'aircraft' },
   { id: 'analytics', icon: 'line-chart', label: 'Analytics', feature: 'aircraft' },
   { id: 'airframes', icon: 'layers', label: 'Airframes', feature: 'aircraft' },
+  { id: 'weather', icon: 'cloud', label: 'Weather', feature: 'weather' },
+  { id: 'wildfires', icon: 'flame', label: 'Wildfires', feature: 'wildfires' },
   { id: 'history', icon: 'history', label: 'History', feature: 'history' },
   { id: 'audio', icon: 'wave', label: 'Radio', feature: 'audio' },
   { id: 'alerts', icon: 'bell', label: 'Alerts', feature: 'alerts' },
-  { id: 'system', icon: 'activity', label: 'System', feature: 'system' },
-  { id: 'assistant', icon: 'message', label: 'Assistant', feature: 'aircraft' },
+  {
+    id: 'system',
+    icon: 'activity',
+    label: 'System',
+    feature: 'system',
+    permission: 'system.view_status',
+    devVisible: true,
+  },
+  // Assistant is publicly discoverable (map/dashboard is public), but the chat
+  // itself requires sign-in — the screen renders a sign-in gate for anonymous
+  // users (CanUseAssistant returns 401/403). So keep it as a plain feature item:
+  // shown in public mode, permission-gated when auth is enforced (hybrid/private).
+  { id: 'assistant', icon: 'message', label: 'Assistant', feature: 'assistant' },
+  {
+    id: 'access',
+    icon: 'shield',
+    label: 'Access Control',
+    feature: 'roles',
+    permission: 'roles.view',
+  },
   {
     id: 'admin',
     icon: 'sliders',
@@ -49,18 +69,40 @@ const EXTERNAL_SERVICES = [
 export function NavRail({ activeTab, onNavigate, connected, className = '' }) {
   const [servicesOpen, setServicesOpen] = useState(false);
   const { unacknowledgedCount, markAllAsRead } = useAlertNotifications();
-  const { canAccessFeature, config: authConfig } = useAuth();
+  const { canAccessFeature, config: authConfig, user } = useAuth();
 
   const visibleItems = useMemo(() => {
-    if (!authConfig.authEnabled || authConfig.publicMode) {
-      return NAV_ITEMS.filter((item) => !item.permission);
-    }
+    const publicMode = !authConfig.authEnabled || authConfig.publicMode;
+    // Real permission check straight off the signed-in user — unlike the context's
+    // hasPermission(), this does NOT return true for everyone in public mode, so a
+    // logged-in user only sees permission-gated items they actually hold.
+    const holdsPerm = (perm) =>
+      !!user && (user.isSuperuser || (user.permissions || []).includes(perm));
+
     return NAV_ITEMS.filter((item) => {
-      if (item.permission) return canAccessFeature(item.permission.split('.')[0], 'write');
+      // Permission-gated items (AI Assistant, System, Admin).
+      if (item.permission) {
+        // A signed-in user with the permission (or a superuser) always sees it —
+        // in any mode. This is why a logged-in admin gets Admin Console / AI / System.
+        if (holdsPerm(item.permission)) return true;
+        // Anonymous: in local dev (devMode) surface the AI/system entries flagged
+        // devVisible so they work without logging in; never in production
+        // (devMode === false) and never Admin (no devVisible).
+        if (publicMode) return Boolean(item.devVisible) && authConfig.devMode !== false;
+        return false;
+      }
       if (!item.feature) return true;
+      if (publicMode) return true;
       return canAccessFeature(item.feature, 'read');
     });
-  }, [authConfig.authEnabled, authConfig.publicMode, canAccessFeature]);
+  }, [authConfig.authEnabled, authConfig.publicMode, authConfig.devMode, canAccessFeature, user]);
+
+  // Cannonball + the Services section are RBAC features (cannonball/services):
+  // shown in full public mode, else gated on the feature's read access (which
+  // resolves to cannonball.view / services.view for a role).
+  const publicMode = !authConfig.authEnabled || authConfig.publicMode;
+  const showCannonball = publicMode || canAccessFeature('cannonball', 'read');
+  const showServices = publicMode || canAccessFeature('services', 'read');
 
   useEffect(() => {
     if (activeTab === 'alerts' && unacknowledgedCount > 0) {
@@ -93,52 +135,57 @@ export function NavRail({ activeTab, onNavigate, connected, className = '' }) {
         </button>
       ))}
 
-      <button
-        type="button"
-        className={`v2-nav__item v2-nav__item--cannonball ${
-          activeTab === 'cannonball' ? 'v2-nav__item--active' : ''
-        }`}
-        onClick={() => onNavigate('cannonball')}
-        data-testid="v2-nav-cannonball"
-      >
-        <Icon name="target" size={17} strokeWidth={1.8} />
-        Cannonball
-      </button>
-
-      <div className="v2-nav__section">
+      {showCannonball && (
         <button
           type="button"
-          className="v2-nav__item"
-          onClick={() => setServicesOpen(!servicesOpen)}
-          aria-expanded={servicesOpen}
+          className={`v2-nav__item v2-nav__item--cannonball ${
+            activeTab === 'cannonball' ? 'v2-nav__item--active' : ''
+          }`}
+          onClick={() => onNavigate('cannonball')}
+          data-testid="v2-nav-cannonball"
         >
-          <Icon name="rows" size={17} strokeWidth={1.8} />
-          Services
-          <Icon
-            name="chevron-down"
-            size={14}
-            strokeWidth={2}
-            className={`v2-nav__chevron ${servicesOpen ? 'v2-nav__chevron--open' : ''}`}
-          />
+          <Icon name="target" size={17} strokeWidth={1.8} />
+          Cannonball
         </button>
-        {servicesOpen && (
-          <div className="v2-nav__sub">
-            {EXTERNAL_SERVICES.map(({ id, label, path, desc }) => (
-              <a
-                key={id}
-                href={path}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="v2-nav__item"
-                title={desc}
-              >
-                {label}
-                <Icon name="external-link" size={12} className="v2-nav__chevron" />
-              </a>
-            ))}
-          </div>
-        )}
-      </div>
+      )}
+
+      {showServices && (
+        <div className="v2-nav__section">
+          <button
+            type="button"
+            className="v2-nav__item"
+            onClick={() => setServicesOpen(!servicesOpen)}
+            aria-expanded={servicesOpen}
+            data-testid="v2-nav-services"
+          >
+            <Icon name="rows" size={17} strokeWidth={1.8} />
+            Services
+            <Icon
+              name="chevron-down"
+              size={14}
+              strokeWidth={2}
+              className={`v2-nav__chevron ${servicesOpen ? 'v2-nav__chevron--open' : ''}`}
+            />
+          </button>
+          {servicesOpen && (
+            <div className="v2-nav__sub">
+              {EXTERNAL_SERVICES.map(({ id, label, path, desc }) => (
+                <a
+                  key={id}
+                  href={path}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="v2-nav__item"
+                  title={desc}
+                >
+                  {label}
+                  <Icon name="external-link" size={12} className="v2-nav__chevron" />
+                </a>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="v2-nav__spacer" />
       <div className="v2-nav__live">

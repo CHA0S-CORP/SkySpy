@@ -24,6 +24,13 @@ AVIATIONSTACK_API_BASE = "http://api.aviationstack.com/v1"
 # Cache settings (aggressive caching due to low request limit)
 FLIGHTS_CACHE_TTL = 3600  # 1 hour
 SCHEDULES_CACHE_TTL = 7200  # 2 hours
+# Negative results (no match / not found) are cached too so repeat lookups for an
+# unmatched callsign or airline don't each burn a request from the 100/month quota.
+NEGATIVE_CACHE_TTL = 3600  # 1 hour
+
+# Sentinel stored for a cached miss (distinguishes "known no result" from a cache
+# miss, since cache.get returns None for both).
+_NEGATIVE = "__aviationstack_none__"
 
 
 def _get_api_key() -> str | None:
@@ -98,7 +105,7 @@ def get_flight_by_callsign(
 
     cached = cache.get(cache_key)
     if cached is not None:
-        return cached
+        return None if cached == _NEGATIVE else cached
 
     params = {}
     if flight_iata:
@@ -110,18 +117,14 @@ def get_flight_by_callsign(
 
     result = _make_request("flights", params)
 
-    if not result:
+    # Don't cache a transient API failure (None) — only cache a definitive answer.
+    if result is None:
         return None
 
     flights = result.get("data", [])
-    if not flights:
-        return None
+    flight = _parse_flight(flights[0]) if flights else None
 
-    # Return the first (current) flight
-    flight = _parse_flight(flights[0])
-    if flight:
-        cache.set(cache_key, flight, FLIGHTS_CACHE_TTL)
-
+    cache.set(cache_key, flight if flight else _NEGATIVE, FLIGHTS_CACHE_TTL if flight else NEGATIVE_CACHE_TTL)
     return flight
 
 
@@ -290,7 +293,7 @@ def get_airline_info(
 
     cached = cache.get(cache_key)
     if cached is not None:
-        return cached
+        return None if cached == _NEGATIVE else cached
 
     params = {}
     if airline_iata:
@@ -302,11 +305,13 @@ def get_airline_info(
 
     result = _make_request("airlines", params)
 
-    if not result:
+    # Transient API failure — leave uncached so a later call can retry.
+    if result is None:
         return None
 
     airlines = result.get("data", [])
     if not airlines:
+        cache.set(cache_key, _NEGATIVE, NEGATIVE_CACHE_TTL)
         return None
 
     airline = airlines[0]

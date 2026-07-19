@@ -37,6 +37,7 @@ from skyspy.admin.auth_admin import (
     UserRoleAdmin,
 )
 from skyspy.admin.aviation import CachedAirportAdmin, CachedGeoJSONAdmin, CachedNavaidAdmin, CachedPirepAdmin
+from skyspy.admin.chat import ChatMessageAdmin, ChatSessionAdmin
 from skyspy.admin.engagement import AircraftFavoriteAdmin, SessionTrackingQualityAdmin
 from skyspy.admin.filters import (
     AchievedAtDateRangeFilter,
@@ -146,6 +147,9 @@ __all__ = [
     "NotificationTemplateAdmin",
     "NotificationLogAdmin",
     "UserNotificationPreferenceAdmin",
+    # Chat / Assistant
+    "ChatSessionAdmin",
+    "ChatMessageAdmin",
     # Auth/RBAC
     "SkyspyUserAdmin",
     "RoleAdmin",

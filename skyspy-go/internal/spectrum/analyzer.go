@@ -337,7 +337,7 @@ func (a *Analyzer) GetSpectrumSmoothed(bins int) []float64 {
 	// Map to output bins
 	for i := 0; i < bins; i++ {
 		var raw float64
-		if bins == len(a.bands) {
+		if bins == len(a.bands) || bins == 1 {
 			raw = rawSpectrum[i]
 		} else {
 			bandIdx := float64(i) * float64(len(a.bands)-1) / float64(bins-1)
@@ -377,6 +377,10 @@ func (a *Analyzer) GetPeaks(bins int) []float64 {
 
 	// Interpolate peaks to match bins
 	peaks := make([]float64, bins)
+	if bins == 1 {
+		peaks[0] = a.peakValues[0]
+		return peaks
+	}
 	for i := 0; i < bins; i++ {
 		peakIdx := float64(i) * float64(len(a.peakValues)-1) / float64(bins-1)
 		lowIdx := int(peakIdx)

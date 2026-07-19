@@ -1,0 +1,10 @@
+[Unit]
+Description=SkySpy release auto-updater (pull ghcr:latest, recreate on change)
+Wants=network-online.target docker.service
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/skyspy/deploy/proxmox/skyspy-update.sh
+# Don't let a transient registry/network blip mark the unit failed.
+SuccessExitStatus=0 1

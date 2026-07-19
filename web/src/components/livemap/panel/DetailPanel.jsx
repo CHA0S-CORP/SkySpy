@@ -1,25 +1,46 @@
 import React, { useMemo } from 'react';
 import { Icon, Sparkline } from '../../v2/primitives';
 import { useDetailData } from '../../v2/screens/detail/useDetailData';
-import { flightStatus } from '../../v2/screens/detail/detailModel';
+import { countryCodeToFlag, flightStatus } from '../../v2/screens/detail/detailModel';
 import { FlightRoute, hasRoute, parseRoute } from '../../v2/screens/detail/FlightRoute';
-import { altitudeOf, CATEGORY_COLORS, categoryOf } from '../../v2/screens/list/listModel';
+import {
+  altitudeOf,
+  CATEGORY_COLORS,
+  categoryOf,
+  compassDir,
+  EMERGENCY_SQUAWKS,
+} from '../../v2/screens/list/listModel';
+
+// Turbulence level → accent color + fill fraction (0..1) for the live risk bar.
+const TURB_META = {
+  light: { color: 'var(--accent2)', frac: 0.33, label: 'LIGHT' },
+  moderate: { color: 'var(--warn)', frac: 0.66, label: 'MODERATE' },
+  severe: { color: 'var(--danger)', frac: 1, label: 'SEVERE' },
+  extreme: { color: 'var(--danger)', frac: 1, label: 'EXTREME' },
+};
 
 /**
  * 392px collapsible Live Map detail panel (design SkySpy.dc.html right pane):
- * photo banner, ID chips, 2×2 primary stat grid, more-details, performance
- * sparklines from track history, external links.
+ * photo banner, identity + threat/privacy badge rail, live turbulence bar, ID
+ * chips, primary stat grid, secondary telemetry micro-grid, airframe facts,
+ * activity counters, performance sparklines, external links.
+ *
+ * The banner + primary telemetry come straight off the live socket entry (no
+ * fetch wait); airframe facts / badges / counters hydrate from useDetailData as
+ * the REST lookups land, and every enriched block is gated on its data so a
+ * sparse GA target still renders cleanly.
  *
  * @param {object} props
  * @param {string} props.apiBase
  * @param {object|null} props.aircraft - the selected live aircraft entry
  * @param {Array} [props.track] - recent track samples (for sparklines)
  * @param {() => void} props.onClose
+ * @param {(hex: string) => void} [props.onOpenFull]
  */
 export function DetailPanel({ apiBase, aircraft, track = [], onClose, onOpenFull }) {
   const hex = aircraft?.hex;
   const callsign = (aircraft?.flight || '').trim();
-  const { info, route } = useDetailData(apiBase, hex, callsign);
+  const { info, route, safety, sessions, acars } = useDetailData(apiBase, hex, callsign);
   const airframe = info.data || {};
   const routeInfo = parseRoute(route.data);
   const { origin, destination } = routeInfo;
@@ -38,6 +59,55 @@ export function DetailPanel({ apiBase, aircraft, track = [], onClose, onOpenFull
     [track]
   );
 
+  // Privacy / interest flags live only inside per-source rows; OR them across
+  // every source that reported the airframe (mirrors DetailScreen).
+  const sourceData = Array.isArray(airframe.source_data) ? airframe.source_data : [];
+  const flags = useMemo(() => {
+    const any = (key) => sourceData.some((s) => s?.[key]);
+    return {
+      ladd: any('is_ladd'),
+      pia: any('is_pia'),
+      interesting: any('is_interesting'),
+      military: any('is_military') || aircraft?.military === true,
+    };
+  }, [sourceData, aircraft?.military]);
+
+  const leInfo =
+    airframe.ownership_flags && typeof airframe.ownership_flags === 'object'
+      ? airframe.ownership_flags.law_enforcement
+      : null;
+  const shellSuspected = airframe.is_shell_suspected === true;
+
+  const emerg =
+    aircraft?.emergency === true || EMERGENCY_SQUAWKS.includes(String(aircraft?.squawk ?? ''));
+
+  // Threat / classification badges, most-urgent first. Each entry renders only
+  // when its condition fired, so the rail is empty for an unremarkable target.
+  const badges = useMemo(() => {
+    const b = [];
+    if (emerg) b.push({ key: 'emerg', label: 'EMERGENCY', color: 'var(--danger)', icon: 'zap' });
+    if (leInfo)
+      b.push({
+        key: 'le',
+        label: leInfo.category || 'LAW ENFORCEMENT',
+        color: 'var(--warn)',
+        icon: 'shield',
+      });
+    if (flags.military)
+      b.push({ key: 'mil', label: 'MILITARY', color: 'var(--mil, var(--warn))', icon: 'shield' });
+    if (flags.ladd) b.push({ key: 'ladd', label: 'LADD', color: 'var(--dim)', icon: 'eye-off' });
+    if (flags.pia) b.push({ key: 'pia', label: 'PIA', color: 'var(--dim)', icon: 'shield-check' });
+    if (shellSuspected)
+      b.push({ key: 'shell', label: 'SHELL?', color: 'var(--warn)', icon: 'alert-triangle' });
+    if (flags.interesting)
+      b.push({ key: 'int', label: 'INTERESTING', color: 'var(--accent)', icon: 'star' });
+    return b;
+  }, [emerg, leInfo, flags, shellSuspected]);
+
+  const turbLevel = String(aircraft?.turbulenceLevel || '').toLowerCase();
+  const turb = TURB_META[turbLevel];
+  const turbRisk = typeof aircraft?.turbulenceRisk === 'number' ? aircraft.turbulenceRisk : null;
+
   if (!aircraft) {
     return (
       <aside className="lm-panel lm-panel--empty" data-testid="lm-detail-panel">
@@ -47,14 +117,96 @@ export function DetailPanel({ apiBase, aircraft, track = [], onClose, onOpenFull
     );
   }
 
-  const chip = (label, value) => (
+  const chip = (label, value, extra) => (
     <div className="lm-panel__chip">
       <span className="lm-panel__chip-label">{label}</span>
-      <span className="lm-panel__chip-val">{value}</span>
+      <span className="lm-panel__chip-val">
+        {extra}
+        {value}
+      </span>
     </div>
   );
 
   const num = (v, digits = 0) => (typeof v === 'number' ? v.toFixed(digits) : '--');
+
+  // Full airframe descriptor for the banner subtitle: prefer the human-readable
+  // manufacturer + model, fall back to the live stream's `desc`, then type name.
+  const subtitle =
+    [airframe.manufacturer, airframe.model].filter(Boolean).join(' ') ||
+    aircraft.desc ||
+    airframe.type_name ||
+    '';
+
+  const regFlag = countryCodeToFlag(airframe.country_code);
+  const registration = airframe.registration || aircraft.r || '';
+
+  // Airspeed readout — pick the richest available (Mach at altitude, else true /
+  // indicated airspeed). Only rendered when the stream carries one.
+  const airspeed =
+    typeof aircraft.mach === 'number'
+      ? { label: 'MACH', val: aircraft.mach.toFixed(2) }
+      : typeof aircraft.tas === 'number'
+        ? { label: 'TAS', val: `${Math.round(aircraft.tas)}` }
+        : typeof aircraft.ias === 'number'
+          ? { label: 'IAS', val: `${Math.round(aircraft.ias)}` }
+          : null;
+
+  // Secondary telemetry — compact 3-up micro cells, present values only.
+  const micro = [
+    aircraft.track != null && {
+      label: 'HEADING',
+      val: `${Math.round(aircraft.track)}°`,
+      sub: compassDir(aircraft.track),
+    },
+    aircraft.bearing != null && {
+      label: 'BEARING',
+      val: `${Math.round(aircraft.bearing)}°`,
+      sub: compassDir(aircraft.bearing),
+    },
+    airspeed && { label: airspeed.label, val: airspeed.val },
+    { label: 'SQUAWK', val: aircraft.squawk || '--', danger: emerg },
+    aircraft.rssi != null && { label: 'RSSI', val: `${aircraft.rssi.toFixed(1)}` },
+    aircraft.category && { label: 'CAT', val: String(aircraft.category).toUpperCase() },
+    aircraft.seen != null && { label: 'AGE', val: `${Math.round(aircraft.seen)}s` },
+  ].filter(Boolean);
+
+  // Airframe reference facts (hydrate from the info lookup).
+  const builtVal = airframe.year_built || airframe.built || aircraft.year || null;
+  const facts = [
+    airframe.manufacturer && { label: 'Manufacturer', val: airframe.manufacturer },
+    airframe.model && { label: 'Model', val: airframe.model },
+    (airframe.serial_number || airframe.msn) && {
+      label: 'Serial',
+      val: airframe.serial_number || airframe.msn,
+    },
+    builtVal && {
+      label: 'Built',
+      val:
+        airframe.age_years != null
+          ? `${builtVal} · ${airframe.age_years} yr${airframe.age_years === 1 ? '' : 's'}`
+          : String(builtVal),
+    },
+    (airframe.country || airframe.registered_country) && {
+      label: 'Country',
+      val: airframe.country || airframe.registered_country,
+    },
+  ].filter(Boolean);
+
+  // Activity counters — free from useDetailData's parallel queries.
+  const sightingCount = (sessions.data || []).length;
+  const safetyCount = (safety.data || []).length;
+  const acarsCount = (acars.data || []).length;
+  const counters = [
+    { key: 'seen', label: 'SIGHTINGS', val: sightingCount, icon: 'crosshair' },
+    {
+      key: 'safety',
+      label: 'SAFETY 24H',
+      val: safetyCount,
+      icon: 'alert-triangle',
+      color: safetyCount > 0 ? 'var(--warn)' : undefined,
+    },
+    { key: 'acars', label: 'ACARS', val: acarsCount, icon: 'radio' },
+  ];
 
   return (
     <aside className="lm-panel" data-testid="lm-detail-panel">
@@ -63,6 +215,7 @@ export function DetailPanel({ apiBase, aircraft, track = [], onClose, onOpenFull
         style={airframe.photo_url ? { backgroundImage: `url(${airframe.photo_url})` } : undefined}
       >
         <div className="lm-panel__banner-scrim" />
+        {emerg && <div className="lm-panel__banner-alarm" aria-hidden="true" />}
         <button
           type="button"
           className="lm-panel__close"
@@ -72,7 +225,10 @@ export function DetailPanel({ apiBase, aircraft, track = [], onClose, onOpenFull
           <Icon name="x" size={16} strokeWidth={1.9} />
         </button>
         <div className="lm-panel__banner-id">
-          <span className="lm-panel__cs">{callsign || (hex || '').toUpperCase()}</span>
+          <div className="lm-panel__banner-titles">
+            <span className="lm-panel__cs">{callsign || (hex || '').toUpperCase()}</span>
+            {subtitle && <span className="lm-panel__subtitle">{subtitle}</span>}
+          </div>
           <span
             className="lm-panel__cat"
             style={{
@@ -89,7 +245,30 @@ export function DetailPanel({ apiBase, aircraft, track = [], onClose, onOpenFull
         <div className="lm-panel__status" style={{ color: status.color }}>
           <span className="lm-panel__status-dot" style={{ background: status.color }} />
           {status.label}
+          {aircraft.seen != null && (
+            <span className="lm-panel__status-age">· {Math.round(aircraft.seen)}s ago</span>
+          )}
         </div>
+
+        {badges.length > 0 && (
+          <div className="lm-panel__badges" data-testid="lm-panel-badges">
+            {badges.map((b) => (
+              <span
+                key={b.key}
+                className="lm-panel__badge"
+                title={b.key === 'le' && leInfo?.description ? leInfo.description : b.label}
+                style={{
+                  color: b.color,
+                  background: `color-mix(in srgb, ${b.color} 15%, transparent)`,
+                  borderColor: `color-mix(in srgb, ${b.color} 40%, transparent)`,
+                }}
+              >
+                <Icon name={b.icon} size={11} strokeWidth={1.9} />
+                {b.label}
+              </span>
+            ))}
+          </div>
+        )}
 
         {aircraft.ghost && (
           <div
@@ -105,16 +284,44 @@ export function DetailPanel({ apiBase, aircraft, track = [], onClose, onOpenFull
           </div>
         )}
 
+        {turb && (
+          <div className="lm-panel__turb" data-testid="lm-panel-turb">
+            <div className="lm-panel__turb-head">
+              <span className="lm-panel__turb-label">
+                <Icon name="wind" size={12} strokeWidth={1.8} style={{ color: turb.color }} />
+                TURBULENCE
+              </span>
+              <span className="lm-panel__turb-level" style={{ color: turb.color }}>
+                {turb.label}
+                {turbRisk != null ? ` · ${Math.round(turbRisk)}` : ''}
+              </span>
+            </div>
+            <div className="lm-panel__turb-track">
+              <div
+                className="lm-panel__turb-fill"
+                style={{
+                  width: `${Math.round((turbRisk != null ? turbRisk / 100 : turb.frac) * 100)}%`,
+                  background: turb.color,
+                }}
+              />
+            </div>
+          </div>
+        )}
+
         <div className="lm-panel__chips">
           {chip('HEX', (hex || '').toUpperCase())}
-          {chip('TYPE', airframe.aircraft_type || aircraft.t || '--')}
+          {chip('TYPE', airframe.type_code || airframe.aircraft_type || aircraft.t || '--')}
           {chip('SIZE', airframe.size || '--')}
-          {chip('REG', airframe.registration || aircraft.r || '--')}
+          {chip(
+            'REG',
+            registration || '--',
+            regFlag ? <span className="lm-panel__reg-flag">{regFlag}</span> : null
+          )}
         </div>
 
-        {(airframe.operator || airframe.owner) && (
+        {(airframe.operator || airframe.owner || aircraft.ownOp) && (
           <span className="lm-panel__airline-badge" data-testid="lm-panel-airline">
-            {airframe.operator || airframe.owner}
+            {airframe.operator || airframe.owner || aircraft.ownOp}
           </span>
         )}
 
@@ -169,23 +376,62 @@ export function DetailPanel({ apiBase, aircraft, track = [], onClose, onOpenFull
           </div>
         </div>
 
-        <div className="lm-panel__eyebrow">MORE DETAILS</div>
-        <div className="lm-panel__kv">
-          <span>Track</span>
-          <span className="v2-mono">
-            {aircraft.track != null ? `${Math.round(aircraft.track)}°` : '--'}
-          </span>
-        </div>
-        <div className="lm-panel__kv">
-          <span>Squawk</span>
-          <span className="v2-mono">{aircraft.squawk || '--'}</span>
-        </div>
-        <div className="lm-panel__kv">
-          <span>RSSI</span>
-          <span className="v2-mono">
-            {aircraft.rssi != null ? `${aircraft.rssi.toFixed(1)} dB` : '--'}
-          </span>
-        </div>
+        {micro.length > 0 && (
+          <>
+            <div className="lm-panel__eyebrow">TELEMETRY</div>
+            <div className="lm-panel__micro">
+              {micro.map((m) => (
+                <div className="lm-panel__micro-cell" key={m.label}>
+                  <span className="lm-panel__micro-label">{m.label}</span>
+                  <span
+                    className="lm-panel__micro-val"
+                    style={m.danger ? { color: 'var(--danger)' } : undefined}
+                  >
+                    {m.val}
+                  </span>
+                  {m.sub && <span className="lm-panel__micro-sub">{m.sub}</span>}
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        {facts.length > 0 && (
+          <>
+            <div className="lm-panel__eyebrow">AIRFRAME</div>
+            <div className="lm-panel__facts">
+              {facts.map((f) => (
+                <div className="lm-panel__kv" key={f.label}>
+                  <span>{f.label}</span>
+                  <span className="v2-mono">{f.val}</span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        <button
+          type="button"
+          className="lm-panel__activity"
+          onClick={() => onOpenFull?.(hex)}
+          data-testid="lm-panel-activity"
+          title="Open full detail"
+        >
+          {counters.map((c) => (
+            <span className="lm-panel__act-cell" key={c.key}>
+              <Icon
+                name={c.icon}
+                size={13}
+                strokeWidth={1.8}
+                style={{ color: c.color || 'var(--dim2)' }}
+              />
+              <span className="lm-panel__act-val" style={c.color ? { color: c.color } : undefined}>
+                {c.val}
+              </span>
+              <span className="lm-panel__act-label">{c.label}</span>
+            </span>
+          ))}
+        </button>
 
         {(altSeries.length > 1 || spdSeries.length > 1) && (
           <>

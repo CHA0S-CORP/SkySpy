@@ -183,6 +183,8 @@ export function toRow(a) {
   }
   const emerg = EMERGENCY_SQUAWKS.includes(a.squawk) || a.emergency === true;
   const track = Math.round(a.track ?? 0);
+  // Row-level emergency flag drives the alert highlight on the list row.
+  const isEmergency = emerg;
   // Registration / tail number (tar1090 `r`, normalizer aliases to `registration`).
   // Delivered by the live stream but previously only searchable — surface it as a
   // secondary line under the callsign when present and distinct from the callsign.
@@ -207,6 +209,7 @@ export function toRow(a) {
     year: typeof yearBuilt === 'number' || typeof yearBuilt === 'string' ? String(yearBuilt) : null,
     type: a.t || '--',
     isMil: cat === 'military',
+    isEmergency,
     accent: air ? cc : 'transparent',
     icaoColor: air ? 'var(--txt)' : 'var(--dim)',
     csColor: air ? cc : 'var(--dim)',

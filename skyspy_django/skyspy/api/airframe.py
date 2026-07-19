@@ -3,6 +3,7 @@ Airframe information API views.
 """
 
 import logging
+import re
 
 from django.conf import settings
 from django.http import FileResponse, Http404
@@ -10,11 +11,13 @@ from drf_spectacular.utils import OpenApiParameter, extend_schema
 from kombu.exceptions import OperationalError as KombuOperationalError
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from skyspy.api.throttles import ExternalLookupRateThrottle
 from skyspy.auth.authentication import APIKeyAuthentication, OptionalJWTAuthentication
-from skyspy.auth.permissions import FeatureBasedPermission
+from skyspy.auth.permissions import CanUseLLM, FeatureBasedPermission
 from skyspy.models import AircraftInfo
 from skyspy.serializers.aircraft import (
     AircraftInfoCacheStatsSerializer,
@@ -27,10 +30,16 @@ logger = logging.getLogger(__name__)
 
 
 class PhotoServeView(APIView):
-    """Serve cached aircraft photos."""
+    """Serve cached aircraft photos.
 
-    authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
-    permission_classes = [FeatureBasedPermission]
+    Always public: these are cached public-domain-ish aircraft photos with no
+    cost or sensitivity, and browsers load them via <img src> which cannot attach
+    an Authorization header — so gating this would break every photo under
+    AUTH_MODE=hybrid/private. Access stays open regardless of auth mode.
+    """
+
+    authentication_classes = []
+    permission_classes = [AllowAny]
 
     def get(self, request, icao_hex, photo_type="full"):
         """
@@ -77,6 +86,29 @@ class AirframeViewSet(viewsets.ViewSet):
 
     authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
     permission_classes = [FeatureBasedPermission]
+
+    # Actions that force an external fetch (photos / info from planespotters etc.)
+    # rather than reading cache — rate-limited so they can't be looped to burn
+    # external quota. Normal retrieve/photos reads stay on the global throttle and
+    # are already guarded by the per-ICAO refetch cooldown below.
+    _EXTERNAL_FETCH_ACTIONS = {"refresh", "fetch_photos", "upgrade_photo", "generate_type_card"}
+    # LLM-backed text generation (cost money) — require AI access, not just the
+    # aircraft feature. flight_history summarizes via the LLM; generate_type_card
+    # writes a type card via the LLM.
+    _LLM_ACTIONS = {"flight_history", "generate_type_card"}
+
+    def get_permissions(self):
+        if getattr(self, "action", None) in self._LLM_ACTIONS:
+            return [CanUseLLM()]
+        return super().get_permissions()
+
+    def get_throttles(self):
+        if (
+            getattr(self, "action", None) in self._EXTERNAL_FETCH_ACTIONS
+            or getattr(self, "action", None) == "flight_history"
+        ):
+            return [ExternalLookupRateThrottle()]
+        return super().get_throttles()
 
     # Fields that make an AircraftInfo record "populated" (worth not retrying).
     _AIRFRAME_IDENTITY_FIELDS = ("registration", "type_code", "type_name", "manufacturer", "model", "operator", "owner")
@@ -213,11 +245,29 @@ class AirframeViewSet(viewsets.ViewSet):
         the aircraft has never been seen by this receiver — otherwise the
         airframe page can't open for any tail we haven't previously cached.
         """
-        try:
-            info = AircraftInfo.objects.get(registration__iexact=registration)
-            return Response(AircraftInfoSerializer(info).data)
-        except AircraftInfo.DoesNotExist:
-            pass
+
+        # A registration is not unique across AircraftInfo rows (the same tail can
+        # be cached under more than one icao_hex — e.g. a re-registration, or a
+        # placeholder row whose icao_hex was set to the registration itself), so
+        # filter+pick rather than get() (which 500s on a duplicate). Prefer, in
+        # order: a real 24-bit Mode-S address (not the registration string), a
+        # cached photo, a resolved type, then most-recently updated.
+        def _real_hex(a):
+            h = (a.icao_hex or "").strip()
+            return bool(re.fullmatch(r"[0-9a-fA-F]{6}", h)) and h.upper() != registration.upper()
+
+        matches = list(AircraftInfo.objects.filter(registration__iexact=registration))
+        if matches:
+            matches.sort(
+                key=lambda a: (
+                    _real_hex(a),
+                    bool(a.photo_local_path or a.photo_url),
+                    bool(a.type_code),
+                    a.updated_at or a.created_at,
+                ),
+                reverse=True,
+            )
+            return Response(AircraftInfoSerializer(matches[0]).data)
 
         # DB miss: US N-numbers map deterministically onto the ICAO A-block, so
         # we can still return a hex the client can open the airframe page with.
@@ -274,6 +324,258 @@ class AirframeViewSet(viewsets.ViewSet):
                 "count": len(results),
             }
         )
+
+    @staticmethod
+    def _seen_hexes(request):
+        """Distinct icao_hex seen by this station, optionally within an `hours` window.
+
+        Returns ``(hexes_queryset, hours)`` where ``hours`` is the parsed window
+        (None = all time) so callers can key caches on it.
+        """
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from skyspy.models import AircraftSession
+
+        raw = (request.query_params.get("hours") or "").strip().lower()
+        hours = None
+        if raw and raw not in ("all", "0"):
+            try:
+                hours = max(0.0, float(raw))
+            except (ValueError, TypeError):
+                hours = None
+
+        qs = AircraftSession.objects.all()
+        if hours:
+            qs = qs.filter(last_seen__gte=timezone.now() - timedelta(hours=hours))
+        return qs.values_list("icao_hex", flat=True).distinct(), hours
+
+    @extend_schema(
+        summary="Seen aircraft-type counts",
+        description=(
+            "Map of ICAO type designator → number of distinct tails of that type this ground "
+            "station has actually tracked (i.e. has at least one AircraftSession). Drives the "
+            "Airframes reference-library 'Seen' filter + per-card count badges. Pass `hours` to "
+            "restrict to a recent window (e.g. 1, 12, 24, 168); omit or `all` for all-time."
+        ),
+        parameters=[
+            OpenApiParameter(name="hours", type=str, description="Recency window in hours, or 'all' (default)"),
+        ],
+        responses={200: None},
+    )
+    @action(detail=False, methods=["get"], url_path="seen-types")
+    def seen_types(self, request):
+        """Distinct-tail counts per type_code, restricted to tails we've actually seen."""
+        from django.core.cache import cache
+        from django.db.models import Count
+
+        seen_hexes, hours = self._seen_hexes(request)
+
+        cache_key = f"skyspy:seen_types:{hours or 'all'}"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return Response(cached)
+
+        rows = (
+            AircraftInfo.objects.filter(icao_hex__in=seen_hexes)
+            .exclude(type_code__isnull=True)
+            .exclude(type_code="")
+            .values("type_code")
+            .annotate(n=Count("icao_hex"))
+        )
+        types = {r["type_code"].upper(): r["n"] for r in rows}
+        payload = {"types": types}
+        cache.set(cache_key, payload, 60)
+        return Response(payload)
+
+    @extend_schema(
+        summary="Auto-generated airframe type cards",
+        description=(
+            "Reference-library cards the daily LLM job generated for airframe types seen here but "
+            "absent from the curated static library. Each card mirrors the static `Airframe` shape "
+            "(id/name/mfr/category + dimensions + a `shape` diagram descriptor) so the front-end "
+            "renders it through the identical blueprint path, plus `generated:true` and a "
+            "`confidence` caveat. The Airframes screen merges these behind the static library."
+        ),
+        responses={200: None},
+    )
+    @action(detail=False, methods=["get"], url_path="type-cards")
+    def type_cards(self, request):
+        """Airframe-shaped JSON for every generated (non-failed) type card."""
+        from django.core.cache import cache
+
+        from skyspy.models import AirframeTypeCard
+
+        cache_key = "skyspy:airframe_type_cards"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return Response(cached)
+
+        cards = [
+            self._type_card_payload(c)
+            for c in AirframeTypeCard.objects.exclude(status=AirframeTypeCard.STATUS_FAILED).order_by("type_code")
+        ]
+        payload = {"cards": cards, "count": len(cards)}
+        cache.set(cache_key, payload, 120)
+        return Response(payload)
+
+    @extend_schema(
+        summary="Generate a missing airframe type card",
+        description=(
+            "Queue on-demand LLM generation of a reference card for an ICAO type designator that "
+            "isn't in the library yet (web-searches for facts + a public photo, picks a diagram "
+            "archetype). Returns 202 with the queued type; the card appears in `type-cards` once "
+            "the worker finishes (a few seconds). Rate-limited. Requires the LLM to be configured."
+        ),
+        responses={202: None, 400: None, 409: None, 503: None},
+    )
+    @action(detail=False, methods=["post"], url_path="type-cards/generate")
+    def generate_type_card(self, request):
+        """Queue generation of one type card on demand (for a seen-but-uncarded type)."""
+        from skyspy.models import AirframeTypeCard
+        from skyspy.services.airframe_card_gen import CURATED_TYPE_CODES
+        from skyspy.services.llm import llm_client
+
+        type_code = (request.data.get("type") or request.query_params.get("type") or "").upper().strip()
+        if not re.fullmatch(r"[A-Z0-9]{2,4}", type_code):
+            return Response({"error": "Invalid ICAO type designator"}, status=status.HTTP_400_BAD_REQUEST)
+        if not llm_client.is_available():
+            return Response(
+                {"error": "LLM is not configured", "status": "llm_unavailable"},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        if type_code in CURATED_TYPE_CODES or AirframeTypeCard.objects.filter(type_code=type_code).exists():
+            return Response(
+                {"status": "exists", "type_code": type_code, "message": "A card already exists for this type."},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        try:
+            from skyspy.tasks.airframe_cards import generate_airframe_type_card
+
+            generate_airframe_type_card.delay(type_code)
+        except (ConnectionError, OSError, RuntimeError, KombuOperationalError) as e:
+            logger.warning(f"Failed to queue type-card generation for {type_code}: {e}")
+            return Response(
+                {"error": "Could not queue generation", "status": "queue_failed"},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        return Response({"status": "queued", "type_code": type_code}, status=status.HTTP_202_ACCEPTED)
+
+    @staticmethod
+    def _type_card_payload(c):
+        """Map an AirframeTypeCard row to the front-end `Airframe` object shape."""
+        # Photo priority: a fetched+cached public type photo (same-origin) →
+        # the external source URL → a representative seen tail's cached photo.
+        if c.photo_cached:
+            photo = f"/api/v1/photos/TYPE-{c.type_code}"
+            photo_full = photo
+        elif c.photo_url:
+            photo = c.photo_url
+            photo_full = c.photo_full_url or c.photo_url
+        elif c.photo_icao_hex:
+            photo = f"/api/v1/photos/{c.photo_icao_hex}"
+            photo_full = photo
+        else:
+            photo = photo_full = None
+        return {
+            "id": c.type_code,
+            "name": c.name or c.type_code,
+            "mfr": c.manufacturer or "",
+            "category": c.category or "ga",
+            "role": c.role or "",
+            "length": c.length_m or 0,
+            "span": c.span_m or 0,
+            "height": c.height_m or 0,
+            "mtow": c.mtow_kg or 0,
+            "cruise": c.cruise_kt or 0,
+            "range": c.range_nm or 0,
+            "ceiling": c.ceiling_ft or 0,
+            "firstFlight": c.first_flight or 0,
+            "shape": c.shape or {"kind": "prop", "engines": 1, "mount": "nose", "tail": "std", "wing": "high"},
+            "blurb": c.blurb or None,
+            "powerplant": c.powerplant or None,
+            "variants": c.variants or None,
+            "wtc": c.wtc or None,
+            "photo": photo,
+            "photoFull": photo_full,
+            "credit": c.photo_credit or None,
+            "photoPage": c.photo_page or None,
+            "generated": True,
+            "confidence": c.confidence,
+            "sources": c.sources or [],
+        }
+
+    @extend_schema(
+        summary="Seen tails of a type",
+        description=(
+            "Paginated list of distinct tails of one ICAO type designator that this ground "
+            "station has tracked, newest last-seen first. Each links to the aircraft detail page."
+        ),
+        parameters=[
+            OpenApiParameter(name="type", type=str, description="ICAO type designator (e.g. B738)", required=True),
+            OpenApiParameter(name="hours", type=str, description="Recency window in hours, or 'all' (default)"),
+            OpenApiParameter(name="limit", type=int, description="Page size (default 25, max 100)"),
+            OpenApiParameter(name="offset", type=int, description="Offset for lazy loading (default 0)"),
+        ],
+        responses={200: None, 400: None},
+    )
+    @action(detail=False, methods=["get"], url_path="seen")
+    def seen(self, request):
+        """Seen tails of a given type, newest first, paginated for lazy loading."""
+        from django.db.models import Count, Max
+
+        from skyspy.models import AircraftSession
+
+        type_code = (request.query_params.get("type") or "").strip()
+        if not type_code:
+            return Response({"error": "type is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            limit = max(1, min(int(request.query_params.get("limit", 25)), 100))
+        except (ValueError, TypeError):
+            limit = 25
+        try:
+            offset = max(0, int(request.query_params.get("offset", 0)))
+        except (ValueError, TypeError):
+            offset = 0
+
+        seen_hexes, _hours = self._seen_hexes(request)
+        infos = {
+            info.icao_hex.upper(): info
+            for info in AircraftInfo.objects.filter(type_code__iexact=type_code, icao_hex__in=seen_hexes)
+        }
+        if not infos:
+            return Response({"results": [], "count": 0, "next_offset": None})
+
+        # Recency + how many times each tail was seen, straight from sessions.
+        agg = {
+            row["icao_hex"].upper(): row
+            for row in AircraftSession.objects.filter(icao_hex__in=list(infos.keys()))
+            .values("icao_hex")
+            .annotate(last_seen=Max("last_seen"), times_seen=Count("id"))
+        }
+
+        merged = []
+        for hexu, info in infos.items():
+            a = agg.get(hexu)
+            merged.append(
+                {
+                    "icao_hex": hexu,
+                    "registration": info.registration or None,
+                    "operator": info.operator or None,
+                    "last_seen": a["last_seen"].isoformat().replace("+00:00", "Z") if a and a["last_seen"] else None,
+                    "times_seen": a["times_seen"] if a else 0,
+                }
+            )
+        # Newest last-seen first; unseen-timestamp rows sink to the bottom.
+        merged.sort(key=lambda r: r["last_seen"] or "", reverse=True)
+
+        total = len(merged)
+        page = merged[offset : offset + limit]
+        next_offset = offset + limit if offset + limit < total else None
+        return Response({"results": page, "count": total, "next_offset": next_offset})
 
     @extend_schema(summary="Get cache statistics", responses={200: AircraftInfoCacheStatsSerializer})
     @action(detail=False, methods=["get"], url_path="cache/stats")

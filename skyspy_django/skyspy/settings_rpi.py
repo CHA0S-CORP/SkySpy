@@ -25,6 +25,10 @@ from .settings import *
 POLLING_INTERVAL = 3  # Was 2 seconds - reduces CPU load by ~33%
 DB_STORE_INTERVAL = 10  # Was 5 seconds - halves database write frequency
 
+# Turbulence scoring less often on constrained hardware (env still wins via
+# TURB_SCORE_INTERVAL in celery.py; this just relaxes the service TTL default).
+TURB_SCORE_TTL = 300
+
 # =============================================================================
 # Disable Resource-Heavy Features
 # =============================================================================

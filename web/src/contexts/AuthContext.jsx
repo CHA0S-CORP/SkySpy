@@ -169,11 +169,13 @@ export function AuthProvider({ children }) {
       const data = await response.json();
       setConfig({
         authEnabled: data.auth_enabled,
+        authMode: data.auth_mode,
         publicMode: data.auth_mode === 'public',
         oidcEnabled: data.oidc_enabled,
         oidcProviderName: data.oidc_provider_name,
         localAuthEnabled: data.local_auth_enabled,
         apiKeyEnabled: data.api_key_enabled,
+        devMode: data.dev_mode || false,
         features: data.features || {},
       });
       return data;
@@ -205,6 +207,15 @@ export function AuthProvider({ children }) {
   }, [apiBaseUrl, authFetch]);
 
   /**
+   * After an interactive login (password or OIDC), reload so every Socket.IO
+   * connection + query re-establishes under the new JWT. Deferred a tick so the
+   * token/user writes to localStorage flush before re-initialization.
+   */
+  const finishInteractiveLogin = useCallback(() => {
+    setTimeout(() => window.location.reload(), 50);
+  }, []);
+
+  /**
    * Login with username and password
    */
   const login = useCallback(
@@ -228,6 +239,11 @@ export function AuthProvider({ children }) {
         setStatus('authenticated');
         scheduleTokenRefresh(data.access);
 
+        // The live map/list is Socket.IO-fed and the socket was opened
+        // anonymously (unauthorized for gated data in hybrid mode). Reload so
+        // every socket + query re-establishes with the JWT and data shows
+        // immediately instead of only after a manual refresh.
+        finishInteractiveLogin();
         return { success: true };
       } catch (err) {
         setError(err.message);
@@ -287,11 +303,20 @@ export function AuthProvider({ children }) {
         let timeoutId = null;
         let popupCheckInterval = null;
         let isCleanedUp = false;
+        let broadcastChannel = null;
 
         const cleanup = () => {
           if (isCleanedUp) return;
           isCleanedUp = true;
           window.removeEventListener('message', handleMessage);
+          if (broadcastChannel) {
+            try {
+              broadcastChannel.close();
+            } catch {
+              /* noop */
+            }
+            broadcastChannel = null;
+          }
           if (timeoutId) clearTimeout(timeoutId);
           if (popupCheckInterval) clearInterval(popupCheckInterval);
           oidcCleanupRef.current = null;
@@ -299,6 +324,34 @@ export function AuthProvider({ children }) {
         };
 
         oidcCleanupRef.current = cleanup;
+
+        // Shared completion path for both transports. The main window keeps its
+        // `popup` handle from window.open even when the popup's own opener is
+        // severed by the IdP's COOP, so we close it from here on success.
+        const complete = (payload) => {
+          if (isCleanedUp) return;
+          cleanup();
+          if (payload && payload.access) {
+            storeTokens(payload.access, payload.refresh);
+            const userData = createUserData(payload.user);
+            setUser(userData);
+            storeUser(userData);
+            setStatus('authenticated');
+            scheduleTokenRefresh(payload.access);
+            try {
+              if (popup && !popup.closed) popup.close();
+            } catch {
+              /* noop */
+            }
+            resolve({ success: true });
+            // Reload so sockets/queries re-establish with the JWT (see
+            // finishInteractiveLogin) — otherwise data only shows after a
+            // manual refresh.
+            finishInteractiveLogin();
+          } else {
+            reject(new Error('OIDC authentication failed'));
+          }
+        };
 
         const handleMessage = (event) => {
           if (isCleanedUp) return;
@@ -308,22 +361,25 @@ export function AuthProvider({ children }) {
             return;
           }
           if (event.data && event.data.type === 'oidc_callback') {
-            cleanup();
-            if (event.data.access) {
-              storeTokens(event.data.access, event.data.refresh);
-              const userData = createUserData(event.data.user);
-              setUser(userData);
-              storeUser(userData);
-              setStatus('authenticated');
-              scheduleTokenRefresh(event.data.access);
-              resolve({ success: true });
-            } else {
-              reject(new Error('OIDC authentication failed'));
-            }
+            complete(event.data);
           }
         };
 
         window.addEventListener('message', handleMessage);
+
+        // Primary transport: BroadcastChannel is same-origin only (so it needs
+        // no origin check) and survives opener severance from cross-origin IdP
+        // navigation, unlike window.opener.postMessage.
+        try {
+          broadcastChannel = new BroadcastChannel('skyspy_oidc');
+          broadcastChannel.onmessage = (event) => {
+            if (event.data && event.data.type === 'oidc_callback') {
+              complete(event.data);
+            }
+          };
+        } catch {
+          broadcastChannel = null;
+        }
 
         popupCheckInterval = setInterval(() => {
           if (isCleanedUp) return;
@@ -436,6 +492,15 @@ export function AuthProvider({ children }) {
           setUser(storedUser);
           setStatus('authenticated');
           scheduleTokenRefresh(accessToken);
+          // One-time reconcile for sessions cached before newer identity fields
+          // existed. `createUserData` always sets `isSuperuser` (to false for a
+          // normal user), so a stored user MISSING the key predates that change —
+          // e.g. a pre-change admin whose cached perms are empty, which would
+          // otherwise hide every permission-gated nav item until re-login. Refresh
+          // from the server; fetchProfile leaves the painted user intact on failure.
+          if (storedUser.isSuperuser === undefined) {
+            fetchProfile();
+          }
         } else {
           const profile = await fetchProfile();
           if (profile) {

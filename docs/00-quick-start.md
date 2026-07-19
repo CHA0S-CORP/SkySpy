@@ -96,7 +96,11 @@ SkysPy requires an ADS-B data source. Choose one of the supported options:
 
 > ⚠️ **No ADS-B Receiver?**
 >
-> Don't worry! You can use **development mode** with mock data to explore all of SkysPy's features before investing in hardware.
+> No problem — two options:
+> - **Real open data (no hardware):** feed live aircraft from keyless community
+>   APIs and ACARS from airframes.io. See [Feeding with Open Data](./22-open-data-feeds.md).
+> - **Synthetic data:** use **development mode** (`make dev`) with a mock feeder
+>   to explore every feature before investing in hardware.
 
 ---
 

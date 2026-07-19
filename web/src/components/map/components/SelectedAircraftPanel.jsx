@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plane, X, Shield, AlertTriangle, ExternalLink, Crosshair, Bell, Zap } from 'lucide-react';
+import { Plane, X, Shield, AlertTriangle, ExternalLink, Crosshair, Bell, Zap, Wind } from 'lucide-react';
 import { getTailInfo } from '../../../utils';
 
 /**
@@ -105,6 +105,16 @@ export function SelectedAircraftPanel({
           )}
           {isEmergency && squawkLabel && <span className="popup-squawk-tag">{squawkLabel}</span>}
           {liveAircraft.military && <Shield size={14} className="military-badge" />}
+          {['moderate', 'severe'].includes(liveAircraft.turbulenceLevel) && (
+            <span
+              className={`turbulence-badge turbulence-${liveAircraft.turbulenceLevel}`}
+              title={`Turbulence risk: ${liveAircraft.turbulenceLevel}${
+                liveAircraft.turbulenceRisk != null ? ` (${liveAircraft.turbulenceRisk})` : ''
+              }`}
+            >
+              <Wind size={12} /> TURB
+            </span>
+          )}
         </div>
 
         <div className="popup-details">

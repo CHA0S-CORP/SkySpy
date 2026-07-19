@@ -222,6 +222,24 @@ export function OverlayMenu({
           <label className="overlay-toggle">
             <input
               type="checkbox"
+              checked={overlays.usAirways}
+              onChange={() => updateOverlays({ ...overlays, usAirways: !overlays.usAirways })}
+            />
+            <span className="toggle-label">US Airways (IFR)</span>
+          </label>
+
+          <label className="overlay-toggle">
+            <input
+              type="checkbox"
+              checked={overlays.usFixes}
+              onChange={() => updateOverlays({ ...overlays, usFixes: !overlays.usFixes })}
+            />
+            <span className="toggle-label">Waypoints / Fixes</span>
+          </label>
+
+          <label className="overlay-toggle">
+            <input
+              type="checkbox"
               checked={overlays.approachPaths}
               onChange={() =>
                 updateOverlays({ ...overlays, approachPaths: !overlays.approachPaths })

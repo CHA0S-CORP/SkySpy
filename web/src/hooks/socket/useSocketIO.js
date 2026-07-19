@@ -165,9 +165,14 @@ export function useSocketIO({
         randomizationFactor: 0.3,
       };
 
-      // Create socket with merged config
-      // Use websocket transport with polling fallback
-      // Note: Set upgrade to false to prevent transport switching issues with some proxies
+      // Create socket with merged config.
+      // Start on HTTP long-polling and let Engine.IO upgrade to WebSocket once
+      // the session exists. A polling handshake is a single round-trip that
+      // succeeds through any proxy, so the session is established BEFORE any raw
+      // WebSocket is opened — this avoids the "WebSocket is closed before the
+      // connection is established" warning (an immediate ws attempt racing the
+      // proxy / a StrictMode double-mount) and makes every (re)connect attempt
+      // use the same reliable path instead of gambling on a bare ws handshake.
       const socket = io(fullUrl, {
         path: pathRef.current,
         // Auth as a function so each (re)connection attempt reads the
@@ -178,8 +183,8 @@ export function useSocketIO({
             ...authRef.current,
           });
         },
-        transports: ['websocket', 'polling'],
-        upgrade: false,
+        transports: ['polling', 'websocket'],
+        upgrade: true,
         ...defaultReconnectConfig,
         ...reconnectConfigRef.current,
       });

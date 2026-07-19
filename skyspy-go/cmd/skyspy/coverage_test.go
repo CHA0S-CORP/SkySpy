@@ -404,8 +404,8 @@ func TestConfigDefaults(t *testing.T) {
 		t.Errorf("Expected default host to be 'localhost', got %q", cfg.Connection.Host)
 	}
 
-	if cfg.Connection.Port != 80 {
-		t.Errorf("Expected default port to be 80, got %d", cfg.Connection.Port)
+	if cfg.Connection.Port != 8000 {
+		t.Errorf("Expected default port to be 8000, got %d", cfg.Connection.Port)
 	}
 
 	if cfg.Display.Theme != "classic" {

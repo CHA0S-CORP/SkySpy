@@ -355,6 +355,11 @@ func parsePolygon(data []byte) (*GeoFeature, error) {
 	if numParts > 1 {
 		endOfFirstPart = parts[1]
 	}
+	// Clamp against malformed/hostile files where parts[1] exceeds the point
+	// count (expectedSize only guarantees numPoints*16 bytes exist).
+	if endOfFirstPart < 0 || endOfFirstPart > numPoints {
+		endOfFirstPart = numPoints
+	}
 
 	var points []GeoPoint
 	for i := 0; i < endOfFirstPart; i++ {

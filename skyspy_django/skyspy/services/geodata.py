@@ -48,6 +48,7 @@ def _feeder_bbox(radius_nm: float | None = None) -> str:
     d_lon = r / (60.0 * max(cos(radians(lat)), 0.1))
     return f"{lat - d_lat:.4f},{lon - d_lon:.4f},{lat + d_lat:.4f},{lon + d_lon:.4f}"
 
+
 # GeoJSON data sources (Natural Earth via GitHub)
 GEOJSON_SOURCES = {
     "countries": "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson",
@@ -134,6 +135,19 @@ def _http_get_geojson(url: str, timeout: float = 15.0) -> httpx.Response:
         return response
 
 
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=1, max=10),
+    retry=retry_if_exception_type((httpx.HTTPError, httpx.TimeoutException)),
+)
+def _http_get_faa(url: str, params: dict, timeout: float = 20.0) -> httpx.Response:
+    """HTTP GET with retry logic for FAA ArcGIS FeatureServer queries."""
+    with httpx.Client(timeout=timeout) as client:
+        response = client.get(url, params=params, headers={"User-Agent": "SkySpyAPI/2.6 (aircraft-tracker)"})
+        response.raise_for_status()
+        return response
+
+
 def fetch_awc_data(endpoint: str, params: dict) -> dict | list:
     """Fetch data from Aviation Weather Center API with retry logic."""
     try:
@@ -190,10 +204,111 @@ def calculate_bbox(geometry: dict) -> tuple:
     return (min(lats), max(lats), min(lons), max(lons))
 
 
+# OpenAIP airport `type` enum → CachedAirport.airport_type label (best-effort;
+# only used for the map icon/label, not for filtering).
+_OPENAIP_AIRPORT_TYPE = {
+    0: "medium_airport",  # Airport (civil/military, resolved lower)
+    1: "small_airport",  # Glider site
+    2: "small_airport",  # Airfield (civil)
+    3: "large_airport",  # International airport
+    4: "heliport",  # Heliport (military)
+    5: "medium_airport",  # Military aerodrome
+    6: "small_airport",  # Ultralight
+    7: "heliport",  # Heliport (civil)
+    8: "closed",  # Aerodrome closed
+    9: "medium_airport",  # Airport (IFR)
+    10: "seaplane_base",  # Landing strip / water
+    11: "small_airport",  # Altiport
+}
+
+
+def _openaip_regions(default_radius_nm: float) -> list[tuple[float, float, float]]:
+    """Feeder + AIRSPACE_EXTRA_REGIONS as (lat, lon, radius_nm) fetch centers.
+
+    Mirrors the airspace boundary task: OpenAIP caps each geo-search at ~27 nm,
+    so multi-site coverage comes from AIRSPACE_EXTRA_REGIONS, not a wider radius.
+    """
+    regions: list[tuple[float, float, float]] = []
+    lat = float(getattr(settings, "FEEDER_LAT", 0) or 0)
+    lon = float(getattr(settings, "FEEDER_LON", 0) or 0)
+    if lat or lon:
+        regions.append((lat, lon, default_radius_nm))
+    for extra in getattr(settings, "AIRSPACE_EXTRA_REGIONS", None) or []:
+        try:
+            elat, elon = float(extra[0]), float(extra[1])
+            eradius = float(extra[2]) if len(extra) > 2 else default_radius_nm
+            regions.append((elat, elon, eradius))
+        except (TypeError, ValueError, IndexError):
+            continue
+    return regions
+
+
+def _as_int(value) -> int | None:
+    try:
+        return int(round(float(value)))
+    except (TypeError, ValueError):
+        return None
+
+
+def _as_float(value) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _refresh_airports_openaip(now: datetime) -> dict:
+    """Build CachedAirport rows from OpenAIP (keyed by ICAO). Empty dict if disabled."""
+    from skyspy.services import openaip
+
+    if not openaip._is_enabled():
+        return {}
+
+    radius = float(getattr(settings, "GEODATA_FETCH_RADIUS_NM", 250) or 250)
+    unique_airports: dict[str, CachedAirport] = {}
+
+    for lat, lon, region_radius in _openaip_regions(radius):
+        for apt in openaip.get_airports(lat, lon, region_radius):
+            icao = (apt.get("icao") or "").strip().upper()
+            # CachedAirport.icao_id is a unique 4-char key; OpenAIP returns many
+            # heliports/hospitals with no ICAO — skip those (map wants real fields).
+            if not icao or len(icao) > 4:
+                continue
+            la, lo = apt.get("latitude"), apt.get("longitude")
+            if la is None or lo is None:
+                continue
+            unique_airports[icao] = CachedAirport(
+                fetched_at=now,
+                icao_id=icao,
+                name=(apt.get("name") or "")[:200],
+                latitude=la,
+                longitude=lo,
+                elevation_ft=_as_int(apt.get("elevation_ft")),
+                airport_type=_OPENAIP_AIRPORT_TYPE.get(apt.get("type"), "medium_airport"),
+                country=(apt.get("country") or "")[:100] or None,
+                region=None,
+                source_data=apt,
+            )
+    return unique_airports
+
+
 def refresh_airports() -> int:
-    """Fetch and cache airport data using UPSERT."""
+    """Fetch and cache airport data using UPSERT.
+
+    Primary source is OpenAIP (keyed, unlimited, dense GA coverage). Falls back
+    to the AWC airport endpoint only when OpenAIP is disabled or returns nothing
+    — AWC's weather-station airport feed returns only a handful of major fields.
+    """
     logger.info("Refreshing cached airports...")
     now = datetime.utcnow()
+
+    unique_airports = _refresh_airports_openaip(now)
+    if unique_airports:
+        with transaction.atomic():
+            CachedAirport.objects.all().delete()
+            CachedAirport.objects.bulk_create(unique_airports.values())
+        logger.info(f"Cached {len(unique_airports)} airports (openaip)")
+        return len(unique_airports)
 
     bbox = _feeder_bbox()  # local box around the feeder (CONUS fallback)
 
@@ -251,10 +366,52 @@ def refresh_airports() -> int:
     return len(unique_airports)
 
 
+def _refresh_navaids_openaip(now: datetime) -> dict:
+    """Build CachedNavaid rows from OpenAIP. Empty dict if disabled."""
+    from skyspy.services import openaip
+
+    if not openaip._is_enabled():
+        return {}
+
+    radius = float(getattr(settings, "GEODATA_FETCH_RADIUS_NM", 250) or 250)
+    unique_navaids: dict = {}
+
+    for lat, lon, region_radius in _openaip_regions(radius):
+        for nav in openaip.get_navaids(lat, lon, region_radius):
+            ident = (nav.get("ident") or "").strip().upper()
+            la, lo = nav.get("latitude"), nav.get("longitude")
+            if not ident or la is None or lo is None:
+                continue
+            unique_navaids[(ident, round(la, 4), round(lo, 4))] = CachedNavaid(
+                fetched_at=now,
+                ident=ident[:10],
+                name=(nav.get("name") or "")[:100],
+                navaid_type=(nav.get("type") or "")[:20] or None,
+                latitude=la,
+                longitude=lo,
+                frequency=_as_float(nav.get("frequency")),
+                channel=None,
+                source_data=nav,
+            )
+    return unique_navaids
+
+
 def refresh_navaids() -> int:
-    """Fetch and cache navaid data."""
+    """Fetch and cache navaid data.
+
+    Primary source is OpenAIP; falls back to AWC only when OpenAIP is disabled or
+    empty. (The AWC navaid endpoint currently returns [] for any bbox.)
+    """
     logger.info("Refreshing cached navaids...")
     now = datetime.utcnow()
+
+    unique_navaids = _refresh_navaids_openaip(now)
+    if unique_navaids:
+        with transaction.atomic():
+            CachedNavaid.objects.all().delete()
+            CachedNavaid.objects.bulk_create(unique_navaids.values())
+        logger.info(f"Cached {len(unique_navaids)} navaids (openaip)")
+        return len(unique_navaids)
 
     bbox = _feeder_bbox()
 
@@ -418,6 +575,127 @@ def refresh_geojson() -> int:
     return total
 
 
+# FAA Aeronautical Information Services enroute structure (keyless ArcGIS
+# FeatureServer, GeoJSON). US airways (ATS_Route lines) + named waypoints/fixes
+# (Designated_Point points) near the feeder — see settings FAA_ENROUTE_*. Stored
+# in CachedGeoJSON as data_type us_airways / us_fixes and served by the generic
+# /aviation/geojson/<type>/ endpoint. Each entry is (data_type, url_setting,
+# outFields, page_size); the ArcGIS layers cap at 2000 / 1000 rows per request.
+_FAA_ENROUTE_LAYERS = (
+    ("us_airways", "FAA_AIRWAYS_URL", "IDENT,TYPE_CODE,LEVEL_", 2000),
+    ("us_fixes", "FAA_FIXES_URL", "IDENT,TYPE_CODE,STATE", 1000),
+)
+
+
+def _faa_envelope(lat: float, lon: float, radius_nm: float) -> str:
+    """ArcGIS esriGeometryEnvelope ("xmin,ymin,xmax,ymax" = lon/lat) around a point."""
+    d_lat = radius_nm / 60.0
+    d_lon = radius_nm / (60.0 * max(cos(radians(lat)), 0.1))
+    return f"{lon - d_lon:.4f},{lat - d_lat:.4f},{lon + d_lon:.4f},{lat + d_lat:.4f}"
+
+
+def fetch_faa_layer(url: str, envelope: str, out_fields: str, page: int, max_features: int) -> list[dict]:
+    """Paginated GeoJSON fetch of one FAA FeatureServer layer within an envelope."""
+    features: list[dict] = []
+    offset = 0
+    while len(features) < max_features:
+        params = {
+            "where": "1=1",
+            "geometry": envelope,
+            "geometryType": "esriGeometryEnvelope",
+            "inSR": "4326",
+            "outSR": "4326",
+            "spatialRel": "esriSpatialRelIntersects",
+            "outFields": out_fields,
+            "resultOffset": offset,
+            "resultRecordCount": page,
+            "f": "geojson",
+        }
+        try:
+            data = _http_get_faa(url, params).json()
+        except Exception as e:  # broad: FAA fetch degrades to whatever pages we have (tested)
+            logger.warning(f"FAA layer fetch failed at offset {offset}: {e}")
+            break
+        batch = data.get("features") if isinstance(data, dict) else None
+        if not batch:
+            break
+        features.extend(batch)
+        if len(batch) < page:
+            break
+        offset += page
+    return features[:max_features]
+
+
+def refresh_faa_enroute() -> int:
+    """Fetch FAA airways + fixes near the feeder into CachedGeoJSON.
+
+    Airways -> data_type ``us_airways`` (LineString), fixes -> ``us_fixes``
+    (Point). US-only: a non-US feeder returns nothing (cache is then left as-is).
+    """
+    if not getattr(settings, "FAA_ENROUTE_ENABLED", False):
+        return 0
+
+    radius = float(getattr(settings, "AIRSPACE_FETCH_RADIUS_NM", 250) or 250)
+    max_features = int(getattr(settings, "FAA_ENROUTE_MAX_FEATURES", 8000) or 8000)
+    regions = _openaip_regions(radius)
+    if not regions:
+        logger.info("FAA enroute refresh skipped: no feeder location configured")
+        return 0
+
+    now = datetime.utcnow()
+    total = 0
+
+    for data_type, url_setting, out_fields, page in _FAA_ENROUTE_LAYERS:
+        url = getattr(settings, url_setting, "")
+        if not url:
+            continue
+
+        seen: set = set()
+        rows: list[CachedGeoJSON] = []
+        for lat, lon, region_radius in regions:
+            envelope = _faa_envelope(lat, lon, region_radius)
+            for feature in fetch_faa_layer(url, envelope, out_fields, page, max_features):
+                geometry = feature.get("geometry")
+                if not geometry:
+                    continue
+                props = feature.get("properties") or {}
+                ident = (props.get("IDENT") or "").strip()
+                bbox = calculate_bbox(geometry)
+                # Dedupe overlapping regions by ArcGIS OBJECTID (feature "id"),
+                # falling back to ident+bbox when the id is absent.
+                key = feature.get("id")
+                if key is None:
+                    key = (ident, round(bbox[0], 3), round(bbox[2], 3))
+                if key in seen:
+                    continue
+                seen.add(key)
+                rows.append(
+                    CachedGeoJSON(
+                        fetched_at=now,
+                        data_type=data_type,
+                        name=(ident or "Unknown")[:100],
+                        code=(props.get("TYPE_CODE") or None) and str(props.get("TYPE_CODE"))[:10],
+                        bbox_min_lat=bbox[0],
+                        bbox_max_lat=bbox[1],
+                        bbox_min_lon=bbox[2],
+                        bbox_max_lon=bbox[3],
+                        geometry=geometry,
+                        properties=props,
+                    )
+                )
+
+        if rows:
+            with transaction.atomic():
+                CachedGeoJSON.objects.filter(data_type=data_type).delete()
+                CachedGeoJSON.objects.bulk_create(rows)
+            logger.info(f"Cached {len(rows)} {data_type} features (FAA)")
+            total += len(rows)
+        else:
+            logger.warning(f"FAA {data_type} fetch returned no features; keeping existing cache")
+
+    return total
+
+
 def refresh_all_geodata() -> dict:
     """Refresh all geographic data."""
     global _last_refresh
@@ -426,6 +704,7 @@ def refresh_all_geodata() -> dict:
         "airports": refresh_airports(),
         "navaids": refresh_navaids(),
         "geojson": refresh_geojson(),
+        "faa_enroute": refresh_faa_enroute(),
     }
 
     _last_refresh = datetime.utcnow()

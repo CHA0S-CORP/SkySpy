@@ -235,12 +235,16 @@ func TestParseFloat(t *testing.T) {
 		{"0.5", 0.5},
 		{"", 0.0},
 		{"abc", 0.0},
-		{"12abc", 12.0},
-		{"12.34.56", 12.34},
+		// Malformed input fails safe to 0 (strconv-backed, no partial parse).
+		{"12abc", 0.0},
+		{"12.34.56", 0.0},
 		{"-", 0.0},
 		{"-.5", -0.5},
-		{"123abc456", 123.0},
-		{"12.abc", 12.0},
+		{"123abc456", 0.0},
+		{"12.abc", 0.0},
+		// Cases the old hand-rolled parser got wrong:
+		{" 50", 50.0},   // leading whitespace now trimmed (was 0 → "matches everything")
+		{"1e3", 1000.0}, // scientific notation now honored (was 1)
 	}
 
 	for _, tc := range tests {
@@ -261,10 +265,12 @@ func TestParseInt(t *testing.T) {
 		{"0", 0},
 		{"", 0},
 		{"abc", 0},
-		{"12abc", 12},
-		{"-12abc", -12},
+		// Malformed input fails safe to 0 (strconv-backed, no partial parse).
+		{"12abc", 0},
+		{"-12abc", 0},
 		{"-", 0},
 		{"--12", 0}, // Second - is not valid
+		{" 42", 42}, // leading whitespace now trimmed
 	}
 
 	for _, tc := range tests {

@@ -13,6 +13,9 @@ from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
+from skyspy.api.throttles import ExternalLookupRateThrottle, GeodataRateThrottle, WeatherRateThrottle
+from skyspy.auth.authentication import APIKeyAuthentication, OptionalJWTAuthentication
+from skyspy.auth.permissions import CanUseLLM, FeatureBasedPermission
 from skyspy.models import (
     AirspaceAdvisory,
     AirspaceBoundary,
@@ -35,9 +38,70 @@ logger = logging.getLogger(__name__)
 class AviationViewSet(viewsets.ViewSet):
     """ViewSet for aviation weather and data."""
 
-    # Public endpoint - no authentication required
-    authentication_classes = []
+    # Public endpoint - no authentication required for the map/weather data.
+    authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
     permission_classes = [AllowAny]
+
+    # Actions that fetch from external weather/aviation APIs vs. those that hit
+    # the terrain/geojson filesystem+compute path. Cheap cached-DB reads
+    # (airports, navaids, airspace boundaries) are left unthrottled.
+    _WEATHER_ACTIONS = {
+        "metars",
+        "tafs",
+        "pireps",
+        "sigmets",
+        "sigmets_proxy",
+        "nexrad",
+        "winds_aloft",
+        "turbulence",
+        "turbulence_advisories",
+        "turbulence_aircraft",
+    }
+    _GEODATA_ACTIONS = {"geojson", "terrain_elevation", "terrain_grid"}
+    # LLM-backed explainers (cost money) — require AI access + rate-limit.
+    _LLM_ACTIONS = {"explain", "airmet_brief"}
+
+    # RBAC-gated feature actions. These are gated on the `wildfires` / `weather`
+    # FeatureAccess feature (via FeatureBasedPermission) so they honor role
+    # permissions in hybrid/private mode; public mode still bypasses. The
+    # airspace/airport/navaid/terrain/geojson actions stay AllowAny (out of scope).
+    _WILDFIRE_ACTIONS = {"wildfires", "wildfire_bundle"}
+    _WEATHER_RBAC_ACTIONS = {
+        "metars",
+        "tafs",
+        "pireps",
+        "pirep_summary",
+        "sigmets",
+        "sigmets_proxy",
+        "nexrad",
+        "winds_aloft",
+        "turbulence",
+        "turbulence_advisories",
+        "turbulence_aircraft",
+    }
+
+    def get_permissions(self):
+        action = getattr(self, "action", None)
+        if action in self._LLM_ACTIONS:
+            return [CanUseLLM()]
+        if action in self._WILDFIRE_ACTIONS:
+            return [FeatureBasedPermission("wildfires")]
+        if action in self._WEATHER_RBAC_ACTIONS:
+            return [FeatureBasedPermission("weather")]
+        return super().get_permissions()
+
+    def get_throttles(self):
+        if self.action in self._WEATHER_ACTIONS:
+            return [WeatherRateThrottle()]
+        if self.action in self._GEODATA_ACTIONS:
+            return [GeodataRateThrottle()]
+        if self.action in self._LLM_ACTIONS:
+            return [ExternalLookupRateThrottle()]
+        # Per-fire bundle hits Watch Duty live (cached ~120s) — throttle like other
+        # external fan-out. The wildfires marker list is a cheap cached-DB read.
+        if self.action == "wildfire_bundle":
+            return [ExternalLookupRateThrottle()]
+        return super().get_throttles()
 
     @extend_schema(
         summary="Get GeoJSON overlay data",
@@ -274,34 +338,48 @@ class AviationViewSet(viewsets.ViewSet):
         return Response(response_data)
 
     @extend_schema(
-        summary="Get plain-English AI summary of a PIREP",
+        summary="Get the decoded block for a PIREP",
         description=(
-            "Uses the configured LLM to explain a stored PIREP in plain English. Opt-in "
-            "(one LLM call, cached). Falls back to the rule-based decoder summary when the "
-            "LLM is disabled/unconfigured."
+            "Deterministic, rule-based decode of a stored PIREP (station, hazards, "
+            "severity, plain-English summary). This is a fixed block formatter like the "
+            "ACARS decode — the LLM is NEVER run over pilot-report text, so the output "
+            "is stable, fast, and available without AI access."
         ),
     )
     @action(detail=False, methods=["get"], url_path=r"pireps/(?P<pirep_id>[^/]+)/summary")
     def pirep_summary(self, request, pirep_id=None):
-        """Plain-English summary of one PIREP (LLM if available, else rule-based)."""
-        from skyspy.services import aviation_llm, pirep_decoder
+        """Deterministic decoded block for one PIREP (rule-based decoder, never LLM)."""
+        from skyspy.services import pirep_decoder
 
         pirep = CachedPirep.objects.filter(pirep_id=pirep_id).first()
         if not pirep:
             return Response({"error": "PIREP not found"}, status=status.HTTP_404_NOT_FOUND)
 
         decoded = pirep_decoder.decode_pirep(pirep)
-        rule_summary = decoded.get("human_summary")
 
-        ai = aviation_llm.explain_pirep(pirep.raw_text or "", decoded=decoded) if aviation_llm.available() else None
+        # Cross-reference the single report against the synthesized area picture
+        # (G-AIRMET advisories + other nearby reports + winds-aloft shear). Guarded
+        # so a turbulence failure never breaks the deterministic decode.
+        area_turbulence = None
+        if pirep.latitude is not None and pirep.longitude is not None:
+            try:
+                from skyspy.services.turbulence import assess_turbulence
+
+                alt = pirep.altitude_ft or (pirep.flight_level * 100 if pirep.flight_level else None)
+                assessment = assess_turbulence(pirep.latitude, pirep.longitude, alt)
+                if assessment and assessment.get("level") != "none":
+                    area_turbulence = {"score": assessment.get("score"), "level": assessment.get("level")}
+            except (ValueError, TypeError, ImportError):
+                area_turbulence = None
 
         return Response(
             {
                 "pirep_id": pirep_id,
-                "summary": ai or rule_summary,
-                "source": "llm" if ai else "rule",
+                "summary": decoded.get("human_summary"),
+                "source": "rule",
                 "severity": decoded.get("severity"),
                 "hazards": decoded.get("hazards"),
+                "area_turbulence": area_turbulence,
             }
         )
 
@@ -357,6 +435,40 @@ class AviationViewSet(viewsets.ViewSet):
             }
         )
 
+    @extend_schema(
+        summary="LLM breakdown of a G-AIRMET advisory",
+        description=(
+            "Structured plain-language briefing for one AIRMET, keyed by advisory_id. "
+            "Returns {available, brief:{headline, summary, hazard_detail, altitude_note, "
+            "operational_impact[], safety_tips[]}}. available=false if the LLM is disabled."
+        ),
+    )
+    @action(detail=False, methods=["get"], url_path="airmet/brief")
+    def airmet_brief(self, request):
+        """Structured LLM breakdown for a single AIRMET advisory."""
+        from skyspy.services import aviation_llm
+
+        advisory_id = (request.query_params.get("advisory_id") or "").strip()
+        if not advisory_id:
+            return Response({"error": "advisory_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+        if not aviation_llm.available():
+            return Response({"available": False, "brief": None})
+
+        advisory = AirspaceAdvisory.objects.filter(advisory_id=advisory_id).order_by("-fetched_at").first()
+        if advisory is None:
+            return Response({"error": "advisory not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        brief = aviation_llm.brief_airmet(
+            advisory.raw_text,
+            hazard=advisory.hazard,
+            severity=advisory.severity,
+            lower_alt_ft=advisory.lower_alt_ft,
+            upper_alt_ft=advisory.upper_alt_ft,
+            region=advisory.region,
+            valid_to=advisory.valid_to,
+        )
+        return Response({"available": True, "brief": brief})
+
     @extend_schema(summary="Get active airspace advisories", responses={200: AirspaceAdvisorySerializer(many=True)})
     @action(detail=False, methods=["get"], url_path="airspace/advisories")
     def airspace_advisories(self, request):
@@ -374,6 +486,55 @@ class AviationViewSet(viewsets.ViewSet):
                 "count": advisories.count(),
             }
         )
+
+    @extend_schema(
+        summary="Assess turbulence risk at a point",
+        parameters=[
+            OpenApiParameter(name="lat", type=float, description="Latitude"),
+            OpenApiParameter(name="lon", type=float, description="Longitude"),
+            OpenApiParameter(name="alt", type=float, description="Altitude in feet (optional)"),
+        ],
+    )
+    @action(detail=False, methods=["get"])
+    def turbulence(self, request):
+        """Turbulence risk for a single lat/lon/alt point (G-AIRMET + PIREP + shear)."""
+        from skyspy.services.turbulence import assess_turbulence
+
+        try:
+            lat = float(request.query_params["lat"])
+            lon = float(request.query_params["lon"])
+        except (KeyError, ValueError, TypeError):
+            return Response({"error": "lat and lon are required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        alt = request.query_params.get("alt")
+        try:
+            alt = float(alt) if alt not in (None, "") else None
+        except (ValueError, TypeError):
+            alt = None
+
+        return Response(assess_turbulence(lat, lon, alt))
+
+    @extend_schema(summary="Active G-AIRMET turbulence advisories (for map overlay)")
+    @action(detail=False, methods=["get"], url_path="turbulence/advisories")
+    def turbulence_advisories(self, request):
+        """Active turbulence (TURB*) advisories with polygons for the map overlay."""
+        now = timezone.now()
+        advisories = AirspaceAdvisory.objects.filter(valid_from__lte=now, valid_to__gte=now, hazard__startswith="TURB")
+        return Response(
+            {
+                "advisories": AirspaceAdvisorySerializer(advisories, many=True).data,
+                "count": advisories.count(),
+            }
+        )
+
+    @extend_schema(summary="Per-aircraft turbulence risk map (hex -> score/level)")
+    @action(detail=False, methods=["get"], url_path="turbulence/aircraft")
+    def turbulence_aircraft(self, request):
+        """Cached turbulence risk per tracked aircraft, written by the scorer task."""
+        from skyspy.tasks.turbulence import CACHE_KEY_BY_HEX
+
+        by_hex = cache.get(CACHE_KEY_BY_HEX) or {}
+        return Response({"aircraft": by_hex, "count": len(by_hex)})
 
     @extend_schema(
         summary="Get airspace boundaries",
@@ -427,6 +588,54 @@ class AviationViewSet(viewsets.ViewSet):
                 "count": boundaries.count(),
             }
         )
+
+    @extend_schema(
+        summary="Get active wildfires near a point (Watch Duty)",
+        parameters=[
+            OpenApiParameter(name="lat", type=float, description="Center latitude"),
+            OpenApiParameter(name="lon", type=float, description="Center longitude"),
+            OpenApiParameter(name="radius_nm", type=float, description="Search radius (nm)"),
+        ],
+    )
+    @action(detail=False, methods=["get"])
+    def wildfires(self, request):
+        """Active wildfire markers from the cached Watch Duty feed."""
+        from django.conf import settings
+
+        from skyspy.services import wildfires as wildfire_service
+
+        try:
+            lat = float(request.query_params.get("lat", getattr(settings, "FEEDER_LAT", 0)))
+        except (ValueError, TypeError):
+            lat = float(getattr(settings, "FEEDER_LAT", 0))
+        try:
+            lon = float(request.query_params.get("lon", getattr(settings, "FEEDER_LON", 0)))
+        except (ValueError, TypeError):
+            lon = float(getattr(settings, "FEEDER_LON", 0))
+        try:
+            radius_nm = float(request.query_params.get("radius", request.query_params.get("radius_nm", 250)))
+            radius_nm = min(radius_nm, 1000)
+        except (ValueError, TypeError):
+            radius_nm = 250.0
+
+        fires = wildfire_service.get_cached_wildfires(lat, lon, radius_nm)
+        return Response({"wildfires": fires, "count": len(fires)})
+
+    @extend_schema(summary="Per-fire detail bundle (reports, cameras, scanner feeds)")
+    @action(detail=False, methods=["get"], url_path=r"wildfires/(?P<event_id>\d+)/bundle")
+    def wildfire_bundle(self, request, event_id=None):
+        """Detail-panel bundle for one wildfire (Watch Duty get_fire_bundle)."""
+        from skyspy.services import wildfires as wildfire_service
+
+        try:
+            fire_id = int(event_id)
+        except (ValueError, TypeError):
+            return Response({"error": "invalid event_id"}, status=status.HTTP_400_BAD_REQUEST)
+
+        bundle = wildfire_service.get_fire_bundle(fire_id)
+        if bundle is None:
+            return Response({"error": "wildfires disabled or unavailable"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        return Response(bundle)
 
     @extend_schema(
         summary="Get airports",

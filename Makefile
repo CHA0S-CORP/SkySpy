@@ -1,4 +1,4 @@
-.PHONY: test test-docker test-local test-verbose clean build help test-common test-python lint lint-python lint-go lint-frontend docs docs-openapi docs-storybook docs-go docs-socketio docs-screenshots
+.PHONY: test test-docker test-local test-verbose clean build help test-common test-python lint lint-python lint-go lint-frontend docs docs-openapi docs-storybook docs-go docs-socketio docs-screenshots dev dev-down dev-logs dev-auth dev-auth-down dev-auth-seed dev-public dev-public-down
 
 # Default target
 help:
@@ -54,6 +54,55 @@ dev:
 	@echo "   WS  ws://localhost:8000/ws/all/"
 	@echo ""
 	@echo "Stop with: make dev-down"
+
+# Start dev stack with AUTH ENFORCED (AUTH_MODE=hybrid, DEV_MODE=False) and seed
+# a local admin + regular user, for testing login / roles / the AI + sensitive gates.
+dev-auth:
+	@echo "🔐 Starting dev services with auth ENFORCED..."
+	docker compose --env-file ./.env.test -f ./docker-compose.test.yaml -f ./docker-compose.dev-auth.yaml --profile dev up --build -d
+	@echo "⏳ Waiting for API to become healthy..."
+	@until [ "$$(docker inspect -f '{{.State.Health.Status}}' skyspy_api_dev 2>/dev/null)" = "healthy" ]; do sleep 3; done
+	@echo "👤 Seeding admin + test user..."
+	docker exec skyspy_api_dev python manage.py seed_dev_users
+	@echo ""
+	@echo "✅ Auth-enforced dev running (AUTH_MODE=hybrid, DEV_MODE=False):"
+	@echo "   Dashboard:    http://localhost:3000  (login required)"
+	@echo "   Django Admin: http://localhost:8000/admin/"
+	@echo "   admin / admin  → superuser, full access (AI/LLM works)"
+	@echo "   user  / user   → viewer role, AI/LLM + system gated (403)"
+	@echo ""
+	@echo "Override creds/role via env: DEV_ADMIN_PASSWORD, DEV_USER_PASSWORD, DEV_USER_ROLE (viewer|operator|analyst|admin)"
+	@echo "Stop with: make dev-auth-down"
+
+# Start dev stack PUBLIC (map/dashboard open to anon) but with AI + sensitive
+# endpoints requiring sign-in (AUTH_MODE=public, DEV_MODE=False) — mirrors the
+# real public deployment. Seeds admin/admin so you can sign in to use the AI.
+dev-public:
+	@echo "🌐 Starting dev services: PUBLIC map, sign-in for AI..."
+	docker compose --env-file ./.env.test -f ./docker-compose.test.yaml -f ./docker-compose.public-auth.yaml --profile dev up --build -d
+	@echo "⏳ Waiting for API to become healthy..."
+	@until [ "$$(docker inspect -f '{{.State.Health.Status}}' skyspy_api_dev 2>/dev/null)" = "healthy" ]; do sleep 3; done
+	@echo "👤 Seeding admin + test user..."
+	docker exec skyspy_api_dev python manage.py seed_dev_users
+	@echo ""
+	@echo "✅ Public dev running (AUTH_MODE=public, DEV_MODE=False):"
+	@echo "   Dashboard:  http://localhost:3000  (map + dashboard open, no login)"
+	@echo "   AI/assistant, chat, AI summaries → sign in (admin/admin or user/user)"
+	@echo "Stop with: make dev-public-down"
+
+# Stop the public-auth dev stack
+dev-public-down:
+	docker compose --env-file ./.env.test -f ./docker-compose.test.yaml -f ./docker-compose.public-auth.yaml --profile dev down
+	@echo "🛬 Public dev stopped"
+
+# Stop the auth-enforced dev stack
+dev-auth-down:
+	docker compose --env-file ./.env.test -f ./docker-compose.test.yaml -f ./docker-compose.dev-auth.yaml --profile dev down
+	@echo "🛬 Auth-enforced dev stopped"
+
+# Re-seed the local admin + test user without restarting the stack
+dev-auth-seed:
+	docker exec skyspy_api_dev python manage.py seed_dev_users
 
 # Stop mock servers
 dev-down:

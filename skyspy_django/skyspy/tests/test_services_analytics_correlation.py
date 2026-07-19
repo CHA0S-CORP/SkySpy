@@ -11,7 +11,6 @@ from skyspy.tests.factories import (
     SafetyEventFactory,
 )
 
-
 # ---- pure math (no DB) ------------------------------------------------------
 
 

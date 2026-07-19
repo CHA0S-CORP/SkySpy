@@ -293,3 +293,97 @@ class AirframeDocument(models.Model):
 
     def __str__(self):
         return f"AirframeDocument({self.icao_hex})"
+
+
+class AirframeTypeCard(models.Model):
+    """
+    An auto-generated reference-library card for one ICAO aircraft *type*.
+
+    The v2 Airframes screen ships a hand-curated static library
+    (``web/.../airframesData.js``). This table holds cards the daily
+    ``generate_airframe_type_cards`` task produces for type designators the
+    station has actually tracked but that are *absent* from that static library:
+    the LLM writes the facts (dimensions, role, blurb, powerplant) and picks a
+    diagram *archetype* — it never draws; the front-end ``<Planform>`` renders
+    the to-scale blueprint from ``shape`` + dimensions exactly like a static card.
+
+    One row per ``type_code``. The API merges these behind the static library
+    (static always wins on a collision), so every field mirrors the static
+    ``Airframe`` shape to keep the front-end render path identical.
+    """
+
+    STATUS_GENERATED = "generated"  # a full, usable card
+    STATUS_STUB = "stub"  # stored identity but the LLM returned nothing usable
+    STATUS_FAILED = "failed"  # generation errored; retry next run
+    STATUS_CHOICES = [
+        (STATUS_GENERATED, "Generated"),
+        (STATUS_STUB, "Stub"),
+        (STATUS_FAILED, "Failed"),
+    ]
+
+    # ICAO type designator (what shows up in ADS-B `t`), upper-cased. == Airframe.id
+    type_code = models.CharField(max_length=10, unique=True, db_index=True)
+
+    # Airframe-shaped fields (mirror airframesData.js). Nullable so a partial
+    # card still stores something useful.
+    name = models.CharField(max_length=120, blank=True, null=True)
+    manufacturer = models.CharField(max_length=120, blank=True, null=True)
+    category = models.CharField(
+        max_length=20, blank=True, null=True
+    )  # airliner/regional/bizjet/turboprop/ga/military/rotor
+    role = models.CharField(max_length=120, blank=True, null=True)
+
+    length_m = models.FloatField(blank=True, null=True)
+    span_m = models.FloatField(blank=True, null=True)
+    height_m = models.FloatField(blank=True, null=True)
+    mtow_kg = models.FloatField(blank=True, null=True)
+    cruise_kt = models.FloatField(blank=True, null=True)
+    range_nm = models.FloatField(blank=True, null=True)
+    ceiling_ft = models.FloatField(blank=True, null=True)
+    first_flight = models.IntegerField(blank=True, null=True)
+
+    # <Planform> descriptor: {kind, engines, mount, tail, sweep, wing?, blades?}.
+    # Always validated/snapped to a known archetype before storing.
+    shape = models.JSONField(default=dict)
+
+    # Extended dossier detail (optional).
+    blurb = models.TextField(blank=True, null=True)
+    powerplant = models.CharField(max_length=200, blank=True, null=True)
+    variants = models.CharField(max_length=200, blank=True, null=True)
+    wtc = models.CharField(max_length=40, blank=True, null=True)  # wake category, e.g. "M — Medium"
+
+    # A representative tail we've tracked, whose cached photo the card shows
+    # (served via /api/v1/photos/<hex>) when no public type photo was fetched.
+    photo_icao_hex = models.CharField(max_length=10, blank=True, null=True)
+
+    # Public type photo fetched at generation time (Wikipedia/Wikimedia lead
+    # image). ``photo_cached`` = we downloaded it into the photo cache under the
+    # key ``TYPE-<code>`` so it serves same-origin at /api/v1/photos/TYPE-<code>;
+    # ``photo_url`` keeps the external source for attribution / hotlink fallback.
+    photo_url = models.CharField(max_length=1000, blank=True, null=True)
+    photo_full_url = models.CharField(max_length=1000, blank=True, null=True)
+    photo_page = models.CharField(max_length=1000, blank=True, null=True)
+    photo_credit = models.CharField(max_length=200, blank=True, null=True)
+    photo_cached = models.BooleanField(default=False)
+
+    # Web sources the LLM was grounded on: [{"title", "url"}, ...].
+    sources = models.JSONField(default=list, blank=True)
+
+    status = models.CharField(max_length=12, choices=STATUS_CHOICES, default=STATUS_GENERATED, db_index=True)
+    # LLM self-rated 0..1 confidence that the facts are correct (drives a UI caveat).
+    confidence = models.FloatField(blank=True, null=True)
+    # Distinct tails of this type seen when the card was generated (provenance).
+    seen_tail_count = models.IntegerField(default=0)
+    model_used = models.CharField(max_length=100, blank=True, null=True)
+
+    generated_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "airframe_type_card"
+        indexes = [
+            models.Index(fields=["status", "-updated_at"], name="idx_aftc_status_updated"),
+        ]
+
+    def __str__(self):
+        return f"AirframeTypeCard({self.type_code})"

@@ -2,9 +2,12 @@ import L from 'leaflet';
 import {
   AIRSPACE_CLASSES,
   SELECTED_COLOR,
+  airmetRgb,
   airspaceRings,
   altitudeOf,
   colorFor,
+  drawAirmetArea,
+  drawAirmetLine,
   drawAirport,
   drawAirspaceDisc,
   drawAirspacePoly,
@@ -21,12 +24,27 @@ import {
   drawTfrDisc,
   drawTfrPoly,
   drawTrail,
+  drawWildfire,
   normAirspaceClass,
   pirepColor,
   pointInRing,
   rectsOverlap,
   severityColor,
+  wildfireColor,
 } from './symbology';
+
+// Distinct, high-contrast line colours cycled across the aircraft in a
+// historical-track overlay (LLM "plot these planes' paths on the radar").
+const HIST_TRACK_COLORS = [
+  '#ffd166',
+  '#4cc9f0',
+  '#f72585',
+  '#80ed99',
+  '#ff9e00',
+  '#b388ff',
+  '#00f5d4',
+  '#ef476f',
+];
 
 /** class → RGB triplet, derived once from the shared AIRSPACE_CLASSES table. */
 const AIRSPACE_RGB = Object.fromEntries(AIRSPACE_CLASSES.map((c) => [c.key, c.rgb]));
@@ -50,10 +68,21 @@ export class CanvasAircraftLayer {
    * @param {(notam: object|null, pt: {x:number,y:number}|null) => void} [opts.onNotamHover]
    * @param {(airport: object|null, pt: {x:number,y:number}|null) => void} [opts.onAirportHover]
    * @param {(airspace: object|null, pt: {x:number,y:number}|null) => void} [opts.onAirspaceHover]
+   * @param {(airmet: object|null, pt: {x:number,y:number}|null) => void} [opts.onAirmetHover]
    */
   constructor(
     map,
-    { onSelect, onHover, onPirepHover, onNotamHover, onAirportHover, onAirspaceHover } = {}
+    {
+      onSelect,
+      onHover,
+      onPirepHover,
+      onNotamHover,
+      onAirportHover,
+      onAirspaceHover,
+      onAirmetHover,
+      onWildfireSelect,
+      onAirmetSelect,
+    } = {}
   ) {
     this.map = map;
     this.onSelect = onSelect;
@@ -62,6 +91,9 @@ export class CanvasAircraftLayer {
     this.onNotamHover = onNotamHover;
     this.onAirportHover = onAirportHover;
     this.onAirspaceHover = onAirspaceHover;
+    this.onAirmetHover = onAirmetHover;
+    this.onWildfireSelect = onWildfireSelect;
+    this.onAirmetSelect = onAirmetSelect;
 
     this.canvas = document.createElement('canvas');
     this.canvas.className = 'lm-canvas';
@@ -94,7 +126,12 @@ export class CanvasAircraftLayer {
       notams: [],
       tfrs: [],
       pireps: [],
+      wildfires: [],
     };
+    // Historical flown-path polylines pushed by the assistant (plot_tracks). Keyed
+    // by ICAO hex → { cs, color, pts:[{lat,lon,alt}] }. Drawn independently of the
+    // live-trail toggle and the traffic filter, always on top when present.
+    this.histTracks = null;
     // display prefs (pushed from React via setDisplay)
     this.display = {
       colorMode: 'category', // 'category' | 'altitude'
@@ -112,12 +149,14 @@ export class CanvasAircraftLayer {
     this.screenIndex = []; // [{hex, x, y}] rebuilt each frame for hit-test
     this.pirepIndex = []; // [{x, y, pr}] rebuilt each frame for pirep hit-test
     this.hoveredPirep = null;
+    this.wildfireIndex = []; // [{x, y, wf}] rebuilt each frame for wildfire hit-test
     this.notamIndex = []; // [{x, y, r, t}] rebuilt each frame for notam hit-test
     this.hoveredNotam = null;
     this.airportIndex = []; // [{x, y, ap}] rebuilt each frame for airport hit-test
     this.hoveredAirport = null;
     this.airspaceIndex = []; // [{rings|disc, poly}] rebuilt each frame for airspace hit-test
     this.hoveredAirspace = null;
+    this.hoveredAirmet = null;
     this.airspaceClasses = null; // {B:true,...} class visibility filter, or null (=all)
     this._raf = null;
     this._dpr = 1;
@@ -187,6 +226,9 @@ export class CanvasAircraftLayer {
   setSelected(hex) {
     this.selectedHex = hex ? hex.toUpperCase() : null;
   }
+  setSelectedWildfire(id) {
+    this.selectedWildfireId = id ?? null;
+  }
   setHovered(hex) {
     this.hoveredHex = hex ? hex.toUpperCase() : null;
   }
@@ -207,6 +249,33 @@ export class CanvasAircraftLayer {
   }
   setOverlayData(data) {
     this.overlayData = { ...this.overlayData, ...data };
+  }
+  /**
+   * Set (or clear) the historical-track overlay. Accepts the plot_tracks payload
+   * { HEX: { cs, pts:[[lat,lon,alt], ...] } } and normalizes points to objects,
+   * assigning each aircraft a stable colour. Pass null/empty to clear.
+   */
+  setHistoricalTracks(tracks) {
+    if (!tracks || typeof tracks !== 'object' || !Object.keys(tracks).length) {
+      this.histTracks = null;
+      return;
+    }
+    const out = {};
+    let i = 0;
+    for (const [hex, t] of Object.entries(tracks)) {
+      const raw = Array.isArray(t?.pts) ? t.pts : Array.isArray(t) ? t : [];
+      const pts = raw
+        .map((p) => (Array.isArray(p) ? { lat: p[0], lon: p[1], alt: p[2] } : p))
+        .filter((p) => typeof p?.lat === 'number' && typeof p?.lon === 'number');
+      if (pts.length < 2) continue;
+      out[String(hex).toUpperCase()] = {
+        cs: t?.cs || hex,
+        color: HIST_TRACK_COLORS[i % HIST_TRACK_COLORS.length],
+        pts,
+      };
+      i++;
+    }
+    this.histTracks = Object.keys(out).length ? out : null;
   }
   /** Per-class airspace visibility map ({B:true,...}), or null to show all. */
   setAirspaceClasses(map) {
@@ -421,14 +490,32 @@ export class CanvasAircraftLayer {
   }
 
   /** Draw enabled aviation overlays under the aircraft. */
+  /** Stroke one on-screen run of a historical track (thicker, solid colour). */
+  _strokeHistRun(ctx, run, color) {
+    if (!run || run.length < 2) return;
+    ctx.save();
+    ctx.lineWidth = 2.25;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.globalAlpha = 0.85;
+    ctx.strokeStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(run[0].x, run[0].y);
+    for (let i = 1; i < run.length; i++) ctx.lineTo(run[i].x, run[i].y);
+    ctx.stroke();
+    ctx.restore();
+  }
+
   _drawOverlays(bounds, project, contains, wrapLon) {
     const { ctx } = this;
     const o = this.overlays;
     const d = this.overlayData;
     this.pirepIndex = []; // rebuilt each frame for pirep hover hit-test
+    this.wildfireIndex = []; // rebuilt each frame for wildfire click hit-test
     this.notamIndex = []; // rebuilt each frame for notam hover hit-test
     this.airportIndex = []; // rebuilt each frame for airport hover hit-test
     this.airspaceIndex = []; // rebuilt each frame for airspace hover hit-test
+    this.airmetIndex = []; // rebuilt each frame for AIRMET click hit-test
     if (o.airspace && d.airspaces?.length) {
       const classFilter = this.airspaceClasses; // {B:true,...} or null (=all)
       for (const poly of d.airspaces) {
@@ -463,6 +550,35 @@ export class CanvasAircraftLayer {
         const radiusPx = Math.abs(edge.y - p.y);
         drawAirspaceDisc(ctx, p.x, p.y, radiusPx, rgb);
         this.airspaceIndex.push({ rings: null, disc: { x: p.x, y: p.y, r: radiusPx }, poly });
+      }
+    }
+    // AIRMETs: G-AIRMET hazard geometry — AREA polygons (filled) and LINE
+    // advisories (open polyline, e.g. freezing level), colour-coded by hazard.
+    if (o.airmets && d.airmets?.length) {
+      for (const adv of d.airmets) {
+        const rgb = airmetRgb(adv.hazard);
+        const geom = adv.polygon;
+        if (geom?.type === 'LineString' && Array.isArray(geom.coordinates)) {
+          const pts = geom.coordinates
+            .filter((c) => Array.isArray(c) && c.length >= 2)
+            .map((c) => project(c[1], c[0]));
+          if (pts.length >= 2) drawAirmetLine(ctx, pts, rgb, adv.hazard);
+          continue;
+        }
+        // AREA: Polygon exterior ring / MultiPolygon first ring / legacy array.
+        let ring = null;
+        if (geom?.type === 'Polygon') ring = geom.coordinates?.[0];
+        else if (geom?.type === 'MultiPolygon') ring = geom.coordinates?.[0]?.[0];
+        else if (Array.isArray(geom)) ring = geom;
+        else if (Array.isArray(adv.coords)) ring = adv.coords;
+        if (!Array.isArray(ring) || ring.length < 3) continue;
+        const pts = ring
+          .map((c) => (Array.isArray(c) ? { lat: c[1], lon: c[0] } : c))
+          .filter((c) => typeof c.lat === 'number' && typeof c.lon === 'number')
+          .map((c) => project(c.lat, c.lon));
+        if (pts.length < 3) continue;
+        drawAirmetArea(ctx, pts, rgb, adv.hazard);
+        this.airmetIndex.push({ rings: [pts], poly: adv });
       }
     }
     if (o.trails && d.trails) {
@@ -500,6 +616,41 @@ export class CanvasAircraftLayer {
           }
         }
         if (run.length >= 2) drawTrail(ctx, run, trailOpts);
+      }
+    }
+    // Historical flown-path polylines (assistant plot_tracks). Always drawn when
+    // present — not gated by the trail toggle or the traffic filter.
+    if (this.histTracks) {
+      const tb = bounds.pad(0.3);
+      for (const t of Object.values(this.histTracks)) {
+        let run = [];
+        let last = null;
+        for (const pnt of t.pts) {
+          const inView = tb.contains(L.latLng(pnt.lat, wrapLon(pnt.lon)));
+          if (inView) {
+            const p = project(pnt.lat, pnt.lon);
+            run.push(p);
+            last = { ...p, cs: t.cs };
+          } else if (run.length) {
+            this._strokeHistRun(ctx, run, t.color);
+            run = [];
+          }
+        }
+        this._strokeHistRun(ctx, run, t.color);
+        if (last) {
+          // Endpoint marker + callsign at the newest position.
+          ctx.save();
+          ctx.fillStyle = t.color;
+          ctx.beginPath();
+          ctx.arc(last.x, last.y, 3.5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.font = '11px system-ui, sans-serif';
+          ctx.lineWidth = 3;
+          ctx.strokeStyle = 'rgba(0,0,0,0.75)';
+          ctx.strokeText(t.cs, last.x + 6, last.y - 6);
+          ctx.fillText(t.cs, last.x + 6, last.y - 6);
+          ctx.restore();
+        }
       }
     }
     if (o.navaids && d.navaids?.length) {
@@ -588,6 +739,23 @@ export class CanvasAircraftLayer {
         this.pirepIndex.push({ x: p.x, y: p.y, pr });
       }
     }
+    // Wildfires: threat-colored flame markers, size nudged up with acreage.
+    if (o.wildfires && d.wildfires?.length) {
+      for (const wf of d.wildfires) {
+        const lat = wf.lat ?? wf.latitude;
+        const lon = wf.lon ?? wf.lng ?? wf.longitude;
+        if (typeof lat !== 'number' || typeof lon !== 'number' || !contains(lat, lon)) continue;
+        const p = project(lat, lon);
+        const acres = typeof wf.acreage === 'number' ? wf.acreage : 0;
+        const r = 5 + Math.min(4, Math.log10(1 + acres) / 1.2); // 5..9 px
+        drawWildfire(ctx, p.x, p.y, wildfireColor(wf.threat_score), r);
+        // Selected fire gets the same targeting ring/brackets an aircraft does.
+        if (wf.id != null && wf.id === this.selectedWildfireId) {
+          drawSelectionRing(ctx, p.x, p.y, this.frame);
+        }
+        this.wildfireIndex.push({ x: p.x, y: p.y, r: Math.max(r, 8), wf });
+      }
+    }
   }
 
   /** Nearest blip within `radius` px of a container point, or null. */
@@ -617,6 +785,23 @@ export class CanvasAircraftLayer {
       if (d <= bestD) {
         bestD = d;
         best = p;
+      }
+    }
+    return best;
+  }
+
+  /** Nearest wildfire within its marker radius of a container point, or null. */
+  hitTestWildfire(containerPoint, radius = 10) {
+    let best = null;
+    let bestD = Infinity;
+    for (const w of this.wildfireIndex) {
+      const dx = w.x - containerPoint.x;
+      const dy = w.y - containerPoint.y;
+      const d = dx * dx + dy * dy;
+      const rr = Math.max(w.r, radius);
+      if (d <= rr * rr && d < bestD) {
+        bestD = d;
+        best = w;
       }
     }
     return best;
@@ -681,15 +866,49 @@ export class CanvasAircraftLayer {
     return best;
   }
 
+  /** Smallest AIRMET AREA whose polygon contains the point, or null. */
+  hitTestAirmet(containerPoint) {
+    let best = null;
+    let bestArea = Infinity;
+    for (const a of this.airmetIndex) {
+      let hit = false;
+      for (const ring of a.rings) {
+        if (pointInRing(containerPoint, ring)) hit = !hit;
+      }
+      if (hit) {
+        const area = ringsArea(a.rings);
+        if (area < bestArea) {
+          bestArea = area;
+          best = a;
+        }
+      }
+    }
+    return best;
+  }
+
   _onClick(e) {
     const hex = this.hitTest(e.containerPoint);
     if (hex) {
       L.DomEvent.stop(e);
       this.onSelect?.(hex);
-    } else {
-      // Click on empty space deselects.
-      this.onSelect?.(null);
+      return;
     }
+    // Wildfire markers open the detail panel (takes priority over deselect).
+    const wf = this.hitTestWildfire(e.containerPoint);
+    if (wf?.wf) {
+      L.DomEvent.stop(e);
+      this.onWildfireSelect?.(wf.wf);
+      return;
+    }
+    // AIRMET areas open the AIRMET detail panel.
+    const airmet = this.hitTestAirmet(e.containerPoint);
+    if (airmet?.poly) {
+      L.DomEvent.stop(e);
+      this.onAirmetSelect?.(airmet.poly);
+      return;
+    }
+    // Click on empty space deselects.
+    this.onSelect?.(null);
   }
 
   _onMouseMove(e) {
@@ -702,9 +921,12 @@ export class CanvasAircraftLayer {
     // Priority: aircraft > point markers (pirep/airport) > area fills
     // (notam/airspace). Only probe a tier when the ones above it missed.
     const pr = hex ? null : this.hitTestPirep(e.containerPoint);
+    const wf = hex || pr ? null : this.hitTestWildfire(e.containerPoint);
     const airport = hex || pr ? null : this.hitTestAirport(e.containerPoint);
     const notam = hex || pr || airport ? null : this.hitTestNotam(e.containerPoint);
-    const airspace = hex || pr || airport || notam ? null : this.hitTestAirspace(e.containerPoint);
+    const airmet = hex || pr || airport || notam ? null : this.hitTestAirmet(e.containerPoint);
+    const airspace =
+      hex || pr || airport || notam || airmet ? null : this.hitTestAirspace(e.containerPoint);
     if (pr?.pr !== this.hoveredPirep) {
       this.hoveredPirep = pr?.pr || null;
       this.onPirepHover?.(pr?.pr || null, pr ? { x: pr.x, y: pr.y } : null);
@@ -717,11 +939,16 @@ export class CanvasAircraftLayer {
       this.hoveredNotam = notam?.t || null;
       this.onNotamHover?.(notam?.t || null, notam ? { x: notam.x, y: notam.y } : null);
     }
+    if (airmet?.poly !== this.hoveredAirmet) {
+      this.hoveredAirmet = airmet?.poly || null;
+      this.onAirmetHover?.(airmet?.poly || null, airmet ? e.containerPoint : null);
+    }
     if (airspace?.poly !== this.hoveredAirspace) {
       this.hoveredAirspace = airspace?.poly || null;
       this.onAirspaceHover?.(airspace?.poly || null, airspace ? e.containerPoint : null);
     }
-    container.style.cursor = hex || pr || airport || notam || airspace ? 'pointer' : '';
+    container.style.cursor =
+      hex || pr || wf || airport || notam || airmet || airspace ? 'pointer' : '';
   }
 
   destroy() {

@@ -114,14 +114,23 @@ def get_route_by_callsign(callsign: str) -> dict | None:
         return None
 
     airline = route.get("airline") if isinstance(route.get("airline"), dict) else {}
+    # adsbdb carries an optional ``midpoint`` for a minority of routes. Build the
+    # ordered waypoint chain (origin -> [midpoint] -> destination) so the shape
+    # matches external_db's route dict and the UI can draw the leg polyline.
+    waypoints = [_airport_brief(origin)]
+    midpoint = route.get("midpoint")
+    if isinstance(midpoint, dict):
+        waypoints.append(_airport_brief(midpoint))
+    waypoints.append(_airport_brief(destination))
     result = {
         "callsign": route.get("callsign_icao") or callsign,
         "airline_code": airline.get("icao"),
         "flight_number": route.get("callsign_iata"),
         "airport_codes": None,
         "plausible": None,
-        "origin": _airport_brief(origin),
-        "destination": _airport_brief(destination),
+        "origin": waypoints[0],
+        "destination": waypoints[-1],
+        "waypoints": waypoints,
     }
     cache.set(cache_key, result, _ROUTE_TTL)
     return result

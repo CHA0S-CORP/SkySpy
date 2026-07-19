@@ -58,8 +58,10 @@ class NotificationChannelAdmin(admin.ModelAdmin):
         EnabledFilter,
         VerifiedFilter,
         "is_global",
+        ("owner", admin.RelatedOnlyFieldListFilter),
     )
-    search_fields = ("name", "description", "apprise_url")
+    search_fields = ("name", "description", "apprise_url", "owner__username", "owner__email")
+    raw_id_fields = ("owner",)
 
     fieldsets = (
         (

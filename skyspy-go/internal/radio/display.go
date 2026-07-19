@@ -3,6 +3,7 @@ package radio
 
 import (
 	"math/rand"
+	"strconv"
 	"strings"
 	"time"
 
@@ -421,23 +422,5 @@ func pad(n int) string {
 }
 
 func itoa(i int) string {
-	if i == 0 {
-		return "0"
-	}
-	neg := i < 0
-	if neg {
-		i = -i
-	}
-	var b [20]byte
-	n := len(b) - 1
-	for i > 0 {
-		b[n] = byte('0' + i%10)
-		i /= 10
-		n--
-	}
-	if neg {
-		b[n] = '-'
-		n--
-	}
-	return string(b[n+1:])
+	return strconv.Itoa(i)
 }

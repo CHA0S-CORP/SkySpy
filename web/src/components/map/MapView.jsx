@@ -55,6 +55,8 @@ import { ConflictProbePanel } from './components/ConflictProbePanel';
 import { useDraggable } from '../../hooks/useDraggable';
 import { useWeatherRadarOverlay } from './components/WeatherRadarOverlay';
 import { useSigmetData } from '../../hooks/useSigmetData';
+import { useAirmetOverlay } from '../../hooks/useAirmetOverlay';
+import { useAircraftTurbulence } from '../../hooks/useAircraftTurbulence';
 import { useTafData } from '../../hooks/useTafData';
 import { useScopeLayout } from '../../hooks/useScopeLayout';
 import MultiScopeContainer from './components/MultiScopeContainer';
@@ -75,6 +77,7 @@ import {
   TafPopup,
   AirspacePopup,
   SigmetPopup,
+  AirmetPopup,
 } from './components/popups';
 import OverlayMenuPanel from './components/OverlayMenuPanel';
 import { FilterMenuPanel } from './components/FilterMenuPanel';
@@ -139,6 +142,7 @@ function MapView({
   const [selectedAirport, setSelectedAirport] = useState(null);
   const [selectedAirspace, setSelectedAirspace] = useState(null);
   const [selectedSigmet, setSelectedSigmet] = useState(null);
+  const [selectedAirmet, setSelectedAirmet] = useState(null);
   // Aviation overlay states - load from localStorage (moved early for useHeatMap dependency)
   const [overlays, setOverlays] = useState(getOverlays);
   // Conflict Probe state (moved early for useConflictProbe dependency)
@@ -548,6 +552,26 @@ function MapView({
     refreshInterval: 5 * 60 * 1000,
   });
 
+  // AIRMET overlay — all G-AIRMET hazard polygons (turbulence, icing, freezing
+  // level, IFR, mtn obscuration, LLWS, surface wind) from the advisories already
+  // fetched above (no extra fetch). AREA = filled polygon, LINE = polyline. Pro
+  // mode only, like SIGMETs.
+  const {
+    airmets,
+    drawOnCanvas: drawAirmets,
+    getAirmetAtPoint,
+  } = useAirmetOverlay({
+    enabled: overlays.airmets && config.mapMode === 'pro',
+    advisories: airspaceAdvisories,
+  });
+
+  // Per-aircraft turbulence risk (score/level), polled from the backend scorer
+  // and merged onto aircraft by hex for the map badge + selected panel.
+  const { byHex: turbulenceByHex } = useAircraftTurbulence({
+    enabled: overlays.airmets,
+    apiBase: config.apiBaseUrl || '',
+  });
+
   // TAF (Terminal Aerodrome Forecast) data hook
   const {
     tafs,
@@ -712,6 +736,7 @@ function MapView({
             showWithSquawk: true,
             showWithoutSquawk: true,
             safetyEventsOnly: false,
+            hiddenSafetyCategories: [],
             showGA: true,
             showAirliners: true,
           };
@@ -726,6 +751,7 @@ function MapView({
         showWithSquawk: true,
         showWithoutSquawk: true,
         safetyEventsOnly: false,
+        hiddenSafetyCategories: [],
         showGA: true,
         showAirliners: true,
       };
@@ -941,6 +967,8 @@ function MapView({
     ukMilZones: null, // Combined: uk_mil_awacs, uk_mil_aar, uk_mil_rc
     euMilAwacs: null, // Combined: de_mil_awacs, nl_mil_awacs, pl_mil_awacs
     trainingAreas: null, // Combined: ift_nav_routes, ift_training_areas, usafa_training_areas
+    usAirways: null, // US IFR airways (FAA ATS_Route)
+    usFixes: null, // US named waypoints/fixes (FAA Designated_Point)
   });
 
   // Map viewport center for dynamic data loading (updated on pan/zoom)
@@ -990,6 +1018,7 @@ function MapView({
     wsConnected,
     config,
     aircraft,
+    hiddenSafetyCategories: trafficFilters.hiddenSafetyCategories,
     alarmHook,
   });
 
@@ -1596,6 +1625,16 @@ function MapView({
     // Phase 12.1: Apply quick filters for Pro mode
     filtered = filterAircraftByQuickFilters(filtered);
 
+    // Stamp per-aircraft turbulence risk (from the backend scorer) for the map
+    // badge + selected panel. Shallow-copy only flagged aircraft so unflagged
+    // ones keep their original object identity.
+    if (turbulenceByHex && turbulenceByHex.size > 0) {
+      filtered = filtered.map((ac) => {
+        const t = turbulenceByHex.get((ac.hex || '').toUpperCase());
+        return t ? { ...ac, turbulenceLevel: t.level, turbulenceRisk: t.score } : ac;
+      });
+    }
+
     return filtered.sort((a, b) => (a.distance_nm || 999) - (b.distance_nm || 999));
   }, [
     aircraft,
@@ -1606,6 +1645,7 @@ function MapView({
     playbackPercent,
     getPlaybackAircraft,
     filterAircraftByQuickFilters,
+    turbulenceByHex,
   ]);
 
   // Profile canvases (altitude, speed, VS, distance).
@@ -1813,11 +1853,13 @@ function MapView({
     selectedNavaid,
     selectedAirport,
     selectedSigmet,
+    selectedAirmet,
     selectedAdvisoryId,
     selectedNotamId,
     stationsWithTaf,
     getTafForAirport,
     convectiveSigmets,
+    airmets,
     airspaceAdvisories,
     acknowledgedAdvisories,
     mapNotams,
@@ -1828,6 +1870,7 @@ function MapView({
     weatherRadarBounds,
     drawWeatherRadar,
     drawSigmets,
+    drawAirmets,
     HAZARD_CONFIG,
     NOTAM_TYPE_CONFIG,
     getAircraftHighlight,
@@ -2169,6 +2212,8 @@ function MapView({
                       setSelectedAirspace,
                       setSelectedTaf,
                       setSelectedSigmet,
+                      getAirmetAtPoint,
+                      setSelectedAirmet,
                       setPopupPosition,
                     })
                   }
@@ -2682,6 +2727,18 @@ function MapView({
           popupPosition={popupPosition}
           isDragging={isDragging}
           onClose={() => setSelectedSigmet(null)}
+          onMouseDown={handlePopupMouseDown}
+        />
+      )}
+
+      {/* AIRMET Popup */}
+      {selectedAirmet && (
+        <AirmetPopup
+          airmet={selectedAirmet}
+          config={config}
+          popupPosition={popupPosition}
+          isDragging={isDragging}
+          onClose={() => setSelectedAirmet(null)}
           onMouseDown={handlePopupMouseDown}
         />
       )}

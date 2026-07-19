@@ -46,7 +46,7 @@ from skyspy.api.alerts import AlertHistoryViewSet, AlertRuleViewSet, AlertSubscr
 from skyspy.api.analytics import AnalyticsViewSet
 from skyspy.api.antenna import AntennaAnalyticsViewSet
 from skyspy.api.archive import ArchiveViewSet
-from skyspy.api.assistant import AssistantAskView, assistant_stream
+from skyspy.api.assistant import AssistantAskView, AssistantSuggestView, assistant_stream
 from skyspy.api.audio import AudioViewSet
 from skyspy.api.auth import (
     APIKeyViewSet,
@@ -67,6 +67,7 @@ from skyspy.api.cannonball import (
     CannonballStatsViewSet,
     CannonballThreatsView,
 )
+from skyspy.api.chat import ChatSessionViewSet
 from skyspy.api.config import ConfigViewSet, TaskMetricsView
 from skyspy.api.flight_pattern_stats import CombinedStatsViewSet, FlightPatternStatsViewSet, GeographicStatsViewSet
 from skyspy.api.history import HistoryViewSet, SessionViewSet, SightingViewSet
@@ -111,6 +112,7 @@ from skyspy.auth.views import (
 # must always call e.g. /api/v1/alerts/history/<id>/acknowledge/ with the slash.
 router = DefaultRouter()
 router.register(r"aircraft", AircraftViewSet, basename="aircraft")
+router.register(r"assistant/sessions", ChatSessionViewSet, basename="assistant-sessions")
 router.register(r"sightings", SightingViewSet, basename="sightings")
 router.register(r"sessions", SessionViewSet, basename="sessions")
 router.register(r"history", HistoryViewSet, basename="history")
@@ -183,6 +185,8 @@ urlpatterns = [
                 path("assistant/ask/", AssistantAskView.as_view(), name="assistant-ask-slash"),
                 path("assistant/stream", assistant_stream, name="assistant-stream"),
                 path("assistant/stream/", assistant_stream, name="assistant-stream-slash"),
+                path("assistant/suggest", AssistantSuggestView.as_view(), name="assistant-suggest"),
+                path("assistant/suggest/", AssistantSuggestView.as_view(), name="assistant-suggest-slash"),
                 # Authentication endpoints
                 path("auth/config", AuthConfigView.as_view(), name="auth-config"),
                 path("auth/config/", AuthConfigView.as_view(), name="auth-config-slash"),

@@ -2,6 +2,7 @@
 
 import logging
 from datetime import timedelta
+from math import cos, pi
 
 from asgiref.sync import sync_to_async
 from django.conf import settings
@@ -68,6 +69,10 @@ class AviationDataMixin:
         """Handle PIREPs request."""
         return await self._get_pireps(params)
 
+    async def _handle_wildfires(self, params: dict):
+        """Get nearby active wildfires (Watch Duty)."""
+        return await self._get_wildfires(params)
+
     async def _handle_metars(self, params: dict):
         """Handle METARs request."""
         return await self._get_metars(params)
@@ -129,7 +134,10 @@ class AviationDataMixin:
         limit = parse_int_param(params.get("limit"), 20, min_val=1, max_val=100)
 
         lat_delta = radius_nm / 60
-        lon_delta = radius_nm / 60
+        # cos(lat) longitude correction — a degree of longitude shrinks with
+        # latitude, so without this the box is too narrow E/W and airports/navaids/
+        # airspace east & west of the feeder silently drop (matches _get_pireps).
+        lon_delta = radius_nm / (60.0 * max(cos(lat * pi / 180), 0.1))
 
         queryset = CachedAirport.objects.filter(
             latitude__gte=lat - lat_delta,
@@ -153,6 +161,26 @@ class AviationDataMixin:
         return airports
 
     @sync_to_async
+    def _get_wildfires(self, params: dict):
+        """Get nearby active wildfires from the cached Watch Duty feed."""
+        from skyspy.services import wildfires
+
+        try:
+            lat = float(params.get("lat", getattr(settings, "FEEDER_LAT", 0)))
+        except (ValueError, TypeError):
+            lat = float(getattr(settings, "FEEDER_LAT", 0))
+        try:
+            lon = float(params.get("lon", getattr(settings, "FEEDER_LON", 0)))
+        except (ValueError, TypeError):
+            lon = float(getattr(settings, "FEEDER_LON", 0))
+        try:
+            radius_nm = float(params.get("radius", params.get("radius_nm", 250)))
+        except (ValueError, TypeError):
+            radius_nm = 250.0
+
+        return wildfires.get_cached_wildfires(lat, lon, radius_nm)
+
+    @sync_to_async
     def _get_navaids(self, params: dict):
         """Get nearby navigation aids."""
         from skyspy.models import CachedNavaid
@@ -172,7 +200,10 @@ class AviationDataMixin:
         limit = parse_int_param(params.get("limit"), 50, min_val=1, max_val=200)
 
         lat_delta = radius_nm / 60
-        lon_delta = radius_nm / 60
+        # cos(lat) longitude correction — a degree of longitude shrinks with
+        # latitude, so without this the box is too narrow E/W and airports/navaids/
+        # airspace east & west of the feeder silently drop (matches _get_pireps).
+        lon_delta = radius_nm / (60.0 * max(cos(lat * pi / 180), 0.1))
 
         queryset = CachedNavaid.objects.filter(
             latitude__gte=lat - lat_delta,
@@ -214,7 +245,10 @@ class AviationDataMixin:
             radius_nm = 100.0
 
         lat_delta = radius_nm / 60
-        lon_delta = radius_nm / 60
+        # cos(lat) longitude correction — a degree of longitude shrinks with
+        # latitude, so without this the box is too narrow E/W and airports/navaids/
+        # airspace east & west of the feeder silently drop (matches _get_pireps).
+        lon_delta = radius_nm / (60.0 * max(cos(lat * pi / 180), 0.1))
 
         queryset = AirspaceBoundary.objects.filter(
             center_lat__gte=lat - lat_delta,
@@ -370,7 +404,9 @@ class AviationDataMixin:
             lon = float(lon)
             radius_nm = float(radius_nm)
             lat_delta = radius_nm / 60
-            lon_delta = radius_nm / 60
+            # cos(lat) longitude correction (see _get_airports) so the weather
+            # bbox isn't too narrow E/W at the feeder latitude.
+            lon_delta = radius_nm / (60.0 * max(cos(lat * pi / 180), 0.1))
             bbox = f"{lat - lat_delta},{lon - lon_delta},{lat + lat_delta},{lon + lon_delta}"
         except (ValueError, TypeError):
             bbox = "24,-130,50,-60"
@@ -397,7 +433,9 @@ class AviationDataMixin:
             lon = float(lon)
             radius_nm = float(radius_nm)
             lat_delta = radius_nm / 60
-            lon_delta = radius_nm / 60
+            # cos(lat) longitude correction (see _get_airports) so the weather
+            # bbox isn't too narrow E/W at the feeder latitude.
+            lon_delta = radius_nm / (60.0 * max(cos(lat * pi / 180), 0.1))
             bbox = f"{lat - lat_delta},{lon - lon_delta},{lat + lat_delta},{lon + lon_delta}"
         except (ValueError, TypeError):
             bbox = "24,-130,50,-60"

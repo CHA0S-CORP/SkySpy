@@ -89,7 +89,7 @@ class CannonballNamespace(socketio.AsyncNamespace):
         Authenticates the user, generates session ID, and sends session info.
         """
         # Authenticate the connection
-        user, error = await authenticate_socket(auth)
+        user, error, api_key_scopes = await authenticate_socket(auth)
 
         if error:
             from django.conf import settings as django_settings
@@ -103,7 +103,7 @@ class CannonballNamespace(socketio.AsyncNamespace):
 
         # Check permission (cannonball uses 'aircraft' permission as base)
         # In a real system, you might have a specific 'cannonball' permission
-        if not await check_topic_permission(user, "aircraft"):
+        if not await check_topic_permission(user, "aircraft", api_key_scopes):
             logger.warning(f"Cannonball namespace permission denied for {sid}")
             return False
 
@@ -115,6 +115,7 @@ class CannonballNamespace(socketio.AsyncNamespace):
             sid,
             {
                 "user": user,
+                "api_key_scopes": api_key_scopes,
                 "auth_error": error,
                 "session_id": session_id,
                 "position": None,
@@ -599,8 +600,13 @@ class CannonballNamespace(socketio.AsyncNamespace):
         session = await sio.get_session(sid, namespace="/cannonball")
         user = session.get("user")
 
-        # Use the permission checking infrastructure
-        from skyspy.socketio.middleware.permissions import _check_permission
+        # Use the permission checking infrastructure. A scoped API key is
+        # constrained to its granted scopes even for a privileged user (REST parity).
+        from skyspy.socketio.middleware.permissions import _check_permission, scope_denies
+
+        if scope_denies(session.get("api_key_scopes"), permission):
+            logger.warning(f"Denying cannonball request {request_type}: API key scopes do not cover {permission}")
+            return False
 
         return await _check_permission(user, permission)
 

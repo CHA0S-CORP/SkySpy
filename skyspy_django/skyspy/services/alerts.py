@@ -29,6 +29,19 @@ from skyspy.socketio.utils import sync_emit
 
 logger = logging.getLogger(__name__)
 
+# ADS-B emitter categories treated as general aviation (light/small/rotor).
+# Mirrors GA_EMITTER_CATEGORIES in web/src/components/v2/screens/alerts/alertsModel.js
+# so the "class" alert filter and the UI role badges agree.
+GA_EMITTER_CATEGORIES = frozenset({"A1", "A2", "A7", "B1", "B2", "B4", "B6"})
+
+# Firefighting / air-tanker detection over callsign + owner/operator + any LE
+# description. Word-safe \bfire\b so "Firearms" (ATF) can't false-positive;
+# "tanker"/"helitack"/"cal fire" catch air-tanker callsigns and fire agencies.
+_FIRE_RE = re.compile(r"\bfire\b|tanker|helitack|cal ?fire|air ?attack", re.IGNORECASE)
+
+# Valid values for the "class" rule type (aircraft role bucket).
+AIRCRAFT_CLASSES = ("commercial", "ga", "fire", "police", "military")
+
 
 class AlertService:
     """
@@ -53,11 +66,19 @@ class AlertService:
         "type": "t",
         "aircraft_type": "t",  # Alias
         "category": "category",
+        "class": "class",  # computed role bucket (commercial/ga/fire/police/military)
         "military": "military",
         "emergency": "squawk",  # Special handling
         "registration": "r",
         "operator": "ownOp",
+        # Turbulence risk, overlaid from the turb:by_hex cache (see
+        # _overlay_turbulence). turbulence_level is compared by rank, not string.
+        "turbulence_score": "turbulence_score",
+        "turbulence_level": "turbulence_level",
     }
+
+    # Ordering for turbulence_level so gt/ge/lt comparisons work on the labels.
+    TURBULENCE_LEVEL_RANK = {"none": 0, "light": 1, "moderate": 2, "severe": 3}
 
     # Emergency squawk codes
     EMERGENCY_SQUAWKS = {"7500", "7600", "7700"}
@@ -74,6 +95,140 @@ class AlertService:
         db_flags = ac.get("dbFlags", 0)
         return bool(db_flags & 1) if isinstance(db_flags, int) else False
 
+    @staticmethod
+    def _classify_aircraft(ac: dict) -> str:
+        """Bucket an aircraft into one high-level role class for the "class" rule
+        type: military | fire | police | ga | commercial.
+
+        Precedence mirrors the frontend deriveTypeBadges() so an alert rule
+        matches the same role badge the UI shows. Fire/police come from the
+        (network-free) law-enforcement pattern DB; GA from the ADS-B emitter
+        category; everything else is commercial.
+        """
+        if AlertService._is_military_aircraft(ac):
+            return "military"
+
+        # Lazy import: keep the service import graph acyclic (matches socketio idiom).
+        from skyspy.services import law_enforcement_db
+
+        le = law_enforcement_db.identify_law_enforcement(
+            hex_code=ac.get("hex"),
+            callsign=ac.get("flight") or ac.get("callsign"),
+            operator=ac.get("ownOp") or ac.get("operator"),
+            registration=ac.get("r") or ac.get("registration"),
+            category=ac.get("category"),
+            type_code=ac.get("t") or ac.get("type"),
+            owner=ac.get("ownOp") or ac.get("owner"),
+        )
+        # Fire before police: air tankers / agency helos may also trip an LE
+        # owner match, but "fire" is the more specific role. Scan callsign,
+        # owner/operator and any LE description together.
+        role_text = " ".join(
+            str(v)
+            for v in (
+                ac.get("flight") or ac.get("callsign"),
+                ac.get("ownOp") or ac.get("operator") or ac.get("owner"),
+                le.get("category"),
+                le.get("description"),
+            )
+            if v
+        )
+        if role_text and _FIRE_RE.search(role_text):
+            return "fire"
+        if le.get("is_law_enforcement"):
+            return "police"
+
+        if (ac.get("category") or "").upper() in GA_EMITTER_CATEGORIES:
+            return "ga"
+        return "commercial"
+
+    @staticmethod
+    def _enrich_aircraft_for_alert(ac: dict) -> dict:
+        """Return a copy of the aircraft dict with identity fields filled in.
+
+        The live hot stream is minimal — operator / manufacturer / model / owner
+        live in the AircraftInfo DB table, not in the position stream. Alerts
+        fire off the stream dict, so notifications would otherwise show blanks.
+        This does a single cache-first lookup (memory → DB → in-memory DBs;
+        external APIs only if the rate limit allows) and overlays any missing
+        identity fields WITHOUT clobbering values the stream already carries.
+        """
+        icao = (ac.get("hex") or "").upper().lstrip("~")
+        if len(icao) != 6:
+            return ac
+
+        try:
+            from skyspy.services import aircraft_info as aircraft_info_service
+
+            info = aircraft_info_service.get_aircraft_info(icao, include_photo=False)
+        except (DatabaseError, ConnectionError, OSError, ValueError, KeyError, TypeError) as e:
+            logger.debug(f"Aircraft-info enrichment failed for {icao}: {type(e).__name__}: {e}")
+            info = None
+
+        if not info:
+            return ac
+
+        enriched = dict(ac)
+        # (aircraft-dict key, info key) — only set when the stream lacks a value.
+        for ac_key, info_key in (
+            ("operator", "operator"),
+            ("owner", "owner"),
+            ("manufacturer", "manufacturer"),
+            ("model", "model"),
+            ("type_name", "type_name"),
+            ("r", "registration"),
+            ("t", "type_code"),
+        ):
+            if not enriched.get(ac_key) and info.get(info_key):
+                enriched[ac_key] = info[info_key]
+        # Flags: only promote a True from the DB (never downgrade a stream flag).
+        if info.get("is_military") and not enriched.get("military"):
+            enriched["military"] = True
+        for ac_key, info_key in (("ladd", "is_ladd"), ("pia", "is_pia")):
+            if info.get(info_key) and not enriched.get(ac_key):
+                enriched[ac_key] = True
+        return enriched
+
+    @staticmethod
+    def _build_airframe_summary(ac: dict) -> dict:
+        """Derive a compact airframe summary for notification payloads.
+
+        Surfaces the "who/what" fields — law enforcement, military, operator,
+        manufacturer/model — that raw webhook receivers and notification
+        templates want. LE is resolved via the network-free pattern DB; all
+        other fields are read from the aircraft dict when present.
+        """
+        from skyspy.services import law_enforcement_db
+
+        try:
+            le = law_enforcement_db.identify_law_enforcement(
+                hex_code=ac.get("hex"),
+                callsign=ac.get("flight") or ac.get("callsign"),
+                operator=ac.get("ownOp") or ac.get("operator"),
+                registration=ac.get("r") or ac.get("registration"),
+                category=ac.get("category"),
+                type_code=ac.get("t") or ac.get("type"),
+                owner=ac.get("ownOp") or ac.get("owner"),
+            )
+        except (KeyError, TypeError, ValueError):
+            le = {}
+
+        return {
+            "operator": ac.get("ownOp") or ac.get("operator") or ac.get("owner"),
+            "owner": ac.get("owner") or ac.get("ownOp"),
+            "manufacturer": ac.get("manufacturer"),
+            "model": ac.get("model"),
+            "type_code": ac.get("t") or ac.get("type"),
+            "type_name": ac.get("type_name") or ac.get("desc"),
+            "registration": ac.get("r") or ac.get("registration"),
+            "military": AlertService._is_military_aircraft(ac),
+            "law_enforcement": bool(le.get("is_law_enforcement")),
+            "law_enforcement_category": le.get("category"),
+            "law_enforcement_description": le.get("description"),
+            "is_ladd": bool(ac.get("ladd") or ac.get("is_ladd")),
+            "is_pia": bool(ac.get("pia") or ac.get("is_pia")),
+        }
+
     def check_alerts(self, aircraft_list: list) -> list:
         """
         Check all active alert rules against aircraft.
@@ -89,6 +244,8 @@ class AlertService:
         """
         with EvaluationTimer(alert_metrics) as timer:
             timer.set_aircraft_count(len(aircraft_list))
+
+            self._overlay_turbulence(aircraft_list)
 
             now = timezone.now()
             triggered = []
@@ -156,6 +313,28 @@ class AlertService:
 
             timer.set_rules_evaluated(rules_evaluated)
             return triggered
+
+    def _overlay_turbulence(self, aircraft_list: list) -> None:
+        """Stamp turbulence_score/turbulence_level onto aircraft from the
+        turb:by_hex cache written by the scorer task, so turbulence rules can
+        evaluate without any per-aircraft weather compute on the hot path.
+
+        Only aircraft with a cached (non-"none") risk are stamped; a cheap
+        single cache read gates the whole thing when nothing is flagged.
+        """
+        from django.core.cache import cache
+
+        from skyspy.tasks.turbulence import CACHE_KEY_BY_HEX
+
+        by_hex = cache.get(CACHE_KEY_BY_HEX)
+        if not by_hex:
+            return
+        for ac in aircraft_list:
+            hex_code = (ac.get("hex") or "").upper()
+            risk = by_hex.get(hex_code)
+            if risk:
+                ac["turbulence_score"] = risk.get("score")
+                ac["turbulence_level"] = risk.get("level")
 
     def _check_alerts_full_iteration(self, aircraft_list: list, now, timer: "EvaluationTimer") -> list:
         """
@@ -247,6 +426,11 @@ class AlertService:
         """
         Get the relevant value from aircraft data.
         """
+        # Computed role bucket (commercial/ga/fire/police/military). Always a
+        # string, so simple eq/contains/regex ("in list") comparisons apply.
+        if rule_type == "class":
+            return self._classify_aircraft(aircraft)
+
         # Special handling for military type - check both 'military' key and 'dbFlags'
         if rule_type == "military":
             # First check explicit 'military' key
@@ -263,6 +447,14 @@ class AlertService:
         if rule_type == "altitude":
             alt = aircraft.get("alt")
             return alt if alt is not None else aircraft.get("alt_baro")
+
+        # Turbulence level compares by rank (none<light<moderate<severe) so the
+        # numeric operators work on the label. Missing/none -> rank 0.
+        if rule_type == "turbulence_level":
+            level = aircraft.get("turbulence_level")
+            if level is None:
+                return None
+            return self.TURBULENCE_LEVEL_RANK.get(str(level).lower(), 0)
 
         field = self.TYPE_MAPPING.get(rule_type)
         if not field:
@@ -299,6 +491,11 @@ class AlertService:
                 is_military = bool(ac_value)
                 expected = rule_value.lower() in ("true", "1", "yes")
                 return is_military == expected
+
+            # Turbulence level: ac_value is already a rank int; convert the rule
+            # value (a label like "moderate", or a numeric rank) to a rank too.
+            if rule_type == "turbulence_level":
+                rule_value = self.TURBULENCE_LEVEL_RANK.get(str(rule_value).lower(), rule_value)
 
             if operator == "eq":
                 return str(ac_value).upper() == str(rule_value).upper()
@@ -405,6 +602,11 @@ class AlertService:
             alert_metrics.record_cooldown_block(rule.id, rule.name)
             return None
 
+        # Overlay identity fields (operator / manufacturer / model / owner) from
+        # the AircraftInfo DB — the hot stream carries none of these, so without
+        # this the notification airframe fields render blank.
+        aircraft = self._enrich_aircraft_for_alert(aircraft)
+
         # Create alert message
         callsign = aircraft.get("flight") or icao
         message = f"Alert '{rule.name}' triggered for {callsign}"
@@ -443,6 +645,10 @@ class AlertService:
             "message": message,
             "priority": rule.priority,
             "aircraft": aircraft,
+            # Derived airframe summary (LE / military / operator / manufacturer,
+            # etc.) so raw webhook receivers (n8n) get structured fields and
+            # notification templates can reference them without a network call.
+            "airframe": self._build_airframe_summary(aircraft),
             "timestamp": timezone.now().isoformat(),
         }
 
@@ -461,20 +667,17 @@ class AlertService:
 
         transaction.on_commit(emit_alert)
 
-        # Send notification - fetch rule from DB to get notification channels
+        # Send notifications + webhook. The rule's api_url, its notification
+        # channels, and the global config are collected and de-duplicated in one
+        # place (_send_notification) so a URL configured in two spots only fires
+        # once. Plain http(s) URLs are POSTed as JSON; Apprise service URLs
+        # (discord://, slack://, …) go through Apprise.
         try:
             db_rule = AlertRule.objects.prefetch_related("notification_channels").get(id=rule.id)
-            self._send_notification(alert_data, db_rule)
+            self._send_notification(alert_data, db_rule, webhook_url=rule.api_url, rule_name=rule.name)
         except AlertRule.DoesNotExist:
-            # Fallback to global config only
-            self._send_notification(alert_data, None)
-
-        # Call webhook if configured and URL is safe
-        if rule.api_url:
-            if _is_safe_url(rule.api_url):
-                self._call_webhook(rule.api_url, alert_data, rule)
-            else:
-                logger.warning(f"Blocked unsafe webhook URL for rule {rule.id}: {rule.api_url[:100]}")
+            # Fallback to global config + rule webhook only
+            self._send_notification(alert_data, None, webhook_url=rule.api_url, rule_name=rule.name)
 
         return alert_data
 
@@ -489,27 +692,47 @@ class AlertService:
 
         return evaluate_suppression_windows(rule.suppression_windows)
 
-    def _send_notification(self, alert_data: dict, rule: AlertRule | None = None):
+    def _send_notification(
+        self,
+        alert_data: dict,
+        rule: AlertRule | None = None,
+        webhook_url: str | None = None,
+        rule_name: str | None = None,
+    ):
         """
-        Send notification via Apprise to rule-specific channels and/or global config.
+        Send notifications for an alert, de-duplicated across every source.
 
-        Priority order:
-        1. Rule-specific notification channels (from DB)
-        2. Global config (APPRISE_URLS from NotificationConfig) if use_global_notifications is True
+        Collects destination URLs from (in priority order):
+        1. The rule's own webhook_url (api_url)
+        2. Rule-specific notification channels (from DB)
+        3. Global config (APPRISE_URLS) if use_global_notifications is True
+
+        Each unique URL fires once. Plain http(s):// URLs are POSTed as JSON
+        (send_webhook_task) so raw webhook receivers like n8n get a JSON body;
+        Apprise service URLs (discord://, slack://, ntfy://, …) go through
+        Apprise. This keeps a URL that appears both as the rule webhook and as a
+        channel from delivering twice.
         """
         try:
-            # Use list of tuples (url, channel_id) to keep them aligned
+            # (url, channel_id) pairs, de-duplicated by URL across all sources.
             url_channel_pairs = []
             seen_urls = set()
 
-            # 1. Get rule-specific notification channels
+            # 1. The rule's own webhook URL (highest priority, no channel id).
+            if webhook_url:
+                webhook_url = webhook_url.strip()
+                if webhook_url:
+                    url_channel_pairs.append((webhook_url, None))
+                    seen_urls.add(webhook_url)
+
+            # 2. Rule-specific notification channels.
             if rule and hasattr(rule, "notification_channels"):
                 for channel in rule.notification_channels.filter(enabled=True):
                     if channel.apprise_url and channel.apprise_url not in seen_urls:
                         url_channel_pairs.append((channel.apprise_url, channel.id))
                         seen_urls.add(channel.apprise_url)
 
-            # 2. Get global config if enabled for this rule (or if no rule provided)
+            # 3. Global config if enabled for this rule (or if no rule provided).
             use_global = True
             if rule and hasattr(rule, "use_global_notifications"):
                 use_global = rule.use_global_notifications
@@ -520,7 +743,6 @@ class AlertService:
                     for url in config.apprise_urls.split(";"):
                         url = url.strip()
                         if url and url not in seen_urls:
-                            # Global URLs have no associated channel_id
                             url_channel_pairs.append((url, None))
                             seen_urls.add(url)
 
@@ -529,16 +751,14 @@ class AlertService:
                 logger.debug("No notification URLs configured, skipping notification")
                 return
 
-            # Deliver via Celery so slow/timing-out notification endpoints
-            # never stall the aircraft polling hot path (mirrors the existing
-            # _call_webhook -> send_webhook_task pattern). The task owns the
-            # NotificationLog write and per-channel retry handling.
-            from skyspy.tasks.notifications import send_notification_task
+            display_name = rule_name or alert_data.get("rule_name", "?")
 
-            # Render title/body from a matching NotificationTemplate when one is
-            # configured, otherwise fall back to the plain defaults. We keep the
-            # channel selection above (per-rule notification_channels + global
-            # config) rather than routing through
+            # Deliver via Celery so slow/timing-out endpoints never stall the
+            # aircraft polling hot path. Each task owns its own logging/retry.
+            from skyspy.tasks.notifications import send_notification_task, send_webhook_task
+
+            # Render title/body once for the Apprise channels. We keep the
+            # channel selection above rather than routing through
             # notification_dispatcher.dispatch_alert(): that dispatcher selects
             # channels by user preference + global NotificationChannel rows and
             # does NOT honor a rule's notification_channels M2M or
@@ -547,23 +767,38 @@ class AlertService:
             title, body = self._render_alert_message(alert_data)
 
             for url, channel_id in url_channel_pairs:
-                # Isolate each iteration: a failure queueing one channel must
-                # not skip delivery to the remaining channels.
+                # Isolate each iteration: a failure queueing one destination must
+                # not skip delivery to the rest.
                 try:
-                    send_notification_task.delay(
-                        channel_url=url,
-                        title=title,
-                        body=body,
-                        priority=alert_data.get("priority", "info"),
-                        event_type="alert",
-                        channel_id=channel_id,
-                        context=alert_data,
-                    )
+                    if url.lower().startswith(("http://", "https://")):
+                        # Raw webhook — POST the alert JSON directly. Apprise
+                        # cannot deliver a bare http(s) URL (it needs json://),
+                        # so this is the only path that reaches n8n-style hooks.
+                        if not _is_safe_url(url):
+                            logger.warning(f"Blocked unsafe webhook URL for rule '{display_name}': {url[:100]}")
+                            continue
+                        send_webhook_task.delay(
+                            url=url,
+                            data=alert_data,
+                            timeout=10.0,
+                            rule_id=alert_data.get("rule_id"),
+                            rule_name=display_name,
+                        )
+                    else:
+                        send_notification_task.delay(
+                            channel_url=url,
+                            title=title,
+                            body=body,
+                            priority=alert_data.get("priority", "info"),
+                            event_type="alert",
+                            channel_id=channel_id,
+                            context=alert_data,
+                        )
                 except Exception as e:  # broad: broker enqueue must never break the alert hot path
                     logger.error(
-                        f"Failed to queue notification for channel "
+                        f"Failed to queue notification for "
                         f"{channel_id if channel_id is not None else url[:50]} "
-                        f"(rule '{alert_data['rule_name']}'): {type(e).__name__}: {e}"
+                        f"(rule '{display_name}'): {type(e).__name__}: {e}"
                     )
 
         except (DatabaseError, ConnectionError, OSError, ValueError, TypeError) as e:

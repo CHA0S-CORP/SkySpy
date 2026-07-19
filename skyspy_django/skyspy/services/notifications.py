@@ -40,8 +40,33 @@ _BLOCKED_IP_RANGES = [
 ]
 
 
+def _allowed_private_networks() -> list[ipaddress.IPv4Network | ipaddress.IPv6Network]:
+    """Operator-configured CIDRs/IPs exempt from the SSRF private-IP block.
+
+    Empty (default) blocks all private targets. Parsed per call so test settings
+    overrides take effect; the list is tiny so cost is negligible.
+    """
+    raw = getattr(settings, "NOTIFICATION_WEBHOOK_ALLOWED_PRIVATE_CIDRS", "") or ""
+    networks = []
+    for entry in raw.split(","):
+        entry = entry.strip()
+        if not entry:
+            continue
+        try:
+            networks.append(ipaddress.ip_network(entry, strict=False))
+        except ValueError:
+            logger.warning(f"Ignoring invalid NOTIFICATION_WEBHOOK_ALLOWED_PRIVATE_CIDRS entry: {entry!r}")
+    return networks
+
+
 def _is_blocked_ip(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
-    """Check whether an IP address is private/loopback/link-local/reserved."""
+    """Check whether an IP address is private/loopback/link-local/reserved.
+
+    An operator allowlist (NOTIFICATION_WEBHOOK_ALLOWED_PRIVATE_CIDRS) can exempt
+    specific private ranges so webhooks can reach a trusted internal receiver.
+    """
+    if any(ip in net for net in _allowed_private_networks()):
+        return False
     if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast or ip.is_unspecified:
         return True
     return any(ip in blocked_range for blocked_range in _BLOCKED_IP_RANGES)

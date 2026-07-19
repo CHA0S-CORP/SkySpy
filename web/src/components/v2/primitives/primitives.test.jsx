@@ -15,6 +15,7 @@ import { StatCard } from './StatCard';
 import { Sparkline } from './Sparkline';
 import { Gauge } from './Gauge';
 import { ToastHost, toast } from './Toast';
+import { BottomSheet } from './BottomSheet';
 
 describe('Icon', () => {
   it('renders known icons with feather-style attrs', () => {
@@ -205,5 +206,29 @@ describe('Toast', () => {
     expect(screen.queryByText('First')).toBeNull();
     act(() => vi.advanceTimersByTime(2300));
     expect(screen.queryByTestId('v2-toast')).toBeNull();
+  });
+});
+
+describe('BottomSheet', () => {
+  it('renders title + children when open and closes via the button', () => {
+    const onOpenChange = vi.fn();
+    render(
+      <BottomSheet open title="Filters" onOpenChange={onOpenChange}>
+        <div>sheet body</div>
+      </BottomSheet>
+    );
+    expect(screen.getByText('Filters')).toBeInTheDocument();
+    expect(screen.getByText('sheet body')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('renders nothing when closed', () => {
+    render(
+      <BottomSheet open={false} title="Filters" onOpenChange={() => {}}>
+        <div>hidden body</div>
+      </BottomSheet>
+    );
+    expect(screen.queryByText('hidden body')).toBeNull();
   });
 });

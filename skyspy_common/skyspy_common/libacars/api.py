@@ -50,6 +50,35 @@ THREAD_POOL_MIN_WORKERS = int(os.environ.get("LIBACARS_THREAD_POOL_MIN", "2"))
 THREAD_POOL_MAX_WORKERS = int(os.environ.get("LIBACARS_THREAD_POOL_MAX", "0"))
 
 # =============================================================================
+# Native-call safety
+# =============================================================================
+
+
+def _c_msg_dir(direction: MsgDir | int) -> int:
+    """Coerce a message direction to a concrete value for the native decoder.
+
+    ROOT-CAUSE FIX for the libacars SIGSEGV on malformed/unknown-direction CPDLC
+    and ADS-C messages. ``la_cpdlc_parse`` / ``la_adsc_parse`` select their ASN.1
+    type descriptor (resp. tag table) from the direction and leave it ``NULL`` for
+    ``LA_MSG_DIR_UNKNOWN``. The only guard is ``la_assert(... != NULL)``, which the
+    release build compiles to a no-op (``#define la_assert(expr) la_nop()``), so the
+    decoder then dereferences the NULL descriptor and crashes.
+
+    Crucially, ``la_acars_decode_apps`` — the entry point we call — does NOT guess
+    the direction from the ACARS block-ID the way the full frame parser does, so an
+    ``UNKNOWN`` direction reaches the CPDLC/ADS-C decoders unresolved. Our own caller
+    passes ``UNKNOWN`` whenever a message carries neither ``fromaddr`` nor ``toaddr``,
+    which is exactly the payload class that was segfaulting.
+
+    Defaulting ``UNKNOWN`` to ``AIR2GND`` (downlink — the direction of virtually every
+    application message a ground station receives) keeps the native decoder on a valid
+    code path. A genuinely-uplink message decoded as downlink merely fails ASN.1
+    decoding (``err=true``) instead of crashing the process.
+    """
+    return int(direction) if int(direction) in (int(MsgDir.GND2AIR), int(MsgDir.AIR2GND)) else int(MsgDir.AIR2GND)
+
+
+# =============================================================================
 # State & Stats
 # =============================================================================
 
@@ -350,6 +379,9 @@ def decode_acars_apps(
         reg_b = reg.encode("utf-8") if reg else None
 
         node = None
+        # Never hand LA_MSG_DIR_UNKNOWN to the native decoder: it NULL-derefs in
+        # the CPDLC/ADS-C parsers (see _c_msg_dir).
+        c_dir = _c_msg_dir(direction)
 
         if reassembly_ctx and reg_b and timestamp is not None:
             tv_sec = int(timestamp)
@@ -357,15 +389,15 @@ def decode_acars_apps(
             if backend == "cffi":
                 rx_time = ffi.new("timeval *", [tv_sec, tv_usec])[0]
                 node = lib.la_acars_apps_parse_and_reassemble(
-                    reg_b, label_b, text_b, int(direction), reassembly_ctx._ptr, rx_time
+                    reg_b, label_b, text_b, c_dir, reassembly_ctx._ptr, rx_time
                 )
             else:
                 rx_time = timeval(tv_sec, tv_usec)
                 node = lib.la_acars_apps_parse_and_reassemble(
-                    reg_b, label_b, text_b, int(direction), reassembly_ctx._ptr, rx_time
+                    reg_b, label_b, text_b, c_dir, reassembly_ctx._ptr, rx_time
                 )
         else:
-            node = lib.la_acars_decode_apps(label_b, text_b, int(direction))
+            node = lib.la_acars_decode_apps(label_b, text_b, c_dir)
 
         if not node or (backend == "cffi" and node == ffi.NULL):
             _record_op(True, (time.perf_counter() - start_t) * 1000)
@@ -453,7 +485,9 @@ def decode_acars_apps_text(
 
     start_t = time.perf_counter()
     try:
-        node = lib.la_acars_decode_apps(label.encode("utf-8"), text.encode("utf-8"), int(direction))
+        # Coerce UNKNOWN -> concrete direction so the native CPDLC/ADS-C parsers
+        # can't NULL-deref (see _c_msg_dir).
+        node = lib.la_acars_decode_apps(label.encode("utf-8"), text.encode("utf-8"), _c_msg_dir(direction))
         if not node or (backend == "cffi" and node == ffi.NULL):
             return None
 

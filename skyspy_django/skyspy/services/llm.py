@@ -39,6 +39,14 @@ _stats = {
 # Bounded in-memory cache to prevent memory growth
 _llm_cache = BoundedCache(maxsize=1000, name="llm")
 
+# A 4xx from the embeddings endpoint (404 = no /embeddings route, 400 = unknown
+# model) is a permanent misconfig, not a transient error — the same call fails
+# forever. Without a circuit, every index operation re-hits it and floods the
+# log. After a hard 4xx, disable embeddings for this cooldown so callers fall
+# back to keyword search instead of hammering a dead endpoint.
+_EMBED_DISABLED_COOLDOWN = 300.0  # seconds
+_embed_disabled_until = 0.0
+
 
 @dataclass
 class LLMClient:
@@ -216,6 +224,11 @@ class LLMClient:
         if not texts:
             return []
 
+        # Skip while the misconfig circuit is open (see _embed_disabled_until).
+        global _embed_disabled_until
+        if time.monotonic() < _embed_disabled_until:
+            return None
+
         # A blank/comment-only env value (e.g. an inline "# defaults to ..."
         # that leaked in as the value) must not defeat the fallback to LLM_*.
         def _clean(v):
@@ -267,12 +280,25 @@ class LLMClient:
                 logger.warning(f"Embeddings count mismatch: got {len(vectors)} for {len(texts)} inputs")
                 return None
             except httpx.HTTPStatusError as e:
-                logger.warning(f"Embeddings HTTP error: {e.response.status_code}")
-                if e.response.status_code >= 500:
+                status = e.response.status_code
+                if status >= 500:
+                    logger.warning(f"Embeddings HTTP error: {status}")
                     if not is_last:
                         time.sleep(2**attempt)
                     attempt += 1
                     continue
+                # 4xx (e.g. 404 no /embeddings route, 400 unknown model) is a
+                # permanent misconfig — open the circuit so we stop retrying it
+                # on every index call.
+                _embed_disabled_until = time.monotonic() + _EMBED_DISABLED_COOLDOWN
+                logger.warning(
+                    "Embeddings HTTP error: %s — endpoint %r rejected the request; "
+                    "disabling embeddings for %ss (check EMBEDDING_API_URL/EMBEDDING_MODEL). "
+                    "Falling back to keyword search.",
+                    status,
+                    endpoint,
+                    int(_EMBED_DISABLED_COOLDOWN),
+                )
                 return None
             except (httpx.HTTPError, ConnectionError, OSError, ValueError, KeyError, TypeError) as e:
                 logger.warning(f"Embeddings error: {e}")

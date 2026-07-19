@@ -242,6 +242,18 @@ OIDC_SCOPES=openid profile email
 | `DUMP978_HOST` | Hostname of dump978 UAT service | `dump978` | ⚪ Optional |
 | `DUMP978_PORT` | HTTP port of dump978 service | `80` | ⚪ Optional |
 
+### Aircraft Stream Mode
+
+> 📌 **Info**
+> `adsblol` lets you run with **real** aircraft and **no hardware** — see [Feeding with Open Data](./22-open-data-feeds.md).
+
+| Variable | Description | Default | Status |
+|:---------|:------------|:--------|:------:|
+| `AIRCRAFT_STREAM_MODE` | Position source: `sse`/`tcp` (local receiver), `adsblol` (keyless community feed), `adsbx` (RapidAPI, keyed), `auto` | `sse` | ⚪ Optional |
+| `AIRCRAFT_STREAM_FREE_SOURCES` | Comma list of keyless sources round-robined in `adsblol` mode | `adsb.lol,adsb.fi,airplanes.live` | ⚪ Optional |
+| `AIRCRAFT_STREAM_ADSBLOL_RADIUS` | Query radius (nm) around `FEEDER_LAT/LON`. Max 250 | `250` | ⚪ Optional |
+| `AIRCRAFT_STREAM_ADSBLOL_INTERVAL` | Poll interval (s); keep ≥ 2 to stay polite | `2` | ⚪ Optional |
+
 ### Polling & Session Configuration
 
 | Variable | Description | Default | Status |
@@ -324,6 +336,22 @@ APPRISE_URLS=telegram://...,discord://...,email://...
 | `ACARS_ENABLED` | Enable ACARS message processing | `True` | ⚪ Optional |
 | `ACARS_PORT` | UDP port for ACARS messages | `5555` | ⚪ Optional |
 | `VDLM2_PORT` | UDP port for VDL Mode 2 messages | `5556` | ⚪ Optional |
+
+### Open ACARS Source (airframes.io — no hardware)
+
+> 📌 **Info**
+> Pull real ACARS with no VHF radio. See [Feeding with Open Data](./22-open-data-feeds.md#-acars--airframesio-open-firehose).
+
+| Variable | Description | Default | Status |
+|:---------|:------------|:--------|:------:|
+| `AIRFRAMES_ACARS_ENABLED` | Poll the airframes.io firehose as an ACARS source | `False` | ⚪ Optional |
+| `AIRFRAMES_ACARS_URL` | Firehose endpoint | `https://api.airframes.io/v1/messages` | ⚪ Optional |
+| `AIRFRAMES_ACARS_API_KEY` | Optional feeder key (raises rate limit; keyless works) | Empty | ⚪ Optional |
+| `AIRFRAMES_ACARS_POLL_INTERVAL` | Poll cadence (s); keep low, ~5s window. Min 2 | `4` | ⚪ Optional |
+| `AIRFRAMES_ACARS_AIRPORTS` | Comma ICAOs — keep stations near these; empty = radius only | LAX metro | ⚪ Optional |
+| `AIRFRAMES_ACARS_CENTER_LAT` | Radius-filter center latitude | `33.9416` | ⚪ Optional |
+| `AIRFRAMES_ACARS_CENTER_LON` | Radius-filter center longitude | `-118.4085` | ⚪ Optional |
+| `AIRFRAMES_ACARS_RADIUS_NM` | Keep stations within this many nm of center; `0` disables | `100` | ⚪ Optional |
 
 ---
 

@@ -64,6 +64,60 @@ export function projectTrack(points) {
 }
 
 /**
+ * Split a chronologically-sorted track into distinct flights. A new leg starts
+ * on a time gap longer than `gapSec` (on-ground / out-of-coverage break — mirrors
+ * the backend TIME_GAP_SPLIT_S=900 in services/flight_anomaly.py) OR on a change
+ * of non-empty callsign (a new flight number with no reception gap).
+ *
+ * Returns a list of legs, each summarized for the flight picker:
+ *   { id, points, callsign, start, end, durationMin, minAlt, maxAlt, count }
+ * `start`/`end` are ISO timestamp strings (or null). Single-flight and empty
+ * inputs pass through as one leg / no legs respectively.
+ *
+ * @param {Array<object>} points - sorted track samples (timestamp, callsign, altitude...)
+ * @param {{gapSec?: number}} [opts]
+ * @returns {Array<object>} flight legs
+ */
+export function splitFlights(points, { gapSec = 900 } = {}) {
+  const pts = points || [];
+  if (pts.length === 0) return [];
+  const legs = [[pts[0]]];
+  for (let i = 1; i < pts.length; i += 1) {
+    const prev = pts[i - 1];
+    const cur = pts[i];
+    const tPrev = new Date(prev.timestamp || 0).getTime();
+    const tCur = new Date(cur.timestamp || 0).getTime();
+    const gap = (tCur - tPrev) / 1000;
+    const prevCs = (prev.callsign || '').trim();
+    const curCs = (cur.callsign || '').trim();
+    const callsignChanged = !!prevCs && !!curCs && prevCs !== curCs;
+    if (gap > gapSec || callsignChanged) legs.push([]);
+    legs[legs.length - 1].push(cur);
+  }
+  return legs.map((leg, i) => {
+    const first = leg[0];
+    const last = leg[leg.length - 1];
+    const alts = leg.map((p) => p.altitude).filter((v) => typeof v === 'number');
+    const start = first?.timestamp || null;
+    const end = last?.timestamp || null;
+    const durationMin =
+      start && end ? Math.max(0, (new Date(end).getTime() - new Date(start).getTime()) / 60000) : 0;
+    const callsign = (leg.map((p) => (p.callsign || '').trim()).find(Boolean) || '').trim();
+    return {
+      id: `${start || i}-${i}`,
+      points: leg,
+      callsign,
+      start,
+      end,
+      durationMin,
+      minAlt: alts.length ? Math.min(...alts) : null,
+      maxAlt: alts.length ? Math.max(...alts) : null,
+      count: leg.length,
+    };
+  });
+}
+
+/**
  * Mini-graph polyline for a 160×46 viewBox from track samples.
  * Returns { points, min, max } or null.
  */

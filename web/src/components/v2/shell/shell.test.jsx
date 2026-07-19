@@ -6,6 +6,8 @@ import { ThemeProvider } from '../../../providers/ThemeProvider';
 
 const markAllAsRead = vi.fn();
 let unacknowledgedCount = 0;
+let deniedFeatures = new Set();
+let authConfig = { authEnabled: false, publicMode: true, devMode: true };
 
 vi.mock('../../../hooks/useAlertNotifications', () => ({
   useAlertNotifications: () => ({
@@ -18,8 +20,13 @@ vi.mock('../../../hooks/useAlertNotifications', () => ({
 
 vi.mock('../../../contexts/AuthContext', () => ({
   useAuth: () => ({
-    canAccessFeature: () => true,
-    config: { authEnabled: false, publicMode: true },
+    canAccessFeature: (feature) => !deniedFeatures.has(feature),
+    hasPermission: () => true,
+    status: 'anonymous',
+    user: null,
+    isAuthenticated: false,
+    logout: vi.fn(),
+    config: authConfig,
   }),
 }));
 
@@ -45,6 +52,8 @@ function renderShell(props = {}) {
 describe('AppShell', () => {
   beforeEach(() => {
     unacknowledgedCount = 0;
+    deniedFeatures = new Set();
+    authConfig = { authEnabled: false, publicMode: true, devMode: true };
     localStorage.getItem.mockReset().mockReturnValue(null);
   });
 
@@ -91,6 +100,24 @@ describe('AppShell', () => {
     unmount();
     renderShell({ activeTab: 'admin' });
     expect(document.querySelector('.v2-content--flush')).toBeNull();
+  });
+
+  it('gates Weather and Wildfires nav on their RBAC features', () => {
+    const { unmount } = renderShell();
+    // Accessible by default (canAccessFeature true).
+    expect(screen.getByTestId('v2-nav-weather')).toBeInTheDocument();
+    expect(screen.getByTestId('v2-nav-wildfires')).toBeInTheDocument();
+    unmount();
+
+    // Enforced auth so feature items are gated on canAccessFeature (public mode
+    // shows every feature item regardless).
+    authConfig = { authEnabled: true, publicMode: false, devMode: false };
+    deniedFeatures = new Set(['weather', 'wildfires']);
+    renderShell();
+    expect(screen.queryByTestId('v2-nav-weather')).toBeNull();
+    expect(screen.queryByTestId('v2-nav-wildfires')).toBeNull();
+    // A non-gated item still shows.
+    expect(screen.getByTestId('v2-nav-map')).toBeInTheDocument();
   });
 
   it('opens settings from the header', () => {

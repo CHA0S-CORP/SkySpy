@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Thin docker-compose wrapper for the SkySpy VM: cds to the project dir and
+# applies the base + prod + release overlays and the acars profile, so ops are
+# one word: `skyspyctl ps`, `skyspyctl logs -f api`, `skyspyctl pull`,
+# `skyspyctl up -d`, `skyspyctl down`.
+set -euo pipefail
+
+PROJECT_DIR="${SKYSPY_DIR:-/opt/skyspy}"
+cd "$PROJECT_DIR"
+
+exec sudo docker compose \
+  -f docker-compose.yml \
+  -f deploy/proxmox/docker-compose.prod.yml \
+  -f deploy/proxmox/docker-compose.release.yml \
+  --profile acars \
+  "$@"

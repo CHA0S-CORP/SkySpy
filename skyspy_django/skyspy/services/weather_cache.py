@@ -6,7 +6,7 @@ Provides Redis caching for METAR data and database storage for PIREPs.
 
 import hashlib
 import logging
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from math import atan2, cos, radians, sin, sqrt
 
 import httpx
@@ -135,9 +135,12 @@ def _parse_pirep_time(pirep: dict) -> datetime | None:
         try:
             # AWC returns Unix timestamp
             if isinstance(obs_time, (int, float)):
-                return datetime.utcfromtimestamp(obs_time)
-            # Try ISO format
-            return datetime.fromisoformat(str(obs_time).replace("Z", "+00:00")).replace(tzinfo=None)
+                return datetime.fromtimestamp(obs_time, tz=UTC)
+            # Try ISO format (assume UTC when the string carries no offset)
+            parsed = datetime.fromisoformat(str(obs_time).replace("Z", "+00:00"))
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=UTC)
+            return parsed
         except (ValueError, TypeError):
             pass
     return None
@@ -248,6 +251,11 @@ def get_cached_pireps(
             "acType": pirep.aircraft_type,
             "turbType": pirep.turbulence_type,
             "turbFreq": pirep.turbulence_freq,
+            # Turbulence layer band — consumed by turbulence._score_pireps to taper
+            # altitude weighting. Without these keys the scorer's base/top band was
+            # always None (dead altitude-band logic).
+            "turbulence_base_ft": pirep.turbulence_base_ft,
+            "turbulence_top_ft": pirep.turbulence_top_ft,
             "iceType": pirep.icing_type,
             "iceInt": pirep.icing_intensity,
             "skyCondition": pirep.sky_cover,
@@ -334,6 +342,11 @@ def get_historical_pireps(
             "acType": pirep.aircraft_type,
             "turbType": pirep.turbulence_type,
             "turbFreq": pirep.turbulence_freq,
+            # Turbulence layer band — consumed by turbulence._score_pireps to taper
+            # altitude weighting. Without these keys the scorer's base/top band was
+            # always None (dead altitude-band logic).
+            "turbulence_base_ft": pirep.turbulence_base_ft,
+            "turbulence_top_ft": pirep.turbulence_top_ft,
             "iceType": pirep.icing_type,
             "iceInt": pirep.icing_intensity,
             "skyCondition": pirep.sky_cover,

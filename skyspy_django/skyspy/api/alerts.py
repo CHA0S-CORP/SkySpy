@@ -5,6 +5,7 @@ Alert rules, subscriptions, and history API views.
 import logging
 from datetime import timedelta
 
+from django.conf import settings
 from django.db import transaction
 from django.db.models import Count, Q
 from django.utils import timezone
@@ -15,7 +16,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from skyspy.api.params import parse_int
-from skyspy.api.throttles import AuthRateThrottle
+from skyspy.api.throttles import AlertWriteRateThrottle
 from skyspy.auth.authentication import APIKeyAuthentication, OptionalJWTAuthentication
 from skyspy.auth.permissions import CanAccessAlert, IsOwnerOrAdmin
 from skyspy.models import AlertAggregate, AlertHistory, AlertRule, AlertSubscription
@@ -40,11 +41,35 @@ class AlertRuleViewSet(viewsets.ModelViewSet):
 
     authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
     permission_classes = [CanAccessAlert, IsOwnerOrAdmin]
-    throttle_classes = [AuthRateThrottle]
 
     queryset = AlertRule.objects.all()
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ["enabled", "priority", "rule_type", "visibility"]
+
+    # Only mutating actions are throttled, and on a dedicated `alert_write`
+    # scope — NOT the login `auth` scope (5/min), which previously capped every
+    # read too and shared its bucket with the login endpoints (browsing rules
+    # burned the brute-force budget, HTTP 429 on a normal dashboard). Reads
+    # (list/retrieve/my_rules/shared/metrics/export) fall through to the global
+    # user/anon throttles.
+    _WRITE_ACTIONS = {
+        "create",
+        "update",
+        "partial_update",
+        "destroy",
+        "toggle",
+        "test",
+        "test_rule",
+        "bulk_create",
+        "bulk_delete",
+        "bulk_toggle",
+        "import_rules",
+    }
+
+    def get_throttles(self):
+        if getattr(self, "action", None) in self._WRITE_ACTIONS:
+            return [AlertWriteRateThrottle()]
+        return super().get_throttles()
 
     def get_serializer_class(self):
         if self.action == "create":
@@ -68,6 +93,12 @@ class AlertRuleViewSet(viewsets.ModelViewSet):
         )
         user = self.request.user
 
+        # Dev convenience: in DEV_MODE, don't scope by ownership so anonymous local
+        # sessions see every rule (production keeps the ownership/visibility rules
+        # below intact).
+        if getattr(settings, "DEV_MODE", False):
+            return queryset
+
         # Apply visibility filtering
         if user.is_authenticated:
             if user.is_superuser:
@@ -81,8 +112,12 @@ class AlertRuleViewSet(viewsets.ModelViewSet):
                 # Users see: their own rules + shared + public rules
                 return queryset.filter(Q(owner=user) | Q(visibility="public") | Q(visibility="shared")).distinct()
         else:
-            # Anonymous users only see public rules
-            return queryset.filter(visibility="public")
+            # Anonymous users (public mode) see public rules AND owner-less
+            # rules. Rules created in public/anonymous mode have owner=None and
+            # default to visibility="private"; without owner__isnull they would
+            # be invisible to everyone but a superuser (the "created rules never
+            # show up" bug). Mirrored in socket _scope_rules_for_user.
+            return queryset.filter(Q(visibility="public") | Q(owner__isnull=True))
 
     def _user_has_manage_all_permission(self, user):
         """Check if user has alerts.manage_all permission or superadmin role.
@@ -679,8 +714,10 @@ class AlertHistoryViewSet(viewsets.ReadOnlyModelViewSet):
                 Q(user=user) | Q(rule__owner=user) | Q(rule_id__in=subscribed_rule_ids) | Q(rule__visibility="public")
             )
         elif not user.is_authenticated:
-            # Anonymous users see public alerts only
-            queryset = queryset.filter(rule__visibility="public")
+            # Anonymous users (public mode) see public-rule alerts AND alerts
+            # from owner-less rules (created in public mode) so the inbox is
+            # populated. Mirrors AlertRuleViewSet.get_queryset.
+            queryset = queryset.filter(Q(rule__visibility="public") | Q(rule__owner__isnull=True))
 
         return queryset.order_by("-triggered_at")
 
@@ -733,6 +770,9 @@ class AlertHistoryViewSet(viewsets.ReadOnlyModelViewSet):
         """
         user = self.request.user
         queryset = self.get_queryset()
+        if not user.is_authenticated:
+            # Public mode: allow acknowledging alerts from owner-less rules.
+            return queryset.filter(rule__owner__isnull=True)
         if user.is_superuser:
             return queryset
 
@@ -745,24 +785,20 @@ class AlertHistoryViewSet(viewsets.ReadOnlyModelViewSet):
         """Mark an alert as acknowledged."""
         alert = self.get_object()
 
-        if not request.user.is_authenticated:
-            return Response({"error": "Authentication required"}, status=status.HTTP_401_UNAUTHORIZED)
-
         if not self._acknowledgeable_queryset().filter(pk=alert.pk).exists():
             return Response({"error": "Permission denied"}, status=status.HTTP_403_FORBIDDEN)
 
-        alert.acknowledge(request.user)
+        ack_user = request.user if request.user.is_authenticated else None
+        alert.acknowledge(ack_user)
         return Response(AlertHistorySerializer(alert).data)
 
     @extend_schema(summary="Acknowledge all unacknowledged alerts", responses={200: dict})
     @action(detail=False, methods=["post"], url_path="acknowledge-all")
     def acknowledge_all(self, request):
         """Acknowledge all unacknowledged alerts owned by or subscribed to by the user."""
-        if not request.user.is_authenticated:
-            return Response({"error": "Authentication required"}, status=status.HTTP_401_UNAUTHORIZED)
-
+        ack_user = request.user if request.user.is_authenticated else None
         queryset = self._acknowledgeable_queryset().filter(acknowledged=False)
-        updated = queryset.update(acknowledged=True, acknowledged_by=request.user, acknowledged_at=timezone.now())
+        updated = queryset.update(acknowledged=True, acknowledged_by=ack_user, acknowledged_at=timezone.now())
 
         return Response(
             {
@@ -781,6 +817,9 @@ class AlertHistoryViewSet(viewsets.ReadOnlyModelViewSet):
             count = AlertHistory.objects.filter(user=request.user).count()
             AlertHistory.objects.filter(user=request.user).delete()
         else:
-            return Response({"error": "Authentication required"}, status=status.HTTP_401_UNAUTHORIZED)
+            # Public mode: clear alerts from owner-less rules (the shared inbox).
+            owner_less = AlertHistory.objects.filter(rule__owner__isnull=True)
+            count = owner_less.count()
+            owner_less.delete()
 
         return Response({"deleted": count, "message": f"Deleted {count} alert history entries"})

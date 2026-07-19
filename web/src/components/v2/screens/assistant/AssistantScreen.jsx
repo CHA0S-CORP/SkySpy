@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Icon } from '../../primitives';
-import { AssistantThread } from './AssistantThread';
+import { AssistantThread, NextPrompts } from './AssistantThread';
+import { ChatSessionsSidebar } from './ChatSessionsSidebar';
 import { useAssistantChat } from './useAssistantChat';
+import { LockedFeature } from '../../../shared/LockedFeature';
 
 /**
  * SkySpy Assistant — full-page chat over the LangChain tool-calling agent.
@@ -43,9 +45,23 @@ const SUGGESTIONS = [
   'Are there active NOTAMs at KLAX?',
 ];
 
-export function AssistantScreen() {
+export function AssistantScreen({ hashParams } = {}) {
   const [input, setInput] = useState('');
-  const { messages, busy, send, clear } = useAssistantChat();
+  const { messages, busy, locked, sessionId, suggestions, send, newChat, loadSession } =
+    useAssistantChat({
+      surface: 'screen',
+    });
+
+  // Deep-link to a saved session (e.g. the dock's "open full assistant" button
+  // passes #assistant?session=<id>). Load it once per distinct id.
+  const loadedSessionRef = useRef(null);
+  useEffect(() => {
+    const id = hashParams?.session;
+    if (id && String(id) !== String(loadedSessionRef.current)) {
+      loadedSessionRef.current = id;
+      loadSession(id);
+    }
+  }, [hashParams?.session, loadSession]);
 
   const submit = (text) => {
     setInput('');
@@ -53,42 +69,70 @@ export function AssistantScreen() {
   };
 
   return (
-    <div className="v2-asst" data-testid="assistant-screen">
-      <div className="v2-asst__header">
-        <Icon name="message" size={17} style={{ color: 'var(--accent)' }} />
-        <span>Assistant</span>
-        <span className="v2-asst__sub">Ask about traffic, safety, airframes & analytics</span>
-        {messages.length > 0 && (
-          <button type="button" className="v2-asst__clear" onClick={clear} title="Clear chat">
-            <Icon name="x" size={13} />
-            Clear
-          </button>
+    <div
+      className={`v2-asst ${locked ? '' : 'v2-asst--with-sidebar'}`}
+      data-testid="assistant-screen"
+    >
+      {/* Anonymous users get the sign-in gate over the whole screen — the chat
+          sessions / new-chat sidebar is hidden since there's nothing to browse. */}
+      {!locked && (
+        <ChatSessionsSidebar activeId={sessionId} onSelect={loadSession} onNewChat={newChat} />
+      )}
+
+      <div className="v2-asst__main">
+        <div className="v2-asst__header">
+          <Icon name="message" size={17} style={{ color: 'var(--accent)' }} />
+          <span>Assistant</span>
+          <span className="v2-asst__sub">Ask about traffic, safety, airframes & analytics</span>
+          {!locked && messages.length > 0 && (
+            <button type="button" className="v2-asst__clear" onClick={newChat} title="New chat">
+              <Icon name="plus" size={13} />
+              New chat
+            </button>
+          )}
+        </div>
+
+        {locked ? (
+          <div className="v2-asst__thread">
+            <LockedFeature
+              title="Sign in to unlock the assistant"
+              subtitle="Ask the AI about live traffic, safety, airframes & analytics — grounded in what this station is tracking. Available to signed-in users."
+              variant="card"
+              className="lockfx--fill"
+            />
+          </div>
+        ) : (
+          <>
+            <div className="v2-asst__thread">
+              <AssistantThread messages={messages} suggestions={SUGGESTIONS} onPick={submit} />
+            </div>
+
+            {!busy && messages.length > 0 && (
+              <NextPrompts suggestions={suggestions} onPick={submit} />
+            )}
+
+            <form
+              className="v2-asst__composer"
+              onSubmit={(e) => {
+                e.preventDefault();
+                submit();
+              }}
+            >
+              <input
+                className="v2-asst__input"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder="Ask the assistant…"
+                disabled={busy}
+                aria-label="Assistant query"
+              />
+              <button type="submit" className="v2-asst__send" disabled={busy || !input.trim()}>
+                <Icon name={busy ? 'refresh' : 'send'} size={16} />
+              </button>
+            </form>
+          </>
         )}
       </div>
-
-      <div className="v2-asst__thread">
-        <AssistantThread messages={messages} suggestions={SUGGESTIONS} onPick={submit} />
-      </div>
-
-      <form
-        className="v2-asst__composer"
-        onSubmit={(e) => {
-          e.preventDefault();
-          submit();
-        }}
-      >
-        <input
-          className="v2-asst__input"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="Ask the assistant…"
-          disabled={busy}
-          aria-label="Assistant query"
-        />
-        <button type="submit" className="v2-asst__send" disabled={busy || !input.trim()}>
-          <Icon name={busy ? 'refresh' : 'send'} size={16} />
-        </button>
-      </form>
     </div>
   );
 }
