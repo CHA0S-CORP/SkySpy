@@ -207,6 +207,15 @@ export function AuthProvider({ children }) {
   }, [apiBaseUrl, authFetch]);
 
   /**
+   * After an interactive login (password or OIDC), reload so every Socket.IO
+   * connection + query re-establishes under the new JWT. Deferred a tick so the
+   * token/user writes to localStorage flush before re-initialization.
+   */
+  const finishInteractiveLogin = useCallback(() => {
+    setTimeout(() => window.location.reload(), 50);
+  }, []);
+
+  /**
    * Login with username and password
    */
   const login = useCallback(
@@ -230,6 +239,11 @@ export function AuthProvider({ children }) {
         setStatus('authenticated');
         scheduleTokenRefresh(data.access);
 
+        // The live map/list is Socket.IO-fed and the socket was opened
+        // anonymously (unauthorized for gated data in hybrid mode). Reload so
+        // every socket + query re-establishes with the JWT and data shows
+        // immediately instead of only after a manual refresh.
+        finishInteractiveLogin();
         return { success: true };
       } catch (err) {
         setError(err.message);
@@ -330,6 +344,10 @@ export function AuthProvider({ children }) {
               /* noop */
             }
             resolve({ success: true });
+            // Reload so sockets/queries re-establish with the JWT (see
+            // finishInteractiveLogin) — otherwise data only shows after a
+            // manual refresh.
+            finishInteractiveLogin();
           } else {
             reject(new Error('OIDC authentication failed'));
           }

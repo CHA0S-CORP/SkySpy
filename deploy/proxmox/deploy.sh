@@ -71,6 +71,9 @@ scp "${SSH_OPTS[@]}" "$SCRIPT_DIR/.env" "${VM_CIUSER}@${VM_IP}:${REMOTE_DIR}/.en
 log "docker compose up --build (this builds the image; ~10-20 min first run)"
 $SSH "cd ${REMOTE_DIR} && sudo docker compose -f docker-compose.yml -f deploy/proxmox/docker-compose.prod.yml --profile acars up -d --build"
 
+log "applying public-radar feature access (data public, AI/admin gated)"
+bash "$SCRIPT_DIR/set-public-features.sh" || log "warn: set-public-features failed (run it manually once api is up)"
+
 log "stack status:"
 $SSH "cd ${REMOTE_DIR} && sudo docker compose -f docker-compose.yml -f deploy/proxmox/docker-compose.prod.yml --profile acars ps"
 
