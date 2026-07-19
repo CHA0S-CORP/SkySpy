@@ -1,9 +1,12 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Icon } from '../../primitives';
+import { useHashParamState, boolParam } from '../../../../hooks/useHashParamState';
+import { useFavorites } from '../../../../hooks/queries/useFavoritesQueries';
 import { useHistoryData, RANGE_HOURS } from './useHistoryData';
 import { ArchiveTab } from './ArchiveTab';
 import { AcarsTab } from './AcarsTab';
+import { PirepsTab } from './PirepsTab';
 import { NotamsTab } from './NotamsTab';
 import {
   activityBins,
@@ -72,33 +75,28 @@ function EmptyTab({ label }) {
  * @param {(hex: string) => void} props.onSelectAircraft
  * @param {(eventId: string|number) => void} props.onViewEvent
  * @param {(notamId: string) => void} [props.onViewNotam] - open NOTAM detail
- * @param {{data?: string}} [props.hashParams] - deep-link tab (`?data=notams`)
  */
-export function HistoryScreen({ apiBase, onSelectAircraft, onViewEvent, onViewNotam, hashParams }) {
-  const initialTab = TABS.some((t) => t.key === hashParams?.data) ? hashParams.data : 'sessions';
-  const [tab, setTab] = useState(initialTab);
-
-  // Deep links (#history?data=... and the legacy #notams/#pireps/#archive
-  // aliases) must also switch the tab when the screen is already mounted
-  useEffect(() => {
-    const linked = hashParams?.data;
-    if (linked && TABS.some((t) => t.key === linked)) {
-      setTab(linked);
-    }
-  }, [hashParams?.data]);
-  const [range, setRange] = useState('24h');
-  const [query, setQuery] = useState('');
-  const [cat, setCat] = useState('All category');
-  const [type, setType] = useState('All types');
-  const [airline, setAirline] = useState('All airlines');
-  const [mil, setMil] = useState(false);
-  const [safe, setSafe] = useState(false);
-  const [sortBy, setSortBy] = useState('time');
-  const [sortDir, setSortDir] = useState('desc');
-  const [archiveIcao, setArchiveIcao] = useState('');
+export function HistoryScreen({ apiBase, onSelectAircraft, onViewEvent, onViewNotam, onViewPirep }) {
+  // Deep-linked view state. The active tab is the `data` param (#history?data=…,
+  // plus the legacy #notams/#pireps/#archive aliases that parseHash folds in);
+  // the filters/sort round out the shareable state.
+  const [tabRaw, setTab] = useHashParamState('data', 'sessions', { replace: false });
+  const tab = TABS.some((t) => t.key === tabRaw) ? tabRaw : 'sessions';
+  const [range, setRange] = useHashParamState('range', '24h');
+  const [query, setQuery] = useHashParamState('q', '');
+  const [cat, setCat] = useHashParamState('cat', 'All category');
+  const [type, setType] = useHashParamState('type', 'All types');
+  const [airline, setAirline] = useHashParamState('airline', 'All airlines');
+  const [mil, setMil] = useHashParamState('mil', false, boolParam);
+  const [safe, setSafe] = useHashParamState('safe', false, boolParam);
+  const [fav, setFav] = useHashParamState('fav', false, boolParam);
+  const [sortBy, setSortBy] = useHashParamState('sort', 'time');
+  const [sortDir, setSortDir] = useHashParamState('sortDir', 'desc');
+  const [archiveIcao, setArchiveIcao] = useHashParamState('icao', '');
   const [headerOpen, setHeaderOpen] = useState(false);
 
   const queryClient = useQueryClient();
+  const { hexSet: favoriteHexes } = useFavorites();
   const historyData = useHistoryData(apiBase, range, tab, archiveIcao);
   const { sessions, safety, stats, sightings, acars, notams, notamTfrs, pireps } = historyData;
 
@@ -132,10 +130,11 @@ export function HistoryScreen({ apiBase, onSelectAircraft, onViewEvent, onViewNo
     () =>
       selectSessions(
         sessionList,
-        { query, cat, type, airline, mil, safe, sortBy, sortDir },
-        safetyByHex
+        { query, cat, type, airline, mil, safe, fav, sortBy, sortDir },
+        safetyByHex,
+        favoriteHexes
       ),
-    [sessionList, query, cat, type, airline, mil, safe, sortBy, sortDir, safetyByHex]
+    [sessionList, query, cat, type, airline, mil, safe, fav, sortBy, sortDir, safetyByHex, favoriteHexes]
   );
   const cards = useMemo(
     () => filtered.map((s) => toSessionCard(s, safetyByHex)),
@@ -252,41 +251,41 @@ export function HistoryScreen({ apiBase, onSelectAircraft, onViewEvent, onViewNo
 
         {/* activity */}
         {headerOpen && (
-        <>
-        <div className="v2-hist__activity">
-          <span className="v2-hist__activity-label">{range.toUpperCase()} ACTIVITY</span>
-          <div className="v2-hist__activity-bars">
-            {activity.map((b, i) => (
-              <span
-                key={i}
-                style={{
-                  height: `${b.h}%`,
-                  background: b.recent ? 'var(--accent)' : 'var(--bord2)',
-                }}
-              />
-            ))}
-          </div>
-          <span className="v2-hist__activity-peak">peak {peak} / bin</span>
-        </div>
-
-        {/* history stats summary (server-computed over the full window) */}
-        {statRows.length > 0 && (
-          <div className="v2-hist__stats" data-testid="v2-hist-stats">
-            <span className="v2-hist__stats-label">{range.toUpperCase()} STATS</span>
-            <div className="v2-hist__stats-grid">
-              {statRows.map((r) => (
-                <div key={r.label} className="v2-hist__stat">
-                  <div className="v2-hist__stat-label">{r.label}</div>
-                  <div className="v2-hist__stat-value">
-                    {r.value.toLocaleString()}
-                    {r.unit && <span className="v2-hist__stat-unit"> {r.unit}</span>}
-                  </div>
-                </div>
-              ))}
+          <>
+            <div className="v2-hist__activity">
+              <span className="v2-hist__activity-label">{range.toUpperCase()} ACTIVITY</span>
+              <div className="v2-hist__activity-bars">
+                {activity.map((b, i) => (
+                  <span
+                    key={i}
+                    style={{
+                      height: `${b.h}%`,
+                      background: b.recent ? 'var(--accent)' : 'var(--bord2)',
+                    }}
+                  />
+                ))}
+              </div>
+              <span className="v2-hist__activity-peak">peak {peak} / bin</span>
             </div>
-          </div>
-        )}
-        </>
+
+            {/* history stats summary (server-computed over the full window) */}
+            {statRows.length > 0 && (
+              <div className="v2-hist__stats" data-testid="v2-hist-stats">
+                <span className="v2-hist__stats-label">{range.toUpperCase()} STATS</span>
+                <div className="v2-hist__stats-grid">
+                  {statRows.map((r) => (
+                    <div key={r.label} className="v2-hist__stat">
+                      <div className="v2-hist__stat-label">{r.label}</div>
+                      <div className="v2-hist__stat-value">
+                        {r.value.toLocaleString()}
+                        {r.unit && <span className="v2-hist__stat-unit"> {r.unit}</span>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
         )}
 
         {/* tabs */}
@@ -375,6 +374,16 @@ export function HistoryScreen({ apiBase, onSelectAircraft, onViewEvent, onViewNo
               >
                 <Icon name="alert-triangle" size={14} strokeWidth={1.7} />
                 Safety
+              </button>
+              <button
+                type="button"
+                className={`v2-hist__toggle ${fav ? 'v2-hist__toggle--fav' : ''}`}
+                aria-pressed={fav}
+                onClick={() => setFav(!fav)}
+                title="Show only your favorited aircraft"
+              >
+                <Icon name="star" size={14} strokeWidth={1.7} />
+                Favorites
               </button>
             </div>
             <div className="v2-hist__sorts">
@@ -608,72 +617,7 @@ export function HistoryScreen({ apiBase, onSelectAircraft, onViewEvent, onViewNo
           ((pireps.data || []).length === 0 ? (
             <EmptyTab label="PIREP" />
           ) : (
-            <div className="v2-hist__rows">
-              {(pireps.data || []).map((p, i) => {
-                const flightLvl =
-                  p.flight_level != null
-                    ? `FL${p.flight_level}`
-                    : p.altitude_ft != null
-                      ? `${p.altitude_ft.toLocaleString()} ft`
-                      : null;
-                const turb =
-                  p.turbulence_type != null
-                    ? `Turb ${p.turbulence_type}${
-                        p.turbulence_base_ft != null || p.turbulence_top_ft != null
-                          ? ` ${p.turbulence_base_ft ?? '?'}–${p.turbulence_top_ft ?? '?'} ft`
-                          : ''
-                      }`
-                    : null;
-                const icing =
-                  p.icing_type != null
-                    ? `Icing ${p.icing_type}${
-                        p.icing_base_ft != null || p.icing_top_ft != null
-                          ? ` ${p.icing_base_ft ?? '?'}–${p.icing_top_ft ?? '?'} ft`
-                          : ''
-                      }`
-                    : null;
-                const meta = [flightLvl, turb, icing].filter(Boolean).join(' · ');
-                const isUrgent = (p.report_type || '').toUpperCase() === 'UUA';
-                return (
-                  <div key={p.id ?? i} className="v2-hist__row v2-hist__row--static">
-                    <Icon
-                      name="message"
-                      size={15}
-                      strokeWidth={1.7}
-                      style={{ color: 'var(--accent2)' }}
-                    />
-                    <div className="v2-hist__row-body">
-                      <div className="v2-hist__row-title">
-                        <span className="v2-mono">
-                          {p.location || p.pirep_id || p.station || 'PIREP'}
-                        </span>
-                        {p.report_type && (
-                          <span
-                            className={`v2-hist__pill ${
-                              isUrgent ? 'v2-hist__pill--danger' : 'v2-hist__pill--dim'
-                            }`}
-                          >
-                            {p.report_type}
-                          </span>
-                        )}
-                        {p.severity && (
-                          <span className="v2-hist__pill v2-hist__pill--warn">{p.severity}</span>
-                        )}
-                      </div>
-                      <div className="v2-hist__row-sub">
-                        {p.human_summary || meta || p.raw_text || p.text || ''}
-                      </div>
-                      {meta && (p.human_summary || p.raw_text || p.text) && (
-                        <div className="v2-hist__row-meta v2-mono">{meta}</div>
-                      )}
-                    </div>
-                    <span className="v2-hist__row-time">
-                      {p.observation_time ? new Date(p.observation_time).toLocaleTimeString() : ''}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
+            <PirepsTab pireps={pireps.data || []} onViewPirep={onViewPirep} />
           ))}
 
         {tab === 'archive' && (

@@ -337,6 +337,92 @@ class AlertServiceSimpleConditionTests(TestCase):
         self.assertFalse(result)
 
 
+class AlertServiceClassFilterTests(TestCase):
+    """Tests for the computed 'class' rule type (role bucket filter)."""
+
+    def setUp(self):
+        self.service = AlertService()
+
+    def test_classify_military(self):
+        self.assertEqual(self.service._classify_aircraft({"military": True}), "military")
+        # dbFlags bit 0 also flags military
+        self.assertEqual(self.service._classify_aircraft({"dbFlags": 1}), "military")
+
+    def test_classify_police_by_callsign(self):
+        # LAPD callsign pattern -> Police Aviation -> police class
+        self.assertEqual(self.service._classify_aircraft({"flight": "LAPD01"}), "police")
+
+    def test_classify_fire_by_callsign(self):
+        self.assertEqual(self.service._classify_aircraft({"flight": "TANKER910"}), "fire")
+
+    def test_classify_fire_by_owner(self):
+        ac = {"flight": "N123FD", "ownOp": "LOS ANGELES CITY FIRE DEPT"}
+        self.assertEqual(self.service._classify_aircraft(ac), "fire")
+
+    def test_atf_firearms_not_misclassified_as_fire(self):
+        # "Firearms" in the ATF description must NOT match the word-safe fire regex;
+        # ATF is federal law enforcement -> police class.
+        self.assertEqual(self.service._classify_aircraft({"flight": "ATF12"}), "police")
+
+    def test_classify_general_aviation(self):
+        # Light aircraft emitter category, no military/LE -> ga
+        self.assertEqual(self.service._classify_aircraft({"category": "A1"}), "ga")
+
+    def test_classify_commercial_default(self):
+        # Airliner callsign, large emitter category, nothing else -> commercial
+        ac = {"flight": "UAL123", "category": "A5"}
+        self.assertEqual(self.service._classify_aircraft(ac), "commercial")
+
+
+    def test_class_condition_matches_via_eq(self):
+        result = self.service._evaluate_simple_condition({"military": True}, "class", "eq", "military")
+        self.assertTrue(result)
+
+    def test_class_condition_multiselect_regex(self):
+        # Frontend 'in list' multiselect compiles to an anchored regex.
+        import re
+
+        pattern = re.compile(r"^(military|police|fire)$", re.IGNORECASE)
+        police = {"flight": "LAPD01"}
+        commercial = {"flight": "UAL123", "category": "A5"}
+        self.assertTrue(
+            self.service._evaluate_simple_condition(
+                police, "class", "regex", r"^(military|police|fire)$", compiled_regex=pattern
+            )
+        )
+        self.assertFalse(
+            self.service._evaluate_simple_condition(
+                commercial, "class", "regex", r"^(military|police|fire)$", compiled_regex=pattern
+            )
+        )
+
+
+class AlertServiceAirframeSummaryTests(TestCase):
+    """Tests for the derived airframe summary attached to alert payloads."""
+
+    def test_summary_le_and_operator(self):
+        ac = {
+            "hex": "a1b2c3",
+            "flight": "CBP123",  # Customs & Border Protection callsign
+            "ownOp": "US CUSTOMS",
+            "manufacturer": "Cessna",
+            "model": "208",
+            "dbFlags": 1,
+        }
+        summary = AlertService._build_airframe_summary(ac)
+        self.assertEqual(summary["operator"], "US CUSTOMS")
+        self.assertEqual(summary["manufacturer"], "Cessna")
+        self.assertTrue(summary["military"])
+        self.assertTrue(summary["law_enforcement"])
+        self.assertEqual(summary["law_enforcement_category"], "Federal Law Enforcement")
+
+    def test_summary_civil_aircraft(self):
+        summary = AlertService._build_airframe_summary({"hex": "abc123", "flight": "UAL456"})
+        self.assertFalse(summary["law_enforcement"])
+        self.assertFalse(summary["military"])
+        self.assertIsNone(summary["law_enforcement_description"])
+
+
 class AlertServiceComplexConditionTests(TestCase):
     """Tests for complex AND/OR condition evaluation."""
 
@@ -1091,6 +1177,61 @@ class AlertServiceWebhookTests(TestCase):
         self.service._call_webhook("https://example.com/webhook", data, mock_rule)
 
 
+@pytest.mark.django_db
+class AlertServiceWebhookRoutingTests:
+    """A raw http(s) webhook URL must POST JSON (send_webhook_task), not go
+    through Apprise (which cannot deliver a bare http URL), and must fire only
+    once even when configured in two places."""
+
+    def _alert(self):
+        return {
+            "rule_id": 7,
+            "rule_name": "Webhook Rule",
+            "message": "msg",
+            "priority": "info",
+            "icao": "ABC123",
+        }
+
+    def test_plain_http_webhook_posts_json_not_apprise(self):
+        service = AlertService()
+        with (
+            patch("skyspy.tasks.notifications.send_webhook_task") as mock_webhook,
+            patch("skyspy.tasks.notifications.send_notification_task") as mock_apprise,
+        ):
+            service._send_notification(self._alert(), None, webhook_url="http://example.com/webhook/abc")
+
+        # Delivered as a JSON POST with the alert payload, not via Apprise.
+        mock_webhook.delay.assert_called_once()
+        assert mock_webhook.delay.call_args.kwargs["url"] == "http://example.com/webhook/abc"
+        assert mock_webhook.delay.call_args.kwargs["data"]["rule_name"] == "Webhook Rule"
+        mock_apprise.delay.assert_not_called()
+
+    def test_webhook_deduped_across_api_url_and_global(self):
+        config = NotificationConfig.get_config()
+        config.enabled = True
+        config.apprise_urls = "http://example.com/webhook/abc"
+        config.save()
+        try:
+            service = AlertService()
+            with patch("skyspy.tasks.notifications.send_webhook_task") as mock_webhook:
+                service._send_notification(self._alert(), None, webhook_url="http://example.com/webhook/abc")
+            # Same URL as api_url and global config -> exactly one delivery.
+            assert mock_webhook.delay.call_count == 1
+        finally:
+            NotificationConfig.objects.all().delete()
+
+    def test_apprise_service_url_still_uses_apprise(self):
+        service = AlertService()
+        with (
+            patch("skyspy.tasks.notifications.send_webhook_task") as mock_webhook,
+            patch("skyspy.tasks.notifications.send_notification_task") as mock_apprise,
+        ):
+            service._send_notification(self._alert(), None, webhook_url="discord://token/id")
+
+        mock_apprise.delay.assert_called_once()
+        mock_webhook.delay.assert_not_called()
+
+
 class AlertServiceEdgeCaseTests(TestCase):
     """Edge case tests for AlertService."""
 
@@ -1391,3 +1532,44 @@ class TestCooldownClearedOnPersistFailure:
         # The good rule still fired despite the bad rule's DB error.
         assert any(a.get("icao") == "BBB222" or a.get("icao_hex") == "BBB222" for a in triggered)
         assert AlertHistory.objects.filter(icao_hex="BBB222").exists()
+
+
+class TurbulenceRuleTests(TestCase):
+    """Turbulence rule_type evaluation + cache overlay."""
+
+    def setUp(self):
+        self.service = AlertService()
+
+    def test_turbulence_level_ranks(self):
+        assert self.service._get_aircraft_value({"turbulence_level": "severe"}, "turbulence_level") == 3
+        assert self.service._get_aircraft_value({"turbulence_level": "moderate"}, "turbulence_level") == 2
+        # Absent -> None (rule then can't match, no false trigger).
+        assert self.service._get_aircraft_value({}, "turbulence_level") is None
+
+    def test_turbulence_level_ge_compare(self):
+        # Aircraft at "severe" (rank 3) satisfies ">= moderate".
+        assert self.service._evaluate_simple_condition(
+            {"turbulence_level": "severe"}, "turbulence_level", "ge", "moderate"
+        )
+        # Aircraft at "light" (rank 1) does not.
+        assert not self.service._evaluate_simple_condition(
+            {"turbulence_level": "light"}, "turbulence_level", "ge", "moderate"
+        )
+
+    def test_turbulence_score_gt_compare(self):
+        assert self.service._evaluate_simple_condition({"turbulence_score": 80}, "turbulence_score", "gt", "50")
+        assert not self.service._evaluate_simple_condition({"turbulence_score": 30}, "turbulence_score", "gt", "50")
+
+    def test_overlay_turbulence_stamps_from_cache(self):
+        from django.core.cache import cache
+
+        from skyspy.tasks.turbulence import CACHE_KEY_BY_HEX
+
+        cache.set(CACHE_KEY_BY_HEX, {"ABC123": {"score": 72, "level": "severe"}})
+        aircraft = [{"hex": "abc123"}, {"hex": "zzz999"}]
+        self.service._overlay_turbulence(aircraft)
+        assert aircraft[0]["turbulence_level"] == "severe"
+        assert aircraft[0]["turbulence_score"] == 72
+        # Un-flagged aircraft is left untouched.
+        assert "turbulence_level" not in aircraft[1]
+        cache.delete(CACHE_KEY_BY_HEX)

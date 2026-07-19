@@ -7,6 +7,7 @@ import {
   DEFAULT_AIRSPACE_CLASSES,
 } from '../mapState';
 import { AIRSPACE_CLASSES } from '../render/symbology';
+import { useAuth } from '../../../contexts/AuthContext';
 
 const COLOR_MODES = [
   { value: 'category', label: 'Type' },
@@ -26,13 +27,18 @@ const toStr = (opts) => opts.map((o) => ({ value: String(o.value), label: o.labe
  * @param {(patch: object) => void} props.onChange
  */
 export function LayersPanel({ overlays, onChange }) {
+  const { canAccessFeature } = useAuth();
+  // Hide RBAC-gated layer toggles (weather / wildfires) the user can't read.
+  const visibleDefs = OVERLAY_DEFS.filter(
+    (def) => !def.feature || canAccessFeature(def.feature, 'read')
+  );
   return (
     <div className="lm-panel-pop" role="dialog" aria-label="Map layers">
       <div className="lm-panel-pop__head">
         <span>Map Layers</span>
       </div>
       <div className="lm-panel-pop__group">
-        {OVERLAY_DEFS.map(({ key, label }) => (
+        {visibleDefs.map(({ key, label }) => (
           <React.Fragment key={key}>
             <label className="lm-panel-pop__row">
               <span>{label}</span>

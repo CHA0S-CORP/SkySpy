@@ -13,7 +13,8 @@ class ConditionSerializer(serializers.Serializer):
     """Single condition in an alert rule."""
 
     type = serializers.CharField(
-        help_text="Condition type (icao, callsign, squawk, altitude, distance, type, military)"
+        help_text="Condition type (icao, callsign, squawk, altitude, distance, type, military, "
+        "class=commercial/ga/fire/police/military)"
     )
     operator = serializers.CharField(
         default="eq", help_text="Comparison operator (eq, ne, lt, gt, le, ge, contains, startswith)"

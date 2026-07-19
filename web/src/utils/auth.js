@@ -267,6 +267,15 @@ export const FEATURE_PERMISSIONS = {
     viewMetrics: 'system.view_metrics',
     manage: 'system.manage',
   },
+  assistant: {
+    view: 'assistant.view',
+  },
+  weather: {
+    view: 'weather.view',
+  },
+  wildfires: {
+    view: 'wildfires.view',
+  },
   users: {
     view: 'users.view',
     create: 'users.create',

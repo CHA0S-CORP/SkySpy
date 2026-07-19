@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Icon } from '../v2/primitives';
+import { LockedFeature } from './LockedFeature';
+import { withAuth } from '../../lib/authHeader';
 
 /**
  * Split a narrative into sentences for the timeline. Breaks only on a sentence
@@ -63,6 +65,7 @@ export function FlightHistoryCard({ apiBase, hex, variant = 'v2', refreshKey = 0
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(!!hex);
   const [error, setError] = useState(false);
+  const [locked, setLocked] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
   const mounted = useRef(true);
 
@@ -78,10 +81,22 @@ export function FlightHistoryCard({ apiBase, hex, variant = 'v2', refreshKey = 0
     const ctrl = new AbortController();
     setLoading(true);
     setError(false);
-    fetch(`${apiBase}/api/v1/airframes/${hexUC}/flight-history/`, { signal: ctrl.signal })
-      .then((res) => (res.ok ? res.json() : { available: false, summary: null }))
+    setLocked(false);
+    fetch(`${apiBase}/api/v1/airframes/${hexUC}/flight-history/`, {
+      signal: ctrl.signal,
+      headers: withAuth(),
+    })
+      .then((res) => {
+        // 401/403 = AI features are gated for this (anonymous) user — show the
+        // sign-in gate rather than hiding the card.
+        if (res.status === 401 || res.status === 403) {
+          if (mounted.current) setLocked(true);
+          return null;
+        }
+        return res.ok ? res.json() : { available: false, summary: null };
+      })
       .then((json) => {
-        if (mounted.current) setData(json);
+        if (json && mounted.current) setData(json);
       })
       .catch((e) => {
         if (e.name !== 'AbortError' && mounted.current) setError(true);
@@ -101,7 +116,9 @@ export function FlightHistoryCard({ apiBase, hex, variant = 'v2', refreshKey = 0
       if (regenerating) return;
       setRegenerating(true);
       try {
-        const res = await fetch(`${apiBase}/api/v1/airframes/${hexUC}/flight-history/?${mode}=true`);
+        const res = await fetch(`${apiBase}/api/v1/airframes/${hexUC}/flight-history/?${mode}=true`, {
+          headers: withAuth(),
+        });
         if (res.ok && mounted.current) setData(await res.json());
       } catch {
         // Network hiccup — leave the existing summary in place.
@@ -124,6 +141,45 @@ export function FlightHistoryCard({ apiBase, hex, variant = 'v2', refreshKey = 0
     // runAction is stable per apiBase/hexUC; only re-run when refreshKey changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshKey]);
+
+  // AI gated for anonymous users — render the sign-in gate inside the card chrome.
+  if (locked) {
+    const badge = (
+      <span className="flighthist__ai">
+        <Icon name="cpu" size={10} strokeWidth={2} />
+        AI
+      </span>
+    );
+    const gate = (
+      <LockedFeature
+        title="Sign in to unlock the AI flight history"
+        subtitle="An AI-written narrative of this airframe's activity, grounded in what this station observed."
+        variant={variant === 'legacy' ? 'inline' : 'card'}
+      />
+    );
+    if (variant === 'legacy') {
+      return (
+        <section className="overview-section flighthist-section" aria-label="Flight history">
+          <h3 className="overview-section-title flighthist__head">
+            <Icon name="history" size={16} strokeWidth={1.8} className="flighthist__glyph" />
+            Flight History
+            {badge}
+          </h3>
+          <div className="flighthist">{gate}</div>
+        </section>
+      );
+    }
+    return (
+      <div className="v2-det__card">
+        <div className="v2-det__card-head">
+          <Icon name="history" size={15} strokeWidth={1.7} style={{ color: 'var(--accent2)' }} />
+          <span>Flight History</span>
+          {badge}
+        </div>
+        <div className="v2-det__card-body flighthist">{gate}</div>
+      </div>
+    );
+  }
 
   // LLM disabled/unconfigured, or the fetch errored — stay invisible.
   if (error || (data && data.available === false)) return null;

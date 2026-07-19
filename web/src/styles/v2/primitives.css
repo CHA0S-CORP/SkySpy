@@ -368,3 +368,77 @@
 .v2-modal__body {
   padding: 22px;
 }
+
+/* ---- Bottom sheet (mobile Dialog anchored to the bottom edge) ---- */
+.v2-sheet-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 6, 10, 0.72);
+  /* Same stacking band as the modal overlay (above map ~1000 / detail chrome
+     2000, below toasts 9999). */
+  z-index: 5000;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.v2-sheet {
+  width: 100%;
+  max-width: 720px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg1);
+  border: 1px solid var(--bord2);
+  border-bottom: none;
+  border-radius: 18px 18px 0 0;
+  box-shadow: 0 -18px 60px rgba(0, 0, 0, 0.6);
+  color: var(--txt);
+  animation: v2-sheet-up 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+  /* Respect the phone home-indicator / rounded corners. */
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+.v2-sheet__grip {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 4px;
+  margin: 8px auto 2px;
+  border-radius: 999px;
+  background: var(--bord2);
+}
+.v2-sheet__head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 14px 10px 18px;
+  border-bottom: 1px solid var(--bord);
+}
+.v2-sheet__title {
+  font-size: 15px;
+  font-weight: 700;
+}
+.v2-sheet__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding: 16px 18px;
+}
+.v2-sheet__body--flush {
+  padding: 0;
+}
+
+@keyframes v2-sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .v2-sheet {
+    animation: none;
+  }
+}

@@ -24,6 +24,8 @@ export function LiveMapToolbar({
   onZoom,
   onRecenter,
   onFullscreen,
+  isMobile = false,
+  onOpenMore,
 }) {
   return (
     <div className="lm__toolbar">
@@ -40,7 +42,7 @@ export function LiveMapToolbar({
 
       <div className="lm__spacer" />
 
-      <div className="lm__cluster">
+      <div className="lm__cluster lm__cluster--labels">
         <div className="lm__seg" role="group" aria-label="Label visibility">
           <button
             type="button"
@@ -119,12 +121,33 @@ export function LiveMapToolbar({
       </div>
 
       <div className="lm__cluster">
-        <button type="button" className="lm__tbtn" onClick={onRecenter} title="Recenter on feeder">
+        <button
+          type="button"
+          className="lm__tbtn lm__tbtn--recenter"
+          onClick={onRecenter}
+          title="Recenter on feeder"
+        >
           <Icon name="crosshair" size={16} strokeWidth={1.7} />
         </button>
-        <button type="button" className="lm__tbtn" onClick={onFullscreen} title="Fullscreen">
+        <button
+          type="button"
+          className="lm__tbtn lm__tbtn--fs"
+          onClick={onFullscreen}
+          title="Fullscreen"
+        >
           <Icon name="fullscreen" size={16} strokeWidth={1.7} />
         </button>
+        {isMobile && (
+          <button
+            type="button"
+            className="lm__tbtn lm__more"
+            onClick={onOpenMore}
+            title="More controls"
+            aria-label="More map controls"
+          >
+            <Icon name="sliders" size={16} strokeWidth={1.7} />
+          </button>
+        )}
       </div>
     </div>
   );

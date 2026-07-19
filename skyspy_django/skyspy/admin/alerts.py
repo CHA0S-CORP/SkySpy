@@ -41,8 +41,10 @@ class AlertRuleAdmin(admin.ModelAdmin):
         "visibility",
         "is_system",
         "rule_type",
+        ("owner", admin.RelatedOnlyFieldListFilter),
     )
-    search_fields = ("name", "description", "value")
+    search_fields = ("name", "description", "value", "owner__username", "owner__email")
+    raw_id_fields = ("owner",)
     filter_horizontal = ("notification_channels",)
 
     fieldsets = (

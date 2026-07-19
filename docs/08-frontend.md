@@ -106,6 +106,12 @@ flowchart TB
 > 💡 **Tip**
 > Hash routing enables deep linking and browser history support without server-side routing configuration.
 
+> 🔗 Most screens also deep-link their view state (search, filters, sort, sub-tab,
+> selection, time range) via query params — e.g. `#aircraft?filter=military&sort=dist`,
+> `#stats?range=24h&mil=1`, `#history?data=acars&airline=UAL`. See the full
+> parameter reference in [21 — Deep Linking](21-deep-linking.md). Screens use the
+> `useHashParamState` hook over `lib/hashRoute.js`.
+
 ### 🗺️ Valid Navigation Tabs
 
 | Tab | Icon | Description |

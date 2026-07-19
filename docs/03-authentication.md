@@ -431,7 +431,29 @@ OIDC_CLIENT_SECRET=your-client-secret
 OIDC_PROVIDER_NAME=Corporate SSO       # Display name for UI
 OIDC_SCOPES=openid profile email groups
 OIDC_DEFAULT_ROLE=viewer               # Role for new OIDC users
+OIDC_ALLOW_EMAIL_LINKING=false         # Link OIDC identity to existing local user by verified email
+OIDC_POST_MESSAGE_ORIGIN=              # Popup postMessage target origin (defaults to request origin)
 ```
+
+Endpoints are resolved from the provider's discovery document
+(`OIDC_PROVIDER_URL/.well-known/openid-configuration`), so hosted IdPs work
+without any endpoint configuration. If discovery is unreachable, SkySpy falls
+back to the legacy `/authorize`, `/token`, `/userinfo` suffixes (Keycloak-style).
+
+**Register this redirect URI with your IdP:** `https://<your-host>/api/v1/auth/oidc/callback/`
+
+| Provider | `OIDC_PROVIDER_URL` |
+|----------|---------------------|
+| Google | `https://accounts.google.com` |
+| Auth0 | `https://<tenant>.auth0.com` |
+| Okta | `https://<org>.okta.com/oauth2/default` |
+| Azure AD | `https://login.microsoftonline.com/<tenant-id>/v2.0` |
+| Keycloak | `https://<host>/realms/<realm>` |
+| Authentik | `https://<host>/application/o/<app-slug>/` |
+
+ID tokens from hosted providers are signature-verified against the provider's
+JWKS (`jwks_uri` from discovery); SkySpy prefers verified ID-token claims and
+falls back to the userinfo endpoint when the ID token can't be validated.
 
 #### OIDC Authentication Flow
 

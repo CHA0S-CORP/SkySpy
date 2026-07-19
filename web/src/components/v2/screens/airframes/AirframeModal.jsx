@@ -1,7 +1,11 @@
 import React, { useState } from 'react';
+import { useInfiniteQuery } from '@tanstack/react-query';
 import { Modal, Icon } from '../../primitives';
+import { api } from '../../../../lib/api';
 import { Planform } from './Planform';
 import { CATEGORY_COLOR, CATEGORIES } from './airframesData';
+
+const SEEN_PAGE = 25;
 
 const CAT_LABEL = Object.fromEntries(CATEGORIES.map((c) => [c.id, c.label]));
 
@@ -63,6 +67,85 @@ function TypePhoto({ frame, color }) {
 }
 
 /**
+ * Lazy-loaded list of tails of this type actually tracked by the station,
+ * newest last-seen first. Each row links to the aircraft's detail page.
+ *
+ * @param {object} props
+ * @param {string} props.type - ICAO type designator (frame.id)
+ * @param {boolean} props.open - only fetch while the modal is open
+ * @param {number|null} [props.hours] - recency window (matches the screen filter); null = all-time
+ * @param {(hex: string) => void} [props.onSelect]
+ */
+function SeenTails({ type, open, hours, onSelect }) {
+  const { data, isLoading, isError, hasNextPage, fetchNextPage, isFetchingNextPage } =
+    useInfiniteQuery({
+      queryKey: ['v2-seen-airframes', type, hours ?? 'all'],
+      enabled: open && !!type,
+      initialPageParam: 0,
+      queryFn: ({ pageParam }) =>
+        api.getSeenAirframesByType(type, {
+          limit: SEEN_PAGE,
+          offset: pageParam,
+          ...(hours ? { hours } : {}),
+        }),
+      getNextPageParam: (last) => last?.next_offset ?? undefined,
+      staleTime: 60 * 1000,
+    });
+
+  const rows = (data?.pages || []).flatMap((p) => p?.results || []);
+  const total = data?.pages?.[0]?.count ?? 0;
+
+  return (
+    <section className="v2-afm__seen">
+      <div className="v2-afm__sheet-head v2-mono">
+        SEEN HERE{total > 0 && <span className="v2-afm__seen-n"> · {total}</span>}
+      </div>
+
+      {isLoading ? (
+        <div className="v2-afm__seen-empty v2-mono">LOADING…</div>
+      ) : isError ? (
+        <div className="v2-afm__seen-empty v2-mono">Could not load sightings.</div>
+      ) : rows.length === 0 ? (
+        <div className="v2-afm__seen-empty v2-mono">No tails of this type seen yet.</div>
+      ) : (
+        <>
+          <ul className="v2-afm__seen-list">
+            {rows.map((r) => (
+              <li key={r.icao_hex}>
+                <button
+                  type="button"
+                  className="v2-afm__seen-row"
+                  onClick={() => onSelect?.(r.icao_hex)}
+                  title="Open aircraft detail"
+                >
+                  <span className="v2-afm__seen-reg v2-mono">{r.registration || r.icao_hex}</span>
+                  {r.operator && <span className="v2-afm__seen-op">{r.operator}</span>}
+                  <span className="v2-afm__seen-meta v2-mono">
+                    {r.times_seen}×
+                    {r.last_seen ? ` · ${new Date(r.last_seen).toLocaleDateString()}` : ''}
+                  </span>
+                  <Icon name="chevron-right" size={13} strokeWidth={2} />
+                </button>
+              </li>
+            ))}
+          </ul>
+          {hasNextPage && (
+            <button
+              type="button"
+              className="v2-afm__seen-more v2-mono"
+              onClick={() => fetchNextPage()}
+              disabled={isFetchingNextPage}
+            >
+              {isFetchingNextPage ? 'LOADING…' : 'LOAD MORE'}
+            </button>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
+/**
  * Full technical dossier for one airframe type: reference photograph, annotated
  * engineering blueprint, dual-unit spec sheet and reference notes.
  *
@@ -70,8 +153,18 @@ function TypePhoto({ frame, color }) {
  * @param {import('./airframesData').Airframe|null} props.frame
  * @param {boolean} props.open
  * @param {(open: boolean) => void} props.onOpenChange
+ * @param {(hex: string) => void} [props.onSelectAircraft] - open a tail's detail page
+ * @param {number|null} [props.seenHours] - recency window for the "seen here" list (null = all-time)
+ * @param {boolean} [props.neverSeen] - this station has never tracked this type (all-time)
  */
-export function AirframeModal({ frame, open, onOpenChange }) {
+export function AirframeModal({
+  frame,
+  open,
+  onOpenChange,
+  onSelectAircraft,
+  seenHours = null,
+  neverSeen = false,
+}) {
   if (!frame) return null;
   const color = CATEGORY_COLOR[frame.category] || 'var(--accent2)';
   const ratio = (frame.span / frame.length).toFixed(2);
@@ -92,12 +185,28 @@ export function AirframeModal({ frame, open, onOpenChange }) {
         <div className="v2-afm__hero">
           <TypePhoto frame={frame} color={color} />
           <div className="v2-afm__ident">
+            {neverSeen && (
+              <div className="v2-afm__unseen v2-mono" title="Reference data only — no local sightings">
+                <Icon name="eye-off" size={12} strokeWidth={1.9} />
+                NEVER SEEN AT THIS STATION
+              </div>
+            )}
             <div className="v2-afm__maker">{frame.mfr}</div>
             <div className="v2-afm__role">
               <Icon name="target" size={13} strokeWidth={1.9} />
               {frame.role}
             </div>
             {frame.blurb && <p className="v2-afm__blurb">{frame.blurb}</p>}
+            {frame.generated && (
+              <p className="v2-afm__auto-note">
+                <Icon name="cpu" size={12} strokeWidth={1.9} />
+                Auto-generated from an AI summary
+                {typeof frame.confidence === 'number'
+                  ? ` (confidence ${Math.round(frame.confidence * 100)}%)`
+                  : ''}
+                . Figures are approximate — verify before operational use.
+              </p>
+            )}
             <dl className="v2-afm__tags">
               {frame.powerplant && (
                 <div className="v2-afm__tag">
@@ -187,6 +296,17 @@ export function AirframeModal({ frame, open, onOpenChange }) {
             <SpecRow k="First flight" primary={`${frame.firstFlight}`} />
           </div>
         </div>
+
+        {/* ── seen tails of this type (lazy-loaded) ─────────────────────── */}
+        <SeenTails
+          type={frame.id}
+          open={open}
+          hours={seenHours}
+          onSelect={(hex) => {
+            onSelectAircraft?.(hex);
+            onOpenChange?.(false);
+          }}
+        />
       </div>
     </Modal>
   );

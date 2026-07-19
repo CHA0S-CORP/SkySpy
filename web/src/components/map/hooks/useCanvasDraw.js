@@ -6,6 +6,7 @@ import {
   drawCenterMarker,
   drawWeatherRadarOverlay,
   drawConvectiveSigmetPolygons,
+  drawAirmetPolygons,
   drawTerrainBoundaries,
   drawNavaids,
   drawAirports,
@@ -109,12 +110,14 @@ export function useCanvasDraw({
   selectedNavaid,
   selectedAirport,
   selectedSigmet,
+  selectedAirmet,
   selectedAdvisoryId,
   selectedNotamId,
   // Aviation display
   stationsWithTaf,
   getTafForAirport,
   convectiveSigmets,
+  airmets,
   airspaceAdvisories,
   acknowledgedAdvisories,
   mapNotams,
@@ -125,6 +128,7 @@ export function useCanvasDraw({
   weatherRadarBounds,
   drawWeatherRadar,
   drawSigmets,
+  drawAirmets,
   // Weather advisory config
   HAZARD_CONFIG,
   NOTAM_TYPE_CONFIG,
@@ -612,6 +616,13 @@ export function useCanvasDraw({
         layerOpacities,
         selectedSigmet: selectedSigmet,
         drawSigmets,
+      });
+      drawAirmetPolygons(ctx, geo, {
+        overlays,
+        airmets: airmets || [],
+        layerOpacities,
+        selectedAirmet,
+        drawAirmets,
       });
       drawTerrainBoundaries(ctx, geo, {
         overlays,

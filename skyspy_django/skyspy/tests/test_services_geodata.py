@@ -13,7 +13,7 @@ from datetime import datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from skyspy.models import CachedAirport, CachedGeoJSON, CachedNavaid
 from skyspy.services import geodata
@@ -625,3 +625,74 @@ class RefreshAllGeodataTests(TestCase):
         self.assertEqual(result["airports"], 100)
         self.assertEqual(result["navaids"], 50)
         self.assertEqual(result["geojson"], 200)
+
+
+@override_settings(
+    FAA_ENROUTE_ENABLED=True,
+    FEEDER_LAT=33.9416,
+    FEEDER_LON=-118.4085,
+    AIRSPACE_FETCH_RADIUS_NM=100.0,
+    AIRSPACE_EXTRA_REGIONS=[],
+    FAA_AIRWAYS_URL="https://faa.example/ATS_Route/FeatureServer/0/query",
+    FAA_FIXES_URL="https://faa.example/DesignatedPoints/FeatureServer/0/query",
+    FAA_ENROUTE_MAX_FEATURES=8000,
+)
+class RefreshFaaEnrouteTests(TestCase):
+    """Tests for FAA airways/fixes fetch into CachedGeoJSON."""
+
+    def tearDown(self):
+        CachedGeoJSON.objects.all().delete()
+
+    @staticmethod
+    def _resp(features):
+        mock = MagicMock()
+        mock.json.return_value = {"type": "FeatureCollection", "features": features}
+        return mock
+
+    @patch("skyspy.services.geodata._http_get_faa")
+    def test_refresh_faa_enroute_stores_airways_and_fixes(self, mock_get):
+        airway = {
+            "type": "Feature",
+            "id": 1,
+            "properties": {"IDENT": "J100", "TYPE_CODE": "CONV", "LEVEL_": "U"},
+            "geometry": {"type": "LineString", "coordinates": [[-119.0, 33.0], [-117.0, 34.0]]},
+        }
+        fix = {
+            "type": "Feature",
+            "id": 2,
+            "properties": {"IDENT": "ADAMM", "TYPE_CODE": "RPT"},
+            "geometry": {"type": "Point", "coordinates": [-118.2, 33.8]},
+        }
+        # One page per layer (each < page size so pagination stops).
+        mock_get.side_effect = [self._resp([airway]), self._resp([fix])]
+
+        total = geodata.refresh_faa_enroute()
+
+        self.assertEqual(total, 2)
+        self.assertEqual(CachedGeoJSON.objects.filter(data_type="us_airways").count(), 1)
+        self.assertEqual(CachedGeoJSON.objects.filter(data_type="us_fixes").count(), 1)
+        awy = CachedGeoJSON.objects.get(data_type="us_airways")
+        self.assertEqual(awy.name, "J100")
+        self.assertEqual(awy.code, "CONV")
+        self.assertEqual(awy.geometry["type"], "LineString")
+
+    @patch("skyspy.services.geodata._http_get_faa")
+    def test_refresh_faa_enroute_disabled_returns_zero(self, mock_get):
+        with override_settings(FAA_ENROUTE_ENABLED=False):
+            self.assertEqual(geodata.refresh_faa_enroute(), 0)
+        mock_get.assert_not_called()
+
+    @patch("skyspy.services.geodata._http_get_faa")
+    def test_refresh_faa_enroute_empty_keeps_existing_cache(self, mock_get):
+        CachedGeoJSON.objects.create(
+            data_type="us_airways",
+            name="V1",
+            geometry={"type": "LineString", "coordinates": [[-118, 33], [-117, 34]]},
+        )
+        mock_get.side_effect = [self._resp([]), self._resp([])]
+
+        total = geodata.refresh_faa_enroute()
+
+        self.assertEqual(total, 0)
+        # Empty response must not wipe the previous rows.
+        self.assertEqual(CachedGeoJSON.objects.filter(data_type="us_airways").count(), 1)

@@ -20,7 +20,7 @@ from rest_framework.views import APIView
 
 from skyspy.api.params import parse_int
 from skyspy.auth.authentication import APIKeyAuthentication, OptionalJWTAuthentication
-from skyspy.auth.permissions import FeatureBasedPermission
+from skyspy.auth.permissions import CanUseLLM, FeatureBasedPermission
 from skyspy.models import SafetyEvent
 from skyspy.serializers.safety import (
     AircraftSafetyStatsSerializer,
@@ -52,6 +52,10 @@ class SafetyEventViewSet(viewsets.ModelViewSet):
         """
         if self.action in ("create", "destroy", "generate_test"):
             return [IsAuthenticated()]
+        # The AI event explainer is an LLM call (cost/abuse) — gate it like the
+        # rest of the AI features so anonymous users can't spend tokens.
+        if self.action == "ai_summary":
+            return [CanUseLLM()]
         return super().get_permissions()
 
     def get_queryset(self):
@@ -372,12 +376,10 @@ class SafetyEventViewSet(viewsets.ModelViewSet):
                 if a
             ],
             "closest_point_of_approach": {
-                "horizontal_separation_nm": (event.details or {}).get("horizontal_sep_nm")
-                or event.cpa_distance_nm,
+                "horizontal_separation_nm": (event.details or {}).get("horizontal_sep_nm") or event.cpa_distance_nm,
                 "vertical_separation_ft": (event.details or {}).get("vertical_sep_ft"),
                 "closure_rate_kt": (event.details or {}).get("closure_rate_kt"),
-                "time_to_cpa_seconds": (event.details or {}).get("time_to_cpa_seconds")
-                or event.cpa_time_seconds,
+                "time_to_cpa_seconds": (event.details or {}).get("time_to_cpa_seconds") or event.cpa_time_seconds,
             },
         }
 

@@ -10,6 +10,7 @@ directly callable/testable, and ``get_tools()`` lazily wraps them for the agent.
 All tools are read-only — no mutation surface is exposed to the model.
 """
 
+import contextvars
 import functools
 import json
 import logging
@@ -17,6 +18,29 @@ import re
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+# The authenticated user driving the current request, set by the agent before it
+# invokes the graph (reset after). Owner-scoped tools (e.g. my_alert_rules) read
+# it. A ContextVar keeps it correct under concurrent async requests without
+# threading a user argument through every tool signature. None = anonymous.
+_current_user: contextvars.ContextVar = contextvars.ContextVar("assistant_current_user", default=None)
+
+
+def set_current_user(user):
+    """Bind the request user for owner-scoped tools; returns the token to reset."""
+    return _current_user.set(user)
+
+
+def reset_current_user(token) -> None:
+    if token is not None:
+        _current_user.reset(token)
+
+
+def _get_user():
+    """The current authenticated user, or None if anonymous/unset."""
+    user = _current_user.get()
+    return user if (user is not None and getattr(user, "is_authenticated", False)) else None
+
 
 # Hard cap on any single tool result so a big analytics dict can't blow the
 # model's context window. Overridable via ASSISTANT_MAX_RESULT_CHARS (raise for
@@ -238,6 +262,34 @@ def recent_pireps(hours: int = 6, limit: int = 15) -> str:
 
 
 @_guarded
+def nearby_wildfires(radius_nm: float = 100.0, limit: int = 15) -> str:
+    """Active wildfires near the feeder from Watch Duty, ranked by threat: name,
+    location, acreage, containment %, threat score, and any evacuation orders/
+    warnings. Use for 'any wildfires nearby', 'is there a fire near me', or fire
+    situational-awareness questions. Empty when wildfires are disabled or the
+    feeder is outside Watch Duty's US/CA coverage."""
+    from django.conf import settings
+
+    from skyspy.services import wildfires
+
+    if not getattr(settings, "WILDFIRES_ENABLED", False):
+        return _json({"enabled": False, "wildfires": [], "count": 0})
+
+    lat = float(getattr(settings, "FEEDER_LAT", 0) or 0)
+    lon = float(getattr(settings, "FEEDER_LON", 0) or 0)
+    try:
+        radius = max(1.0, min(250.0, float(radius_nm)))
+    except (TypeError, ValueError):
+        radius = 100.0
+    n = max(1, min(50, int(limit or 15)))
+
+    fires = wildfires.get_cached_wildfires(lat, lon, radius)
+    # Highest threat first; None scores sort last.
+    fires.sort(key=lambda f: (f.get("threat_score") is None, -(f.get("threat_score") or 0)))
+    return _json({"enabled": True, "radius_nm": radius, "count": len(fires), "wildfires": fires[:n]})
+
+
+@_guarded
 def airport_notams(icao: str) -> str:
     """Active NOTAMs (Notices to Air Missions) for an airport by ICAO code:
     closed runways/taxiways, unserviceable navaids, obstacles, and restrictions
@@ -304,6 +356,288 @@ def live_aircraft_map(limit: int = 60, military_only: bool = False, callsigns: s
         if missing:
             result["not_found"] = missing
     return _json(result)
+
+
+# ADS-B emitter categories treated as "general aviation" (light/small fixed-wing,
+# rotorcraft, gliders/balloons/ultralights) — excludes airliners (A3/A4/A5).
+_GA_CATEGORIES = {"A1", "A2", "A7", "B1", "B2", "B4"}
+_EMERGENCY_SQUAWKS = {"7500", "7600", "7700"}
+
+# Fuzzy aircraft CLASSES → an OR-list of match conditions. ADS-B transmits
+# variant type designators (B77W, A359, B789…), so a class matches by emitter
+# category (reliable for size) OR a type-code prefix (catches every variant).
+# {"cat": "A5"} matches ac.category=="A5"; {"tp": "B77"} matches ac.t startswith "B77".
+_WIDEBODY_TYPE_PREFIXES = ["B74", "B76", "B77", "B78", "A30", "A31", "A33", "A34", "A35", "A38", "MD11", "IL96", "B78"]
+_CLASS_MAP: dict[str, list[dict]] = {
+    "widebody": [{"cat": "A5"}, *({"tp": p} for p in _WIDEBODY_TYPE_PREFIXES)],
+    "heavy": [{"cat": "A5"}, *({"tp": p} for p in _WIDEBODY_TYPE_PREFIXES)],
+    "airliner": [{"cat": "A3"}, {"cat": "A4"}, {"cat": "A5"}],
+    "jet": [{"cat": "A3"}, {"cat": "A4"}, {"cat": "A5"}],
+    "large": [{"cat": "A4"}, {"cat": "A5"}],
+    "narrowbody": [{"cat": "A3"}],
+    "regional": [{"cat": "A3"}],
+    "light": [{"cat": "A1"}, {"cat": "A2"}],
+    "small": [{"cat": "A1"}, {"cat": "A2"}],
+    "helicopter": [{"cat": "A7"}],
+    "rotorcraft": [{"cat": "A7"}],
+    "heli": [{"cat": "A7"}],
+    "glider": [{"cat": "B1"}],
+    "sailplane": [{"cat": "B1"}],
+    "balloon": [{"cat": "B2"}],
+    "ultralight": [{"cat": "B4"}],
+    "drone": [{"cat": "B6"}],
+    "uav": [{"cat": "B6"}],
+}
+
+
+def _build_radar_match(
+    *,
+    military,
+    law_enforcement,
+    emergency,
+    general_aviation,
+    classes,
+    categories,
+    types,
+    type_prefix,
+    callsigns,
+    hexes,
+    callsign_prefix,
+    alt_min,
+    alt_max,
+    dist_max,
+) -> dict:
+    """Assemble a radar-filter match spec from tool args (only set keys included).
+
+    Shared shape with the frontend radar predicate (LiveMapView): every present
+    key is an AND condition. Law-enforcement is resolved here to a hex allowlist
+    (there is no per-aircraft LE flag in the live feed); everything else is a
+    plain attribute the client can also re-evaluate live.
+    """
+    from django.core.cache import cache
+
+    def _csv(s):
+        return [x for x in re.split(r"[,\s]+", (s or "").upper()) if x]
+
+    match: dict[str, Any] = {}
+    if military:
+        match["military"] = True
+    if emergency:
+        match["emergency"] = True
+    if general_aviation:
+        match["ga"] = True
+    cats = _csv(categories)
+    if cats:
+        match["categories"] = cats
+    tps = _csv(types)
+    if tps:
+        match["types"] = tps
+    tprefix = _csv(type_prefix)
+    if tprefix:
+        match["typePrefixes"] = tprefix
+    # Fuzzy classes (widebody/helicopter/airliner/…) → an OR-list of conditions.
+    any_of: list[dict] = []
+    for cname in _csv(classes):
+        any_of.extend(_CLASS_MAP.get(cname.lower(), []))
+    if any_of:
+        # Dedup while preserving order.
+        seen = set()
+        match["anyOf"] = [
+            c for c in any_of if not (repr(sorted(c.items())) in seen or seen.add(repr(sorted(c.items()))))
+        ]
+    cs = _csv(callsigns)
+    if cs:
+        match["callsigns"] = cs
+    pref = _csv(callsign_prefix)
+    if pref:
+        match["callsignPrefix"] = pref
+    hx = _csv(hexes)
+    if hx:
+        match["hexes"] = hx
+    if alt_min:
+        match["altMin"] = int(alt_min)
+    if alt_max:
+        match["altMax"] = int(alt_max)
+    if dist_max:
+        match["distMax"] = float(dist_max)
+
+    if law_enforcement:
+        # Resolve which currently-live aircraft are law enforcement (no live flag).
+        from skyspy.services import law_enforcement_db
+
+        le_hexes = []
+        for ac in cache.get("current_aircraft", []) or []:
+            hx_code = (ac.get("hex") or "").strip()
+            if not hx_code:
+                continue
+            res = law_enforcement_db.identify_law_enforcement(
+                hex_code=hx_code,
+                callsign=(ac.get("flight") or "").strip() or None,
+                registration=ac.get("r") or None,
+                category=ac.get("category"),
+                type_code=ac.get("t"),
+            )
+            # Confirmed LE, or a strong "of interest" signal. Bare surveillance-type /
+            # helicopter matches (confidence low/none) flood the list with plain GA
+            # (Cessna 172s, Robinson R44s), so require medium+ confidence for is_interest.
+            if res.get("is_law_enforcement") or (
+                res.get("is_interest") and res.get("confidence") in ("medium", "high", "very_high")
+            ):
+                le_hexes.append(hx_code.upper())
+        # Intersect with any explicit hex list, else set it.
+        if "hexes" in match:
+            match["hexes"] = [h for h in match["hexes"] if h in set(le_hexes)]
+        else:
+            match["hexes"] = le_hexes
+    return match
+
+
+def _match_live_aircraft(ac: dict, m: dict) -> bool:
+    """Evaluate a radar match spec against one live aircraft object."""
+    hexes = m.get("hexes")
+    if hexes is not None and (ac.get("hex") or "").upper() not in set(hexes):
+        return False
+    if "military" in m and bool(ac.get("military")) != m["military"]:
+        return False
+    if m.get("emergency"):
+        sq = str(ac.get("squawk") or "")
+        if not (ac.get("emergency") or sq in _EMERGENCY_SQUAWKS):
+            return False
+    if m.get("ga") and (ac.get("military") or (ac.get("category") or "").upper() not in _GA_CATEGORIES):
+        return False
+    cats = m.get("categories")
+    if cats and (ac.get("category") or "").upper() not in set(cats):
+        return False
+    types_ = m.get("types")
+    if types_ and (ac.get("t") or "").upper() not in set(types_):
+        return False
+    tprefix = m.get("typePrefixes")
+    if tprefix and not any((ac.get("t") or "").upper().startswith(p) for p in tprefix):
+        return False
+    any_of = m.get("anyOf")
+    if any_of:
+        cat = (ac.get("category") or "").upper()
+        typ = (ac.get("t") or "").upper()
+        if not any((("cat" in c and cat == c["cat"]) or ("tp" in c and typ.startswith(c["tp"]))) for c in any_of):
+            return False
+    cs = m.get("callsigns")
+    if cs and (ac.get("flight") or "").strip().upper() not in set(cs):
+        return False
+    pref = m.get("callsignPrefix")
+    if pref and not any((ac.get("flight") or "").strip().upper().startswith(p) for p in pref):
+        return False
+    if m.get("altMax") and (ac.get("alt_baro") or 0) > m["altMax"]:
+        return False
+    if m.get("altMin") and (ac.get("alt_baro") or 0) < m["altMin"]:
+        return False
+    if m.get("distMax") is not None:
+        dist = ac.get("distance_nm")
+        if dist is None or dist > m["distMax"]:
+            return False
+    return True
+
+
+@_guarded
+def radar_filter(
+    label: str = "",
+    military: bool = False,
+    law_enforcement: bool = False,
+    emergency: bool = False,
+    general_aviation: bool = False,
+    classes: str = "",
+    categories: str = "",
+    types: str = "",
+    type_prefix: str = "",
+    callsigns: str = "",
+    hexes: str = "",
+    callsign_prefix: str = "",
+    alt_min: int = 0,
+    alt_max: int = 0,
+    dist_max: float = 0.0,
+) -> str:
+    """Filter the LIVE RADAR to a subset of current aircraft AND render that subset
+    on a map. Use this whenever the user wants to SEE a category/role of live
+    traffic — e.g. 'live view of law enforcement aircraft', 'show all GA aircraft',
+    'military traffic on the map', 'anything squawking an emergency', 'show 737s
+    within 50nm'. It draws an inline map of the matching aircraft and, when the
+    user is on the radar page, live-filters the actual radar screen (and fits the
+    view to the matches). Compose several conditions for complex filters (they AND
+    together). NEVER hand-list aircraft or invent hexes — call this tool so the
+    matches come from real live data.
+
+    Args (all optional; combine as needed):
+      label: short human name for the filter (e.g. 'Law enforcement'), shown on the radar banner.
+      military: only military aircraft.
+      law_enforcement: only law-enforcement/government/surveillance aircraft (resolved from the LE database).
+      emergency: only aircraft squawking 7500/7600/7700 or flagged emergency.
+      general_aviation: only light/small GA + rotorcraft (excludes airliners).
+      classes: comma fuzzy aircraft classes — USE THIS for size/body/role words instead of
+        guessing type codes: 'widebody','heavy','airliner','jet','narrowbody','regional','light',
+        'helicopter','glider','balloon','drone'. (ADS-B sends variant type codes like B77W/A359,
+        so a hand-typed list of base codes misses them — classes resolve robustly.)
+      categories: comma ADS-B emitter categories if you truly want a raw category (A1 light, A2 small,
+        A3 large/narrowbody, A5 heavy/widebody, A7 rotorcraft).
+      types: comma EXACT type codes (e.g. 'C172,PA28').
+      type_prefix: comma type-code PREFIXES for a family (e.g. 'B73' = all 737s, 'A32,A31,A20,A21' = A320 family).
+      callsigns / hexes: comma exact identifiers to restrict to.
+      callsign_prefix: comma callsign prefixes (e.g. 'N' for US GA, 'CHP' for CHP).
+      alt_min / alt_max: altitude band in feet.
+      dist_max: max distance from the receiver in nm.
+    """
+    from django.core.cache import cache
+
+    match = _build_radar_match(
+        military=military,
+        law_enforcement=law_enforcement,
+        emergency=emergency,
+        general_aviation=general_aviation,
+        classes=classes,
+        categories=categories,
+        types=types,
+        type_prefix=type_prefix,
+        callsigns=callsigns,
+        hexes=hexes,
+        callsign_prefix=callsign_prefix,
+        alt_min=alt_min,
+        alt_max=alt_max,
+        dist_max=dist_max,
+    )
+
+    aircraft = cache.get("current_aircraft", []) or []
+    matched = [ac for ac in aircraft if _match_live_aircraft(ac, match)]
+    positioned = []
+    for ac in matched:
+        lat, lon = ac.get("lat"), ac.get("lon")
+        if lat is None or lon is None:
+            continue
+        # Compact point (rounded coords, drop empty fields) so many fit the cap.
+        pt = {
+            "hex": (ac.get("hex") or "").strip(),
+            "callsign": (ac.get("flight") or "").strip(),
+            "lat": round(lat, 5),
+            "lon": round(lon, 5),
+            "distance_nm": ac.get("distance_nm"),
+            "military": bool(ac.get("military")),
+        }
+        for k, v in (("track", ac.get("track")), ("altitude", ac.get("alt_baro")), ("type", ac.get("t"))):
+            if v is not None and v != "":
+                pt[k] = v
+        positioned.append(pt)
+    positioned.sort(key=lambda p: (p["distance_nm"] is None, p["distance_nm"] or 0))
+
+    label = (label or "Filtered aircraft").strip()
+    # Cap the inline-map list so the JSON result stays under the tool char cap
+    # (the live radar itself shows ALL matches; this is just the chat preview).
+    return _json(
+        {
+            "label": label,
+            "count": len(matched),
+            "positioned": len(positioned),
+            "aircraft": positioned[:20],
+            # The command the client applies to the live radar (fit view to matches).
+            "radar": {"label": label, "match": match, "view": "fit"},
+        }
+    )
 
 
 @_guarded
@@ -384,12 +718,12 @@ def _resolve_to_hex(identifier: str) -> str | None:
 
 
 def fetch_airframe_photo(aircraft: str, force: bool = False) -> str:
-    """Fetch a photo of an airframe by its 6-char ICAO hex OR a live callsign /
-    flight number (e.g. 'ASA111' or 'A1B2C3'); callsigns are resolved against
-    currently-tracked aircraft. The app displays the photo automatically from
-    this tool call — do NOT write an image URL or a Markdown image yourself; just
-    say the photo is shown and credit the photographer/source if returned. Set
-    force=true to bypass the cache and re-download the image. Returns
+    """Show/display a photo of an aircraft — call this to let the user SEE a plane,
+    given its ICAO hex, tail number, or callsign/flight number (e.g. 'A1B2C3',
+    'N882SD', 'ASA111'). This is the only way to display an image; the app renders
+    it from this tool call, so do NOT write an image URL or a Markdown image
+    yourself — just say the photo is shown and credit the photographer/source if
+    returned. Set force=true to bypass the cache and re-download the image. Returns
     {"error": ...} if the aircraft can't be resolved, no photo is available, or
     the fetch fails."""
     from skyspy.services import aircraft_info, photo_cache
@@ -646,24 +980,15 @@ def _track_pattern(pts: list[dict]) -> dict:
     return flags
 
 
-@_guarded
-def aircraft_track(identifier: str, hours: int = 6, points: int = 60) -> str:
-    """Reconstruct an aircraft's actual FLOWN PATH over the last N hours by ICAO
-    hex, live callsign, or tail number. Returns an ordered, downsampled polyline
-    (lat/lon/altitude/track/vertical_rate/time) the app draws on a map, plus
-    derived behavior flags: orbit_or_loiter (circling/holding/survey), rapid_climb
-    and rapid_descent. Use for 'is anything orbiting / loitering', 'trace this
-    aircraft's path', or surveillance/holding-pattern questions. Empty track means
-    no stored positions in the window."""
+def _query_track_rows(hex_code: str, hours: int, points: int):
+    """Fetch an aircraft's stored positions over the window, ordered oldest→newest
+    and downsampled to at most ``points``. Returns (total_row_count, sampled_rows).
+    Shared by aircraft_track (single, with behavior flags) and plot_tracks (many)."""
     from django.utils import timezone
 
     from skyspy.models import AircraftSighting
 
-    hex_code = _resolve_to_hex(identifier)
-    if not hex_code:
-        return _json({"error": f"could not resolve '{identifier}' to an aircraft", "identifier": identifier})
-    hrs = _clamp_hours(hours, hi=168)
-    since = timezone.now() - timezone.timedelta(hours=hrs)
+    since = timezone.now() - timezone.timedelta(hours=hours)
     rows = list(
         AircraftSighting.objects.filter(icao_hex=hex_code, timestamp__gte=since, latitude__isnull=False)
         .order_by("timestamp")
@@ -673,6 +998,23 @@ def aircraft_track(identifier: str, hours: int = 6, points: int = 60) -> str:
     # Ceil division so the downsampled track never exceeds the requested point count
     # (plain floor-div leaves step=1 when len(rows) is just above n, returning all rows).
     step = max(1, -(-len(rows) // n))
+    return len(rows), rows[::step]
+
+
+@_guarded
+def aircraft_track(identifier: str, hours: int = 6, points: int = 60) -> str:
+    """Reconstruct an aircraft's actual FLOWN PATH over the last N hours by ICAO
+    hex, live callsign, or tail number. Returns an ordered, downsampled polyline
+    (lat/lon/altitude/track/vertical_rate/time) the app draws on a map, plus
+    derived behavior flags: orbit_or_loiter (circling/holding/survey), rapid_climb
+    and rapid_descent. Use for 'is anything orbiting / loitering', 'trace this
+    aircraft's path', or surveillance/holding-pattern questions. Empty track means
+    no stored positions in the window."""
+    hex_code = _resolve_to_hex(identifier)
+    if not hex_code:
+        return _json({"error": f"could not resolve '{identifier}' to an aircraft", "identifier": identifier})
+    hrs = _clamp_hours(hours, hi=168)
+    total, sampled = _query_track_rows(hex_code, hrs, points)
     track = [
         {
             "lat": r["latitude"],
@@ -682,18 +1024,168 @@ def aircraft_track(identifier: str, hours: int = 6, points: int = 60) -> str:
             "vertical_rate": r["vertical_rate"],
             "ts": r["timestamp"],
         }
-        for r in rows[::step]
+        for r in sampled
     ]
     return _json(
         {
             "identifier": identifier,
             "icao_hex": hex_code,
             "hours": hrs,
-            "point_count": len(rows),
+            "point_count": total,
             "pattern": _track_pattern(track),
             "track": track,
         }
     )
+
+
+@_guarded
+def plot_tracks(identifiers: str, hours: int = 6) -> str:
+    """Plot the historical FLOWN PATHS of one OR MANY aircraft directly on the live
+    RADAR SCREEN, over the last N hours. Pass a comma-separated list of ICAO hexes,
+    tail numbers, and/or live callsigns (e.g. 'N882SD, A1B2C3, UAL123'). Each
+    resolved aircraft's stored positions are drawn as a distinct coloured track on
+    the radar, the map zooms to fit them all, and each track is labelled. Use this
+    whenever the user wants to SEE where aircraft flew — 'plot N882SD's track',
+    'show me the last 3 hours of these planes on the radar', 'draw the paths of
+    every military aircraft from this morning', 'overlay their routes on the map'.
+    For a single aircraft's path plus behaviour flags in the chat, use
+    aircraft_track instead; use plot_tracks to render on the actual radar."""
+    from skyspy.services import aircraft_info
+
+    hrs = _clamp_hours(hours, hi=168)
+    idents = [s.strip() for s in (identifiers or "").split(",") if s.strip()]
+    if not idents:
+        return _json({"error": "no identifiers given", "hint": "pass a comma-separated list of hex/tail/callsign"})
+    idents = idents[:12]  # bound fan-out and keep the payload under the result cap
+
+    tracks: dict[str, dict] = {}
+    unresolved: list[str] = []
+    empty: list[str] = []
+    # Split a shared point budget across the resolved aircraft so the payload the
+    # frontend receives (and the LLM-visible observation) stays under the char cap.
+    per_track = max(10, min(80, 180 // max(1, len(idents))))
+    for ident in idents:
+        hex_code = _resolve_to_hex(ident)
+        if not hex_code:
+            unresolved.append(ident)
+            continue
+        _total, sampled = _query_track_rows(hex_code, hrs, per_track)
+        pts = [
+            [round(r["latitude"], 4), round(r["longitude"], 4), r["altitude_baro"]]
+            for r in sampled
+            if r["latitude"] is not None and r["longitude"] is not None
+        ]
+        if len(pts) < 2:
+            empty.append(ident)
+            continue
+        info = aircraft_info.get_aircraft_info(hex_code) or {}
+        label = (info.get("registration") or info.get("callsign") or ident).strip()
+        tracks[hex_code.upper()] = {"cs": label, "pts": pts}
+
+    if not tracks:
+        return _json(
+            {
+                "error": "no stored positions to plot in the window",
+                "hours": hrs,
+                "unresolved": unresolved,
+                "no_track": empty,
+            }
+        )
+    label = f"Tracks: {', '.join(t['cs'] for t in tracks.values())}"
+    return _json(
+        {
+            "label": label[:120],
+            "hours": hrs,
+            "count": len(tracks),
+            "tracks": tracks,
+            "view": "fit",
+            "unresolved": unresolved or None,
+            "no_track": empty or None,
+        }
+    )
+
+
+@_guarded
+def busiest_tails(hours: int = 24, limit: int = 15) -> str:
+    """Rank the aircraft (tail numbers) that flew the MOST flights over the last N
+    hours. "unique_flights" is the number of distinct callsigns/flight numbers that
+    tail was seen using (what most people mean by "how many different flights");
+    "flight_legs" is the number of separate flights split on >15-minute reception
+    gaps (distinct takeoffs/passes over the station). Rows are ranked by
+    unique_flights, then flight_legs. Use for 'which tail number has the most
+    unique flights', 'busiest aircraft', 'which plane flew the most today'. Each
+    row: registration (tail, may be null if unknown), icao_hex, aircraft_type,
+    is_military, unique_flights, flight_legs, total_sightings, first_seen,
+    last_seen."""
+    from django.db.models import Count, Max, Min, Q
+    from django.utils import timezone
+
+    from skyspy.models import AircraftInfo, AircraftSighting
+    from skyspy.services.flight_anomaly import _split_flights
+
+    hours = _clamp_hours(hours, hi=720)
+    limit = max(1, min(50, int(limit or 15)))
+    since = timezone.now() - timezone.timedelta(hours=hours)
+
+    # A real flight number is a non-blank callsign; count the distinct ones per tail.
+    has_cs = Q(callsign__isnull=False) & ~Q(callsign="")
+    ranked = list(
+        AircraftSighting.objects.filter(timestamp__gte=since)
+        .values("icao_hex")
+        .annotate(
+            unique_flights=Count("callsign", distinct=True, filter=has_cs),
+            total_sightings=Count("id"),
+            military_hits=Count("id", filter=Q(is_military=True)),
+            aircraft_type=Max("aircraft_type"),
+            first_seen=Min("timestamp"),
+            last_seen=Max("timestamp"),
+        )
+        .order_by("-unique_flights", "-total_sightings")[:limit]
+    )
+    if not ranked:
+        return _json({"hours": hours, "count": 0, "results": []})
+
+    hexes = [r["icao_hex"] for r in ranked]
+    # Flight legs (separate flights split on >15-min gaps) only for the ranked pool,
+    # so the time-gap split stays bounded. One ordered query, grouped in Python.
+    legs_by_hex: dict[str, int] = {}
+    cur_hex: str | None = None
+    buf: list[dict] = []
+
+    def _flush(h: str | None, rows: list[dict]) -> None:
+        if h is not None:
+            legs_by_hex[h] = sum(1 for leg in _split_flights(rows) if leg)
+
+    for row in (
+        AircraftSighting.objects.filter(icao_hex__in=hexes, timestamp__gte=since)
+        .order_by("icao_hex", "timestamp")
+        .values("icao_hex", "timestamp")
+    ):
+        if row["icao_hex"] != cur_hex:
+            _flush(cur_hex, buf)
+            cur_hex, buf = row["icao_hex"], []
+        buf.append(row)
+    _flush(cur_hex, buf)
+
+    regs = {
+        i["icao_hex"]: i["registration"]
+        for i in AircraftInfo.objects.filter(icao_hex__in=hexes).values("icao_hex", "registration")
+    }
+    results = [
+        {
+            "registration": (regs.get(r["icao_hex"]) or "").strip() or None,
+            "icao_hex": r["icao_hex"],
+            "aircraft_type": r["aircraft_type"] or None,
+            "is_military": r["military_hits"] > 0,
+            "unique_flights": r["unique_flights"],
+            "flight_legs": legs_by_hex.get(r["icao_hex"], 0),
+            "total_sightings": r["total_sightings"],
+            "first_seen": r["first_seen"].isoformat() if r["first_seen"] else None,
+            "last_seen": r["last_seen"].isoformat() if r["last_seen"] else None,
+        }
+        for r in ranked
+    ]
+    return _json({"hours": hours, "count": len(results), "results": results})
 
 
 @_guarded
@@ -758,6 +1250,483 @@ def threat_assessment(radius_nm: float = 25.0) -> str:
 
 
 # =============================================================================
+# Developer / API reference tools
+# =============================================================================
+#
+# These let the assistant answer "how do I pull this data programmatically?" with
+# the real REST endpoints and Socket.IO events instead of hallucinating them. The
+# REST index is generated live from the OpenAPI schema (always accurate); the
+# Socket.IO reference is a curated distillation of docs/SOCKETIO_API.md kept here
+# so it ships with the app (the docs/ tree isn't guaranteed in the runtime image).
+
+_REST_INDEX_CACHE_KEY = "assistant:rest_api_index"
+_REST_INDEX_TTL = 3600  # URL map is static per deploy; refresh hourly
+_REST_MAX_ENDPOINTS = 60  # cap the list so a full dump can't blow the result cap
+_RE_NAMED_GROUP = re.compile(r"\(\?P<(\w+)>[^)]+\)")
+
+
+def _clean_route(route: str) -> str:
+    """Turn a Django route/regex into a readable path template:
+    '^aircraft/(?P<pk>[^/.]+)/$' -> '/api/v1/aircraft/{pk}/'. Nested regex patterns
+    each carry their own ^/$ anchors, so strip every anchor, not just the ends."""
+    route = _RE_NAMED_GROUP.sub(lambda m: "{" + m.group(1) + "}", route)
+    route = route.replace("^", "").replace("$", "")
+    return "/" + route.lstrip("/")
+
+
+def _rest_index() -> list[dict]:
+    """Walk the URL resolver for /api/v1/ endpoints, returning a compact
+    [{method, path, summary}] list. Introspects the URLconf directly (robust) so it
+    doesn't depend on OpenAPI schema generation, which needs serializer traversal."""
+    from django.urls import get_resolver
+    from django.urls.resolvers import URLResolver
+
+    out, seen = [], set()
+
+    def walk(resolver, prefix=""):
+        for p in resolver.url_patterns:
+            route = prefix + str(getattr(p.pattern, "_route", p.pattern))
+            if isinstance(p, URLResolver):
+                walk(p, route)
+                continue
+            # Skip non-API routes and the format-suffixed (.json/.api) duplicates.
+            if not route.startswith("api/v1/") or "(?P<format>" in route:
+                continue
+            cb = p.callback
+            acts = getattr(cb, "actions", None)  # DRF router: {http_method: action}
+            cls = getattr(cb, "cls", None)  # the ViewSet / APIView class
+            if acts:
+                methods = sorted(m.upper() for m in acts)
+                summary = "/".join(sorted(set(acts.values())))
+            elif cls:
+                methods = sorted(
+                    m.upper()
+                    for m in getattr(cls, "http_method_names", [])
+                    if hasattr(cls, m) and m not in ("options", "head", "trace")
+                )
+                doc = (cls.__doc__ or cls.__name__).strip().splitlines()
+                summary = doc[0].strip()[:100] if doc else cls.__name__
+            else:
+                continue
+            if not methods:
+                continue
+            path = _clean_route(route)
+            key = (path, tuple(methods))
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append({"method": ",".join(methods), "path": path, "summary": summary})
+
+    walk(get_resolver())
+    out.sort(key=lambda e: e["path"])
+    return out
+
+
+@_guarded
+def rest_api_reference(topic: str = "") -> str:
+    """Look up SkySpy's REST API so you can tell a developer how to pull data
+    programmatically over HTTP. Returns a compact index of /api/v1/ endpoints
+    (method, path, and the action/summary) introspected live from the URL map, so
+    it's always accurate. Pass a topic keyword (e.g. 'aircraft', 'acars', 'safety',
+    'alerts', 'weather', 'stats') to filter; empty returns the index. Use for 'how
+    do I get X via the API', 'REST endpoint for X', or 'is there an API for X'."""
+    from django.core.cache import cache
+
+    index = cache.get(_REST_INDEX_CACHE_KEY)
+    if index is None:
+        index = _rest_index()
+        cache.set(_REST_INDEX_CACHE_KEY, index, _REST_INDEX_TTL)
+
+    kw = (topic or "").strip().lower()
+    matches = [e for e in index if kw in e["path"].lower() or kw in (e.get("summary") or "").lower()] if kw else index
+    shown, more = matches[:_REST_MAX_ENDPOINTS], max(0, len(matches) - _REST_MAX_ENDPOINTS)
+    return _json(
+        {
+            "base_url": "/api/v1/",
+            "auth": "Bearer JWT or API key per AUTH_MODE (public may allow anon reads)",
+            "docs": "OpenAPI schema at /api/schema/; interactive at /api/docs/ (Swagger) and /api/redoc/",
+            "topic": topic or None,
+            "count": len(matches),
+            "endpoints": shown,
+            "_more": more or None,
+            "hint": "pass a topic keyword to narrow" if more else None,
+        }
+    )
+
+
+# Curated Socket.IO reference (distilled from docs/SOCKETIO_API.md). Request-type
+# and broadcast-event catalogs are keyed so a topic filter can trim them.
+_SOCKETIO_REFERENCE = {
+    "url": "wss://<host>/socket.io/ (Socket.IO protocol, not raw WebSocket)",
+    "namespaces": ["/ (main)", "/audio", "/cannonball"],
+    "auth": "io(url, {auth:{token}}) — JWT, or an API key (sk_-prefixed); anon allowed in AUTH_MODE=public",
+    "subscribe": {
+        "emit": "subscribe",
+        "payload": {"topics": ["aircraft", "safety", "stats"]},
+        "or": {"topics": "all"},
+        "ack_event": "subscribed -> {topics, joined, denied}",
+    },
+    "topics": {
+        "aircraft": "real-time positions (perm aircraft.view)",
+        "safety": "safety alerts/events (safety.view)",
+        "stats": "statistics updates (stats.view)",
+        "alerts": "custom alert notifications (alerts.view)",
+        "acars": "ACARS messages (acars.view)",
+        "airspace": "airspace boundaries (airspace.view)",
+        "notams": "NOTAMs and TFRs (notams.view)",
+    },
+    "request_response": {
+        "emit": "request",
+        "payload": {"type": "aircraft-snapshot", "request_id": "req-1", "params": {}},
+        "reply_event": "response -> {request_id, request_type, data}",
+        "error_event": "error -> {request_id, message}",
+    },
+    "request_types": {
+        "aircraft": "one aircraft by params.icao",
+        "aircraft-snapshot": "all current aircraft {aircraft[], count, timestamp}",
+        "aircraft-list": "filtered list (military_only, category, min/max_altitude)",
+        "aircraft-info": "detailed info by params.icao (reg, type, operator, owner, photo)",
+        "aircraft-info-bulk": "info for params.icaos[] (max 100)",
+        "aircraft-stats": "live counts by category/altitude band",
+        "sightings": "historical sightings (params.hours)",
+        "history-stats": "history statistics",
+        "history-trends": "traffic trends over time",
+        "notam-snapshot": "full NOTAMs + TFRs + stats",
+        "airport": "NOTAMs for params.icao airport",
+        "safety-snapshot": "safety events snapshot",
+        "alert-snapshot": "alert history snapshot",
+        "acars-snapshot": "ACARS messages snapshot",
+        "safety-events": "recent safety events (params.hours)",
+        "safety-acknowledge": "acknowledge a safety event",
+        "airports": "nearby airports",
+        "airspace-boundaries": "airspace boundary geometry",
+        "airspaces": "advisories (G-AIRMETs, SIGMETs)",
+        "pireps": "pilot reports",
+        "metar": "single METAR by airport",
+        "taf": "single TAF by airport",
+        "status": "system status",
+        "system-info": "system information",
+        "alert-rules": "list/create/update/delete rules (alert-rule-*)",
+        "notification-channels": "list/create/test channels (notification-channel-*)",
+    },
+    "broadcast_events": {
+        "positions:update": "aircraft topic — real-time positions (10+ Hz)",
+        "aircraft:update": "aircraft — full aircraft state (10 Hz)",
+        "aircraft:new": "aircraft — new aircraft appeared",
+        "aircraft:remove": "aircraft — aircraft removed",
+        "aircraft:heartbeat": "aircraft — periodic count (~5s)",
+        "safety:event": "safety — new safety event",
+        "safety:event_updated": "safety — event acknowledged/updated",
+        "safety:event_resolved": "safety — event cleared",
+        "stats:update": "stats — statistics (0.5 Hz)",
+        "alert:triggered": "alerts — custom alert fired",
+        "acars:message": "acars — new ACARS message",
+        "airspace:advisory": "airspace — advisory update",
+        "notam:new": "notams — new NOTAM (also notam:tfr_new/update/expired/stats)",
+        "antenna:analytics_update": "aircraft — antenna polar/RSSI analytics",
+    },
+    "example": (
+        "const s = io('https://host', {auth:{token}}); "
+        "s.on('connect', () => s.emit('subscribe', {topics:['aircraft']})); "
+        "s.on('positions:update', d => ...); "
+        "s.emit('request', {type:'aircraft-snapshot', request_id:'1', params:{}}); "
+        "s.on('response', r => console.log(r.data));"
+    ),
+}
+
+
+@_guarded
+def socketio_reference(topic: str = "") -> str:
+    """Look up SkySpy's real-time Socket.IO API so you can tell a developer how to
+    stream/pull live data over WebSocket. Returns the namespaces, auth, subscribe
+    topics, the request/response query pattern with its request-type catalog, and
+    the server broadcast events. Pass a topic keyword (e.g. 'aircraft', 'acars',
+    'safety', 'alerts', 'notam') to filter the request-types/events; empty returns
+    the whole reference. Use for 'how do I subscribe to updates', 'websocket/
+    Socket.IO format', or 'what does the live feed emit'."""
+    ref = dict(_SOCKETIO_REFERENCE)
+    kw = (topic or "").strip().lower()
+    if kw:
+        ref["request_types"] = {k: v for k, v in ref["request_types"].items() if kw in k.lower() or kw in v.lower()}
+        ref["broadcast_events"] = {
+            k: v for k, v in ref["broadcast_events"].items() if kw in k.lower() or kw in v.lower()
+        }
+        ref["topic"] = topic
+    return _json(ref)
+
+
+# =============================================================================
+# Location / personal / schedule tools
+# =============================================================================
+
+
+@_guarded
+def weather_nearby() -> str:
+    """Current weather AT THE RECEIVER: finds the nearest airport with a METAR and
+    returns its latest observation (wind, visibility, ceiling, temp, flight
+    category VFR/MVFR/IFR/LIFR). Use for 'how's the weather', 'is it VFR here', or
+    'weather near me' when no airport is named — for a specific airport use
+    airport_weather instead."""
+    from django.conf import settings
+
+    from skyspy.services import geodata, weather_cache
+
+    lat, lon = getattr(settings, "FEEDER_LAT", None), getattr(settings, "FEEDER_LON", None)
+    if lat is None or lon is None:
+        return _json({"error": "receiver location (FEEDER_LAT/LON) not configured"})
+    airports = geodata.get_cached_airports(float(lat), float(lon), radius_nm=60, limit=200) or []
+    # Nearest airport that actually has an ICAO id we can query for a METAR.
+    from skyspy.services.geodata import haversine_nm
+
+    airports = [a for a in airports if a.get("icaoId") and a.get("lat") is not None]
+    airports.sort(key=lambda a: haversine_nm(float(lat), float(lon), a["lat"], a["lon"]))
+    for apt in airports[:5]:
+        metars = weather_cache.fetch_metar_by_station(apt["icaoId"], hours=3) or []
+        if metars:
+            dist = round(haversine_nm(float(lat), float(lon), apt["lat"], apt["lon"]), 1)
+            return _json({"station": apt["icaoId"], "name": apt.get("name"), "distance_nm": dist, "metar": metars[0]})
+    return _json({"error": "no nearby station with a current METAR", "airports_checked": len(airports[:5])})
+
+
+@_guarded
+def aircraft_dossier(identifier: str) -> str:
+    """Full dossier for one aircraft (by ICAO hex, tail number, or live callsign):
+    identity (reg, type, manufacturer, model, operator, owner, year), this station's
+    sighting history (first/last seen, times seen, closest approach, max altitude),
+    and any known incidents/accidents. Richer than lookup_airframe — use it for
+    'tell me everything about ...' or a deep profile of a specific aircraft."""
+    from skyspy.services.airframe_dossier import build_dossier
+
+    hex_code = _resolve_to_hex(identifier)
+    if not hex_code:
+        return _json({"error": f"could not resolve '{identifier}' to an aircraft", "identifier": identifier})
+    dossier = build_dossier(hex_code)
+    if not dossier:
+        return _json({"error": f"no dossier for {hex_code} (never tracked, not in any DB)", "icao_hex": hex_code})
+    # Current turbulence risk if this aircraft is live and flagged (scorer cache).
+    from django.core.cache import cache
+
+    from skyspy.tasks.turbulence import CACHE_KEY_BY_HEX
+
+    turb = (cache.get(CACHE_KEY_BY_HEX) or {}).get(hex_code.upper())
+    if turb:
+        dossier["turbulence"] = {"score": turb.get("score"), "level": turb.get("level")}
+    # Drop the embedding-input blob; keep the structured sections for the model.
+    dossier.pop("text", None)
+    return _json(dossier)
+
+
+@_guarded
+def nearby_advisories() -> str:
+    """Active airspace hazards NEAR THE RECEIVER: temporary flight restrictions
+    (TFRs) plus SIGMETs / G-AIRMETs (turbulence, icing, IFR, convective) whose area
+    covers the station. Use for 'any TFRs near me', 'flight restrictions nearby', or
+    'active weather advisories / SIGMETs in the area'."""
+    from django.conf import settings
+
+    from skyspy.services import airspace, notams
+
+    lat, lon = getattr(settings, "FEEDER_LAT", None), getattr(settings, "FEEDER_LON", None)
+    if lat is None or lon is None:
+        return _json({"error": "receiver location (FEEDER_LAT/LON) not configured"})
+    lat, lon = float(lat), float(lon)
+    tfrs = notams.get_tfrs(lat=lat, lon=lon, radius_nm=150, active_only=True) or []
+    advisories = airspace.get_advisories(lat=lat, lon=lon) or []
+    return _json(
+        {
+            "center": {"lat": round(lat, 4), "lon": round(lon, 4)},
+            "tfr_count": len(tfrs),
+            "tfrs": [
+                {"id": t.get("notam_id") or t.get("id"), "text": (t.get("text") or t.get("description"))}
+                for t in tfrs[:10]
+            ],
+            "advisory_count": len(advisories),
+            "advisories": [
+                {"type": a.get("advisory_type"), "hazard": a.get("hazard"), "valid_to": a.get("valid_to")}
+                for a in advisories[:15]
+            ],
+        }
+    )
+
+
+@_guarded
+def turbulence_forecast(lat: float = 0.0, lon: float = 0.0, altitude_ft: int = 0) -> str:
+    """Turbulence risk assessment. With no arguments: the current picture near the
+    receiver — a risk score (0-100) + level (none/light/moderate/severe) at the
+    station, the active G-AIRMET turbulence advisories, and any live aircraft the
+    station is currently tracking that are flagged at moderate+ turbulence risk.
+    Pass lat/lon (and optionally altitude_ft) to assess a specific point/flight
+    level instead. Synthesizes NWS G-AIRMET forecast polygons, nearby pilot-report
+    (PIREP) turbulence, and winds-aloft vertical shear. Use for 'is it bumpy',
+    'any turbulence', 'will my flight be rough', or 'which aircraft are in
+    turbulence'."""
+    from django.conf import settings
+    from django.core.cache import cache
+
+    from skyspy.services.turbulence import assess_turbulence
+    from skyspy.tasks.turbulence import CACHE_KEY_BY_HEX
+
+    if not lat and not lon:
+        lat = getattr(settings, "FEEDER_LAT", None)
+        lon = getattr(settings, "FEEDER_LON", None)
+        if lat is None or lon is None:
+            return _json({"error": "receiver location (FEEDER_LAT/LON) not configured; pass lat/lon"})
+    lat, lon = float(lat), float(lon)
+    alt = int(altitude_ft) if altitude_ft else None
+
+    assessment = assess_turbulence(lat, lon, alt)
+
+    # Live aircraft currently flagged at moderate+ risk (from the scorer cache).
+    by_hex = cache.get(CACHE_KEY_BY_HEX) or {}
+    live = {(a.get("hex") or "").upper(): a for a in (cache.get("current_aircraft") or [])}
+    at_risk = []
+    for hex_code, risk in by_hex.items():
+        if risk.get("level") in ("moderate", "severe"):
+            ac = live.get(hex_code, {})
+            at_risk.append(
+                {
+                    "hex": hex_code,
+                    "callsign": (ac.get("flight") or "").strip() or None,
+                    "altitude": ac.get("alt_baro"),
+                    "score": risk.get("score"),
+                    "level": risk.get("level"),
+                }
+            )
+    at_risk.sort(key=lambda a: a.get("score") or 0, reverse=True)
+
+    return _json(
+        {
+            "point": {"lat": round(lat, 4), "lon": round(lon, 4), "altitude_ft": alt},
+            "assessment": assessment,
+            "aircraft_at_risk_count": len(at_risk),
+            "aircraft_at_risk": at_risk[:15],
+        }
+    )
+
+
+@_guarded
+def enroute_structure(lat: float = 0.0, lon: float = 0.0, radius_nm: int = 75) -> str:
+    """US enroute structure — published IFR airways plus named waypoints/fixes —
+    near a point, defaulting to the receiver. Returns the airway designators (e.g.
+    'V23', 'J100') and fix idents (e.g. 'ADAMM') in the area from FAA reference data.
+    Use for 'what airways/waypoints are near me', 'which airways cross the area', or
+    to explain a flight's routing over named fixes. Pass lat/lon to center elsewhere.
+    US-only (empty away from US coverage)."""
+    from django.conf import settings
+
+    from skyspy.services import geodata
+
+    if not lat and not lon:
+        lat = getattr(settings, "FEEDER_LAT", None)
+        lon = getattr(settings, "FEEDER_LON", None)
+    if lat is None or lon is None:
+        return _json({"error": "receiver location (FEEDER_LAT/LON) not configured"})
+    lat, lon = float(lat), float(lon)
+    r = max(1, min(250, int(radius_nm or 75)))
+
+    def _ident(f):
+        props = f.get("properties") or {}
+        return props.get("IDENT") or props.get("name")
+
+    airways = geodata.get_cached_geojson("us_airways", lat=lat, lon=lon, radius_nm=r)
+    fixes = geodata.get_cached_geojson("us_fixes", lat=lat, lon=lon, radius_nm=r)
+    awy = sorted({i for f in airways if (i := _ident(f))})
+    fix = sorted({i for f in fixes if (i := _ident(f))})
+    return _json(
+        {
+            "center": {"lat": round(lat, 4), "lon": round(lon, 4)},
+            "radius_nm": r,
+            "airway_count": len(awy),
+            "airways": awy[:60],
+            "fix_count": len(fix),
+            "fixes": fix[:80],
+        }
+    )
+
+
+@_guarded
+def watched_aircraft() -> str:
+    """The station's watch list: aircraft flagged to keep an eye on, each with an
+    indicator of whether it's LIVE right now (in current traffic). Use for 'what's
+    on the watch list', 'any watched aircraft up right now', or 'am I watching
+    anything'. This list is station-wide (shared), not per-user."""
+    from django.core.cache import cache
+
+    from skyspy.models.watch_list import WatchedAircraft
+
+    watched = list(WatchedAircraft.objects.all().order_by("-added_at")[:100])
+    if not watched:
+        return _json({"count": 0, "watched": [], "note": "watch list is empty"})
+    live_hexes = {(a.get("hex") or "").upper() for a in (cache.get("current_aircraft") or [])}
+    rows = [
+        {
+            "hex": w.hex,
+            "callsign": w.callsign or None,
+            "registration": w.registration or None,
+            "type": w.type_code or None,
+            "notes": w.notes or None,
+            "live_now": w.hex.upper() in live_hexes,
+        }
+        for w in watched
+    ]
+    return _json({"count": len(rows), "live_now": sum(r["live_now"] for r in rows), "watched": rows})
+
+
+@_guarded
+def my_alert_rules() -> str:
+    """The CURRENT USER's custom alert rules: what they've configured SkySpy to
+    alert on, each with whether it's enabled, its priority, and when it last fired.
+    Use for 'what am I alerting on', 'show my alerts', 'are my alerts working', or
+    'did any of my alerts trigger'. Requires a signed-in user; returns a note if
+    anonymous."""
+    user = _get_user()
+    if user is None:
+        return _json({"error": "no signed-in user; alert rules are per-user", "rules": []})
+    from skyspy.models.alerts import AlertRule
+
+    rules = list(AlertRule.objects.filter(owner=user).order_by("-enabled", "name")[:50])
+    return _json(
+        {
+            "count": len(rules),
+            "enabled": sum(1 for r in rules if r.enabled),
+            "rules": [
+                {
+                    "name": r.name,
+                    "type": r.rule_type,
+                    "operator": r.operator,
+                    "value": r.value,
+                    "priority": r.priority,
+                    "enabled": r.enabled,
+                    "last_triggered": r.last_triggered.strftime("%Y-%m-%dT%H:%M:%SZ") if r.last_triggered else None,
+                }
+                for r in rules
+            ],
+        }
+    )
+
+
+@_guarded
+def flight_schedule(callsign: str) -> str:
+    """Scheduled airline flight info for a callsign/flight number (e.g. 'UAL123'):
+    origin/destination airport, scheduled and estimated departure/arrival times, and
+    status. Use for 'when does flight X land', 'is X delayed', or schedule questions.
+    Backed by a metered external API (AviationStack) — off unless configured; returns
+    a note when unavailable. For the origin/dest of a LIVE aircraft, prefer
+    lookup_route (no quota)."""
+    from skyspy.services import aviationstack
+
+    cs = (callsign or "").strip().upper()
+    if not cs:
+        return _json({"error": "callsign required"})
+    if not aviationstack._is_enabled():
+        return _json({"error": "flight schedules not configured (AVIATIONSTACK_ENABLED off)", "callsign": cs})
+    data = aviationstack.get_flight_by_callsign(cs)
+    if not data:
+        return _json({"callsign": cs, "found": False, "note": "no scheduled flight matched"})
+    return _json({"callsign": cs, "found": True, "flight": data})
+
+
+# =============================================================================
 # Registry
 # =============================================================================
 
@@ -775,8 +1744,10 @@ TOOL_FUNCS = [
     collection_stats,
     live_traffic_summary,
     live_aircraft_map,
+    radar_filter,
     airport_weather,
     recent_pireps,
+    nearby_wildfires,
     airport_notams,
     lookup_airframe,
     fetch_airframe_photo,
@@ -792,15 +1763,27 @@ TOOL_FUNCS = [
     semantic_event_search,
     metric_correlations,
     aircraft_track,
+    plot_tracks,
+    busiest_tails,
     detect_unusual_patterns,
     identify_law_enforcement,
     threat_assessment,
+    rest_api_reference,
+    socketio_reference,
+    weather_nearby,
+    aircraft_dossier,
+    nearby_advisories,
+    turbulence_forecast,
+    enroute_structure,
+    watched_aircraft,
+    my_alert_rules,
+    flight_schedule,
 ]
 
 
 def _short_description(doc: str | None) -> str:
     """First sentence of a tool docstring, whitespace-collapsed and length-capped —
-    the compact-mode tool description, so 31 tool schemas fit a small window."""
+    the compact-mode tool description, so all tool schemas fit a small window."""
     text = " ".join((doc or "").split())
     m = re.match(r"(.+?[.!?])(\s|$)", text)
     first = m.group(1) if m else text

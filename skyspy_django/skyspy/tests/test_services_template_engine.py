@@ -225,6 +225,45 @@ class TemplateEngineBuildContextAlertTests(TestCase):
         self.assertEqual(context["speed"], 450)
         self.assertEqual(context["squawk"], "1200")
 
+    def test_build_context_includes_airframe_fields(self):
+        """Operator/manufacturer/model/military and LE classification are surfaced."""
+        alert_data = {
+            "rule_name": "LE Rule",
+            "aircraft": {
+                "hex": "a1b2c3",
+                "flight": "CBP123",  # Customs & Border Protection callsign pattern
+                "ownOp": "US CUSTOMS",
+                "manufacturer": "Cessna",
+                "model": "208 Caravan",
+                "dbFlags": 1,  # military bit
+            },
+        }
+
+        context = self.engine.build_context_from_alert(alert_data)
+
+        self.assertEqual(context["operator"], "US CUSTOMS")
+        self.assertEqual(context["manufacturer"], "Cessna")
+        self.assertEqual(context["model"], "208 Caravan")
+        self.assertTrue(context["military"])  # from dbFlags bit 0
+        self.assertTrue(context["law_enforcement"])
+        self.assertEqual(context["law_enforcement_category"], "Federal Law Enforcement")
+        # Compact badge string composes only the flags that are set
+        self.assertIn("MIL", context["badges"])
+        self.assertIn("LE: Customs & Border Protection", context["badges"])
+
+    def test_build_context_non_le_aircraft(self):
+        """A civil airliner is not flagged as LE or military."""
+        alert_data = {
+            "aircraft": {"hex": "abc123", "flight": "UAL456", "ownOp": "UNITED"},
+        }
+
+        context = self.engine.build_context_from_alert(alert_data)
+
+        self.assertFalse(context["law_enforcement"])
+        self.assertFalse(context["military"])
+        self.assertIsNone(context["law_enforcement_description"])
+        self.assertEqual(context["badges"], "")  # blank when nothing notable
+
     def test_build_context_includes_timestamps(self):
         """Test context includes timestamp fields."""
         alert_data = {

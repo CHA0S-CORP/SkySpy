@@ -95,6 +95,13 @@ export function normalizeAircraft(data, { partial = false } = {}) {
     desc: data.desc || data.description || null,
     ownOp: data.ownOp || data.owner_operator || null,
     year: data.year || null,
+    // Turbulence risk (0-100 score + level). Not on the hot stream today — it's
+    // merged in from the /aviation/turbulence/aircraft endpoint via
+    // useAircraftTurbulence — but whitelisted here (presence-aware, ?? null so
+    // partial/delta merges never clobber a known value) so it survives
+    // normalization if the backend later rides the stream. Accepts snake+camel.
+    turbulenceRisk: data.turbulence_risk ?? data.turbulenceRisk ?? (partial ? null : null),
+    turbulenceLevel: data.turbulence_level ?? data.turbulenceLevel ?? (partial ? null : null),
   };
 }
 

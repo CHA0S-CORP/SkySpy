@@ -583,6 +583,8 @@ class RouteCacheTests(TestCase):
         self.assertEqual(result["origin"]["city"], "San Francisco")
         self.assertEqual(result["destination"]["icao"], "KJFK")
         self.assertEqual(result["airport_codes"], "KSFO-KJFK")
+        # Ordered waypoint chain (origin-first, destination-last) for the leg polyline.
+        self.assertEqual([w["icao"] for w in result["waypoints"]], ["KSFO", "KJFK"])
 
     @patch("skyspy.services.external_db._fetch_route_hexdb", return_value=None)
     @patch("skyspy.services.adsbdb.get_route_by_callsign", return_value=None)

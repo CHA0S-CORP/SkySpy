@@ -110,6 +110,8 @@ describe('apiHelpers', () => {
         username: '',
         email: '',
         displayName: '',
+        isSuperuser: false,
+        isStaff: false,
         permissions: [],
         roles: [],
       });
@@ -123,6 +125,8 @@ describe('apiHelpers', () => {
         username: '',
         email: '',
         displayName: '',
+        isSuperuser: false,
+        isStaff: false,
         permissions: [],
         roles: [],
       });
@@ -145,6 +149,8 @@ describe('apiHelpers', () => {
         username: 'testuser',
         email: 'test@example.com',
         displayName: 'Test User',
+        isSuperuser: false,
+        isStaff: false,
         permissions: ['view_alerts', 'edit_alerts'],
         roles: ['admin', 'user'],
       });
@@ -188,6 +194,8 @@ describe('apiHelpers', () => {
         username: 'minimaluser',
         email: '',
         displayName: '',
+        isSuperuser: false,
+        isStaff: false,
         permissions: [],
         roles: [],
       });
@@ -210,6 +218,8 @@ describe('apiHelpers', () => {
         username: '',
         email: '',
         displayName: '',
+        isSuperuser: false,
+        isStaff: false,
         permissions: [],
         roles: [],
       });
@@ -223,6 +233,8 @@ describe('apiHelpers', () => {
         username: '',
         email: '',
         displayName: '',
+        isSuperuser: false,
+        isStaff: false,
         permissions: [],
         roles: [],
       });
@@ -244,6 +256,8 @@ describe('apiHelpers', () => {
         'username',
         'email',
         'displayName',
+        'isSuperuser',
+        'isStaff',
         'permissions',
         'roles',
       ]);
@@ -271,6 +285,7 @@ describe('apiHelpers', () => {
         oidcEnabled: false,
         localAuthEnabled: true,
         apiKeyEnabled: false,
+        devMode: false,
         features: {},
       });
     });
@@ -284,6 +299,7 @@ describe('apiHelpers', () => {
         oidcEnabled: false,
         localAuthEnabled: false,
         apiKeyEnabled: false,
+        devMode: false,
         features: {},
       });
     });
@@ -297,6 +313,7 @@ describe('apiHelpers', () => {
         oidcEnabled: false,
         localAuthEnabled: true,
         apiKeyEnabled: false,
+        devMode: false,
         features: {},
       });
     });

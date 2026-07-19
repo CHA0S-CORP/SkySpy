@@ -1,6 +1,125 @@
-import React, { memo, useEffect, useState } from 'react';
+import React, { memo, useEffect, useRef, useState } from 'react';
 import { Icon } from '../primitives';
 import { useTheme, V2_THEMES } from '../../../providers/ThemeProvider';
+import { useAuth } from '../../../contexts/AuthContext';
+import { navigate } from '../../../lib/hashRoute';
+
+/** Initials for the avatar chip (max two letters). */
+function initials(name) {
+  const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return '?';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+/**
+ * Header identity menu: shows the current user, with a dropdown to reach the
+ * admin console (admins only) and sign out. Anonymous visitors get a Sign in
+ * button instead. Admin access mirrors the backend: superuser, the system.manage
+ * permission, or an admin/superadmin role.
+ */
+function UserMenu() {
+  const { status, user, isAuthenticated, logout } = useAuth();
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onDown = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    };
+    const onKey = (e) => e.key === 'Escape' && setOpen(false);
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  if (status === 'loading') return null;
+
+  // Anonymous: a direct sign-in affordance.
+  if (!isAuthenticated) {
+    return (
+      <button
+        type="button"
+        className="v2-usermenu__signin"
+        onClick={() => navigate('login')}
+        data-testid="v2-header-signin"
+      >
+        <Icon name="log-in" size={15} strokeWidth={2} />
+        Sign in
+      </button>
+    );
+  }
+
+  const roles = user?.roles || [];
+  const isAdmin =
+    !!user?.isSuperuser ||
+    (user?.permissions || []).includes('system.manage') ||
+    roles.some((r) => r === 'admin' || r === 'superadmin');
+  const name = user?.displayName || user?.username || 'Account';
+  const roleLabel = user?.isSuperuser ? 'Superuser' : roles[0] || 'User';
+
+  const go = (tab) => {
+    setOpen(false);
+    navigate(tab);
+  };
+
+  return (
+    <div className="v2-usermenu" ref={ref} data-testid="v2-usermenu">
+      <button
+        type="button"
+        className={`v2-usermenu__trigger ${open ? 'is-open' : ''}`}
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        title={name}
+        data-testid="v2-usermenu-trigger"
+      >
+        <span className="v2-usermenu__avatar">{initials(name)}</span>
+        <span className="v2-usermenu__name">{name}</span>
+        <Icon name="chevron-down" size={13} strokeWidth={2} className="v2-usermenu__chev" />
+      </button>
+
+      {open && (
+        <div className="v2-usermenu__pop" role="menu">
+          <div className="v2-usermenu__id">
+            <span className="v2-usermenu__avatar v2-usermenu__avatar--lg">{initials(name)}</span>
+            <div className="v2-usermenu__idtext">
+              <div className="v2-usermenu__idname">{name}</div>
+              <div className="v2-usermenu__idrole">{roleLabel}</div>
+            </div>
+          </div>
+
+          <div className="v2-usermenu__sep" />
+
+          {isAdmin && (
+            <button type="button" className="v2-usermenu__item" role="menuitem" onClick={() => go('admin')}>
+              <Icon name="sliders" size={15} strokeWidth={1.9} />
+              Admin Console
+            </button>
+          )}
+
+          <button
+            type="button"
+            className="v2-usermenu__item v2-usermenu__item--danger"
+            role="menuitem"
+            onClick={() => {
+              setOpen(false);
+              logout();
+            }}
+            data-testid="v2-usermenu-logout"
+          >
+            <Icon name="log-out" size={15} strokeWidth={1.9} />
+            Sign out
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 /** Theme dot colors shown in the switcher (each theme's --accent). */
 const THEME_DOTS = { radar: '#3ddc84', slate: '#4cc9f0', amber: '#f5b544' };
@@ -136,6 +255,8 @@ export function AppHeader({
           <Icon name="sun" size={17} />
         </button>
         <UtcClock />
+        <div className="v2-header__divider" />
+        <UserMenu />
       </div>
     </header>
   );

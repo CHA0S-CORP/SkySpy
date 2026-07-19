@@ -11,6 +11,26 @@ from skyspy.models import NotificationChannel, NotificationConfig, NotificationL
 APPRISE_URL_MASK = "****"
 
 
+def normalize_channel_url(channel_type: str | None, url: str | None) -> str | None:
+    """Rewrite a "Generic Webhook" http(s):// URL to Apprise's json(s):// scheme.
+
+    Delivery goes through Apprise, which cannot parse a bare ``http://`` URL —
+    it needs its JSON plugin scheme (``json://`` for http, ``jsons://`` for
+    https). The UI's webhook template (``json://{webhook_url}``) is supposed to
+    apply this, but a user who pastes a full ``http://...`` URL (or edits an
+    existing channel) otherwise saves an unparseable URL that fails silently on
+    send. Normalizing here makes the native webhook selection just work.
+    """
+    if channel_type != "webhook" or not url:
+        return url
+    stripped = url.strip()
+    if stripped.startswith("https://"):
+        return "jsons://" + stripped[len("https://") :]
+    if stripped.startswith("http://"):
+        return "json://" + stripped[len("http://") :]
+    return url
+
+
 def mask_apprise_url(url):
     """Mask credentials/tokens in an Apprise URL for API responses.
 
@@ -129,6 +149,9 @@ class NotificationChannelCreateSerializer(serializers.Serializer):
         # Whitelist only allowed fields - explicitly exclude owner, is_global, verified
         allowed_fields = {"name", "channel_type", "apprise_url", "description", "supports_rich", "enabled"}
         safe_data = {k: v for k, v in validated_data.items() if k in allowed_fields}
+        # A "webhook" channel POSTs JSON via Apprise's json:// plugin; accept a
+        # plain http(s):// URL and rewrite it so it isn't stored unparseable.
+        safe_data["apprise_url"] = normalize_channel_url(safe_data.get("channel_type"), safe_data.get("apprise_url"))
         return NotificationChannel.objects.create(**safe_data)
 
 
@@ -171,8 +194,11 @@ class NotificationChannelUpdateSerializer(serializers.Serializer):
         for field in allowed_fields:
             if field in validated_data:
                 setattr(instance, field, validated_data[field])
-        # Reset verification if URL changed
+        # Normalize a webhook http(s):// URL to json(s):// (see create()). Use
+        # the incoming type if provided, else the channel's existing type.
         if "apprise_url" in validated_data:
+            instance.apprise_url = normalize_channel_url(instance.channel_type, instance.apprise_url)
+            # Reset verification if URL changed
             instance.verified = False
         instance.save()
         return instance

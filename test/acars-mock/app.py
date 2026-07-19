@@ -460,7 +460,7 @@ class MockGenerator:
         async with httpx.AsyncClient() as client:
             while self.running:
                 try:
-                    response = await client.get(f"{settings.api_url}/api/v1/aircraft", timeout=5.0)
+                    response = await client.get(f"{settings.api_url}/api/v1/aircraft/", timeout=5.0)
                     if response.status_code == 200:
                         data = response.json()
                         aircraft = data.get("aircraft", [])

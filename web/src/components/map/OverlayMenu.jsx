@@ -190,6 +190,26 @@ export const OverlayMenu = memo(function OverlayMenu({
             <AlertTriangle size={14} />
             <span>Convective SIGMETs</span>
           </label>
+
+          <label className="overlay-toggle">
+            <input
+              type="checkbox"
+              checked={overlays.airmets}
+              onChange={() => handleToggle('airmets')}
+            />
+            <Wind size={14} />
+            <span>AIRMETs</span>
+          </label>
+
+          <label className="overlay-toggle">
+            <input
+              type="checkbox"
+              checked={overlays.windsAloft}
+              onChange={() => handleToggle('windsAloft')}
+            />
+            <Wind size={14} />
+            <span>Winds Aloft</span>
+          </label>
         </div>
 
         <div className="overlay-section">

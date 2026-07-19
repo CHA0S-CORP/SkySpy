@@ -70,7 +70,15 @@ class SkyspyUser(models.Model):
         return self.auth_provider == "oidc"
 
     def get_all_permissions(self):
-        """Get all permissions from all assigned roles."""
+        """Get all permissions from all assigned roles.
+
+        A superuser implicitly holds every permission — mirror the short-circuit
+        in ``has_permission`` so the login/``my_permissions`` payloads (and the
+        frontend nav gating that reads them) reflect full access even when no
+        role is assigned (e.g. a ``createsuperuser`` admin with no UserRole).
+        """
+        if self.user.is_superuser:
+            return list(ALL_PERMISSIONS)
         permissions = set()
         for user_role in self.user.user_roles.select_related("role").filter(
             models.Q(expires_at__isnull=True) | models.Q(expires_at__gt=timezone.now())
@@ -232,6 +240,11 @@ class FeatureAccess(models.Model):
         ("acars", "ACARS Messages"),
         ("history", "Flight History"),
         ("system", "System Status"),
+        ("assistant", "AI Assistant"),
+        ("cannonball", "Cannonball Mode"),
+        ("services", "External Services"),
+        ("weather", "Weather Data"),
+        ("wildfires", "Wildfire Tracking"),
         ("users", "User Management"),
         ("roles", "Role Management"),
     ]
@@ -391,6 +404,22 @@ FEATURE_PERMISSIONS = {
         "system.view_metrics",
         "system.manage",
     ],
+    "assistant": [
+        "assistant.view",
+    ],
+    "cannonball": [
+        "cannonball.view",
+        "cannonball.manage",
+    ],
+    "services": [
+        "services.view",
+    ],
+    "weather": [
+        "weather.view",
+    ],
+    "wildfires": [
+        "wildfires.view",
+    ],
     "users": [
         "users.view",
         "users.create",
@@ -421,6 +450,9 @@ DEFAULT_ROLES = {
             "acars.view",
             "history.view",
             "system.view_status",
+            "services.view",
+            "weather.view",
+            "wildfires.view",
         ],
         "priority": 10,
     },
@@ -440,6 +472,9 @@ DEFAULT_ROLES = {
             "acars.view",
             "history.view",
             "system.view_status",
+            "services.view",
+            "weather.view",
+            "wildfires.view",
         ],
         "priority": 20,
     },
@@ -464,6 +499,11 @@ DEFAULT_ROLES = {
             "history.export",
             "system.view_status",
             "system.view_metrics",
+            "assistant.view",
+            "cannonball.view",
+            "services.view",
+            "weather.view",
+            "wildfires.view",
         ],
         "priority": 30,
     },
@@ -493,6 +533,12 @@ DEFAULT_ROLES = {
             "system.view_status",
             "system.view_metrics",
             "system.manage",
+            "assistant.view",
+            "cannonball.view",
+            "cannonball.manage",
+            "services.view",
+            "weather.view",
+            "wildfires.view",
             "users.view",
             "users.edit",
             "roles.view",

@@ -53,6 +53,7 @@ def refresh_all_geodata(self):
                     "airports": results.get("airports", 0),
                     "navaids": results.get("navaids", 0),
                     "geojson": results.get("geojson", 0),
+                    "faa_enroute": results.get("faa_enroute", 0),
                     "timestamp": datetime.utcnow().isoformat() + "Z",
                 },
                 room="topic_aircraft",
@@ -134,6 +135,69 @@ def refresh_geojson(self):
     except Exception as e:  # broad: task-level guard; retries on any service failure
         logger.error(f"Failed to refresh GeoJSON: {e}")
         raise self.retry(exc=e, countdown=300)
+
+
+@shared_task(bind=True, max_retries=3)
+@singleton_task(timeout=1200)
+def refresh_faa_enroute(self):
+    """
+    Refresh cached FAA enroute structure (US airways + named fixes).
+
+    Runs daily (also invoked by refresh_all_geodata).
+    """
+    logger.info("Refreshing FAA enroute structure (airways + fixes)")
+
+    try:
+        from skyspy.services import geodata
+
+        count = geodata.refresh_faa_enroute()
+        logger.info(f"Refreshed {count} FAA enroute features")
+
+        return count
+
+    except Exception as e:  # broad: task-level guard; retries on any service failure
+        logger.error(f"Failed to refresh FAA enroute data: {e}")
+        raise self.retry(exc=e, countdown=300)
+
+
+@shared_task(bind=True, max_retries=3)
+@singleton_task(timeout=600)
+def refresh_wildfires(self):
+    """Refresh cached Watch Duty wildfires near the feeder.
+
+    Runs every WILDFIRES_REFRESH_INTERVAL seconds (default 5 min). No-op when
+    WILDFIRES_ENABLED is off.
+    """
+    from datetime import datetime
+
+    from skyspy.socketio.utils import sync_emit
+
+    if not getattr(settings, "WILDFIRES_ENABLED", False):
+        return {"status": "skipped", "reason": "disabled"}
+
+    logger.info("Refreshing Watch Duty wildfires")
+
+    try:
+        from skyspy.services import wildfires
+
+        count = wildfires.refresh_wildfires()
+        logger.info(f"Cached {count} wildfires")
+
+        # Broadcast update to WebSocket clients via Socket.IO
+        try:
+            sync_emit(
+                "wildfires:refresh",
+                {"count": count, "timestamp": datetime.utcnow().isoformat() + "Z"},
+                room="topic_aircraft",
+            )
+        except Exception as e:  # broad: broadcast must never crash the task
+            logger.warning(f"Failed to broadcast wildfire refresh: {e}")
+
+        return count
+
+    except Exception as e:  # broad: task-level guard; retries on any service failure
+        logger.error(f"Failed to refresh wildfires: {e}")
+        raise self.retry(exc=e, countdown=60)
 
 
 @shared_task

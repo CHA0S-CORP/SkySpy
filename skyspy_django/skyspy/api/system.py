@@ -16,8 +16,9 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from skyspy.api.throttles import ExternalLookupRateThrottle
 from skyspy.auth.authentication import APIKeyAuthentication, OptionalJWTAuthentication
-from skyspy.auth.permissions import FeatureBasedPermission
+from skyspy.auth.permissions import FeatureBasedPermission, RequireAuthenticated
 from skyspy.models import AircraftSession, AircraftSighting, AlertHistory, AlertRule, NotificationConfig, SafetyEvent
 from skyspy.serializers.system import (
     ApiInfoSerializer,
@@ -72,9 +73,14 @@ def _host_cpu_mem():
 
 
 class HealthCheckView(APIView):
-    """Simple health check endpoint."""
+    """Simple health check endpoint.
 
-    authentication_classes = []
+    Public liveness probe for load balancers. Anonymous callers get only the
+    overall status + timestamp; the per-service breakdown (which reveals backend
+    topology and libacars internals) is returned only to authenticated users.
+    """
+
+    authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
     permission_classes = []
 
     @extend_schema(
@@ -136,11 +142,18 @@ class HealthCheckView(APIView):
         except Exception as e:  # broad: CFFI binding health probe, unknowable failure modes
             services["libacars"] = {"status": "error", "message": str(e)}
 
+        timestamp = timezone.now().isoformat().replace("+00:00", "Z")
+
+        # Anonymous callers (public dashboards / load balancers) get liveness only.
+        # The per-service breakdown is infrastructure detail — authenticated only.
+        if not (request.user and request.user.is_authenticated):
+            return Response({"status": overall_status, "timestamp": timestamp})
+
         return Response(
             {
                 "status": overall_status,
                 "services": services,
-                "timestamp": timezone.now().isoformat().replace("+00:00", "Z"),
+                "timestamp": timestamp,
             }
         )
 
@@ -187,9 +200,16 @@ def _get_cached_table_counts():
 
 
 class StatusView(APIView):
-    """Comprehensive system status endpoint."""
+    """Comprehensive system status endpoint.
 
-    authentication_classes = []
+    Reachable anonymously (it also backs the public Statistics card), but the
+    sensitive infrastructure fields — feeder location, worker PID, scheduled
+    Celery tasks, connection counts, antenna RSSI — are included only for
+    authenticated users. The full-detail System page is separately hidden from
+    anonymous visitors in the nav.
+    """
+
+    authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
     permission_classes = []
 
     @extend_schema(
@@ -286,44 +306,58 @@ class StatusView(APIView):
 
         cpu_percent, memory_percent, load_average = _host_cpu_mem()
 
-        return Response(
-            {
-                "version": __version__,
-                "adsb_online": adsb_online,
-                "aircraft_count": aircraft_count,
-                "cpu_percent": cpu_percent,
-                "memory_percent": memory_percent,
-                "load_average": load_average,
-                "total_sightings": total_sightings,
-                "total_sessions": total_sessions,
-                "active_rules": active_rules,
-                "alert_history_count": alert_history_count,
-                "safety_event_count": safety_event_count,
-                "safety_monitoring_enabled": settings.SAFETY_MONITORING_ENABLED,
-                "safety_tracked_aircraft": safety_tracked_aircraft,
-                "notifications_configured": notifications_configured,
-                "redis_enabled": bool(settings.REDIS_URL),
-                "websocket_connections": websocket_connections,
-                "sse_subscribers": sse_subscribers,
-                "acars_enabled": settings.ACARS_ENABLED,
-                "acars_running": bool(cache.get("acars_running")),
-                "polling_interval_seconds": settings.POLLING_INTERVAL,
-                "db_store_interval_seconds": settings.DB_STORE_INTERVAL,
-                "celery_running": celery_running,
-                "celery_tasks": celery_tasks,
-                "worker_pid": os.getpid(),
-                "location": {"latitude": settings.FEEDER_LAT, "longitude": settings.FEEDER_LON},
-                "antenna": antenna_summary,
-                "libacars": libacars_status,
-            }
-        )
+        payload = {
+            "version": __version__,
+            "adsb_online": adsb_online,
+            "aircraft_count": aircraft_count,
+            "cpu_percent": cpu_percent,
+            "memory_percent": memory_percent,
+            "load_average": load_average,
+            "total_sightings": total_sightings,
+            "total_sessions": total_sessions,
+            "active_rules": active_rules,
+            "alert_history_count": alert_history_count,
+            "safety_event_count": safety_event_count,
+            "safety_monitoring_enabled": settings.SAFETY_MONITORING_ENABLED,
+            "safety_tracked_aircraft": safety_tracked_aircraft,
+            "notifications_configured": notifications_configured,
+            "redis_enabled": bool(settings.REDIS_URL),
+            "acars_enabled": settings.ACARS_ENABLED,
+            "acars_running": bool(cache.get("acars_running")),
+            "polling_interval_seconds": settings.POLLING_INTERVAL,
+            "db_store_interval_seconds": settings.DB_STORE_INTERVAL,
+            "celery_running": celery_running,
+        }
+
+        # Sensitive infrastructure detail: authenticated users only. Anonymous
+        # callers (public Statistics card) never see feeder location, PID,
+        # scheduled tasks, connection counts, or antenna RSSI.
+        if request.user and request.user.is_authenticated:
+            payload.update(
+                {
+                    "websocket_connections": websocket_connections,
+                    "sse_subscribers": sse_subscribers,
+                    "celery_tasks": celery_tasks,
+                    "worker_pid": os.getpid(),
+                    "location": {"latitude": settings.FEEDER_LAT, "longitude": settings.FEEDER_LON},
+                    "antenna": antenna_summary,
+                    "libacars": libacars_status,
+                }
+            )
+
+        return Response(payload)
 
 
 class SystemInfoView(APIView):
-    """API information endpoint."""
+    """API information endpoint.
 
-    authentication_classes = []
-    permission_classes = []
+    Enumerates the API surface (including admin/task/websocket routes), so it is
+    restricted to authenticated users to avoid handing anonymous visitors an
+    attack-surface map.
+    """
+
+    authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
+    permission_classes = [RequireAuthenticated]
 
     @extend_schema(
         summary="API information",
@@ -426,10 +460,16 @@ class SystemInfoView(APIView):
 
 
 class MetricsView(APIView):
-    """Prometheus metrics endpoint."""
+    """Prometheus metrics endpoint.
 
-    authentication_classes = []
-    permission_classes = []
+    Metrics leak internal performance/state, so scraping requires authentication
+    (use an API key with the scraper) even on a public deployment. If Prometheus
+    is isolated at the network layer instead, front it there rather than opening
+    this up.
+    """
+
+    authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
+    permission_classes = [RequireAuthenticated]
 
     def get(self, request):
         """Return Prometheus metrics including libacars metrics."""
@@ -490,10 +530,16 @@ class ExternalDatabaseStatsView(APIView):
 
 
 class OpenSkyLookupView(APIView):
-    """Lookup aircraft by ICAO hex code in OpenSky database."""
+    """Lookup aircraft by ICAO hex code in OpenSky database.
 
-    authentication_classes = []
-    permission_classes = []
+    Fans out to external databases (OpenSky, then an aggregated lookup), so it
+    requires authentication and is strictly rate-limited to prevent scripted
+    hex-scans from burning external-API quota / getting the feeder banned.
+    """
+
+    authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
+    permission_classes = [RequireAuthenticated]
+    throttle_classes = [ExternalLookupRateThrottle]
 
     @extend_schema(
         summary="OpenSky aircraft lookup",
@@ -536,10 +582,16 @@ class OpenSkyLookupView(APIView):
 
 
 class AircraftLookupView(APIView):
-    """Aggregated aircraft lookup across all databases."""
+    """Aggregated aircraft lookup across all databases.
 
-    authentication_classes = []
-    permission_classes = []
+    Merges ADSBX / tar1090 / FAA / OpenSky — several outbound requests per call —
+    so it requires authentication and is strictly rate-limited (a single scripted
+    hex list would otherwise trigger thousands of external calls).
+    """
+
+    authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
+    permission_classes = [RequireAuthenticated]
+    throttle_classes = [ExternalLookupRateThrottle]
 
     @extend_schema(
         summary="Aggregated aircraft lookup",
@@ -574,6 +626,9 @@ class RouteLookupView(APIView):
 
     authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
     permission_classes = [FeatureBasedPermission]
+    # Route lookup hits adsb.im per call — keep it usable on public dashboards
+    # (per AUTH_MODE) but rate-limit to blunt scripted abuse.
+    throttle_classes = [ExternalLookupRateThrottle]
 
     @extend_schema(summary="Route lookup", description="Look up flight route information by callsign from adsb.im")
     def get(self, request, callsign):

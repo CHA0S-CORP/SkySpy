@@ -68,6 +68,10 @@ class AviationDataMixin:
         """Handle PIREPs request."""
         return await self._get_pireps(params)
 
+    async def _handle_wildfires(self, params: dict):
+        """Get nearby active wildfires (Watch Duty)."""
+        return await self._get_wildfires(params)
+
     async def _handle_metars(self, params: dict):
         """Handle METARs request."""
         return await self._get_metars(params)
@@ -151,6 +155,26 @@ class AviationDataMixin:
                 }
             )
         return airports
+
+    @sync_to_async
+    def _get_wildfires(self, params: dict):
+        """Get nearby active wildfires from the cached Watch Duty feed."""
+        from skyspy.services import wildfires
+
+        try:
+            lat = float(params.get("lat", getattr(settings, "FEEDER_LAT", 0)))
+        except (ValueError, TypeError):
+            lat = float(getattr(settings, "FEEDER_LAT", 0))
+        try:
+            lon = float(params.get("lon", getattr(settings, "FEEDER_LON", 0)))
+        except (ValueError, TypeError):
+            lon = float(getattr(settings, "FEEDER_LON", 0))
+        try:
+            radius_nm = float(params.get("radius", params.get("radius_nm", 250)))
+        except (ValueError, TypeError):
+            radius_nm = 250.0
+
+        return wildfires.get_cached_wildfires(lat, lon, radius_nm)
 
     @sync_to_async
     def _get_navaids(self, params: dict):

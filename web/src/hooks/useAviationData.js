@@ -27,6 +27,7 @@ export function useAviationData(
     airspaceAdvisories: [], // Active G-AIRMETs
     metars: [],
     pireps: [],
+    wildfires: [], // Watch Duty active fires
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -131,6 +132,10 @@ export function useAviationData(
             .then((data) => ({ type: 'airspace', data: extractData(data) }))
             .catch((err) => ({ type: 'airspace', error: err.message }))
         );
+      }
+      // G-AIRMET/AIRMET advisories feed both the airspace layer and the dedicated
+      // AIRMETs layer, so fetch them when either is enabled.
+      if (overlays?.airspace || overlays?.airmets) {
         promises.push(
           makeRequest('airspaces', baseParams)
             .then((data) => ({
@@ -160,6 +165,19 @@ export function useAviationData(
           )
             .then((data) => ({ type: 'pireps', data: extractData(data) }))
             .catch((err) => ({ type: 'pireps', error: err.message }))
+        );
+      }
+
+      // Wildfires (only if overlay enabled) — cached Watch Duty markers. Fires are
+      // sparse and spread over hundreds of nm (unlike dense-local airports/navaids),
+      // so use a generous floor instead of the tight radar range or the layer looks
+      // empty when zoomed in. Capped at 500nm to match the backend cache fill.
+      if (overlays?.wildfires) {
+        const fireRadius = Math.min(500, Math.max(250, Math.round(radarRange * 1.5)));
+        promises.push(
+          makeRequest('wildfires', { ...baseParams, radius: fireRadius }, AVIATION_TIMEOUT)
+            .then((data) => ({ type: 'wildfires', data: extractData(data) }))
+            .catch((err) => ({ type: 'wildfires', error: err.message }))
         );
       }
 
@@ -211,8 +229,10 @@ export function useAviationData(
     overlays?.navaids,
     overlays?.airports,
     overlays?.airspace,
+    overlays?.airmets,
     overlays?.metars,
     overlays?.pireps,
+    overlays?.wildfires,
     extractData,
     normalizeAirport,
   ]);

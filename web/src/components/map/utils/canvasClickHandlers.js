@@ -93,6 +93,8 @@ export function handleCanvasClick(e, params) {
     setSelectedAirspace,
     setSelectedTaf,
     setSelectedSigmet,
+    getAirmetAtPoint,
+    setSelectedAirmet,
     setPopupPosition,
   } = params;
 
@@ -433,6 +435,23 @@ export function handleCanvasClick(e, params) {
     });
   }
 
+  // Check AIRMET areas (point-in-polygon) if the overlay is enabled and nothing
+  // closer (e.g. an aircraft) already won. Lowest priority, like SIGMETs.
+  if (overlays.airmets && getAirmetAtPoint && closestType !== 'aircraft') {
+    const clickLat = feederLat + ((centerY - clickY + proPanOffset.y) / pixelsPerNm) * (1 / 60);
+    const clickLon =
+      feederLon +
+      ((clickX - centerX - proPanOffset.x) / pixelsPerNm) *
+        (1 / 60) *
+        (1 / Math.cos((feederLat * Math.PI) / 180));
+    const airmetArea = getAirmetAtPoint(clickLat, clickLon);
+    if (airmetArea && closestDist > 25) {
+      closest = airmetArea;
+      closestType = 'airmet';
+      closestDist = 20;
+    }
+  }
+
   // Handle click based on type
   if (closest) {
     // Only clear aircraft selection if not pinned, or if selecting a new aircraft
@@ -446,6 +465,7 @@ export function handleCanvasClick(e, params) {
     setSelectedAirspace(null);
     setSelectedTaf(null);
     setSelectedSigmet(null);
+    if (setSelectedAirmet) setSelectedAirmet(null);
 
     if (closestType === 'aircraft') {
       selectAircraft(closest);
@@ -468,6 +488,8 @@ export function handleCanvasClick(e, params) {
       setSelectedAirspace(closest);
     } else if (closestType === 'sigmet') {
       setSelectedSigmet(closest);
+    } else if (closestType === 'airmet') {
+      if (setSelectedAirmet) setSelectedAirmet(closest);
     }
   } else {
     // Clicked on empty area - clear all selections (unless panel is pinned)
@@ -481,6 +503,7 @@ export function handleCanvasClick(e, params) {
     setSelectedAirport(null);
     setSelectedAirspace(null);
     setSelectedSigmet(null);
+    if (setSelectedAirmet) setSelectedAirmet(null);
   }
 }
 

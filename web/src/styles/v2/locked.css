@@ -1,0 +1,153 @@
+/* ============================================================================
+   LockedFeature — "sign in to unlock" gate for AI/LLM features (CanUseLLM).
+   A redacted, frosted-glass overlay over a blurred preview: the feature reads as
+   present-but-classified rather than missing. Tactical/surveillance aesthetic to
+   match the ADS-B app — mono eyebrow, cyan accent, scanline grain.
+   ========================================================================== */
+
+.lockfx {
+  position: relative;
+  /* Stack preview + scrim + panel in a single grid cell so the box's height is
+     driven by the tallest child (the CTA panel). Absolute-positioning the panel
+     let long copy overflow a fixed min-height and get clipped top & bottom. */
+  display: grid;
+  overflow: hidden;
+  border-radius: 10px;
+  isolation: isolate;
+}
+.lockfx > * {
+  grid-area: 1 / 1;
+}
+
+.lockfx--card {
+  min-height: 148px;
+  border: 1px solid color-mix(in srgb, var(--accent2) 22%, transparent);
+  background: linear-gradient(180deg, var(--bg1), var(--bg0));
+}
+
+.lockfx--inline {
+  min-height: 108px;
+  border: 1px dashed color-mix(in srgb, var(--accent2) 26%, transparent);
+  background: color-mix(in srgb, var(--bg1) 80%, transparent);
+}
+
+/* Stretch the gate to fill its container (e.g. the full assistant panel) instead
+   of sitting as a small card at the top. */
+.lockfx--fill {
+  flex: 1;
+  height: 100%;
+}
+
+/* Blurred faux-content behind the gate. */
+.lockfx__preview {
+  padding: 16px 18px;
+  filter: blur(6px) saturate(0.7);
+  opacity: 0.5;
+  user-select: none;
+  pointer-events: none;
+}
+
+.lockfx__redact {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  padding: 4px 0;
+}
+.lockfx__redact span {
+  height: 9px;
+  border-radius: 3px;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--accent2) 34%, var(--bg3)),
+    var(--bg3)
+  );
+}
+
+/* Darkening + grain scrim so the CTA panel stays legible over any preview. */
+.lockfx__scrim {
+  z-index: 1;
+  background:
+    radial-gradient(120% 90% at 50% 0%, transparent, color-mix(in srgb, var(--bg0) 78%, transparent) 78%),
+    repeating-linear-gradient(0deg, transparent 0 2px, color-mix(in srgb, var(--accent2) 5%, transparent) 2px 3px);
+  backdrop-filter: blur(1px);
+}
+
+/* Foreground CTA. Drives the box height (tallest grid child), so long copy
+   grows the panel instead of overflowing a fixed height and being clipped. */
+.lockfx__panel {
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  text-align: center;
+  padding: 14px 18px;
+}
+
+.lockfx__badge {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  margin-bottom: 4px;
+  border-radius: 50%;
+  color: var(--accent2);
+  background: color-mix(in srgb, var(--accent2) 14%, var(--bg1));
+  border: 1px solid color-mix(in srgb, var(--accent2) 40%, transparent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent2) 8%, transparent),
+    0 6px 20px color-mix(in srgb, var(--accent2) 22%, transparent);
+}
+
+.lockfx__eyebrow {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--accent2);
+  opacity: 0.85;
+}
+
+.lockfx__title {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text, #eaf1f8);
+  max-width: 30ch;
+  line-height: 1.3;
+}
+
+.lockfx__sub {
+  font-size: 11.5px;
+  color: var(--dim);
+  max-width: 34ch;
+  line-height: 1.4;
+}
+
+.lockfx__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 8px;
+  padding: 7px 15px;
+  border-radius: 7px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  color: var(--bg0);
+  background: var(--accent2);
+  border: 1px solid var(--accent2);
+  transition: transform 0.12s ease, box-shadow 0.2s ease, filter 0.2s ease;
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--accent2) 30%, transparent);
+}
+.lockfx__btn:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.08);
+  box-shadow: 0 6px 22px color-mix(in srgb, var(--accent2) 42%, transparent);
+}
+.lockfx__btn:active {
+  transform: translateY(0);
+}

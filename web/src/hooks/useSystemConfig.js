@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { withAuth } from '../lib/authHeader';
 
 /**
  * Parse Django REST Framework error responses.
@@ -29,18 +30,11 @@ const parseDRFError = (data) => {
 };
 
 /**
- * Get auth headers for API requests.
+ * Get auth headers for API requests. Uses the shared bearer helper (correct
+ * ACCESS_TOKEN_KEY) — reading a bare 'access_token' key here silently sent no
+ * auth, 401ing the admin config screen in bearer-only mode.
  */
-const getAuthHeaders = () => {
-  const token = localStorage.getItem('access_token');
-  const headers = {
-    'Content-Type': 'application/json',
-  };
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-  return headers;
-};
+const getAuthHeaders = () => withAuth({ 'Content-Type': 'application/json' });
 
 /**
  * Hook for managing system configuration.

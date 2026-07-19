@@ -95,6 +95,12 @@ def _load_cached_databases_on_ready(sender=None, **kwargs):
 # =============================================================================
 # Celery Beat Schedule
 # =============================================================================
+# Wildfire refresh cadence is configurable (fires move faster than aviation
+# reference data); read once at import (settings are configured above).
+from django.conf import settings as _beat_settings  # noqa: E402
+
+_wildfire_interval = float(getattr(_beat_settings, "WILDFIRES_REFRESH_INTERVAL", 300) or 300)
+
 app.conf.beat_schedule = {
     # Aircraft polling - every 1 second (skipped when streaming is active)
     "poll-aircraft-every-2s": {
@@ -175,6 +181,12 @@ app.conf.beat_schedule = {
         "task": "skyspy.tasks.geodata.check_and_refresh_geodata",
         "schedule": 3600.0,  # 1 hour
     },
+    # Watch Duty wildfire refresh - every WILDFIRES_REFRESH_INTERVAL (default 5 min).
+    # No-op when WILDFIRES_ENABLED is off (the task returns early).
+    "refresh-wildfires": {
+        "task": "skyspy.tasks.geodata.refresh_wildfires",
+        "schedule": _wildfire_interval,
+    },
     # PIREP cleanup - every hour
     "cleanup-pireps-hourly": {
         "task": "skyspy.tasks.geodata.cleanup_old_pireps",
@@ -204,6 +216,13 @@ app.conf.beat_schedule = {
     "refresh-tafs-every-30m": {
         "task": "skyspy.tasks.geodata.refresh_tafs",
         "schedule": 1800.0,  # 30 minutes
+    },
+    # Per-aircraft turbulence risk scoring - reads current_aircraft cache and
+    # writes turb:by_hex (off the hot path). Interval via env.
+    "score-aircraft-turbulence": {
+        "task": "skyspy.tasks.turbulence.score_aircraft_turbulence",
+        "schedule": float(os.environ.get("TURB_SCORE_INTERVAL", "60")),
+        "options": {"expire_seconds": float(os.environ.get("TURB_SCORE_INTERVAL", "60"))},
     },
     # ==========================================================================
     # Unified Stats Aggregation (P1 optimization)
@@ -477,6 +496,15 @@ app.conf.beat_schedule = {
         "task": "skyspy.tasks.rag.refresh_rag_documents",
         "schedule": crontab(minute="*/30"),
     },
+    # ==========================================================================
+    # Auto-generated airframe type cards
+    # ==========================================================================
+    # LLM-write reference cards for newly-seen aircraft types - daily at 7:30 AM UTC
+    # (after the airframe info/RAG refreshes). No-op unless AIRFRAME_CARD_GEN_ENABLED.
+    "generate-airframe-type-cards-daily": {
+        "task": "skyspy.tasks.airframe_cards.generate_airframe_type_cards",
+        "schedule": crontab(hour=7, minute=30),
+    },
 }
 
 
@@ -572,6 +600,8 @@ app.conf.task_routes = {
     "skyspy.tasks.analytics.cleanup_memory_cache": {"queue": "default"},
     # Cleanup tasks (low-priority, can run slowly)
     "skyspy.tasks.cleanup.*": {"queue": "low_priority"},
+    # Per-aircraft turbulence scoring (weather fan-out, off the hot path)
+    "skyspy.tasks.turbulence.*": {"queue": "low_priority"},
     # Law enforcement data sync (external downloads + DB writes)
     "skyspy.tasks.le_data_sync.*": {"queue": "database"},
     # Long-running transcription tasks
@@ -592,6 +622,8 @@ app.conf.task_routes = {
     "skyspy.tasks.incidents.*": {"queue": "database"},
     # Airframe RAG indexing (embedding API + DB writes)
     "skyspy.tasks.rag.*": {"queue": "database"},
+    # Airframe type-card generation (LLM calls, daily back-fill — not time-sensitive)
+    "skyspy.tasks.airframe_cards.*": {"queue": "low_priority"},
     # Cannonball tasks (pattern analysis is time-sensitive)
     "skyspy.tasks.cannonball.analyze_aircraft_patterns": {"queue": "polling"},
     "skyspy.tasks.cannonball.cleanup_cannonball_sessions": {"queue": "database"},

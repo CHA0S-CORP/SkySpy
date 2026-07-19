@@ -1,86 +1,134 @@
 /**
- * Login Page Component
+ * Login Page — "Ground Station Console"
  *
- * Premium login experience with animated radar background and SkySpy branding.
+ * A tactical two-pane sign-in: a live radar scope hero (left) with HUD
+ * telemetry read-outs, paired with an instrument-bezel auth console (right).
+ * Styled in the v2 design language (IBM Plex, deep bg0, green/cyan accents)
+ * so it reads as part of the SkySpy platform, not a bolt-on.
  */
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { LogIn, KeyRound, AlertCircle, Loader2, Radio, Plane } from 'lucide-react';
+import {
+  LogIn,
+  KeyRound,
+  AlertCircle,
+  Loader2,
+  Radio,
+  User,
+  Lock,
+  ChevronRight,
+} from 'lucide-react';
 
-// Generate random aircraft for background animation
-function generateAircraft(count = 8) {
-  return Array.from({ length: count }, (_, i) => ({
-    id: i,
-    x: Math.random() * 100,
-    y: Math.random() * 100,
-    rotation: Math.random() * 360,
-    speed: 15 + Math.random() * 25,
-    delay: Math.random() * 10,
-    size: 12 + Math.random() * 8,
-  }));
+// Deterministic-ish scatter of contacts for the scope. Bearings/ranges are
+// spread so tracks don't clump; speeds vary so the sweep feels alive.
+function generateContacts(count = 7) {
+  return Array.from({ length: count }, (_, i) => {
+    const bearing = (i * 360) / count + (Math.random() * 40 - 20);
+    return {
+      id: i,
+      bearing, // degrees, 0 = up
+      reach: 26 + Math.random() * 16, // % of scope radius the track travels
+      speed: 9 + Math.random() * 10, // seconds per outbound run
+      delay: -(Math.random() * 14), // desync the fleet
+      kind: i % 3, // color band
+    };
+  });
 }
 
-function RadarBackground() {
-  const [aircraft] = useState(() => generateAircraft(8));
+function RadarScope() {
+  const [contacts] = useState(() => generateContacts(7));
 
   return (
-    <div className="login-radar-bg">
-      {/* Radar sweep */}
-      <div className="radar-sweep" />
-
-      {/* Concentric rings */}
-      <div className="radar-rings">
-        {[1, 2, 3, 4, 5].map((ring) => (
-          <div key={ring} className="radar-ring-login" style={{ '--ring-size': `${ring * 20}%` }} />
+    <div className="lp-scope" aria-hidden="true">
+      <div className="lp-scope__field">
+        {/* Range rings */}
+        {[1, 2, 3, 4].map((r) => (
+          <div key={r} className="lp-ring" style={{ '--r': `${r * 25}%` }} />
         ))}
-      </div>
 
-      {/* Crosshairs */}
-      <div className="radar-crosshair-login" />
+        {/* Cardinal crosshair */}
+        <div className="lp-cross lp-cross--h" />
+        <div className="lp-cross lp-cross--v" />
 
-      {/* Animated aircraft blips */}
-      <div className="radar-aircraft">
-        {aircraft.map((plane) => (
+        {/* Rotating sweep beam */}
+        <div className="lp-sweep" />
+
+        {/* Contacts, emitted from the origin along a bearing */}
+        {contacts.map((c) => (
           <div
-            key={plane.id}
-            className="radar-blip"
+            key={c.id}
+            className="lp-track"
+            data-kind={c.kind}
             style={{
-              '--start-x': `${plane.x}%`,
-              '--start-y': `${plane.y}%`,
-              '--rotation': `${plane.rotation}deg`,
-              '--speed': `${plane.speed}s`,
-              '--delay': `-${plane.delay}s`,
-              '--size': `${plane.size}px`,
+              '--bearing': `${c.bearing}deg`,
+              '--reach': `${c.reach}%`,
+              '--speed': `${c.speed}s`,
+              '--delay': `${c.delay}s`,
             }}
           >
-            <Plane size={plane.size} />
+            <span className="lp-track__trail" />
+            <span className="lp-track__blip" />
           </div>
         ))}
+
+        {/* Origin marker */}
+        <div className="lp-origin" />
       </div>
 
-      {/* Grid overlay */}
-      <div className="radar-grid-overlay" />
+      {/* Fine grid + scanline atmosphere */}
+      <div className="lp-grid" />
+      <div className="lp-scan" />
     </div>
   );
 }
 
-function SkySkyLogo({ size = 'large' }) {
-  const iconSize = size === 'large' ? 48 : 32;
+function useUtcClock() {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const hh = String(now.getUTCHours()).padStart(2, '0');
+  const mm = String(now.getUTCMinutes()).padStart(2, '0');
+  const ss = String(now.getUTCSeconds()).padStart(2, '0');
+  return `${hh}:${mm}:${ss}Z`;
+}
 
+function ScopeHud() {
+  const utc = useUtcClock();
   return (
-    <div className={`skyspy-logo ${size}`}>
-      <div className="logo-icon-wrapper">
-        <div className="logo-pulse-ring" />
-        <div className="logo-pulse-ring delay" />
-        <div className="logo-icon">
-          <Radio size={iconSize} strokeWidth={1.5} />
+    <div className="lp-hud" aria-hidden="true">
+      <div className="lp-hud__row lp-hud__row--top">
+        <span className="lp-hud__tag">STATION · SKYSPY-1</span>
+        <span className="lp-hud__tag">{utc}</span>
+      </div>
+      <div className="lp-hud__row lp-hud__row--bot">
+        <span className="lp-hud__tag">1090 · 978 MHz</span>
+        <span className="lp-hud__tag lp-hud__tag--live">
+          <span className="lp-led" /> SIGNAL ACQUIRED
+        </span>
+      </div>
+      <div className="lp-hud__corner lp-hud__corner--tl" />
+      <div className="lp-hud__corner lp-hud__corner--tr" />
+      <div className="lp-hud__corner lp-hud__corner--bl" />
+      <div className="lp-hud__corner lp-hud__corner--br" />
+    </div>
+  );
+}
+
+function Wordmark() {
+  return (
+    <div className="lp-brand">
+      <div className="lp-brand__mark">
+        <Radio size={26} strokeWidth={1.6} />
+      </div>
+      <div className="lp-brand__type">
+        <div className="lp-brand__word">
+          <span className="lp-brand__sky">Sky</span>
+          <span className="lp-brand__spy">Spy</span>
         </div>
+        <div className="lp-brand__tag">Aircraft Intelligence Platform</div>
       </div>
-      <div className="logo-text">
-        <span className="logo-sky">Sky</span>
-        <span className="logo-spy">Spy</span>
-      </div>
-      {size === 'large' && <div className="logo-tagline">Aircraft Intelligence Platform</div>}
     </div>
   );
 }
@@ -103,7 +151,7 @@ export default function LoginPage() {
     clearError();
 
     if (!username || !password) {
-      setLocalError('Please enter username and password');
+      setLocalError('Enter username and password to continue');
       return;
     }
 
@@ -112,7 +160,7 @@ export default function LoginPage() {
     setIsSubmitting(false);
 
     if (!result.success) {
-      setLocalError(result.error || 'Login failed');
+      setLocalError(result.error || 'Authentication failed');
     }
   };
 
@@ -124,7 +172,7 @@ export default function LoginPage() {
     try {
       await loginWithOIDC();
     } catch (err) {
-      setLocalError(err.message || 'OIDC login failed');
+      setLocalError(err.message || 'SSO sign-in failed');
     }
 
     setIsSubmitting(false);
@@ -132,137 +180,145 @@ export default function LoginPage() {
 
   const displayError = localError || error;
 
-  if (isLoading) {
-    return (
-      <div className="login-page">
-        <RadarBackground />
-        <div className={`login-card ${mounted ? 'mounted' : ''}`}>
-          <div className="login-loading">
-            <div className="loading-radar">
-              <Radio size={32} className="pulse" />
-            </div>
-            <span>Initializing secure connection...</span>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="login-page">
-      <RadarBackground />
+    <div className={`lp ${mounted ? 'lp--in' : ''}`}>
+      {/* LEFT — radar scope hero */}
+      <section className="lp-pane lp-pane--scope">
+        <RadarScope />
+        <ScopeHud />
+        <div className="lp-pane__vignette" />
+      </section>
 
-      <div className={`login-card ${mounted ? 'mounted' : ''}`}>
-        <div className="login-header">
-          <SkySkyLogo size="large" />
-        </div>
+      {/* RIGHT — auth console */}
+      <section className="lp-pane lp-pane--console">
+        <div className="lp-console">
+          <div className="lp-console__bezel">
+            <span className="lp-tick lp-tick--tl" />
+            <span className="lp-tick lp-tick--tr" />
+            <span className="lp-tick lp-tick--bl" />
+            <span className="lp-tick lp-tick--br" />
 
-        {displayError && (
-          <div className="login-error">
-            <AlertCircle size={16} />
-            <span>{displayError}</span>
-          </div>
-        )}
-
-        <div className="login-content">
-          {config.localAuthEnabled && (
-            <form onSubmit={handleSubmit} className="login-form">
-              <div className="form-group">
-                <label htmlFor="username">
-                  <span className="label-text">Username or Email</span>
-                </label>
-                <div className="input-wrapper">
-                  <input
-                    id="username"
-                    type="text"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    placeholder="Enter your credentials"
-                    disabled={isSubmitting}
-                    autoComplete="username"
-                    // eslint-disable-next-line jsx-a11y/no-autofocus -- intentional for login form UX
-                    autoFocus
-                  />
-                  <div className="input-glow" />
-                </div>
+            <header className="lp-console__head">
+              <Wordmark />
+              <div className="lp-console__status">
+                <span className="lp-led lp-led--sm" />
+                <span>{isLoading ? 'ESTABLISHING LINK' : 'SECURE CHANNEL'}</span>
               </div>
+            </header>
 
-              <div className="form-group">
-                <label htmlFor="password">
-                  <span className="label-text">Password</span>
-                </label>
-                <div className="input-wrapper">
-                  <input
-                    id="password"
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Enter your password"
-                    disabled={isSubmitting}
-                    autoComplete="current-password"
-                  />
-                  <div className="input-glow" />
-                </div>
+            {isLoading ? (
+              <div className="lp-boot">
+                <Radio size={22} className="lp-boot__icon" />
+                <span>Initializing secure connection…</span>
               </div>
-
-              <button type="submit" className="login-button primary" disabled={isSubmitting}>
-                {isSubmitting ? (
-                  <>
-                    <Loader2 size={18} className="spin" />
-                    <span>Authenticating...</span>
-                  </>
-                ) : (
-                  <>
-                    <LogIn size={18} />
-                    <span>Sign In</span>
-                  </>
+            ) : (
+              <>
+                {displayError && (
+                  <div className="lp-alert" role="alert">
+                    <AlertCircle size={15} />
+                    <span>{displayError}</span>
+                  </div>
                 )}
-                <div className="button-shine" />
-              </button>
-            </form>
-          )}
 
-          {config.localAuthEnabled && config.oidcEnabled && (
-            <div className="login-divider">
-              <span>or continue with</span>
-            </div>
-          )}
+                <div className="lp-console__body">
+                  {config.localAuthEnabled && (
+                    <form onSubmit={handleSubmit} className="lp-form">
+                      <div className="lp-field">
+                        <label htmlFor="username" className="lp-label">
+                          Operator ID
+                        </label>
+                        <div className="lp-input">
+                          <User size={16} className="lp-input__glyph" />
+                          <input
+                            id="username"
+                            type="text"
+                            value={username}
+                            onChange={(e) => setUsername(e.target.value)}
+                            placeholder="username or email"
+                            disabled={isSubmitting}
+                            autoComplete="username"
+                            // eslint-disable-next-line jsx-a11y/no-autofocus -- intentional for login form UX
+                            autoFocus
+                          />
+                        </div>
+                      </div>
 
-          {config.oidcEnabled && (
-            <div className="login-oidc-section">
-              <button
-                type="button"
-                className="login-button oidc"
-                onClick={handleOIDCLogin}
-                disabled={isSubmitting}
-              >
-                <KeyRound size={18} />
-                <span>{config.oidcProviderName || 'Single Sign-On'}</span>
-              </button>
-            </div>
-          )}
-        </div>
+                      <div className="lp-field">
+                        <label htmlFor="password" className="lp-label">
+                          Passphrase
+                        </label>
+                        <div className="lp-input">
+                          <Lock size={16} className="lp-input__glyph" />
+                          <input
+                            id="password"
+                            type="password"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            placeholder="••••••••••"
+                            disabled={isSubmitting}
+                            autoComplete="current-password"
+                          />
+                        </div>
+                      </div>
 
-        <div className="login-footer">
-          <div className="footer-stats">
-            <div className="stat">
-              <Plane size={14} />
-              <span>Real-time Tracking</span>
-            </div>
-            <div className="stat-divider" />
-            <div className="stat">
-              <Radio size={14} />
-              <span>ADS-B Intelligence</span>
-            </div>
+                      <button
+                        type="submit"
+                        className="lp-btn lp-btn--primary"
+                        disabled={isSubmitting}
+                      >
+                        {isSubmitting ? (
+                          <>
+                            <Loader2 size={17} className="lp-spin" />
+                            <span>Authenticating…</span>
+                          </>
+                        ) : (
+                          <>
+                            <LogIn size={17} />
+                            <span>Sign In</span>
+                            <ChevronRight size={17} className="lp-btn__go" />
+                          </>
+                        )}
+                      </button>
+                    </form>
+                  )}
+
+                  {config.localAuthEnabled && config.oidcEnabled && (
+                    <div className="lp-divider">
+                      <span>or continue with</span>
+                    </div>
+                  )}
+
+                  {config.oidcEnabled && (
+                    <button
+                      type="button"
+                      className="lp-btn lp-btn--oidc"
+                      onClick={handleOIDCLogin}
+                      disabled={isSubmitting}
+                    >
+                      <KeyRound size={17} />
+                      <span>{config.oidcProviderName || 'Single Sign-On'}</span>
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+
+            <footer className="lp-console__foot">
+              <div className="lp-caps">
+                <span>Real-time Tracking</span>
+                <i />
+                <span>ADS-B Intelligence</span>
+                <i />
+                <span>Safety Monitoring</span>
+              </div>
+              <div className="lp-console__meta">
+                <span>Secure Aircraft Monitoring System</span>
+                <span className="lp-console__ver">v2.0</span>
+              </div>
+            </footer>
           </div>
-          <p className="footer-copyright">Secure Aircraft Monitoring System</p>
         </div>
-      </div>
-
-      {/* Version badge */}
-      <div className="login-version">
-        <span>SkySpy v2.0</span>
-      </div>
+      </section>
     </div>
   );
 }

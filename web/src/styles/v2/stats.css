@@ -594,3 +594,62 @@
     grid-template-columns: 1fr;
   }
 }
+
+@media (max-width: 768px) {
+  .v2-stats {
+    padding: 12px 12px 20px;
+  }
+  /* toolbar stacks; time-range + mil wrap full width */
+  .v2-stats__toolbar {
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 10px 12px;
+  }
+  .v2-stats__ranges {
+    flex: 1 1 100%;
+    justify-content: space-between;
+  }
+  .v2-stats__range {
+    flex: 1;
+  }
+  /* right rail becomes a single column again (undo the 1400 row layout) */
+  .v2-stats__grid > .v2-stats__rail:last-child {
+    flex-direction: column;
+    flex-wrap: nowrap;
+  }
+  /* KPI tiles: 2-up (dense small tiles) */
+  .v2-stats__kpis {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+  /* segmented history tabs wrap under the panel title */
+  .v2-stats__panel-head {
+    flex-wrap: wrap;
+  }
+  .v2-stats__seg {
+    margin-left: 0;
+    width: 100%;
+    justify-content: flex-start;
+  }
+  /* heatmap: fewer, larger cells */
+  .v2-stats__hours {
+    grid-template-columns: repeat(6, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .v2-stats {
+    padding: 10px 8px 16px;
+    font-size: 12px;
+  }
+  .v2-stats__kpis {
+    grid-template-columns: 1fr;
+  }
+  /* gap tiles + severity cells stack to 2-up so numbers stay readable */
+  .v2-stats__gap-tiles {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .v2-stats__panel {
+    padding: 12px;
+  }
+}

@@ -1,4 +1,7 @@
-/* v2 Aircraft List screen (designs/Aircraft List.dc.html) */
+/* v2 Aircraft List screen — tactical surveillance console
+ * (base design: designs/Aircraft List.dc.html). Layout: KPI summary strip,
+ * control bar (search + filter chips), grouped/right-aligned telemetry grid,
+ * status footer. Numeric columns use tabular figures so magnitudes align. */
 
 .v2-list {
   display: flex;
@@ -6,16 +9,107 @@
   height: 100%;
   min-height: 0;
   padding: 16px 20px;
+  gap: 14px;
   font-size: 13px;
   color: var(--txt);
   font-family: var(--font-sans);
 }
 
+/* ── KPI summary strip ─────────────────────────────────────────────── */
+.v2-list__summary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  flex: 0 0 auto;
+}
+.v2-list__kpi {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: linear-gradient(180deg, var(--bg2), var(--bg1));
+  border: 1px solid var(--bord);
+  border-radius: 13px;
+  position: relative;
+  overflow: hidden;
+}
+.v2-list__kpi::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--dim2);
+  opacity: 0.6;
+}
+.v2-list__kpi-icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  border-radius: 9px;
+  background: var(--bg3);
+  color: var(--dim);
+}
+.v2-list__kpi-icon--air {
+  color: var(--accent2);
+}
+.v2-list__kpi-icon--mil {
+  color: var(--mil);
+}
+.v2-list__kpi-icon--alert {
+  color: var(--dim);
+}
+.v2-list__kpi-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.v2-list__kpi-value {
+  font-family: var(--font-mono);
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+  color: var(--txt);
+}
+.v2-list__kpi-label {
+  font-size: 10px;
+  letter-spacing: 1.1px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--dim2);
+}
+/* Emergency KPI lights up only when something is squawking. */
+.v2-list__kpi--alert {
+  border-color: color-mix(in srgb, var(--danger) 55%, transparent);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--danger) 16%, var(--bg2)),
+    var(--bg1)
+  );
+}
+.v2-list__kpi--alert::before {
+  background: var(--danger);
+  opacity: 1;
+  animation: v2-blink 1.4s ease-in-out infinite;
+}
+.v2-list__kpi--alert .v2-list__kpi-icon--alert {
+  background: color-mix(in srgb, var(--danger) 22%, transparent);
+  color: var(--danger);
+}
+.v2-list__kpi--alert .v2-list__kpi-value {
+  color: var(--danger);
+}
+
+/* ── Control bar: search + ghost toggle ────────────────────────────── */
 .v2-list__toolbar {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 14px;
+  flex: 0 0 auto;
 }
 .v2-list__search {
   display: flex;
@@ -28,9 +122,14 @@
   border: 1px solid var(--bord);
   border-radius: 11px;
   color: var(--dim);
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 .v2-list__search:focus-within {
   border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
 }
 .v2-list__search input {
   flex: 1;
@@ -44,12 +143,28 @@
 .v2-list__search input::placeholder {
   color: var(--dim2);
 }
+.v2-list__ghost-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 42px;
+  padding: 0 14px;
+  background: var(--bg1);
+  border: 1px solid var(--bord);
+  border-radius: 11px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--dim);
+  cursor: pointer;
+  white-space: nowrap;
+}
 
+/* ── Filter chips ──────────────────────────────────────────────────── */
 .v2-list__chips {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-bottom: 14px;
+  flex: 0 0 auto;
 }
 .v2-list__chip {
   display: flex;
@@ -65,31 +180,44 @@
   background: var(--bg1);
   border: 1px solid var(--bord);
   color: var(--dim);
+  transition:
+    color 0.12s ease,
+    border-color 0.12s ease,
+    background 0.12s ease;
 }
 .v2-list__chip:hover {
   color: var(--txt);
+  border-color: var(--bord2);
 }
 .v2-list__chip--on {
   background: color-mix(in srgb, var(--chip-dot) 18%, transparent);
   border-color: var(--chip-dot);
   color: var(--txt);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--chip-dot) 40%, transparent) inset;
 }
 .v2-list__chip-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
   background: var(--chip-dot);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--chip-dot) 70%, transparent);
 }
 .v2-list__chip-count {
   font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
   background: var(--bg3);
   color: var(--dim);
   padding: 1px 7px;
   border-radius: 12px;
 }
+.v2-list__chip--on .v2-list__chip-count {
+  background: color-mix(in srgb, var(--chip-dot) 26%, transparent);
+  color: var(--txt);
+}
 
+/* ── Data grid ─────────────────────────────────────────────────────── */
 .v2-list__table {
   flex: 1;
   min-height: 0;
@@ -108,11 +236,54 @@
   align-items: center;
   padding: 0 18px;
 }
+/* Numeric telemetry columns right-align with tabular figures so digits stack.
+ * Columns: 4 alt · 5 spd · 6 v/s · 8 dist · 10 sqk. */
+.v2-list__thead > :nth-child(4),
+.v2-list__thead > :nth-child(5),
+.v2-list__thead > :nth-child(6),
+.v2-list__thead > :nth-child(8),
+.v2-list__thead > :nth-child(10) {
+  justify-content: flex-end;
+}
+.v2-list__row > :nth-child(4),
+.v2-list__row > :nth-child(5),
+.v2-list__row > :nth-child(6),
+.v2-list__row > :nth-child(8),
+.v2-list__row > :nth-child(10) {
+  justify-content: flex-end;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+/* Group dividers: identity | telemetry (col 4) | signal (col 9). */
+.v2-list__thead > :nth-child(4),
+.v2-list__row > :nth-child(4),
+.v2-list__thead > :nth-child(9),
+.v2-list__row > :nth-child(9) {
+  border-left: 1px solid var(--bord);
+  padding-left: 16px;
+  margin-left: 2px;
+}
+
 .v2-list__thead {
   height: 46px;
   border-bottom: 1px solid var(--bord2);
   background: var(--bg2);
   flex: 0 0 auto;
+  position: relative;
+}
+.v2-list__thead::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--accent) 40%, transparent),
+    transparent
+  );
 }
 .v2-list__th {
   display: flex;
@@ -128,13 +299,17 @@
   color: var(--dim);
   text-transform: uppercase;
   padding: 0;
+  transition: color 0.12s ease;
 }
-.v2-list__th--active {
+.v2-list__th:hover {
   color: var(--txt);
 }
+.v2-list__th--active {
+  color: var(--accent);
+}
 .v2-list__th-arrow {
-  font-family: var(--font-mono);
-  font-size: 10px;
+  display: inline-flex;
+  align-items: center;
   color: var(--accent);
 }
 
@@ -154,9 +329,36 @@
   font-family: inherit;
   color: var(--txt);
   font-size: 13px;
+  position: relative;
+  transition:
+    background 0.1s ease,
+    box-shadow 0.1s ease;
 }
 .v2-list__row:hover {
   background: var(--bg2);
+  box-shadow: inset 3px 0 0 -1px color-mix(in srgb, var(--accent) 60%, transparent);
+}
+.v2-list__row:focus-visible {
+  outline: none;
+  background: var(--bg2);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+/* Emergency track: red wash + pulsing edge marker. */
+.v2-list__row--alert {
+  background: color-mix(in srgb, var(--danger) 9%, transparent);
+}
+.v2-list__row--alert:hover {
+  background: color-mix(in srgb, var(--danger) 15%, transparent);
+}
+.v2-list__row--alert::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--danger);
+  animation: v2-blink 1.2s ease-in-out infinite;
 }
 .v2-list__cell {
   font-family: var(--font-mono);
@@ -226,8 +428,10 @@
 .v2-list__cell--hdg {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 7px;
   font-size: 12px;
+  font-variant-numeric: tabular-nums;
 }
 .v2-list__hdg-dir {
   font-family: var(--font-mono);
@@ -257,12 +461,16 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
-  padding: 48px;
+  gap: 12px;
+  padding: 56px;
   color: var(--dim2);
   font-size: 13px;
 }
+.v2-list__empty svg {
+  opacity: 0.55;
+}
 
+/* ── Status footer ─────────────────────────────────────────────────── */
 .v2-list__footer {
   display: flex;
   align-items: center;
@@ -279,6 +487,7 @@
   gap: 7px;
   font-family: var(--font-mono);
   font-size: 12px;
+  font-variant-numeric: tabular-nums;
   color: var(--dim);
 }
 .v2-list__foot-spacer {
@@ -337,4 +546,11 @@
   background: color-mix(in srgb, var(--accent) 12%, transparent);
   border-color: color-mix(in srgb, var(--accent) 34%, transparent);
   color: var(--accent);
+}
+
+/* Narrow viewports: collapse KPI strip to 2 columns. */
+@media (max-width: 900px) {
+  .v2-list__summary {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }

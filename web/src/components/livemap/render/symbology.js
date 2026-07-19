@@ -581,6 +581,106 @@ export function drawTfrPoly(ctx, pts, label) {
   ctx.restore();
 }
 
+// ---------------------------------------------------------------------------
+// AIRMETs (G-AIRMET hazard areas/lines) — colour-coded by hazard
+// ---------------------------------------------------------------------------
+
+/** hazard code → "r,g,b" fill/stroke colour. -LO/-HI share the base colour. */
+export const AIRMET_RGB = {
+  'TURB-LO': '255,184,77',
+  'TURB-HI': '255,140,26',
+  TURB: '255,165,0',
+  ICE: '76,201,240',
+  FZLVL: '122,215,255',
+  IFR: '154,167,180',
+  MT_OBSC: '176,176,176',
+  MTN_OBSCN: '176,176,176',
+  LLWS: '255,106,0',
+  SFC_WND: '224,185,60',
+};
+const AIRMET_DEFAULT_RGB = '154,167,180';
+
+/** Resolve an AIRMET hazard to its colour, matching exact then base-hazard. */
+export function airmetRgb(hazard) {
+  const key = (hazard || '').toUpperCase();
+  return AIRMET_RGB[key] || AIRMET_RGB[key.split('-')[0]] || AIRMET_DEFAULT_RGB;
+}
+
+/** Short screen label for an AIRMET hazard. */
+export function airmetLabel(hazard) {
+  const key = (hazard || '').toUpperCase();
+  if (key.startsWith('TURB')) return key === 'TURB-HI' ? 'TURB HI' : key === 'TURB-LO' ? 'TURB LO' : 'TURB';
+  if (key === 'MT_OBSC' || key === 'MTN_OBSCN') return 'MT OBSC';
+  if (key === 'SFC_WND') return 'SFC WND';
+  return key || 'AIRMET';
+}
+
+/** Filled AIRMET area (closed polygon): dashed hazard-coloured outline + faint fill. */
+export function drawAirmetArea(ctx, pts, rgb, hazard) {
+  if (!pts || pts.length < 3) return;
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x, pts[0].y);
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+  ctx.closePath();
+  ctx.fillStyle = `rgba(${rgb},0.10)`;
+  ctx.fill();
+  ctx.strokeStyle = `rgba(${rgb},0.85)`;
+  ctx.lineWidth = 1.4;
+  ctx.setLineDash([7, 4]);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  _airmetLabel(ctx, pts, rgb, hazard);
+  ctx.restore();
+}
+
+/** Open AIRMET line (e.g. freezing level): dotted hazard-coloured polyline, no fill. */
+export function drawAirmetLine(ctx, pts, rgb, hazard) {
+  if (!pts || pts.length < 2) return;
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x, pts[0].y);
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+  ctx.strokeStyle = `rgba(${rgb},0.9)`;
+  ctx.lineWidth = 2;
+  ctx.setLineDash([2, 3]);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  _airmetLabel(ctx, pts, rgb, hazard);
+  ctx.restore();
+}
+
+function _airmetLabel(ctx, pts, rgb, hazard) {
+  let cx = 0;
+  let cy = 0;
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const p of pts) {
+    cx += p.x;
+    cy += p.y;
+    if (p.x < minX) minX = p.x;
+    if (p.y < minY) minY = p.y;
+    if (p.x > maxX) maxX = p.x;
+    if (p.y > maxY) maxY = p.y;
+  }
+  cx /= pts.length;
+  cy /= pts.length;
+  if (maxX - minX + (maxY - minY) < 44) return; // too small to label
+  const label = airmetLabel(hazard);
+  ctx.font = '700 9px "IBM Plex Mono", monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const w = ctx.measureText(label).width + 8;
+  ctx.fillStyle = 'rgba(0,0,0,0.6)';
+  ctx.fillRect(cx - w / 2, cy - 7, w, 14);
+  ctx.fillStyle = `rgb(${rgb})`;
+  ctx.fillText(label, cx, cy);
+  ctx.textAlign = 'start';
+  ctx.textBaseline = 'alphabetic';
+}
+
 /**
  * Draw a TFR as a point + area disc (fallback when there is no polygon ring).
  * `radiusPx` is the projected area radius; a hatched amber/red circle + center
@@ -657,6 +757,38 @@ export function pirepColor(p) {
   if (/MOD/.test(sev)) return SEVERITY_COLORS.warn;
   if (turb || icing) return SEVERITY_COLORS.info;
   return SEVERITY_COLORS.info;
+}
+
+/**
+ * Threat color for a wildfire from its libwatchduty composite score [0,100].
+ * Mirrors the TUI tiers: red high (>=60), amber medium (>=20), else green.
+ */
+export function wildfireColor(score) {
+  const s = typeof score === 'number' ? score : 0;
+  if (s >= 60) return SEVERITY_COLORS.danger;
+  if (s >= 20) return SEVERITY_COLORS.warn;
+  return '#80ed99'; // low / contained
+}
+
+/**
+ * Wildfire marker: a filled flame-ish triangle in the threat color with a dark
+ * outline, radius scaled slightly by acreage. Distinct from the round PIREP dot
+ * and the hollow airport ring so fires read at a glance.
+ */
+export function drawWildfire(ctx, x, y, color = '#ff6b35', r = 6) {
+  ctx.save();
+  ctx.fillStyle = color;
+  ctx.strokeStyle = 'rgba(5,7,10,0.9)';
+  ctx.lineWidth = 1.25;
+  ctx.beginPath();
+  // upward flame triangle
+  ctx.moveTo(x, y - r);
+  ctx.lineTo(x + r * 0.85, y + r * 0.7);
+  ctx.lineTo(x - r * 0.85, y + r * 0.7);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
 }
 
 export function drawAirport(ctx, x, y, ident) {

@@ -398,3 +398,62 @@
   font-size: 9px;
   color: var(--txt);
 }
+
+/* ── responsive ─────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .v2-analytics {
+    padding: 12px 12px 22px;
+    gap: 12px;
+  }
+  /* toolbar stacks: title, fleet filter, range each full width */
+  .v2-analytics__toolbar {
+    gap: 12px;
+    padding: 12px;
+  }
+  .v2-analytics__title {
+    margin-right: 0;
+    flex: 1 1 100%;
+  }
+  .v2-analytics__toolbar-group {
+    flex: 1 1 100%;
+    justify-content: space-between;
+  }
+  .v2-analytics__ranges {
+    flex: 1;
+  }
+  .v2-analytics__range {
+    flex: 1;
+  }
+  /* explorer axes stack (X select / swap / Y select) */
+  .v2-analytics__axes {
+    flex-wrap: wrap;
+  }
+  .v2-analytics__axis {
+    flex: 1 1 100%;
+  }
+  .v2-analytics__swap {
+    order: 3;
+  }
+  /* impact / military tables would overflow — let their card body scroll.
+     The matrix already scrolls (.v2-analytics__matrix overflow-x). */
+  .v2-analytics__card-body {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .v2-analytics__impact {
+    min-width: 460px;
+  }
+  /* hour heatmap: fewer, larger cells */
+  .v2-analytics__hours {
+    grid-template-columns: repeat(6, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .v2-analytics {
+    padding: 10px 8px 18px;
+  }
+  .v2-analytics__card-head {
+    flex-wrap: wrap;
+  }
+}

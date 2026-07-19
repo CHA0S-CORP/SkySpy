@@ -12,9 +12,17 @@
 @import './stats.css';
 @import './analytics.css';
 @import './airframes.css';
+@import './weather.css';
+@import './wildfires.css';
 @import './detail.css';
 @import './notam.css';
+@import './pirep.css';
 @import './cannonball.css';
 @import './livemap.css';
 @import './assistant.css';
 @import './assistant-dock.css';
+@import './locked.css';
+@import './access.css';
+@import './fav.css';
+/* Global responsive + touch layer — LAST so it overrides component styles. */
+@import './responsive.css';

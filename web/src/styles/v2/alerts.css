@@ -262,6 +262,7 @@
 }
 .v2-alerts__channel-body {
   flex: 1;
+  min-width: 0;
 }
 .v2-alerts__channel-name {
   font-size: 14px;
@@ -408,6 +409,13 @@
   height: 42px;
   font-family: var(--font-mono);
 }
+/* Multiselect class chips occupy the op+value space of a condition row. */
+.v2-alerts__cond-classes {
+  flex: 1;
+  align-items: center;
+  margin-bottom: 0;
+  min-height: 42px;
+}
 .v2-alerts__add-cond {
   display: flex;
   align-items: center;
@@ -500,4 +508,387 @@
 .v2-alerts__create:disabled {
   opacity: 0.6;
   cursor: default;
+}
+
+/* -------------------------------------------------------------------------
+   Notification channel manager (custom alert targets)
+   ------------------------------------------------------------------------- */
+.v2-alerts__channel-form {
+  padding: 14px 16px;
+  border-radius: 11px;
+  background: var(--bg2);
+  border: 1px solid var(--bord);
+  margin-bottom: 14px;
+}
+.v2-alerts__type-select {
+  width: 100%;
+}
+.v2-alerts__channel-test {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  font-size: 12px;
+}
+/* Keep trailing controls (Test / Switch / delete) from squishing in narrow cards. */
+.v2-alerts__channel > .v2-alerts__channel-test,
+.v2-alerts__channel > .v2-iconbtn,
+.v2-alerts__channel > .v2-switch {
+  flex: 0 0 auto;
+}
+.v2-alerts__channel-detail.v2-mono {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+/* Per-rule target chips (create modal) */
+.v2-alerts__target-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.v2-alerts__target-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 11px;
+  border-radius: 999px;
+  background: var(--bg2);
+  border: 1px solid var(--bord);
+  color: var(--dim);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+}
+.v2-alerts__target-chip--on {
+  color: var(--accent2);
+  border-color: color-mix(in srgb, var(--accent2) 45%, var(--bord));
+  background: color-mix(in srgb, var(--accent2) 14%, transparent);
+}
+
+/* -------------------------------------------------------------------------
+   Inbox (local notification sink)
+   ------------------------------------------------------------------------- */
+.v2-alerts__inbox-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.v2-alerts__inbox-count {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--dim);
+}
+.v2-alerts__inbox-item {
+  position: relative;
+  cursor: pointer;
+}
+.v2-alerts__fired--click {
+  cursor: pointer;
+}
+.v2-alerts__fired--click:hover,
+.v2-alerts__inbox-item:hover {
+  background: color-mix(in srgb, var(--accent2) 6%, var(--bg1));
+}
+.v2-alerts__inbox-item--unread {
+  background: color-mix(in srgb, var(--accent2) 8%, var(--bg1));
+}
+.v2-alerts__inbox-dot {
+  position: absolute;
+  left: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent2);
+}
+.v2-alerts__inbox-read {
+  margin-left: 4px;
+}
+
+/* -------------------------------------------------------------------------
+   Alert detail modal
+   ------------------------------------------------------------------------- */
+.v2-alerts__detail {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.v2-alerts__detail-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border-left: 3px solid var(--accent2);
+  border-radius: 10px;
+  background: var(--bg2);
+}
+.v2-alerts__detail-titles {
+  flex: 1;
+}
+.v2-alerts__detail-rule {
+  font-size: 15px;
+  font-weight: 700;
+}
+.v2-alerts__detail-sub {
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--dim);
+}
+.v2-alerts__detail-identity {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.v2-alerts__detail-photo {
+  width: 132px;
+  height: 88px;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 1px solid var(--bord);
+}
+.v2-alerts__detail-cs {
+  font-size: 18px;
+  font-weight: 700;
+}
+.v2-alerts__detail-meta {
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--dim);
+}
+.v2-alerts__detail-op {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--dim2);
+}
+.v2-alerts__detail-stats {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 8px;
+}
+.v2-alerts__detail-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 10px 4px;
+  border-radius: 9px;
+  background: var(--bg2);
+  border: 1px solid var(--bord);
+  color: var(--dim);
+}
+.v2-alerts__detail-stat-val {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--fg, #e8eef5);
+}
+.v2-alerts__detail-stat-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--dim2);
+}
+.v2-alerts__detail-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 7px;
+}
+.v2-alerts__detail-badge {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 2px 7px;
+  border-radius: 6px;
+  border: 1px solid var(--bord);
+  text-transform: uppercase;
+}
+.v2-alerts__detail-track {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 11px;
+  background: var(--bg2);
+  border: 1px solid var(--bord);
+}
+.v2-alerts__detail-track-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.v2-alerts__detail-track-aside {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--dim2);
+}
+.v2-alerts__detail-card {
+  margin: 0;
+}
+.v2-alerts__detail-map {
+  /* The Leaflet container (.v2-det__map-leaflet) is position:absolute/inset:0, so
+     the wrapper MUST be positioned or the map escapes to the nearest positioned
+     ancestor (the fixed dialog) and fills the whole viewport. */
+  position: relative;
+  height: 300px;
+  border-radius: 11px;
+  overflow: hidden;
+  border: 1px solid var(--bord);
+}
+.v2-alerts__detail-map > * {
+  width: 100%;
+  height: 100%;
+}
+.v2-alerts__detail-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.v2-alerts__detail-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  text-decoration: none;
+}
+@media (max-width: 620px) {
+  .v2-alerts__detail-stats {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* Rule card edit/delete + delete-undo bar */
+.v2-alerts__rule-del:hover {
+  color: var(--danger);
+}
+.v2-alerts__undo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--danger) 10%, var(--bg2));
+  border: 1px solid color-mix(in srgb, var(--danger) 30%, var(--bord));
+  color: var(--danger);
+  font-size: 13px;
+}
+.v2-alerts__undo span {
+  color: var(--dim);
+}
+.v2-alerts__undo strong {
+  color: var(--fg, #e8eef5);
+}
+.v2-alerts__undo-btn {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ==========================================================================
+   Responsive — mobile / tablet reflow (canonical 1024 / 768 / 480 breakpoints).
+   Only NEW media blocks below; desktop base rules above are untouched.
+   ========================================================================== */
+
+@media (max-width: 1024px) {
+  /* rule + channel card grids to one column on tablets */
+  .v2-alerts__grid,
+  .v2-alerts__channels {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .v2-alerts__topbar {
+    flex-wrap: wrap;
+    padding: 12px 14px 0;
+  }
+  .v2-alerts__tabs {
+    flex-wrap: wrap;
+  }
+  .v2-alerts__filters {
+    flex-wrap: wrap;
+    padding: 12px 14px;
+  }
+  .v2-alerts__scroll {
+    padding: 0 14px 14px;
+  }
+  /* search grows full width; the priority/status selects wrap below it */
+  .v2-alerts__search {
+    flex-basis: 100%;
+    max-width: none;
+  }
+  .v2-alerts__filters .v2-select {
+    flex: 1 1 auto;
+  }
+
+  /* ---- Create/Edit rule modal: stack every multi-column form grid ---- */
+  .v2-alerts__templates {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .v2-alerts__pri-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .v2-alerts__modal-2col {
+    grid-template-columns: 1fr;
+  }
+  .v2-alerts__enabled-row {
+    padding-top: 0;
+  }
+  /* condition rows stack: field / operator / value / class chips full width */
+  .v2-alerts__cond-row {
+    flex-wrap: wrap;
+  }
+  .v2-alerts__cond-row .v2-select,
+  .v2-alerts__cond-val,
+  .v2-alerts__cond-classes {
+    flex: 1 1 100%;
+  }
+  .v2-alerts__cond-op {
+    flex: 1 1 100% !important;
+  }
+  /* action buttons wrap so Create never overflows */
+  .v2-alerts__modal-actions {
+    flex-wrap: wrap;
+  }
+  /* fired-history rows wrap the timestamp under the body */
+  .v2-alerts__fired {
+    flex-wrap: wrap;
+  }
+  .v2-alerts__fired-time {
+    min-width: 0;
+    text-align: left;
+  }
+}
+
+@media (max-width: 480px) {
+  .v2-alerts {
+    font-size: 12px;
+  }
+  .v2-alerts__topbar {
+    padding: 10px 11px 0;
+  }
+  .v2-alerts__filters {
+    padding: 10px 11px;
+  }
+  .v2-alerts__scroll {
+    padding: 0 11px 11px;
+  }
+  .v2-alerts__templates,
+  .v2-alerts__pri-grid {
+    grid-template-columns: 1fr;
+  }
+  .v2-alerts__empty {
+    padding: 48px 20px;
+  }
 }

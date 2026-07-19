@@ -45,6 +45,16 @@ from skyspy.models.auth import (
 
 logger = logging.getLogger(__name__)
 
+# Methods that mutate — only these share the strict login (AuthRateThrottle,
+# 5/min) budget. Reads must NOT: the RBAC console fans out several GETs
+# (roles + users + api-keys) on every load, which would otherwise 429 itself.
+_WRITE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
+
+
+def _auth_throttle_on_write(view):
+    """Apply AuthRateThrottle to mutating requests only."""
+    return [AuthRateThrottle()] if view.request.method in _WRITE_METHODS else []
+
 
 class UserViewSet(viewsets.ModelViewSet):
     """
@@ -57,7 +67,9 @@ class UserViewSet(viewsets.ModelViewSet):
     queryset = SkyspyUser.objects.select_related("user").prefetch_related("user__user_roles__role").all()
     serializer_class = SkyspyUserSerializer
     permission_classes = [IsAuthenticated, HasPermission.with_perms("users.view")]
-    throttle_classes = [AuthRateThrottle]
+
+    def get_throttles(self):
+        return _auth_throttle_on_write(self)
 
     def get_permissions(self):
         if self.action in ["create"]:
@@ -215,7 +227,9 @@ class RoleViewSet(viewsets.ModelViewSet):
     queryset = Role.objects.all()
     serializer_class = RoleSerializer
     permission_classes = [IsAuthenticated, HasPermission.with_perms("roles.view")]
-    throttle_classes = [AuthRateThrottle]
+
+    def get_throttles(self):
+        return _auth_throttle_on_write(self)
 
     def get_permissions(self):
         if self.action in ["create"]:
@@ -233,24 +247,52 @@ class RoleViewSet(viewsets.ModelViewSet):
         return Response({"roles": serializer.data, "count": len(serializer.data)})
 
     def update(self, request, *args, **kwargs):
-        """Update a role, protecting system role permissions."""
+        """Update a role.
+
+        System roles are editable (permissions / priority / display_name /
+        description) so admins can retune the built-ins from the RBAC console — but
+        ``name`` and ``is_system`` stay immutable (renaming a system role would
+        orphan the ``reset_defaults`` restore path). Use ``reset_defaults`` to put a
+        system role back to its shipped ``DEFAULT_ROLES`` permissions.
+        """
         partial = kwargs.pop("partial", False)
         instance = self.get_object()
 
-        # For system roles, strip out any permission changes
-        if instance.is_system and "permissions" in request.data:
-            data = request.data.copy() if hasattr(request.data, "copy") else dict(request.data)
-            # Remove permissions from update data for system roles
-            data.pop("permissions", None)
-            # Allow display_name and description changes
-            serializer = self.get_serializer(instance, data=data, partial=partial)
-        else:
-            serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        data = request.data.copy() if hasattr(request.data, "copy") else dict(request.data)
+        if instance.is_system:
+            # Identity of a built-in role is fixed; only its access is tunable.
+            data.pop("name", None)
+            data.pop("is_system", None)
 
+        serializer = self.get_serializer(instance, data=data, partial=partial)
         serializer.is_valid(raise_exception=True)
         self.perform_update(serializer)
 
         return Response(serializer.data)
+
+    @action(detail=True, methods=["post"])
+    def reset_defaults(self, request, pk=None):
+        """Restore a built-in system role's permissions/priority to DEFAULT_ROLES.
+
+        The escape hatch for the "system roles are editable" decision: an admin can
+        experiment with a built-in role's access and snap it back to the shipped
+        defaults. No-op error for custom roles (no default to restore).
+        """
+        role = self.get_object()
+        default = DEFAULT_ROLES.get(role.name)
+        if not role.is_system or default is None:
+            return Response(
+                {"error": "Only built-in system roles can be reset to defaults"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        role.permissions = list(default["permissions"])
+        role.priority = default.get("priority", role.priority)
+        role.display_name = default.get("display_name", role.display_name)
+        role.description = default.get("description", role.description)
+        role.save(update_fields=["permissions", "priority", "display_name", "description", "updated_at"])
+
+        return Response(self.get_serializer(role).data)
 
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
@@ -337,7 +379,9 @@ class APIKeyViewSet(viewsets.ModelViewSet):
 
     serializer_class = APIKeySerializer
     permission_classes = [IsAuthenticated, HasPermission.with_perms("users.view")]
-    throttle_classes = [AuthRateThrottle]
+
+    def get_throttles(self):
+        return _auth_throttle_on_write(self)
 
     def get_queryset(self):
         """Get queryset with optional filtering."""

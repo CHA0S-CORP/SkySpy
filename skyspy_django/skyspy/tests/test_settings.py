@@ -109,6 +109,10 @@ API_KEY_ENABLED = True
 # This is appropriate for tests that aren't specifically testing authentication
 AUTH_MODE = "public"
 
+# Tests exercise production enforcement of the AI/sensitive auth gates, so the
+# local-dev bypass stays off.
+DEV_MODE = False
+
 # =============================================================================
 # Test Environment Configuration
 # =============================================================================
@@ -228,6 +232,32 @@ AIRSPACE_FETCH_RADIUS_NM = 250.0
 GEODATA_FETCH_RADIUS_NM = 250.0
 AIRSPACE_EXTRA_REGIONS = []
 
+# Watch Duty wildfire overlay — disabled in tests; the client is mocked.
+WILDFIRES_ENABLED = False
+WILDFIRES_REFRESH_INTERVAL = 300.0
+WILDFIRES_RADIUS_NM = 250.0
+WILDFIRES_CAMERA_RADIUS_NM = 50.0
+WATCHDUTY_BASE_URL = "https://api.watchduty.example/api/v1"
+WATCHDUTY_API_TOKEN = ""
+WATCHDUTY_USERNAME = ""
+WATCHDUTY_PASSWORD = ""
+
+# FAA enroute structure (US airways + fixes) — disabled in tests; fetchers mock URLs.
+FAA_ENROUTE_ENABLED = False
+FAA_AIRWAYS_URL = "https://faa.example/ATS_Route/FeatureServer/0/query"
+FAA_FIXES_URL = "https://faa.example/DesignatedPoints/FeatureServer/0/query"
+FAA_ENROUTE_MAX_FEATURES = 8000
+
+# Per-aircraft turbulence risk scoring
+TURB_ENABLED = True
+TURB_SCORE_INTERVAL = 60.0
+TURB_SCORE_TTL = 180
+TURB_PIREP_RADIUS_NM = 150.0
+TURB_PIREP_HOURS = 3
+TURB_LEVEL_LIGHT = 20
+TURB_LEVEL_MODERATE = 45
+TURB_LEVEL_SEVERE = 70
+
 # Polling - faster for tests
 POLLING_INTERVAL = 1
 DB_STORE_INTERVAL = 1
@@ -282,6 +312,7 @@ AIRFRAMES_ACARS_RADIUS_NM = 100.0
 # Notifications - disabled for tests
 APPRISE_URLS = ""
 NOTIFICATION_COOLDOWN = 60
+NOTIFICATION_WEBHOOK_ALLOWED_PRIVATE_CIDRS = ""
 
 # Caching - short TTL for tests
 CACHE_TTL = 1
@@ -353,6 +384,7 @@ EMBEDDING_DIM = 1536
 ASSISTANT_ENABLED = False
 ASSISTANT_MODEL = "test-model"
 ASSISTANT_MAX_STEPS = 6
+ASSISTANT_MAX_STEPS_COMPACT = 4
 ASSISTANT_TIMEOUT = 60
 ASSISTANT_MAX_RESULT_CHARS = 6000
 ASSISTANT_MAX_HISTORY_MSGS = 16
@@ -361,6 +393,24 @@ ASSISTANT_CONTEXT_WINDOW = 0
 # Off in tests so tool-selection assertions see a clean query (no live snapshot).
 ASSISTANT_BRIEFING_ENABLED = False
 ASSISTANT_PHOTO_BASE_URL = ""
+
+# Metered flight-schedule API (AviationStack). Off in tests — the flight_schedule
+# assistant tool no-ops without it.
+AVIATIONSTACK_ENABLED = False
+AVIATIONSTACK_API_KEY = ""
+
+# Auto-generated airframe type cards (daily LLM back-fill). Off in tests.
+AIRFRAME_CARD_GEN_ENABLED = False
+AIRFRAME_CARD_GEN_BATCH = 8
+AIRFRAME_CARD_GEN_MIN_TAILS = 1
+
+# Runtime web search. Off in tests (no live network); providers mocked per-test.
+WEB_SEARCH_ENABLED = False
+WEB_SEARCH_PROVIDER = "wikipedia"
+WEB_SEARCH_API_KEY = ""
+WEB_SEARCH_URL = ""
+WEB_SEARCH_MAX_RESULTS = 5
+WEB_SEARCH_USER_AGENT = "skyspy-test/3 (+https://example.test)"
 
 # Sentry - disabled for tests
 SENTRY_DSN = None

@@ -101,6 +101,27 @@ export function Message({ msg }) {
   );
 }
 
+/**
+ * Follow-up prompt chips shown after a conversation has started. These are
+ * generated dynamically from a separate LLM context (see useAssistantChat /
+ * POST /assistant/suggest/), unlike the static starter chips in the empty state.
+ */
+export function NextPrompts({ suggestions = [], onPick }) {
+  if (!suggestions.length) return null;
+  return (
+    <div className="v2-asst__next" aria-label="Suggested follow-up questions">
+      <span className="v2-asst__next-label">Suggested next</span>
+      <div className="v2-asst__next-chips">
+        {suggestions.map((s) => (
+          <button key={s} type="button" className="v2-asst__chip" onClick={() => onPick?.(s)}>
+            {s}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function AssistantThread({ messages, suggestions = [], onPick, emptyTitle, emptyHint }) {
   const endRef = useRef(null);
 
