@@ -132,3 +132,35 @@ def test_assess_turbulence_combines_and_caches(monkeypatch):
 
 def test_assess_turbulence_missing_coords():
     assert turbulence.assess_turbulence(None, None) == {"score": 0, "level": "none", "sources": {}}
+
+
+def test_assess_turbulence_none_alt_does_not_share_band_zero(monkeypatch):
+    # A None-altitude assessment must not collide with real 0-4999ft aircraft in
+    # the grid cache — otherwise whoever computes first pins its score on both.
+    cache.clear()
+    monkeypatch.setattr(turbulence, "_score_gairmet", lambda *a: (80, []))
+    monkeypatch.setattr(turbulence, "_score_pireps", lambda *a: (0, []))
+    monkeypatch.setattr(turbulence, "_score_winds_shear", lambda *a: (0, None))
+
+    none_alt = turbulence.assess_turbulence(40.0, -100.0, None)
+    assert none_alt["score"] == 80
+
+    # Same cell, altitude 2000ft (band 0). Different scorer result proves it is
+    # not served the None-altitude cache entry.
+    monkeypatch.setattr(turbulence, "_score_gairmet", lambda *a: (30, []))
+    low_alt = turbulence.assess_turbulence(40.0, -100.0, 2000)
+    assert low_alt["score"] == 30
+
+
+def test_gairmet_missing_severity_is_light_not_moderate(monkeypatch):
+    # A TURB advisory with no severity string must land below the moderate band.
+    cache.clear()
+    monkeypatch.setattr(
+        turbulence.airspace,
+        "get_advisories",
+        lambda **kw: [{"hazard": "TURB", "severity": None, "polygon": SQUARE}],
+    )
+    score, hits = turbulence._score_gairmet(40.0, -100.0, 30000)
+    assert score == turbulence._GAIRMET_SEVERITY_DEFAULT
+    assert turbulence._level_for_score(score) == "light"
+    assert hits

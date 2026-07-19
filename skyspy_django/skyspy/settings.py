@@ -915,6 +915,9 @@ FAA_ENROUTE_MAX_FEATURES = get_env("FAA_ENROUTE_MAX_FEATURES", "8000", int)
 TURB_ENABLED = get_env("TURB_ENABLED", "True", bool)
 TURB_SCORE_INTERVAL = get_env("TURB_SCORE_INTERVAL", "60", float)
 TURB_SCORE_TTL = get_env("TURB_SCORE_TTL", "180", int)
+# Per-point grid-cache TTL (seconds). Nearby aircraft share one assessment;
+# also bounds how long an expired G-AIRMET keeps scoring, so keep it short.
+TURB_GRID_TTL = get_env("TURB_GRID_TTL", "120", int)
 TURB_PIREP_RADIUS_NM = get_env("TURB_PIREP_RADIUS_NM", "150", float)
 TURB_PIREP_HOURS = get_env("TURB_PIREP_HOURS", "3", int)
 TURB_LEVEL_LIGHT = get_env("TURB_LEVEL_LIGHT", "20", int)

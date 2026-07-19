@@ -44,3 +44,22 @@ def test_score_flags_only_nonzero(monkeypatch):
 def test_score_disabled(monkeypatch):
     monkeypatch.setattr(turb_task.settings, "TURB_ENABLED", False)
     assert score_aircraft_turbulence()["status"] == "disabled"
+
+
+def test_score_coerces_ground_alt(monkeypatch):
+    # alt_baro == "ground" (readsb) must be scored altitude-agnostic, not dropped
+    # by a TypeError inside assess_turbulence.
+    cache.set("current_aircraft", [{"hex": "gnd001", "lat": 40.0, "lon": -100.0, "alt_baro": "ground"}])
+
+    seen = {}
+
+    def fake_assess(lat, lon, alt):
+        seen["alt"] = alt
+        return {"score": 25, "level": "light", "sources": {}}
+
+    monkeypatch.setattr("skyspy.services.turbulence.assess_turbulence", fake_assess)
+
+    result = score_aircraft_turbulence()
+    assert result["scored"] == 1
+    assert seen["alt"] is None
+    assert cache.get(CACHE_KEY_BY_HEX) == {"GND001": {"score": 25, "level": "light"}}

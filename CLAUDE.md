@@ -236,6 +236,9 @@ FAA_ENROUTE_MAX_FEATURES=8000
 TURB_ENABLED=True
 TURB_SCORE_INTERVAL=60
 TURB_SCORE_TTL=180
+# Per-point grid-cache TTL (s). Nearby aircraft share one assessment; also caps
+# how long an expired G-AIRMET keeps scoring, so keep it short.
+TURB_GRID_TTL=120
 TURB_PIREP_RADIUS_NM=150
 TURB_PIREP_HOURS=3
 TURB_LEVEL_LIGHT=20

@@ -33,15 +33,19 @@ from skyspy.services.weather_cache import fetch_winds_aloft, get_cached_pireps
 
 logger = logging.getLogger(__name__)
 
-# Grid-cache TTL and rounding. Aircraft within ~0.1 deg (~6nm) and the same
-# 5000ft altitude band share a cached assessment.
-_GRID_TTL = 120
+# Grid-cache rounding. Aircraft within ~0.1 deg (~6nm) and the same 5000ft
+# altitude band share a cached assessment. The TTL is configurable
+# (TURB_GRID_TTL) since it bounds how long an expired G-AIRMET keeps scoring.
 _GRID_LATLON_ROUND = 1  # decimal places
 _ALT_BAND_FT = 5000
 
 
 def _cfg(name: str, default):
     return getattr(settings, name, default)
+
+
+def _grid_ttl() -> int:
+    return int(_cfg("TURB_GRID_TTL", 120))
 
 
 # --- geometry ---------------------------------------------------------------
@@ -100,6 +104,10 @@ _GAIRMET_SEVERITY_SCORE = {
     "LGT-MOD": 45,
     "LGT": 32,
 }
+# Score for a TURB advisory that carries no severity string. Kept below the
+# moderate band threshold (TURB_LEVEL_MODERATE default 45) so an unqualified
+# advisory reads as "light" rather than auto-flagging every point as moderate.
+_GAIRMET_SEVERITY_DEFAULT = 40
 
 
 def _score_gairmet(lat: float, lon: float, alt_ft) -> tuple[int, list[dict]]:
@@ -116,7 +124,7 @@ def _score_gairmet(lat: float, lon: float, alt_ft) -> tuple[int, list[dict]]:
         if not _point_in_polygon(lon, lat, adv.get("polygon")):
             continue
         severity = (adv.get("severity") or "").upper()
-        base = _GAIRMET_SEVERITY_SCORE.get(severity, 50)
+        base = _GAIRMET_SEVERITY_SCORE.get(severity, _GAIRMET_SEVERITY_DEFAULT)
         if hazard == "TURB-HI":
             base = min(100, base + 8)
         best = max(best, base)
@@ -172,7 +180,10 @@ def _score_pireps(lat: float, lon: float, alt_ft) -> tuple[int, list[dict]]:
         contribution = base * dist_w * alt_w
         if contribution > best:
             best = contribution
-        if dist_w > 0 and info["level"] >= 2:
+        # List every PIREP that actually contributed to the score (level >= 1,
+        # matching the scoring gate above) so the "why" panel explains the value
+        # instead of silently omitting a light report that raised it.
+        if dist_w > 0 and info["level"] >= 1:
             hits.append(
                 {
                     "pirep_id": p.get("pirep_id"),
@@ -202,10 +213,28 @@ def _score_winds_shear(lat: float, lon: float, alt_ft) -> tuple[int, dict | None
 
     # Find the two levels bracketing the aircraft altitude and compute the
     # vector wind difference per 1000ft as a rough shear proxy.
+    def _first(entry, *keys):
+        # Explicit None checks: a legitimate 0 (calm wind, surface level) must
+        # not be skipped the way `a or b` would drop a falsy-but-valid value.
+        for k in keys:
+            v = entry.get(k)
+            if v is not None:
+                return v
+        return None
+
     def _lvl(entry):
-        alt = entry.get("altitude") or entry.get("alt_ft") or entry.get("fl")
-        spd = entry.get("wind_speed") or entry.get("wspd") or entry.get("speed")
-        drc = entry.get("wind_dir") or entry.get("wdir") or entry.get("direction")
+        alt = _first(entry, "altitude", "alt_ft")
+        if alt is None:
+            fl = _first(entry, "fl")
+            if fl is not None:
+                # Flight level is hundreds of feet (FL340 = 34000ft); the rest
+                # of this function works in feet, so convert before comparing.
+                try:
+                    alt = float(fl) * 100.0
+                except (TypeError, ValueError):
+                    alt = None
+        spd = _first(entry, "wind_speed", "wspd", "speed")
+        drc = _first(entry, "wind_dir", "wdir", "direction")
         try:
             return float(alt), float(spd), float(drc)
         except (TypeError, ValueError):
@@ -265,7 +294,11 @@ def assess_turbulence(lat: float, lon: float, altitude_ft=None) -> dict:
     if lat is None or lon is None:
         return {"score": 0, "level": "none", "sources": {}}
 
-    alt_band = int((altitude_ft or 0) // _ALT_BAND_FT)
+    # Key the altitude band on None distinctly from band 0 (0-4999ft): a
+    # None-altitude assessment disables pirep alt-weighting + shear, so it must
+    # not share a grid cell with real low-altitude aircraft (else whoever hits
+    # the cell first pins its altitude-specific score onto everyone in the band).
+    alt_band = "na" if altitude_ft is None else int(altitude_ft // _ALT_BAND_FT)
     cache_key = f"turb:grid:{round(lat, _GRID_LATLON_ROUND)}:{round(lon, _GRID_LATLON_ROUND)}:{alt_band}"
     cached = cache.get(cache_key)
     if cached is not None:
@@ -290,5 +323,5 @@ def assess_turbulence(lat: float, lon: float, altitude_ft=None) -> dict:
             "winds": shear_info,
         },
     }
-    cache.set(cache_key, result, _GRID_TTL)
+    cache.set(cache_key, result, _grid_ttl())
     return result

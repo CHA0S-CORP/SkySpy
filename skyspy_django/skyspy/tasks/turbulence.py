@@ -50,6 +50,11 @@ def score_aircraft_turbulence():
         alt = ac.get("alt_baro")
         if alt is None:
             alt = ac.get("alt")
+        # alt_baro is often the string "ground" (readsb); coerce non-numeric
+        # values to None so assess_turbulence scores the point altitude-agnostic
+        # instead of raising TypeError and silently dropping the aircraft.
+        if not isinstance(alt, (int, float)):
+            alt = None
         try:
             result = assess_turbulence(float(lat), float(lon), alt)
         except (ValueError, TypeError) as e:
