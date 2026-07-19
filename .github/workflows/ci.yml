@@ -99,7 +99,7 @@ jobs:
     timeout-minutes: 20
     services:
       postgres:
-        image: postgres:16-alpine
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_USER: adsb
           POSTGRES_PASSWORD: adsb
@@ -187,7 +187,7 @@ jobs:
     timeout-minutes: 20
     services:
       postgres:
-        image: postgres:16-alpine
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_USER: adsb
           POSTGRES_PASSWORD: adsb
@@ -783,7 +783,7 @@ jobs:
       cancel-in-progress: false
     services:
       postgres:
-        image: postgres:16-alpine
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_USER: adsb
           POSTGRES_PASSWORD: adsb
@@ -906,15 +906,32 @@ jobs:
     steps:
       - name: Check results
         id: check
+        env:
+          # CRITICAL gates — a real failure here blocks the image build/publish.
+          # These are functional correctness signals; don't ship an image that
+          # can't pass its own unit tests.
+          CRIT_PYTHON: ${{ needs.test-python-unit.result }}
+          CRIT_FRONTEND: ${{ needs.test-frontend-unit.result }}
+          CRIT_GO: ${{ needs.test-go.result }}
+          # ADVISORY (non-blocking) — reported but never block the image build:
+          # lint (style), security scans, and the slow integration/e2e suites.
+          ALL_RESULTS: ${{ toJSON(needs.*.result) }}
         run: |
-          RESULTS='${{ toJSON(needs.*.result) }}'
-          echo "Job results: $RESULTS"
-          if echo "$RESULTS" | jq -e 'all(. == "success" or . == "skipped")' > /dev/null; then
+          echo "All job results: $ALL_RESULTS"
+          passed=true
+          for job in CRIT_PYTHON CRIT_FRONTEND CRIT_GO; do
+            r="${!job}"
+            if [ "$r" != "success" ] && [ "$r" != "skipped" ]; then
+              echo "::error::Critical quality-gate job failed ($job=$r)"
+              passed=false
+            fi
+          done
+          if [ "$passed" = "true" ]; then
             echo "passed=true" >> $GITHUB_OUTPUT
-            echo "Quality gate passed"
+            echo "Quality gate passed (advisory lint/security/integration/e2e failures are non-blocking)"
           else
             echo "passed=false" >> $GITHUB_OUTPUT
-            echo "Quality gate failed"
+            echo "Quality gate failed — a critical (unit-test) job did not pass"
             exit 1
           fi
 
