@@ -14,8 +14,9 @@ from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from skyspy.api.throttles import ExternalLookupRateThrottle
 from skyspy.auth.authentication import APIKeyAuthentication, OptionalJWTAuthentication
-from skyspy.auth.permissions import FeatureBasedPermission
+from skyspy.auth.permissions import CanUseLLM, FeatureBasedPermission
 from skyspy.models import AcarsMessage
 from skyspy.serializers.acars import (
     AcarsAirlineStatsSerializer,
@@ -43,11 +44,47 @@ from skyspy.services.acars_stats import (
 logger = logging.getLogger(__name__)
 
 
+def _cached_decode(msg):
+    """Return the message's cached libacars decode from the DB.
+
+    Decoding is done ONCE at ingest by the isolated Celery worker
+    (``decode_acars_message``) and persisted to ``AcarsMessage.decoded`` — we
+    never run libacars in the web process (it can segfault on malformed
+    CPDLC/ARINC, which would take down the API worker). ``decoded is None``
+    means "not decoded yet"; ``{}`` is the "undecodable" sentinel. When it is
+    not yet decoded, queue the background task and answer from the raw text.
+    """
+    if msg.decoded is not None:
+        return msg.decoded or None
+    if msg.text and msg.label:
+        try:
+            from skyspy.tasks.acars import decode_acars_message
+
+            decode_acars_message.delay(msg.id)
+        except Exception as e:  # broad: enqueue must never break the response
+            logger.debug("Failed to queue ACARS decode for %s: %s", msg.id, e)
+    return None
+
+
 class AcarsViewSet(viewsets.ReadOnlyModelViewSet):
     """ViewSet for ACARS/VDL2 messages."""
 
     authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
     permission_classes = [FeatureBasedPermission]
+
+    # LLM-backed ACARS explainers (cost money) — require AI access, not just the
+    # acars feature, and rate-limit.
+    _LLM_ACTIONS = {"ai_summary", "ai_analysis"}
+
+    def get_permissions(self):
+        if getattr(self, "action", None) in self._LLM_ACTIONS:
+            return [CanUseLLM()]
+        return super().get_permissions()
+
+    def get_throttles(self):
+        if getattr(self, "action", None) in self._LLM_ACTIONS:
+            return [ExternalLookupRateThrottle()]
+        return super().get_throttles()
 
     queryset = AcarsMessage.objects.all()
     serializer_class = AcarsMessageSerializer
@@ -132,22 +169,26 @@ class AcarsViewSet(viewsets.ReadOnlyModelViewSet):
     def ai_summary(self, request, pk=None):
         """Plain-English LLM summary of one ACARS message."""
         from skyspy.services import aviation_llm
-        from skyspy.services.acars_decoder import decode_message_text
 
         msg = self.get_object()
 
         if not aviation_llm.available():
             return Response({"available": False, "summary": None})
 
-        decoded = msg.decoded or None
-        if not decoded and msg.text:
-            decoded = decode_message_text(msg.text, label=msg.label) or None
+        decoded = _cached_decode(msg)
+
+        # Ground the summary in the turbulence risk at the message's position.
+        pos = (decoded or {}).get("position") if isinstance(decoded, dict) else None
+        lat = pos.get("lat") if isinstance(pos, dict) else None
+        lon = pos.get("lon") if isinstance(pos, dict) else None
 
         summary = aviation_llm.summarize_acars(
             msg.text or "",
             label=msg.label,
             callsign=msg.callsign,
             decoded=decoded,
+            lat=lat,
+            lon=lon,
         )
         return Response({"available": True, "summary": summary, "id": msg.id})
 
@@ -164,22 +205,27 @@ class AcarsViewSet(viewsets.ReadOnlyModelViewSet):
     def ai_analysis(self, request, pk=None):
         """Structured LLM decode of one ACARS message."""
         from skyspy.services import aviation_llm
-        from skyspy.services.acars_decoder import decode_message_text
 
         msg = self.get_object()
 
         if not aviation_llm.available():
             return Response({"available": False, "analysis": None})
 
-        decoded = msg.decoded or None
-        if not decoded and msg.text:
-            decoded = decode_message_text(msg.text, label=msg.label) or None
+        decoded = _cached_decode(msg)
+
+        # Pull a position out of the decoded message (position/ADS reports carry
+        # one) so the analysis can be grounded in the turbulence risk there.
+        pos = (decoded or {}).get("position") if isinstance(decoded, dict) else None
+        lat = pos.get("lat") if isinstance(pos, dict) else None
+        lon = pos.get("lon") if isinstance(pos, dict) else None
 
         analysis = aviation_llm.analyze_acars(
             msg.text or "",
             label=msg.label,
             callsign=msg.callsign,
             decoded=decoded,
+            lat=lat,
+            lon=lon,
         )
         return Response({"available": True, "analysis": analysis, "id": msg.id})
 

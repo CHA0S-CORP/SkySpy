@@ -10,6 +10,7 @@ export {
   drawAdvisories,
   drawNotams,
   drawPireps,
+  drawAirmetPolygons,
   drawWindsAloft,
   drawMetars,
 } from './drawOverlays';

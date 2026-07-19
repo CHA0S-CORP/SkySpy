@@ -169,11 +169,13 @@ export function AuthProvider({ children }) {
       const data = await response.json();
       setConfig({
         authEnabled: data.auth_enabled,
+        authMode: data.auth_mode,
         publicMode: data.auth_mode === 'public',
         oidcEnabled: data.oidc_enabled,
         oidcProviderName: data.oidc_provider_name,
         localAuthEnabled: data.local_auth_enabled,
         apiKeyEnabled: data.api_key_enabled,
+        devMode: data.dev_mode || false,
         features: data.features || {},
       });
       return data;
@@ -436,6 +438,15 @@ export function AuthProvider({ children }) {
           setUser(storedUser);
           setStatus('authenticated');
           scheduleTokenRefresh(accessToken);
+          // One-time reconcile for sessions cached before newer identity fields
+          // existed. `createUserData` always sets `isSuperuser` (to false for a
+          // normal user), so a stored user MISSING the key predates that change —
+          // e.g. a pre-change admin whose cached perms are empty, which would
+          // otherwise hide every permission-gated nav item until re-login. Refresh
+          // from the server; fetchProfile leaves the painted user intact on failure.
+          if (storedUser.isSuperuser === undefined) {
+            fetchProfile();
+          }
         } else {
           const profile = await fetchProfile();
           if (profile) {

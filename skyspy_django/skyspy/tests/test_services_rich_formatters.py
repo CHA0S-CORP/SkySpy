@@ -153,6 +153,28 @@ class DiscordFormatterAlertTests(TestCase):
         military_fields = [f for f in fields if "Military" in f["name"]]
         self.assertTrue(len(military_fields) > 0)
 
+    def test_format_alert_airframe_operator_and_le(self):
+        """Aircraft (manufacturer/model), operator and LE badge are shown."""
+        data = {
+            "rule_name": "LE",
+            "priority": "warning",
+            "operator": "US CUSTOMS",
+            "manufacturer": "Cessna",
+            "model": "208",
+            "law_enforcement": True,
+            "law_enforcement_description": "Customs & Border Protection",
+            "aircraft": {"hex": "A1B2C3"},
+        }
+
+        result = self.formatter.format_alert(data)
+        fields = result["embeds"][0]["fields"]
+        names = {f["name"]: f["value"] for f in fields}
+
+        self.assertEqual(names.get("Aircraft"), "Cessna 208")
+        self.assertEqual(names.get("Operator"), "US CUSTOMS")
+        le = [v for k, v in names.items() if "Law Enforcement" in k]
+        self.assertIn("Customs & Border Protection", le)
+
     def test_format_alert_registration_author(self):
         """Test registration is shown in author section."""
         data = {

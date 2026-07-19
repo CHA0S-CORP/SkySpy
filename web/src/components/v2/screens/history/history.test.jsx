@@ -268,10 +268,14 @@ describe('HistoryScreen', () => {
   });
 
   const renderScreen = (props = {}) => {
+    // The active tab is now deep-linked via the URL (#history?data=…) rather
+    // than a prop, so translate the test's `hashParams` into the hash.
+    const { hashParams, ...rest } = props;
+    if (hashParams?.data) window.location.hash = `#history?data=${hashParams.data}`;
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     return render(
       <QueryClientProvider client={qc}>
-        <HistoryScreen apiBase="" onSelectAircraft={vi.fn()} onViewEvent={vi.fn()} {...props} />
+        <HistoryScreen apiBase="" onSelectAircraft={vi.fn()} onViewEvent={vi.fn()} {...rest} />
       </QueryClientProvider>
     );
   };

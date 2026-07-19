@@ -2,7 +2,11 @@ import { useQuery } from '@tanstack/react-query';
 
 async function getJson(url) {
   try {
-    const res = await fetch(url);
+    // no-store: these are live-ish polled reads that should never come from the
+    // HTTP cache — and it stops the browser replaying a cached redirect (e.g. a
+    // 301 served by a momentarily misconfigured backend) that would otherwise
+    // poison every detail fetch and blank out the page.
+    const res = await fetch(url, { cache: 'no-store' });
     if (!res.ok) return null;
     const ct = res.headers.get('content-type');
     if (!ct || !ct.includes('application/json')) return null;
@@ -43,8 +47,9 @@ export function isPopulatedAirframe(airframe) {
  * @param {string} hex - ICAO 24-bit hex (lowercase ok)
  * @param {string} [callsign]
  * @param {boolean} [liveTrack] - when true, refresh the track faster for live view
+ * @param {number} [trackHours] - track history window in hours (default 24)
  */
-export function useDetailData(apiBase, hex, callsign, liveTrack = false) {
+export function useDetailData(apiBase, hex, callsign, liveTrack = false, trackHours = 24) {
   // DB stores icao_hex uppercase and the sightings/sessions/safety filters
   // are case-sensitive exact matches; navigation sources pass lowercase.
   // Key every query on the normalized hex so callers arriving with different
@@ -72,12 +77,12 @@ export function useDetailData(apiBase, hex, callsign, liveTrack = false) {
   });
 
   const track = useQuery({
-    queryKey: ['v2-detail-track', apiBase, hexUC],
+    queryKey: ['v2-detail-track', apiBase, hexUC, trackHours],
     enabled: !!hex,
     refetchInterval: liveTrack ? 5000 : 30000,
     queryFn: async () => {
       const data = await getJson(
-        `${apiBase}/api/v1/sightings/?icao_hex=${hexUC}&hours=24&limit=1000`
+        `${apiBase}/api/v1/sightings/?icao_hex=${hexUC}&hours=${trackHours}&limit=1000`
       );
       const list = data?.sightings || data?.results || (Array.isArray(data) ? data : []);
       return list.slice().sort((a, b) => new Date(a.timestamp || 0) - new Date(b.timestamp || 0));

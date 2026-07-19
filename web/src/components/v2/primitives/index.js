@@ -8,6 +8,7 @@ export { SegmentedControl } from './SegmentedControl';
 export { Tabs } from './Tabs';
 export { Select } from './Select';
 export { Modal } from './Modal';
+export { BottomSheet } from './BottomSheet';
 export { ToastHost, toast } from './Toast';
 export { EmptyState } from './EmptyState';
 export { StatCard } from './StatCard';

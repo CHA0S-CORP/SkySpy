@@ -57,6 +57,7 @@ services:
     volumes:
       - ./test-results:/app/test-results
       - ./skyspy_django/skyspy:/app/skyspy:ro  # Hot reload Python code
+      - ./skyspy_common/skyspy_common:/opt/venv/lib/python3.14/site-packages/skyspy_common:ro  # Hot reload shared pkg (subprocess_decode etc.)
     depends_on:
       postgres:
         condition: service_healthy
@@ -179,6 +180,7 @@ services:
     volumes:
       - ./test/api-cache:/data
       - ./skyspy_django/skyspy:/app/skyspy:ro  # Hot reload Python code
+      - ./skyspy_common/skyspy_common:/opt/venv/lib/python3.14/site-packages/skyspy_common:ro  # Hot reload shared pkg (subprocess_decode etc.)
     ports:
       - "${API_PORT:-8000}:8000"
     depends_on:
@@ -251,6 +253,7 @@ services:
     volumes:
       - ./test/api-cache:/data
       - ./skyspy_django/skyspy:/app/skyspy:ro  # Hot reload Python code
+      - ./skyspy_common/skyspy_common:/opt/venv/lib/python3.14/site-packages/skyspy_common:ro  # Hot reload shared pkg (subprocess_decode etc.)
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -266,6 +269,15 @@ services:
       --concurrency=50
       --queues=polling,default,database,transcription,notifications,low_priority
       --pool=gevent
+    healthcheck:
+      # Base image HEALTHCHECK curls :8000 (the web server) which this worker
+      # container does not run -> always "unhealthy". Ping the worker via the
+      # broker instead.
+      test: ["CMD-SHELL", "celery -A skyspy inspect ping -t 8 | grep -q pong || exit 1"]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 40s
 
   # ACARS UDP Listener for dev profile
   acars-listener:
@@ -286,6 +298,7 @@ services:
       - VDLM2_PORT=${VDLM2_PORT:-5555}
     volumes:
       - ./skyspy_django/skyspy:/app/skyspy:ro
+      - ./skyspy_common/skyspy_common:/opt/venv/lib/python3.14/site-packages/skyspy_common:ro  # Hot reload shared pkg (subprocess_decode etc.)
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -294,6 +307,10 @@ services:
     networks:
       - test-network
     command: python manage.py run_acars --acars-port 5550 --vdlm2-port 5555 -v 2
+    healthcheck:
+      # Base image HEALTHCHECK curls :8000 (the web server) which this listener
+      # does not run -> always "unhealthy". No web port / no ps in image to probe.
+      disable: true
 
   # Celery Beat for dev profile
   celery-beat:
@@ -315,6 +332,7 @@ services:
       - AIRCRAFT_STREAM_ENABLED=${AIRCRAFT_STREAM_ENABLED:-True}
     volumes:
       - ./skyspy_django/skyspy:/app/skyspy:ro  # Hot reload Python code
+      - ./skyspy_common/skyspy_common:/opt/venv/lib/python3.14/site-packages/skyspy_common:ro  # Hot reload shared pkg (subprocess_decode etc.)
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -328,6 +346,11 @@ services:
       celery -A skyspy beat
       --loglevel=info
       --scheduler=django_celery_beat.schedulers:DatabaseScheduler
+    healthcheck:
+      # Base image HEALTHCHECK curls :8000 (the web server) which beat does not
+      # run -> always "unhealthy". Beat has no inspect-ping; nothing depends on
+      # its health condition.
+      disable: true
 
   # --- PgBouncer ---
   pgbouncer:
@@ -385,6 +408,9 @@ services:
     image: pgvector/pgvector:pg16
     profiles: ["dev","test"]
     container_name: skyspy_postgres_test
+    # Docker's default /dev/shm is 64M; parallel VACUUM/ANALYZE + hash ops need
+    # more shared memory or fail with "No space left on device".
+    shm_size: 256mb
     environment:
       - POSTGRES_USER=${POSTGRES_USER:-adsb}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-adsb}
@@ -525,7 +551,8 @@ services:
       - RELAY_PROTOCOL=udp
 
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/api/stats"]
+      # Image has no curl; use python3 (present, runs mock_server.py) to probe.
+      test: ["CMD", "python3", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8080/api/stats',timeout=5).status==200 else 1)"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -557,6 +584,31 @@ services:
       timeout: 10s
       retries: 3
       start_period: 5s
+
+  # SearXNG meta-search — the general web-search backend for the LLM
+  # (services/web_search.py). Reachable in-stack at http://searxng:8080; the app
+  # is pointed at it via WEB_SEARCH_PROVIDER=searxng + WEB_SEARCH_URL in .env.test.
+  searxng:
+    image: searxng/searxng:latest
+    profiles: ["dev"]
+    container_name: skyspy_searxng
+    environment:
+      - SEARXNG_BASE_URL=http://searxng:8080/
+      - SEARXNG_SECRET=${SEARXNG_SECRET:-skyspy-dev-searxng-secret}
+      - UWSGI_WORKERS=${SEARXNG_WORKERS:-2}
+      - UWSGI_THREADS=4
+    volumes:
+      - ./searxng:/etc/searxng:rw
+    networks:
+      - test-network
+    ports:
+      - ${SEARXNG_PORT_EXTERNAL:-18090}:8080
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
 
 networks:
   test-network:

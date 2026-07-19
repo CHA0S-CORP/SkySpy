@@ -54,6 +54,9 @@ class AuthConfigView(APIView):
             "oidc_provider_name": getattr(settings, "OIDC_PROVIDER_NAME", ""),
             "local_auth_enabled": getattr(settings, "LOCAL_AUTH_ENABLED", True),
             "api_key_enabled": getattr(settings, "API_KEY_ENABLED", True),
+            # Local dev (DEV_MODE): the backend relaxes auth gates, so the UI can
+            # surface AI/system entries even to an anonymous dev session.
+            "dev_mode": bool(getattr(settings, "DEV_MODE", False)),
         }
 
         # Include feature access configuration
@@ -141,6 +144,8 @@ class LoginView(APIView):
                 "id": user.id,
                 "username": user.username,
                 "email": user.email,
+                "is_superuser": user.is_superuser,
+                "is_staff": user.is_staff,
                 "display_name": profile.display_name,
                 "permissions": profile.get_all_permissions(),
                 "roles": [ur.role.name for ur in user.user_roles.all()],
@@ -290,7 +295,8 @@ class OIDCAuthorizeView(APIView):
         # Build authorization URL
         from urllib.parse import urlencode
 
-        provider_url = getattr(settings, "OIDC_PROVIDER_URL", "")
+        from skyspy.auth.oidc import get_endpoints
+
         client_id = getattr(settings, "OIDC_CLIENT_ID", "")
         redirect_uri = request.build_absolute_uri("/api/v1/auth/oidc/callback/")
         scopes = getattr(settings, "OIDC_SCOPES", "openid profile email")
@@ -309,7 +315,10 @@ class OIDCAuthorizeView(APIView):
             "state": state,
         }
 
-        auth_url = f"{provider_url}/authorize?{urlencode(params)}"
+        # Use the provider's discovered authorization endpoint (works with hosted
+        # IdPs like Google/Auth0/Okta), falling back to the legacy /authorize path.
+        authorization_endpoint = get_endpoints()["authorization_endpoint"]
+        auth_url = f"{authorization_endpoint}?{urlencode(params)}"
 
         return Response({"authorization_url": auth_url})
 
@@ -349,12 +358,14 @@ class OIDCCallbackView(APIView):
         # Exchange code for tokens
         import httpx
 
-        provider_url = getattr(settings, "OIDC_PROVIDER_URL", "")
+        from skyspy.auth.oidc import decode_id_token, get_endpoints
+
         client_id = getattr(settings, "OIDC_CLIENT_ID", "")
         client_secret = getattr(settings, "OIDC_CLIENT_SECRET", "")
         redirect_uri = request.build_absolute_uri("/api/v1/auth/oidc/callback/")
 
-        token_url = f"{provider_url}/token"
+        endpoints = get_endpoints()
+        token_url = endpoints["token_endpoint"]
         token_data = {
             "grant_type": "authorization_code",
             "code": code,
@@ -374,18 +385,22 @@ class OIDCCallbackView(APIView):
                 {"error": "Failed to exchange authorization code"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-        # Get user info
-        access_token = tokens.get("access_token")
-        userinfo_url = f"{provider_url}/userinfo"
+        # Prefer the (verified) ID token claims — hosted IdPs like Google return
+        # identity primarily there. Fall back to the userinfo endpoint when the ID
+        # token is absent or can't be validated (e.g. no JWKS configured).
+        claims = decode_id_token(tokens.get("id_token", ""))
 
-        try:
-            with httpx.Client() as client:
-                userinfo_response = client.get(userinfo_url, headers={"Authorization": f"Bearer {access_token}"})
-                userinfo_response.raise_for_status()
-                claims = userinfo_response.json()
-        except (httpx.HTTPError, ValueError, KeyError, TypeError) as e:
-            logger.exception(f"OIDC userinfo failed: {e}")
-            return Response({"error": "Failed to get user info"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        if not claims:
+            access_token = tokens.get("access_token")
+            userinfo_url = endpoints["userinfo_endpoint"]
+            try:
+                with httpx.Client() as client:
+                    userinfo_response = client.get(userinfo_url, headers={"Authorization": f"Bearer {access_token}"})
+                    userinfo_response.raise_for_status()
+                    claims = userinfo_response.json()
+            except (httpx.HTTPError, ValueError, KeyError, TypeError) as e:
+                logger.exception(f"OIDC userinfo failed: {e}")
+                return Response({"error": "Failed to get user info"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         # Authenticate user using OIDC backend
         from skyspy.auth.backends import OIDCAuthenticationBackend
@@ -412,6 +427,8 @@ class OIDCCallbackView(APIView):
                 "id": user.id,
                 "username": user.username,
                 "email": user.email,
+                "is_superuser": user.is_superuser,
+                "is_staff": user.is_staff,
                 "display_name": profile.display_name,
                 "permissions": profile.get_all_permissions(),
                 "roles": [ur.role.name for ur in user.user_roles.all()],
@@ -506,9 +523,29 @@ def permissions_list(request):
     """
     Get list of all available permissions.
     """
+    from skyspy.models.auth import FeatureAccess
+
+    feature_names = dict(FeatureAccess.FEATURE_CHOICES)
+
     permissions = []
     for feature, perms in FEATURE_PERMISSIONS.items():
-        permissions.append({"feature": feature, "permissions": perms})
+        permissions.append(
+            {
+                "feature": feature,
+                "display_name": feature_names.get(feature, feature.replace("_", " ").title()),
+                # Raw string list kept for backward compatibility; `actions` carries
+                # the per-permission labels the RBAC console's role matrix renders.
+                "permissions": perms,
+                "actions": [
+                    {
+                        "key": p,
+                        "action": p.split(".", 1)[1] if "." in p else p,
+                        "label": (p.split(".", 1)[1] if "." in p else p).replace("_", " ").title(),
+                    }
+                    for p in perms
+                ],
+            }
+        )
 
     return Response(permissions)
 

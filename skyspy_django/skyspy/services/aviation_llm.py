@@ -128,6 +128,12 @@ OUTPUT FORMAT
    (position/altitude, sky, weather/visibility, temp/wind, turbulence, icing,
    remarks). Use a short labeled list, not dense prose.
 
+If a "turbulence_context" field is provided, it is the model-derived turbulence
+risk (NWS G-AIRMET forecast + nearby PIREPs + winds-aloft shear) at this report's
+position. Add a brief line noting whether the pilot's report agrees with or
+contradicts that forecast risk — but the pilot's first-hand observation always
+takes precedence; treat the context as corroboration, not fact.
+
 Keep it accurate, concise, and unambiguous. When in doubt, flag the doubt."""
 
 # Dedicated ACARS decoder prompt. Identifies the message type/label, decodes the
@@ -239,6 +245,10 @@ OUTPUT FORMAT
    (event/time, position/altitude, fuel, route, clearance, or free text).
 3. Raw/uninterpreted: quote any airline-specific or corrupted segments verbatim,
    clearly marked as not decoded.
+If a "turbulence_context" field is provided, it is the model-derived turbulence
+risk (NWS G-AIRMET + nearby PIREPs + winds-aloft shear) at this message's
+position. If the risk is moderate or greater, add one short line noting the
+rough-air conditions along the aircraft's track — never invent it if absent.
 Keep it accurate and concise. When in doubt, flag the doubt."""
 
 # Dedicated NOTAM decoder prompt. Handles both ICAO Q-line/A)-G) and US-domestic
@@ -419,10 +429,23 @@ def _summarize(kind: str, raw_text: str, context: dict | None = None) -> str | N
 
 
 def summarize_acars(
-    text: str, *, label: str | None = None, callsign: str | None = None, decoded: dict | None = None
+    text: str,
+    *,
+    label: str | None = None,
+    callsign: str | None = None,
+    decoded: dict | None = None,
+    lat=None,
+    lon=None,
+    altitude_ft=None,
 ) -> str | None:
-    """Plain-English summary of an ACARS/VDL2 message body."""
-    return _summarize("acars", text, {"label": label, "callsign": callsign, "decoded": decoded})
+    """Plain-English summary of an ACARS/VDL2 message body. When lat/lon are given
+    (e.g. from a position report), the turbulence-risk picture at that position is
+    injected so the summary can flag rough-air conditions."""
+    ctx = {"label": label, "callsign": callsign, "decoded": decoded}
+    turb = _turbulence_context(lat, lon, altitude_ft)
+    if turb:
+        ctx["turbulence_context"] = turb
+    return _summarize("acars", text, ctx)
 
 
 # Structured ACARS analysis — same decoding knowledge as the prose decoder, but
@@ -448,7 +471,11 @@ _ACARS_ANALYSIS_SYSTEM_PROMPT = (
     "- If a code is non-standard or looks corrupted, still list it and explain the uncertainty in a "
     "note — do NOT present a guessed correction as fact.\n"
     '- Empty arrays are valid. If the message is empty or unintelligible, set headline to "N/A" and '
-    "leave the arrays empty."
+    "leave the arrays empty.\n"
+    '- If a "turbulence_context" field is provided (model-derived turbulence risk at the message '
+    "position from NWS G-AIRMET + PIREPs + winds-aloft shear), and this is a position/weather "
+    'report, add ONE `notes` entry summarizing the rough-air risk (e.g. "Moderate turbulence '
+    'forecast at this position (G-AIRMET TURB)"). Do not invent it if the field is absent.'
 )
 
 _ACARS_ANALYSIS_MAX_TOKENS = 700
@@ -473,17 +500,29 @@ def _parse_json_object(content: str) -> dict | None:
 
 
 def analyze_acars(
-    text: str, *, label: str | None = None, callsign: str | None = None, decoded: dict | None = None
+    text: str,
+    *,
+    label: str | None = None,
+    callsign: str | None = None,
+    decoded: dict | None = None,
+    lat=None,
+    lon=None,
+    altitude_ft=None,
 ) -> dict | None:
     """Structured (JSON) decode of an ACARS/VDL2 message for rich UI rendering.
 
     Returns a normalized dict (headline / message_type / aircraft / summary / fields /
     airports / notes) or ``None`` when the LLM is unavailable or the message is empty.
+    When lat/lon are given (e.g. from a position report), the turbulence-risk picture
+    at that position is injected so the analysis can flag rough-air conditions.
     """
     if not text or not text.strip() or not llm_client.is_available():
         return None
 
     ctx = {"label": label, "callsign": callsign, "decoded": decoded}
+    turb = _turbulence_context(lat, lon, altitude_ft)
+    if turb:
+        ctx["turbulence_context"] = turb
     ctx = {k: v for k, v in ctx.items() if v not in (None, "", [], {})}
     parts = []
     if ctx:
@@ -536,12 +575,44 @@ def analyze_acars(
         "fields": fields,
         "airports": airports,
         "notes": notes,
+        # Deterministic turbulence risk at the message position (not LLM-derived),
+        # so the UI can render a reliable badge. None when no position / calm.
+        "turbulence": turb,
     }
 
 
-def explain_pirep(raw_text: str, *, decoded: dict | None = None) -> str | None:
-    """Plain-English explanation of a PIREP. ``decoded`` = pirep_decoder output."""
-    return _summarize("pirep", raw_text, {"decoded": decoded})
+def _turbulence_context(lat, lon, altitude_ft=None) -> dict | None:
+    """Best-effort turbulence risk at a report's position, to ground PIREP/ACARS
+    LLM analysis in the current NWS G-AIRMET + PIREP + winds-aloft picture. Returns
+    a compact dict (level/score + hazard hits) or None when unavailable."""
+    if lat is None or lon is None:
+        return None
+    try:
+        from skyspy.services.turbulence import assess_turbulence
+
+        result = assess_turbulence(float(lat), float(lon), altitude_ft)
+    except (ValueError, TypeError, ImportError):
+        return None
+    if not result or result.get("level") == "none":
+        return None
+    sources = result.get("sources") or {}
+    return {
+        "level": result.get("level"),
+        "score": result.get("score"),
+        "gairmet_hazards": [h.get("hazard") for h in (sources.get("gairmet") or [])][:3],
+        "nearby_pirep_turb": bool(sources.get("pireps")),
+    }
+
+
+def explain_pirep(raw_text: str, *, decoded: dict | None = None, lat=None, lon=None, altitude_ft=None) -> str | None:
+    """Plain-English explanation of a PIREP. ``decoded`` = pirep_decoder output.
+    When lat/lon are given, the current turbulence-risk picture at that position
+    is injected so the model can corroborate or contrast the pilot's report."""
+    context = {"decoded": decoded}
+    turb = _turbulence_context(lat, lon, altitude_ft)
+    if turb:
+        context["turbulence_context"] = turb
+    return _summarize("pirep", raw_text, context)
 
 
 def explain_notam(raw_text: str, *, decoded: dict | None = None) -> str | None:
@@ -621,6 +692,97 @@ def brief_notam(raw_text: str, *, decoded: dict | None = None) -> dict | None:
         "summary": summary,
         "restrictions": restrictions[:4],
         "implications": implications[:3],
+    }
+
+
+_AIRMET_BRIEF_SYSTEM_PROMPT = (
+    "You are a flight-operations briefer. From a G-AIRMET (graphical AIRMET) forecast "
+    "hazard advisory produce a structured briefing for someone watching ADS-B traffic on "
+    "the ground (not a pilot planning a flight). Respond with ONLY a JSON object, no "
+    "markdown fences, with exactly these keys:\n"
+    '  "headline": one line (<= 120 chars) — the hazard, the altitude band it affects, and '
+    "how long it is valid.\n"
+    '  "summary": 2-3 plain-language sentences. Expand every contraction (TURB=turbulence, '
+    "ICE=icing, IFR=instrument flight rules, MT OBSC=mountain obscuration, LLWS=low-level "
+    "wind shear, FZLVL=freezing level, SFC WND=surface winds). Explain what the hazard is "
+    "and what conditions produce it. Never assert facts not present in the source.\n"
+    '  "hazard_detail": one sentence describing the hazard type in aviation terms (what a '
+    "pilot would experience).\n"
+    '  "altitude_note": one short string describing the affected altitude band in plain terms '
+    '(e.g. "Surface up to 12,000 ft" or "FL180 and above"), or "" if unknown.\n'
+    '  "operational_impact": array of 2-3 short strings — how this affects aircraft operating '
+    "in the area (aircraft types most affected, likely reroutes/altitude changes).\n"
+    '  "safety_tips": array of 1-2 short strings — what a ground observer might notice in the '
+    "ADS-B picture (deviations, altitude changes, holding).\n"
+    "Ground every statement in the advisory data. If the input is empty or not an AIRMET, "
+    'return {"headline":"","summary":"","hazard_detail":"","altitude_note":"","operational_impact":[],"safety_tips":[]}.'
+)
+
+
+def brief_airmet(
+    raw_text: str | None,
+    *,
+    hazard: str | None = None,
+    severity: str | None = None,
+    lower_alt_ft: int | None = None,
+    upper_alt_ft: int | None = None,
+    region: str | None = None,
+    valid_to=None,
+) -> dict | None:
+    """Structured plain-language briefing for one G-AIRMET advisory.
+
+    Returns ``{headline, summary, hazard_detail, altitude_note, operational_impact[],
+    safety_tips[]}`` or ``None`` when the LLM is unavailable or the response can't be
+    parsed. Unlike the raw-text decoders, AIRMETs often carry little/no raw text, so
+    the structured advisory fields (hazard, severity, altitude band) are the primary
+    input and ``raw_text`` is optional context.
+    """
+    if not llm_client.is_available():
+        return None
+
+    fields = {
+        "hazard": hazard,
+        "severity": severity,
+        "lower_alt_ft": lower_alt_ft,
+        "upper_alt_ft": upper_alt_ft,
+        "region": region,
+        "valid_to": str(valid_to) if valid_to else None,
+    }
+    clean = {k: v for k, v in fields.items() if v not in (None, "", [], {})}
+    if not clean and not (raw_text and raw_text.strip()):
+        return None
+
+    parts = ["Advisory fields: " + json.dumps(clean, default=str)[:800]]
+    if raw_text and raw_text.strip():
+        parts.append("Raw AIRMET text:\n" + raw_text.strip()[:2000])
+
+    response = llm_client.complete(
+        [
+            {"role": "system", "content": _AIRMET_BRIEF_SYSTEM_PROMPT},
+            {"role": "user", "content": "\n\n".join(parts)},
+        ],
+        max_tokens=600,
+    )
+    if not response:
+        return None
+
+    data = _parse_json_object(response.get("content") or "")
+    if not data:
+        return None
+
+    headline = (data.get("headline") or "").strip()
+    summary = (data.get("summary") or "").strip()
+    if not headline and not summary:
+        return None
+    impact = [str(r).strip() for r in (data.get("operational_impact") or []) if str(r).strip()]
+    tips = [str(r).strip() for r in (data.get("safety_tips") or []) if str(r).strip()]
+    return {
+        "headline": headline,
+        "summary": summary,
+        "hazard_detail": (data.get("hazard_detail") or "").strip(),
+        "altitude_note": (data.get("altitude_note") or "").strip(),
+        "operational_impact": impact[:3],
+        "safety_tips": tips[:2],
     }
 
 
@@ -850,9 +1012,18 @@ def explain(kind: str, text: str, context: dict | None = None) -> str | None:
     kind = (kind or "").lower().strip()
     ctx = context or {}
     if kind == "acars":
-        return summarize_acars(text, **{k: ctx.get(k) for k in ("label", "callsign", "decoded") if k in ctx})
+        return summarize_acars(
+            text,
+            **{k: ctx.get(k) for k in ("label", "callsign", "decoded", "lat", "lon", "altitude_ft") if k in ctx},
+        )
     if kind == "pirep":
-        return explain_pirep(text, decoded=ctx.get("decoded"))
+        return explain_pirep(
+            text,
+            decoded=ctx.get("decoded"),
+            lat=ctx.get("lat"),
+            lon=ctx.get("lon"),
+            altitude_ft=ctx.get("altitude_ft"),
+        )
     if kind == "notam":
         return explain_notam(text, decoded=ctx.get("decoded"))
     if kind in ("metar", "taf", "sigmet"):

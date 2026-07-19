@@ -981,14 +981,20 @@ def _parse_route_response(payload, callsign: str) -> dict | None:
     if len(airports) < 2:
         return None
 
+    # ``_airports`` is ordered origin-first, destination-last; any entries in
+    # between are en-route stops/waypoints. Expose the full ordered chain as
+    # ``waypoints`` (each a route-airport brief) so the UI can draw the leg
+    # polyline, keeping origin/destination as the convenient endpoints.
+    waypoints = [_airport_brief(a) for a in airports]
     return {
         "callsign": entry.get("callsign") or callsign,
         "airline_code": entry.get("airline_code"),
         "flight_number": entry.get("number"),
         "airport_codes": entry.get("airport_codes"),
         "plausible": entry.get("plausible"),
-        "origin": _airport_brief(airports[0]),
-        "destination": _airport_brief(airports[-1]),
+        "origin": waypoints[0],
+        "destination": waypoints[-1],
+        "waypoints": waypoints,
     }
 
 
@@ -1067,14 +1073,16 @@ def _fetch_route_hexdb(callsign: str) -> dict | None:
     def _brief(icao: str) -> dict:
         return {"iata": None, "icao": icao, "name": None, "city": None, "country": None, "lat": None, "lon": None}
 
+    waypoints = [_brief(icao) for icao in legs]
     return {
         "callsign": callsign,
         "airline_code": None,
         "flight_number": None,
         "airport_codes": "-".join(legs),
         "plausible": None,
-        "origin": _brief(legs[0]),
-        "destination": _brief(legs[-1]),
+        "origin": waypoints[0],
+        "destination": waypoints[-1],
+        "waypoints": waypoints,
     }
 
 

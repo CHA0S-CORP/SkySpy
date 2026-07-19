@@ -383,3 +383,42 @@
     grid-column: span 1;
   }
 }
+
+@media (max-width: 768px) {
+  .v2-sys {
+    padding: 14px 12px 20px;
+  }
+  /* status banner wraps: icon+text on top, dots/refresh below */
+  .v2-sys__banner {
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 14px 16px;
+  }
+  .v2-sys__banner-spacer {
+    display: none;
+  }
+  /* footer version chips wrap and centre */
+  .v2-sys__footer {
+    flex-wrap: wrap;
+    gap: 10px 18px;
+  }
+}
+
+@media (max-width: 480px) {
+  .v2-sys {
+    padding: 12px 8px 16px;
+    font-size: 12px;
+  }
+  /* gauges single column so the big value + track never overflow */
+  .v2-sys__gauges {
+    grid-template-columns: 1fr;
+  }
+  /* feeder coords stack; Copy button drops to full width */
+  .v2-sys__feeder-coords {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .v2-sys__feeder-coords > div[style] {
+    flex-basis: 100%;
+  }
+}

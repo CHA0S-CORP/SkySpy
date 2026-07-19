@@ -4,6 +4,7 @@ Notification configuration and channel API views.
 
 import logging
 
+from django.conf import settings
 from django.db.models import Q
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
@@ -179,14 +180,22 @@ class NotificationChannelViewSet(viewsets.ModelViewSet):
         queryset = super().get_queryset().select_related("owner").annotate(_alert_rule_count=Count("alert_rules"))
         user = self.request.user
 
+        # Dev convenience: in DEV_MODE show every channel to anonymous local sessions
+        # (production keeps the ownership scoping below).
+        if getattr(settings, "DEV_MODE", False):
+            return queryset
+
         if user.is_authenticated:
             if _is_admin_user(user):
                 return queryset
             # Users see: their own channels + global channels
             return queryset.filter(Q(owner=user) | Q(is_global=True)).distinct()
         else:
-            # Anonymous users only see global channels
-            return queryset.filter(is_global=True)
+            # Anonymous users (public mode) see global channels AND owner-less
+            # channels (the only kind public-mode create produces — owner=None,
+            # is_global=False). Without owner__isnull a channel created in public
+            # mode would be invisible, same as the alert-rule visibility bug.
+            return queryset.filter(Q(is_global=True) | Q(owner__isnull=True))
 
     @extend_schema(summary="List notification channels", responses={200: NotificationChannelSerializer(many=True)})
     def list(self, request, *args, **kwargs):
@@ -257,7 +266,8 @@ class NotificationChannelViewSet(viewsets.ModelViewSet):
     def _can_edit(self, user, channel) -> bool:
         """Check if user can edit this channel."""
         if not user or not user.is_authenticated:
-            return False
+            # Public mode: allow editing owner-less channels (the shared set).
+            return channel.owner_id is None
         if _is_admin_user(user):
             return True
         return channel.owner_id == user.id

@@ -61,6 +61,29 @@ export function drawConvectiveSigmetPolygons(ctx, geo, data) {
   }
 }
 
+/**
+ * Draw G-AIRMET/AIRMET hazard polygons (color-coded by hazard; AREA filled +
+ * dashed, LINE stroked). Distinct from the red convective SIGMET hatching. Pro
+ * mode only.
+ *
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {object} geo
+ * @param {object} data
+ * @param {object} data.overlays
+ * @param {Array}  data.airmets
+ * @param {object} data.layerOpacities
+ * @param {Function} data.drawAirmets - Callback that paints the AIRMET geometry
+ */
+export function drawAirmetPolygons(ctx, geo, data) {
+  const { isPro, latLonToScreen } = geo;
+  const { overlays, airmets, layerOpacities, drawAirmets } = data;
+
+  if (isPro && overlays.airmets && airmets.length > 0 && drawAirmets) {
+    const opacity = layerOpacities.airmets ?? 0.85;
+    drawAirmets(ctx, latLonToScreen, opacity);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // 3. Terrain Boundaries
 // ---------------------------------------------------------------------------
@@ -226,6 +249,47 @@ export function drawTerrainBoundaries(ctx, geo, data) {
       }
     });
     ctx.setLineDash([]);
+    ctx.restore();
+  }
+
+  // US IFR airways (FAA ATS_Route) - thin steel-blue lines forming the enroute lattice
+  if (overlays.usAirways && aviationOverlayData.usAirways?.length > 0) {
+    ctx.save();
+    aviationOverlayData.usAirways.forEach((feature) => {
+      if (feature.type === 'line') {
+        _draw(feature.coords, 'rgba(120, 160, 210, 0.45)', null, 0.75);
+      }
+    });
+    ctx.restore();
+  }
+
+  // US named waypoints/fixes (FAA Designated_Point) - small steel-blue diamonds + labels
+  if (overlays.usFixes && aviationOverlayData.usFixes?.length > 0) {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(150, 185, 225, 0.7)';
+    ctx.fillStyle = 'rgba(150, 185, 225, 0.7)';
+    ctx.lineWidth = 1;
+    ctx.font = '9px monospace';
+    ctx.textAlign = 'center';
+    const cw = ctx.canvas?.width || 0;
+    const ch = ctx.canvas?.height || 0;
+    aviationOverlayData.usFixes.forEach((feature) => {
+      if (feature.type !== 'point') return;
+      const [lon, lat] = feature.coords;
+      const p = latLonToScreen(lat, lon);
+      if (!p) return;
+      // Skip offscreen fixes — 800+ labels/frame otherwise tanks the canvas FPS.
+      if (p.x < 0 || p.x > cw || p.y < 0 || p.y > ch) return;
+      const r = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y - r);
+      ctx.lineTo(p.x + r, p.y);
+      ctx.lineTo(p.x, p.y + r);
+      ctx.lineTo(p.x - r, p.y);
+      ctx.closePath();
+      ctx.stroke();
+      if (feature.name) ctx.fillText(String(feature.name), p.x, p.y - r - 2);
+    });
     ctx.restore();
   }
 }

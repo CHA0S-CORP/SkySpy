@@ -1,0 +1,26 @@
+# Dev overlay: PUBLIC map/dashboard, but AI/LLM (and sensitive endpoints) require
+# sign-in — i.e. the real public-deployment posture. AUTH_MODE=public keeps the
+# map, aircraft, stats, history, alerts, etc. open to anonymous visitors; DEV_MODE=False
+# means the AI gates (CanUseAssistant / CanUseLLM) and sensitive-endpoint gates
+# actually enforce, so the assistant/chat + AI summaries prompt sign-in.
+#
+# Usage (or `make dev-public`, which also seeds an admin to sign in with):
+#   docker compose --env-file ./.env.test \
+#     -f ./docker-compose.test.yaml -f ./docker-compose.public-auth.yaml \
+#     --profile dev up -d
+
+services:
+  api:
+    environment:
+      - AUTH_MODE=public
+      - DEV_MODE=False
+
+  celery-worker:
+    environment:
+      - AUTH_MODE=public
+      - DEV_MODE=False
+
+  celery-beat:
+    environment:
+      - AUTH_MODE=public
+      - DEV_MODE=False

@@ -33,7 +33,7 @@ import time
 from collections import OrderedDict, defaultdict
 from datetime import UTC, datetime, timedelta
 
-from django.db import DatabaseError
+from django.db import DatabaseError, InterfaceError, OperationalError, close_old_connections
 
 from skyspy.services.acars_decoder import enrich_acars_message
 from skyspy.socketio.utils import sync_emit
@@ -662,7 +662,18 @@ class AcarsService:
                     station_id=msg.get("station_id"),
                 )
 
-            record = await create_record()
+            try:
+                record = await create_record()
+            except (OperationalError, InterfaceError):
+                # The long-running listener has no request boundary, so a DB
+                # connection killed by a Postgres/pgbouncer restart is never
+                # reset and every subsequent store would fail with "connection
+                # is closed". Drop the dead connection and retry once so the
+                # next query opens a fresh one and the listener self-heals.
+                from asgiref.sync import sync_to_async as _sync_to_async
+
+                await _sync_to_async(close_old_connections)()
+                record = await create_record()
             logger.debug(
                 f"Stored {msg.get('source', 'acars')} message id={record.id} "
                 f"flight={msg.get('callsign') or msg.get('registration') or 'N/A'}"

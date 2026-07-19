@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Icon } from '../../primitives';
+import { useHashParamState, boolParam } from '../../../../hooks/useHashParamState';
 import { useRadioFeed } from './useRadioFeed';
 import {
   audioUrlOf,
@@ -60,11 +61,12 @@ function Waveform({ seed, bars, progress = null, color, onSeek }) {
  * @param {(hex: string, callsign?: string) => void} props.onSelectAircraft
  */
 export function RadioScreen({ apiBase, aircraft, onSelectAircraft }) {
-  const [query, setQuery] = useState('');
-  const [status, setStatus] = useState('All Status');
-  const [channel, setChannel] = useState('All Channels');
-  const [emergency, setEmergency] = useState(false);
-  const [range, setRange] = useState('24h');
+  // Deep-linked view state (#audio?q=&status=&channel=&emergency=&range=)
+  const [query, setQuery] = useHashParamState('q', '');
+  const [status, setStatus] = useHashParamState('status', 'All Status');
+  const [channel, setChannel] = useHashParamState('channel', 'All Channels');
+  const [emergency, setEmergency] = useHashParamState('emergency', false, boolParam);
+  const [range, setRange] = useHashParamState('range', '24h');
   const [autoPlay, setAutoPlay] = useState(false);
   const [nowId, setNowId] = useState(null);
   const [playing, setPlaying] = useState(false);

@@ -1,0 +1,81 @@
+/* ============================================================================
+   v2 global responsive + touch layer. Imported LAST from styles/v2/index.css so
+   these rules win over per-component styles. Canonical breakpoints:
+     1200 shell · 1024 tablet · 768 phone · 480 small phone
+   ========================================================================== */
+
+/* ---- Touch affordances (coarse pointers: phones, tablets, touchscreens) ----
+   Enforce ~44px WCAG tap targets and kill the grey tap-flash + hover-only
+   reveals that make touch UIs feel broken. Scoped to pointer:coarse so mouse
+   users keep the tighter desktop density. */
+@media (pointer: coarse) {
+  .v2-iconbtn,
+  .lm__tbtn,
+  .v2-usermenu__trigger,
+  .v2-usermenu__signin,
+  .v2-shell__menubtn {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .lm__seg button,
+  .v2-nav__item,
+  .v2-chip--interactive,
+  .v2-tabs__tab {
+    min-height: 44px;
+  }
+
+  /* Larger hit area for the Radix switch on touch. */
+  .v2-switch {
+    transform: scale(1.1);
+    transform-origin: left center;
+  }
+
+  /* Remove the blue/grey tap highlight; provide our own :active feedback. */
+  a,
+  button,
+  [role='button'],
+  .v2-iconbtn,
+  .lm__tbtn,
+  .v2-chip--interactive,
+  .v2-nav__item {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .v2-iconbtn:active,
+  .lm__tbtn:active,
+  .v2-chip--interactive:active,
+  .v2-nav__item:active {
+    background: var(--bg2);
+  }
+}
+
+/* On devices that cannot hover, don't hide controls behind :hover — reveal
+   any hover-gated affordance by default. Individual components opt in by
+   marking the element .is-hover-reveal. */
+@media (hover: none) {
+  .is-hover-reveal {
+    opacity: 1 !important;
+    visibility: visible !important;
+  }
+}
+
+/* ---- Modal → bottom sheet on small phones ----
+   The centered Radix modal is unreadable on a narrow phone; dock it to the
+   bottom edge full-width like a native sheet. */
+@media (max-width: 480px) {
+  .v2-modal-overlay {
+    place-items: end center;
+    padding: 0;
+  }
+  .v2-modal {
+    width: 100%;
+    max-width: 100%;
+    max-height: 92vh;
+    overflow-y: auto;
+    border-radius: 18px 18px 0 0;
+    border-bottom: none;
+    animation: v2-sheet-up 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+    padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+}

@@ -287,6 +287,14 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # - hybrid: Per-feature configuration (default in production)
 AUTH_MODE = get_env("AUTH_MODE", "hybrid")  # Never default to public
 
+# Local-development flag. When True, the AI/assistant + sensitive-endpoint auth
+# gates and the per-user owner-scoping are RELAXED so a developer can use the app
+# without logging in. MUST be False on any public deployment (default False), so
+# the gates enforce. This is deliberately separate from DEBUG: the dev stack runs
+# DEBUG=False, and a public deploy also runs DEBUG=False, so DEBUG can't tell them
+# apart — the dev stack sets DEV_MODE=True in .env.test.
+DEV_MODE = get_env("DEV_MODE", "False", bool)
+
 # JWT Configuration
 JWT_SECRET_KEY = get_env("JWT_SECRET_KEY", SECRET_KEY)
 
@@ -308,6 +316,14 @@ JWT_REFRESH_TOKEN_LIFETIME_DAYS = get_env("JWT_REFRESH_TOKEN_LIFETIME_DAYS", "2"
 JWT_AUTH_COOKIE = get_env("JWT_AUTH_COOKIE", "False", bool)
 
 # OIDC Configuration
+# OIDC_PROVIDER_URL is the issuer base URL; endpoints are resolved from its
+# .well-known/openid-configuration discovery document (see auth/oidc.py), so
+# hosted IdPs work out of the box:
+#   Google: https://accounts.google.com
+#   Auth0:  https://<tenant>.auth0.com
+#   Okta:   https://<org>.okta.com/oauth2/default
+#   Keycloak: https://<host>/realms/<realm>
+# Register redirect URI  <site>/api/v1/auth/oidc/callback/  with the provider.
 OIDC_ENABLED = get_env("OIDC_ENABLED", "False", bool)
 OIDC_PROVIDER_URL = get_env("OIDC_PROVIDER_URL", "")
 OIDC_PROVIDER_NAME = get_env("OIDC_PROVIDER_NAME", "SSO")
@@ -315,6 +331,13 @@ OIDC_CLIENT_ID = get_env("OIDC_CLIENT_ID", "")
 OIDC_CLIENT_SECRET = get_env("OIDC_CLIENT_SECRET", "")
 OIDC_SCOPES = get_env("OIDC_SCOPES", "openid profile email groups")
 OIDC_DEFAULT_ROLE = get_env("OIDC_DEFAULT_ROLE", "viewer")
+# Link an OIDC identity to an existing local user when the verified email matches
+# (only if the provider asserts email_verified). Off by default to avoid account
+# takeover via an IdP that doesn't verify email.
+OIDC_ALLOW_EMAIL_LINKING = get_env("OIDC_ALLOW_EMAIL_LINKING", "False", bool)
+# Target origin for the popup postMessage handshake (defaults to request origin).
+# Set to the dashboard origin when the API is served from a different host.
+OIDC_POST_MESSAGE_ORIGIN = get_env("OIDC_POST_MESSAGE_ORIGIN", "")
 
 # Local Auth
 LOCAL_AUTH_ENABLED = get_env("LOCAL_AUTH_ENABLED", "True", bool)
@@ -335,13 +358,18 @@ if OIDC_ENABLED:
 # =============================================================================
 # Django REST Framework
 # =============================================================================
-# Build auth classes based on configuration
-_DRF_AUTH_CLASSES = []
-if AUTH_MODE != "public":
-    _DRF_AUTH_CLASSES = [
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
-        "skyspy.auth.authentication.APIKeyAuthentication",
-    ]
+# Build auth classes based on configuration.
+# Always register auth classes, INCLUDING in public mode. They only *identify*
+# the requester (parse a bearer JWT / API key); the permission layer decides
+# access and already bypasses public reads. In public mode the map/dashboard
+# stay open to anonymous visitors, but auth-gated-even-in-public endpoints
+# (assistant/LLM, system admin, user/role management) must still be able to
+# recognize a signed-in user — leaving this empty made every such gate reject
+# everyone, since request.user was always Anonymous.
+_DRF_AUTH_CLASSES = [
+    "rest_framework_simplejwt.authentication.JWTAuthentication",
+    "skyspy.auth.authentication.APIKeyAuthentication",
+]
 
 _DRF_PERMISSION_CLASSES = ["rest_framework.permissions.AllowAny"]
 if AUTH_MODE == "private":
@@ -374,6 +402,13 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {
         "anon": get_env("API_THROTTLE_ANON", "600/minute"),
         "user": get_env("API_THROTTLE_USER", "2000/minute"),
+        # Scoped limits for expensive / external-fan-out endpoints (see api/throttles.py).
+        # These are keyed per user-or-IP and sit well below the global anon rate.
+        "auth": get_env("API_THROTTLE_AUTH", "5/minute"),
+        "upload": get_env("API_THROTTLE_UPLOAD", "10/minute"),
+        "external_lookup": get_env("API_THROTTLE_EXTERNAL_LOOKUP", "10/minute"),
+        "weather": get_env("API_THROTTLE_WEATHER", "30/minute"),
+        "geodata": get_env("API_THROTTLE_GEODATA", "60/minute"),
     },
 }
 
@@ -448,6 +483,26 @@ SESSION_COOKIE_SAMESITE = "Lax"
 
 CSRF_COOKIE_SECURE = not DEBUG or get_env("FORCE_SECURE_COOKIES", "false", bool)
 SESSION_COOKIE_SECURE = not DEBUG or get_env("FORCE_SECURE_COOKIES", "false", bool)
+
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = "SAMEORIGIN"
+
+# Origins allowed to send authenticated POSTs (admin/login, SPA on another host).
+# Defaults to the CORS origins so a single env var usually suffices.
+_csrf_trusted_raw = get_env("CSRF_TRUSTED_ORIGINS", _cors_origins_raw)
+CSRF_TRUSTED_ORIGINS = [o.strip() for o in _csrf_trusted_raw.split(",") if o.strip()]
+
+# HTTPS hardening — production only (DEBUG=False). The app sits behind a
+# TLS-terminating reverse proxy, so honor its X-Forwarded-Proto header. The
+# liveness probe stays reachable over plain HTTP so load balancers don't get a
+# redirect on their health check.
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    SECURE_SSL_REDIRECT = get_env("SECURE_SSL_REDIRECT", "True", bool)
+    SECURE_REDIRECT_EXEMPT = [r"^health/?$", r"^api/v1/system/health/?$"]
+    SECURE_HSTS_SECONDS = get_env("SECURE_HSTS_SECONDS", "31536000", int)  # 1 year
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = get_env("SECURE_HSTS_INCLUDE_SUBDOMAINS", "True", bool)
+    SECURE_HSTS_PRELOAD = get_env("SECURE_HSTS_PRELOAD", "True", bool)
 
 
 # =============================================================================
@@ -626,6 +681,11 @@ AIRFRAMES_ACARS_RADIUS_NM = get_env("AIRFRAMES_ACARS_RADIUS_NM", "100", float)
 # Notifications
 APPRISE_URLS = get_env("APPRISE_URLS", "")
 NOTIFICATION_COOLDOWN = get_env("NOTIFICATION_COOLDOWN", "300", int)
+# SSRF allowlist: comma-separated IPs/CIDRs exempt from the private/internal-IP
+# webhook block. Empty (default) blocks all private targets. Use to reach a
+# self-hosted webhook receiver on a trusted LAN (e.g. an internal n8n at
+# 10.42.252.10, or the whole 10.42.0.0/16).
+NOTIFICATION_WEBHOOK_ALLOWED_PRIVATE_CIDRS = get_env("NOTIFICATION_WEBHOOK_ALLOWED_PRIVATE_CIDRS", "")
 
 # Caching
 CACHE_TTL = get_env("CACHE_TTL", "5", int)
@@ -700,8 +760,15 @@ EMBEDDING_DIM = get_env("EMBEDDING_DIM", "1536", int)  # text-embedding-3-small 
 # (served by vLLM in prod, or OpenAI/Ollama in dev — any OpenAI-compatible URL).
 ASSISTANT_ENABLED = get_env("ASSISTANT_ENABLED", "False", bool)
 ASSISTANT_MODEL = get_env("ASSISTANT_MODEL", "") or LLM_MODEL
-ASSISTANT_MAX_STEPS = get_env("ASSISTANT_MAX_STEPS", "10", int)  # tool-call budget per query
-ASSISTANT_TIMEOUT = get_env("ASSISTANT_TIMEOUT", "60", int)
+# Tool-call budget per query. Each step is ~2 graph nodes (model call + tool), so
+# the recursion limit is MAX_STEPS*2+2. Safe to raise on large-context models
+# (128k gpt-4o-mini etc.) — the binding constraint is ASSISTANT_TIMEOUT, not the
+# context window: more steps mean more sequential model+tool round-trips, so raise
+# the timeout alongside it. COMPACT caps the budget on small windows where deep
+# tool chains would overflow the context (see ASSISTANT_CONTEXT_WINDOW).
+ASSISTANT_MAX_STEPS = get_env("ASSISTANT_MAX_STEPS", "15", int)
+ASSISTANT_MAX_STEPS_COMPACT = get_env("ASSISTANT_MAX_STEPS_COMPACT", "8", int)
+ASSISTANT_TIMEOUT = get_env("ASSISTANT_TIMEOUT", "120", int)
 # Context-window budget knobs. Raise for large-context models to let tools return
 # more and conversations run longer; keep low on RPi/small models. Defaults match
 # the historical hardcoded caps.
@@ -711,7 +778,7 @@ ASSISTANT_MAX_HISTORY_CHARS = get_env("ASSISTANT_MAX_HISTORY_CHARS", "3000", int
 # The chat model's max context window in tokens. When set to a small value
 # (<=16000, e.g. a local 8k vLLM/Ollama model) the assistant auto-switches to
 # COMPACT MODE: a short system prompt, first-sentence-only tool descriptions, and
-# tighter result/history/briefing caps — so the fixed prompt + 31 tool schemas
+# tighter result/history/briefing caps — so the fixed prompt + tool schemas
 # stop overflowing the window on the very first model call. 0 (default) = assume a
 # large context, no compaction.
 ASSISTANT_CONTEXT_WINDOW = get_env("ASSISTANT_CONTEXT_WINDOW", "0", int)
@@ -726,6 +793,31 @@ ASSISTANT_BRIEFING_ENABLED = get_env("ASSISTANT_BRIEFING_ENABLED", "True", bool)
 # Set to a public asset base (e.g. https://sky-spy-assets.s3.amazonaws.com/photos)
 # to force <base>/<HEX>.jpg.
 ASSISTANT_PHOTO_BASE_URL = get_env("ASSISTANT_PHOTO_BASE_URL", "")
+
+# Auto-generated airframe type cards. A daily Celery task
+# (generate_airframe_type_cards) discovers ICAO aircraft-type designators this
+# station has actually tracked but that are absent from the curated static
+# Airframes library, then has the LLM write a factual reference card + pick a
+# diagram archetype (it never draws — the front-end <Planform> renders the
+# blueprint). Requires LLM_ENABLED. Off by default. BATCH bounds LLM calls per
+# run; MIN_TAILS skips one-off mis-decodes (only types with >= N distinct tails).
+AIRFRAME_CARD_GEN_ENABLED = get_env("AIRFRAME_CARD_GEN_ENABLED", "False", bool)
+AIRFRAME_CARD_GEN_BATCH = get_env("AIRFRAME_CARD_GEN_BATCH", "8", int)
+AIRFRAME_CARD_GEN_MIN_TAILS = get_env("AIRFRAME_CARD_GEN_MIN_TAILS", "1", int)
+
+# Runtime web search (services/web_search.py). Grounds LLM output in live web
+# sources and supplies public type photos for the airframe card generator.
+# Provider: wikipedia (default, keyless — MediaWiki search + Wikimedia lead
+# image) | tavily | brave (keyed, set WEB_SEARCH_API_KEY) | searxng (self-host,
+# set WEB_SEARCH_URL) | duckduckgo (keyless HTML scrape, brittle). Wikipedia is
+# always consulted for the type photo regardless of the text provider.
+WEB_SEARCH_ENABLED = get_env("WEB_SEARCH_ENABLED", "True", bool)
+WEB_SEARCH_PROVIDER = get_env("WEB_SEARCH_PROVIDER", "wikipedia")
+WEB_SEARCH_API_KEY = get_env("WEB_SEARCH_API_KEY", "")
+WEB_SEARCH_URL = get_env("WEB_SEARCH_URL", "")  # SearXNG base URL
+WEB_SEARCH_MAX_RESULTS = get_env("WEB_SEARCH_MAX_RESULTS", "5", int)
+# Wikimedia 403s requests without a descriptive contact UA; set your own.
+WEB_SEARCH_USER_AGENT = get_env("WEB_SEARCH_USER_AGENT", "skyspy/3 (+https://github.com/skyspy/skyspy)")
 
 # OpenSky Database
 OPENSKY_DB_PATH = get_env("OPENSKY_DB_PATH", "/data/opensky/aircraft-database.csv")
@@ -767,6 +859,67 @@ OPENAIP_API_KEY = get_env("OPENAIP_API_KEY", "")
 AIRSPACE_FETCH_RADIUS_NM = get_env("AIRSPACE_FETCH_RADIUS_NM", "250", float)
 GEODATA_FETCH_RADIUS_NM = get_env("GEODATA_FETCH_RADIUS_NM", "250", float)
 AIRSPACE_EXTRA_REGIONS = json.loads(get_env("AIRSPACE_EXTRA_REGIONS", "[]"))
+
+# Watch Duty wildfire overlay. When WILDFIRES_ENABLED, a Celery beat task polls
+# the public api.watchduty.org geo_events feed via libwatchduty every
+# WILDFIRES_REFRESH_INTERVAL seconds, keeps active wildfires within
+# WILDFIRES_RADIUS_NM of FEEDER_LAT/LON (haversine — the API has no server-side
+# bbox), scores each with libwatchduty.compute_threat, and caches them in
+# CachedWildfire. Served to the map as threat-colored markers (Socket.IO
+# `wildfires` request / REST /aviation/wildfires/) and to the assistant as the
+# `get_nearby_wildfires` tool. Per-fire detail (reports/cameras/scanner feeds) is
+# fetched on demand via get_fire_bundle. Watch Duty is US/CA-centric — a non-US
+# feeder simply caches nothing. Read endpoints are public; WATCHDUTY_API_TOKEN is
+# optional (raises the feeder rate limit only). Off by default.
+WILDFIRES_ENABLED = get_env("WILDFIRES_ENABLED", "False", bool)
+WILDFIRES_REFRESH_INTERVAL = get_env("WILDFIRES_REFRESH_INTERVAL", "300", float)
+WILDFIRES_RADIUS_NM = get_env("WILDFIRES_RADIUS_NM", str(GEODATA_FETCH_RADIUS_NM), float)
+# Max fire→camera distance for the detail panel. Watch Duty's camera list is the
+# whole network (not fire-scoped), so cameras beyond this are dropped instead of
+# showing a lookout too far away to see the fire (reads as the "wrong location").
+WILDFIRES_CAMERA_RADIUS_NM = get_env("WILDFIRES_CAMERA_RADIUS_NM", "50", float)
+WATCHDUTY_BASE_URL = get_env("WATCHDUTY_BASE_URL", "https://api.watchduty.org/api/v1")
+# Watch Duty auth. Read endpoints (fires/reports/cameras) are public, but the
+# global aircraft catalog (/aircraft/) and other user-scoped endpoints require a
+# DRF token. Provide either a WATCHDUTY_API_TOKEN directly, or WATCHDUTY_USERNAME
+# + WATCHDUTY_PASSWORD to log in — the service logs in once and caches the token.
+WATCHDUTY_API_TOKEN = get_env("WATCHDUTY_API_TOKEN", "")
+WATCHDUTY_USERNAME = get_env("WATCHDUTY_USERNAME", "")
+WATCHDUTY_PASSWORD = get_env("WATCHDUTY_PASSWORD", "")
+
+# FAA enroute structure (US airways + named waypoints/fixes) from the FAA
+# Aeronautical Information Services ArcGIS FeatureServer (keyless, authoritative,
+# 28-day cycle). Fetched as GeoJSON within GEODATA_FETCH_RADIUS_NM of the feeder
+# (+ AIRSPACE_EXTRA_REGIONS) and cached in CachedGeoJSON as data_type
+# `us_airways` (ATS_Route lines) / `us_fixes` (Designated_Point points); served by
+# the generic /aviation/geojson/<type>/ endpoint and drawn as map layers. US-only:
+# a non-US feeder simply fetches nothing. FAA_ENROUTE_MAX_FEATURES caps rows per
+# layer (ArcGIS pages at 1000-2000/req; we paginate with resultOffset).
+FAA_ENROUTE_ENABLED = get_env("FAA_ENROUTE_ENABLED", "True", bool)
+FAA_AIRWAYS_URL = get_env(
+    "FAA_AIRWAYS_URL",
+    "https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/ATS_Route/FeatureServer/0/query",
+)
+FAA_FIXES_URL = get_env(
+    "FAA_FIXES_URL",
+    "https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/DesignatedPoints/FeatureServer/0/query",
+)
+FAA_ENROUTE_MAX_FEATURES = get_env("FAA_ENROUTE_MAX_FEATURES", "8000", int)
+
+# Per-aircraft turbulence risk (services/turbulence.py + tasks/turbulence.py).
+# Synthesizes a 0-100 risk score per tracked aircraft from G-AIRMET TURB
+# forecast polygons, nearby turbulence PIREPs, and winds-aloft vertical shear.
+# The scorer task runs off the aircraft hot path (TURB_SCORE_INTERVAL, seconds)
+# and caches turb:by_hex for TURB_SCORE_TTL. TURB_PIREP_* bound the PIREP query;
+# TURB_LEVEL_* are the score thresholds for the light/moderate/severe bands.
+TURB_ENABLED = get_env("TURB_ENABLED", "True", bool)
+TURB_SCORE_INTERVAL = get_env("TURB_SCORE_INTERVAL", "60", float)
+TURB_SCORE_TTL = get_env("TURB_SCORE_TTL", "180", int)
+TURB_PIREP_RADIUS_NM = get_env("TURB_PIREP_RADIUS_NM", "150", float)
+TURB_PIREP_HOURS = get_env("TURB_PIREP_HOURS", "3", int)
+TURB_LEVEL_LIGHT = get_env("TURB_LEVEL_LIGHT", "20", int)
+TURB_LEVEL_MODERATE = get_env("TURB_LEVEL_MODERATE", "45", int)
+TURB_LEVEL_SEVERE = get_env("TURB_LEVEL_SEVERE", "70", int)
 
 # OpenSky Network Live API (https://opensky-network.org/)
 # Free tier: 4,000 credits/day (8,000 for contributors)

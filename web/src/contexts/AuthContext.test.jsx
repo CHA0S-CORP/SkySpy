@@ -142,6 +142,7 @@ describe('AuthContext', () => {
     it('should restore authenticated state from valid stored token', async () => {
       const validToken = createValidToken();
       const userData = {
+        isSuperuser: false,
         id: 1,
         username: 'testuser',
         email: 'test@example.com',
@@ -328,7 +329,7 @@ describe('AuthContext', () => {
   describe('logout', () => {
     it('should logout successfully', async () => {
       const validToken = createValidToken();
-      const userData = { id: 1, username: 'testuser' };
+      const userData = { id: 1, username: 'testuser', isSuperuser: false };
 
       storedValues['skyspy_access_token'] = validToken;
       storedValues['skyspy_refresh_token'] = 'refresh-token';
@@ -356,7 +357,7 @@ describe('AuthContext', () => {
 
     it('should clear tokens even if logout API fails', async () => {
       const validToken = createValidToken();
-      const userData = { id: 1, username: 'testuser' };
+      const userData = { id: 1, username: 'testuser', isSuperuser: false };
 
       storedValues['skyspy_access_token'] = validToken;
       storedValues['skyspy_refresh_token'] = 'refresh-token';
@@ -395,7 +396,11 @@ describe('AuthContext', () => {
 
       storedValues['skyspy_access_token'] = validToken;
       storedValues['skyspy_refresh_token'] = 'refresh-token';
-      storedValues['skyspy_user'] = JSON.stringify({ id: 1, username: 'testuser' });
+      storedValues['skyspy_user'] = JSON.stringify({
+        id: 1,
+        username: 'testuser',
+        isSuperuser: false,
+      });
 
       global.fetch
         .mockReturnValueOnce(setupAuthConfigResponse())
@@ -438,7 +443,11 @@ describe('AuthContext', () => {
 
       storedValues['skyspy_access_token'] = validToken;
       storedValues['skyspy_refresh_token'] = 'refresh-token';
-      storedValues['skyspy_user'] = JSON.stringify({ id: 1, username: 'testuser' });
+      storedValues['skyspy_user'] = JSON.stringify({
+        id: 1,
+        username: 'testuser',
+        isSuperuser: false,
+      });
 
       let resolveRefresh;
       const refreshPromise = new Promise((resolve) => {
@@ -485,7 +494,11 @@ describe('AuthContext', () => {
 
       storedValues['skyspy_access_token'] = validToken;
       storedValues['skyspy_refresh_token'] = 'refresh-token';
-      storedValues['skyspy_user'] = JSON.stringify({ id: 1, username: 'testuser' });
+      storedValues['skyspy_user'] = JSON.stringify({
+        id: 1,
+        username: 'testuser',
+        isSuperuser: false,
+      });
 
       global.fetch
         .mockReturnValueOnce(setupAuthConfigResponse())
@@ -517,7 +530,11 @@ describe('AuthContext', () => {
 
       storedValues['skyspy_access_token'] = validToken;
       storedValues['skyspy_refresh_token'] = 'refresh-token';
-      storedValues['skyspy_user'] = JSON.stringify({ id: 1, username: 'testuser' });
+      storedValues['skyspy_user'] = JSON.stringify({
+        id: 1,
+        username: 'testuser',
+        isSuperuser: false,
+      });
 
       global.fetch
         .mockReturnValueOnce(setupAuthConfigResponse())
@@ -580,6 +597,7 @@ describe('AuthContext', () => {
     it('should check user permissions correctly', async () => {
       const validToken = createValidToken();
       const userData = {
+        isSuperuser: false,
         id: 1,
         username: 'testuser',
         permissions: ['view_alerts', 'edit_alerts'],
@@ -606,6 +624,7 @@ describe('AuthContext', () => {
     it('should check hasAnyPermission correctly', async () => {
       const validToken = createValidToken();
       const userData = {
+        isSuperuser: false,
         id: 1,
         username: 'testuser',
         permissions: ['view_alerts'],
@@ -631,6 +650,7 @@ describe('AuthContext', () => {
     it('should check hasAllPermissions correctly', async () => {
       const validToken = createValidToken();
       const userData = {
+        isSuperuser: false,
         id: 1,
         username: 'testuser',
         permissions: ['view_alerts', 'edit_alerts'],
@@ -670,7 +690,13 @@ describe('AuthContext', () => {
 
     it('should check feature access based on config', async () => {
       const validToken = createValidToken();
-      const userData = { id: 1, username: 'testuser', permissions: [], roles: [] };
+      const userData = {
+        id: 1,
+        username: 'testuser',
+        isSuperuser: false,
+        permissions: [],
+        roles: [],
+      };
 
       storedValues['skyspy_access_token'] = validToken;
       storedValues['skyspy_refresh_token'] = 'refresh-token';
@@ -700,7 +726,13 @@ describe('AuthContext', () => {
 
     it('should deny access when feature is disabled', async () => {
       const validToken = createValidToken();
-      const userData = { id: 1, username: 'testuser', permissions: [], roles: [] };
+      const userData = {
+        id: 1,
+        username: 'testuser',
+        isSuperuser: false,
+        permissions: [],
+        roles: [],
+      };
 
       storedValues['skyspy_access_token'] = validToken;
       storedValues['skyspy_refresh_token'] = 'refresh-token';
@@ -734,7 +766,11 @@ describe('AuthContext', () => {
 
       storedValues['skyspy_access_token'] = validToken;
       storedValues['skyspy_refresh_token'] = 'refresh-token';
-      storedValues['skyspy_user'] = JSON.stringify({ id: 1, username: 'testuser' });
+      storedValues['skyspy_user'] = JSON.stringify({
+        id: 1,
+        username: 'testuser',
+        isSuperuser: false,
+      });
 
       global.fetch.mockReturnValue(setupAuthConfigResponse());
 
@@ -870,7 +906,11 @@ describe('AuthContext', () => {
 
       storedValues['skyspy_access_token'] = validToken;
       storedValues['skyspy_refresh_token'] = 'refresh-token';
-      storedValues['skyspy_user'] = JSON.stringify({ id: 1, username: 'testuser' });
+      storedValues['skyspy_user'] = JSON.stringify({
+        id: 1,
+        username: 'testuser',
+        isSuperuser: false,
+      });
 
       global.fetch.mockReturnValue(setupAuthConfigResponse());
 

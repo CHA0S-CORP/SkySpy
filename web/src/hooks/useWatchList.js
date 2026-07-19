@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { withAuth } from '../lib/authHeader';
 
 /**
  * useWatchList hook - manages aircraft watch list with localStorage persistence
@@ -151,7 +152,7 @@ export function useWatchList({ enableAudio = true } = {}) {
   useEffect(() => {
     const syncFromBackend = async () => {
       try {
-        const res = await fetch('/api/v1/watchlist/');
+        const res = await fetch('/api/v1/watchlist/', { headers: withAuth() });
         if (res.ok) {
           const data = await res.json();
           if (data.watchList?.length > 0) {
@@ -168,7 +169,7 @@ export function useWatchList({ enableAudio = true } = {}) {
             // Backend is empty but we have local data - push to backend
             await fetch('/api/v1/watchlist/import/', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: withAuth({ 'Content-Type': 'application/json' }),
               body: JSON.stringify({
                 watchList: watchList.map((item) => ({
                   hex: item.hex,
@@ -230,7 +231,7 @@ export function useWatchList({ enableAudio = true } = {}) {
       // Sync to backend (fire and forget)
       fetch('/api/v1/watchlist/', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: withAuth({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({
           hex,
           callsign: entry.callsign || '',
@@ -285,7 +286,7 @@ export function useWatchList({ enableAudio = true } = {}) {
   // Clear the entire watch list
   const clearWatchList = useCallback(() => {
     setWatchList([]);
-    fetch('/api/v1/watchlist/clear/', { method: 'DELETE' }).catch(() => {});
+    fetch('/api/v1/watchlist/clear/', { method: 'DELETE', headers: withAuth() }).catch(() => {});
   }, []);
 
   // Toggle panel visibility
@@ -306,7 +307,7 @@ export function useWatchList({ enableAudio = true } = {}) {
   // Export watch list as JSON file download
   const exportWatchList = useCallback(async () => {
     try {
-      const res = await fetch('/api/v1/watchlist/export/');
+      const res = await fetch('/api/v1/watchlist/export/', { headers: withAuth() });
       if (res.ok) {
         const data = await res.json();
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -366,7 +367,7 @@ export function useWatchList({ enableAudio = true } = {}) {
         if (newItems.length > 0) {
           fetch('/api/v1/watchlist/import/', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: withAuth({ 'Content-Type': 'application/json' }),
             body: JSON.stringify({ watchList: newItems }),
           }).catch(() => {});
         }

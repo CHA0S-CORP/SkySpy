@@ -67,7 +67,11 @@ class AlertHandlerMixin:
 
         qs = AlertRule.objects.all()
         if user is None or not getattr(user, "is_authenticated", False):
-            return qs.filter(visibility="public")
+            # Anonymous/public mode: rules created here have owner=None. Show
+            # public rules AND owner-less rules so public-mode-created rules are
+            # visible (otherwise a default-private, owner-less rule is invisible
+            # to everyone but a superuser). Mirrors the REST viewset.
+            return qs.filter(Q(visibility="public") | Q(owner__isnull=True))
         if user.is_superuser:
             return qs
         return qs.filter(Q(owner=user) | Q(visibility="public") | Q(visibility="shared")).distinct()
@@ -100,15 +104,24 @@ class AlertHandlerMixin:
 
         user = params.get("_user")
         owner = user if (user is not None and getattr(user, "is_authenticated", False)) else None
-        rule = AlertRule.objects.create(
-            name=params.get("name", "New Rule"),
-            description=params.get("description", ""),
-            enabled=params.get("enabled", True),
-            priority=params.get("priority", "info"),
-            conditions=params.get("conditions", {}),
-            cooldown_minutes=params.get("cooldown_minutes", 5),
-            owner=owner,
-        )
+        create_kwargs = {
+            "name": params.get("name", "New Rule"),
+            "description": params.get("description", ""),
+            "enabled": params.get("enabled", True),
+            "priority": params.get("priority", "info"),
+            "conditions": params.get("conditions", {}),
+            "cooldown_minutes": params.get("cooldown_minutes", 5),
+            "use_global_notifications": params.get("use_global_notifications", True),
+            "owner": owner,
+        }
+        if params.get("api_url") is not None:
+            create_kwargs["api_url"] = params["api_url"]
+        if params.get("visibility") in {"private", "shared", "public"}:
+            create_kwargs["visibility"] = params["visibility"]
+        rule = AlertRule.objects.create(**create_kwargs)
+        channel_ids = params.get("notification_channels")
+        if channel_ids:
+            rule.notification_channels.set(channel_ids)
         return {
             "id": str(rule.id),
             "name": rule.name,
@@ -117,6 +130,8 @@ class AlertHandlerMixin:
             "priority": rule.priority,
             "conditions": rule.conditions,
             "cooldown_minutes": rule.cooldown_minutes,
+            "use_global_notifications": rule.use_global_notifications,
+            "notification_channels": list(rule.notification_channels.values_list("id", flat=True)),
             "created_at": rule.created_at.isoformat() if rule.created_at else None,
         }
 
@@ -152,10 +167,22 @@ class AlertHandlerMixin:
         if "cooldown_minutes" in params:
             rule.cooldown_minutes = params["cooldown_minutes"]
             update_fields.append("cooldown_minutes")
+        if "use_global_notifications" in params:
+            rule.use_global_notifications = params["use_global_notifications"]
+            update_fields.append("use_global_notifications")
+        if "api_url" in params:
+            rule.api_url = params["api_url"]
+            update_fields.append("api_url")
+        if params.get("visibility") in {"private", "shared", "public"}:
+            rule.visibility = params["visibility"]
+            update_fields.append("visibility")
 
         if update_fields:
             update_fields.append("updated_at")
             rule.save(update_fields=update_fields)
+
+        if "notification_channels" in params:
+            rule.notification_channels.set(params["notification_channels"] or [])
 
         return {
             "id": str(rule.id),
@@ -165,6 +192,8 @@ class AlertHandlerMixin:
             "priority": rule.priority,
             "conditions": rule.conditions,
             "cooldown_minutes": rule.cooldown_minutes,
+            "use_global_notifications": rule.use_global_notifications,
+            "notification_channels": list(rule.notification_channels.values_list("id", flat=True)),
             "updated_at": rule.updated_at.isoformat() if rule.updated_at else None,
         }
 

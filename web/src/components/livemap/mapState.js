@@ -37,6 +37,8 @@ export const DEFAULT_OVERLAYS = {
   airports: false,
   notams: false,
   pireps: false,
+  airmets: false, // G-AIRMET/AIRMET hazard polygons (turbulence, icing, IFR, etc.)
+  wildfires: false, // Watch Duty active-fire markers
   showGhosts: false, // reveal non-ICAO (~) TIS-B/ADS-R duplicate tracks (hidden by default)
   // display prefs (persisted alongside overlays)
   trailSeconds: 300, // trail history window / length
@@ -71,15 +73,21 @@ export const QUICK_CHIPS = [
   { key: 'lowalt', label: 'Low Alt', color: 'var(--warn)' },
 ];
 
+// `feature` (optional) RBAC-gates a layer toggle: it is hidden unless the user
+// can read that FeatureAccess feature (weather / wildfires). Ungated toggles
+// always show. canAccessFeature() returns true in public/dev mode, so this is a
+// no-op there.
 export const OVERLAY_DEFS = [
   { key: 'rangeRings', label: 'Range Rings' },
   { key: 'trails', label: 'Aircraft Trails' },
-  { key: 'weatherRadar', label: 'Weather Radar' },
+  { key: 'weatherRadar', label: 'Weather Radar', feature: 'weather' },
   { key: 'airspace', label: 'Airspace' },
   { key: 'navaids', label: 'Navaids (VOR/NDB)' },
   { key: 'airports', label: 'Airports' },
   { key: 'notams', label: 'NOTAMs / TFRs' },
-  { key: 'pireps', label: 'PIREPs' },
+  { key: 'pireps', label: 'PIREPs', feature: 'weather' },
+  { key: 'airmets', label: 'AIRMETs', feature: 'weather' },
+  { key: 'wildfires', label: 'Wildfires', feature: 'wildfires' },
   { key: 'showGhosts', label: 'Ghost Tracks (TIS-B/ADS-R)' },
 ];
 
@@ -124,6 +132,89 @@ export function makeFilterFn(f) {
     if (hasSquawk && !f.showWithSquawk) return false;
     if (!hasSquawk && !f.showWithoutSquawk) return false;
     if (airborne && (alt < f.minAltitude || alt > f.maxAltitude)) return false;
+    return true;
+  };
+}
+
+const EMERGENCY_SQUAWKS = new Set(['7500', '7600', '7700']);
+
+function distanceNm(a, feeder) {
+  if (typeof a.distance_nm === 'number') return a.distance_nm;
+  if (!feeder || typeof a.lat !== 'number' || typeof a.lon !== 'number') return null;
+  const dLat = a.lat - feeder.lat;
+  const dLon = a.lon - feeder.lon;
+  const nmY = dLat * 60;
+  const nmX = dLon * 60 * Math.cos((feeder.lat * Math.PI) / 180);
+  return Math.sqrt(nmX * nmX + nmY * nmY);
+}
+
+/**
+ * Build a predicate from an assistant radar-filter match spec (mirrors the
+ * backend `_match_live_aircraft`). Every present key is an AND condition. This
+ * is what makes the docked assistant's "show all GA / LE / military / emergency"
+ * requests live-filter the radar, re-evaluated as aircraft update.
+ *
+ * @param {object|null} match - { hexes?, military?, emergency?, ga?, categories?, types?, callsigns?, callsignPrefix?, altMin?, altMax?, distMax? }
+ * @param {{lat:number,lon:number}|null} [feeder] - for distMax when aircraft lack distance
+ * @returns {((a: object) => boolean)|null} null when there is no match spec
+ */
+export function makeRadarMatchFn(match, feeder = null) {
+  if (!match || typeof match !== 'object' || !Object.keys(match).length) return null;
+  const hexes = match.hexes ? new Set(match.hexes.map((h) => String(h).toUpperCase())) : null;
+  const cats = match.categories
+    ? new Set(match.categories.map((c) => String(c).toUpperCase()))
+    : null;
+  const types = match.types ? new Set(match.types.map((t) => String(t).toUpperCase())) : null;
+  const calls = match.callsigns
+    ? new Set(match.callsigns.map((c) => String(c).toUpperCase()))
+    : null;
+  const prefixes = match.callsignPrefix
+    ? match.callsignPrefix.map((p) => String(p).toUpperCase())
+    : null;
+
+  return (a) => {
+    if (hexes && !hexes.has(String(a.hex || '').toUpperCase())) return false;
+    if (typeof match.military === 'boolean') {
+      const isMil = categoryOf(a) === 'military';
+      if (isMil !== match.military) return false;
+    }
+    if (match.emergency) {
+      const sq = String(a.squawk || '');
+      if (!(a.emergency || EMERGENCY_SQUAWKS.has(sq))) return false;
+    }
+    if (match.ga && categoryOf(a) !== 'ga') return false;
+    if (cats && !cats.has(String(a.category || '').toUpperCase())) return false;
+    const typ = String(a.t || a.type || '').toUpperCase();
+    if (types && !types.has(typ)) return false;
+    if (
+      match.typePrefixes &&
+      !match.typePrefixes.some((p) => typ.startsWith(String(p).toUpperCase()))
+    )
+      return false;
+    // Fuzzy class: category-match OR type-prefix-match against any listed condition.
+    if (match.anyOf) {
+      const cat = String(a.category || '').toUpperCase();
+      const ok = match.anyOf.some(
+        (c) =>
+          (c.cat && cat === String(c.cat).toUpperCase()) ||
+          (c.tp && typ.startsWith(String(c.tp).toUpperCase()))
+      );
+      if (!ok) return false;
+    }
+    const cs = String(a.flight || a.callsign || '')
+      .trim()
+      .toUpperCase();
+    if (calls && !calls.has(cs)) return false;
+    if (prefixes && !prefixes.some((p) => cs.startsWith(p))) return false;
+    if (match.altMin != null || match.altMax != null) {
+      const alt = altitudeOf(a);
+      if (match.altMax != null && alt > match.altMax) return false;
+      if (match.altMin != null && alt < match.altMin) return false;
+    }
+    if (match.distMax != null) {
+      const d = distanceNm(a, feeder);
+      if (d == null || d > match.distMax) return false;
+    }
     return true;
   };
 }

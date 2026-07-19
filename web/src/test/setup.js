@@ -5,6 +5,9 @@ import { afterEach, vi } from 'vitest';
 // Cleanup after each test
 afterEach(() => {
   cleanup();
+  // Deep-linked view state lives in window.location.hash (see useHashParamState);
+  // reset it so URL writes from one test don't leak into the next.
+  if (window.location.hash) window.location.hash = '';
 });
 
 // Mock window.matchMedia

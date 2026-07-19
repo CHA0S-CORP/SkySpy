@@ -1,5 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { Icon, Select, SegmentedControl } from '../../primitives';
+import { useHashParamState } from '../../../../hooks/useHashParamState';
 import { RANGE_HOURS, useAnalyticsData } from './useAnalyticsData';
 import {
   FIELD_FALLBACK,
@@ -53,10 +54,11 @@ function BarList({ items, color = 'var(--accent2)', unit = '' }) {
  * @param {(hex: string) => void} props.onSelectAircraft
  */
 export function AdvancedAnalyticsScreen({ apiBase, onSelectAircraft }) {
-  const [range, setRange] = useState('24h');
-  const [xField, setXField] = useState('distance_nm');
-  const [yField, setYField] = useState('rssi');
-  const [military, setMilitary] = useState('all');
+  // Deep-linked view state (#analytics?range=&x=&y=&mil=)
+  const [range, setRange] = useHashParamState('range', '24h');
+  const [xField, setXField] = useHashParamState('x', 'distance_nm');
+  const [yField, setYField] = useHashParamState('y', 'rssi');
+  const [military, setMilitary] = useHashParamState('mil', 'all');
 
   const hours = RANGE_HOURS[range] ?? 24;
   const {

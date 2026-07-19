@@ -1,10 +1,14 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import L from 'leaflet';
-import { Icon } from '../v2/primitives';
+import { Icon, BottomSheet } from '../v2/primitives';
+import { useHashParamState } from '../../hooks/useHashParamState';
+import { useBreakpoint } from '../../hooks/useBreakpoint';
 import { useLiveLeafletMap } from './hooks/useLiveLeafletMap';
 import { useMapOverlayData } from './hooks/useMapOverlayData';
 import { CanvasAircraftLayer } from './render/CanvasAircraftLayer';
 import { DetailPanel } from './panel/DetailPanel';
+import { WildfirePanel } from './panel/WildfirePanel';
+import { AirmetPanel } from './panel/AirmetPanel';
 import { HoverTip } from './HoverTip';
 import { LiveMapToolbar } from './LiveMapToolbar';
 import { FilterPanel } from './panels/FilterPanel';
@@ -15,6 +19,7 @@ import {
   loadFilters,
   loadOverlays,
   makeFilterFn,
+  makeRadarMatchFn,
   overlaysActiveCount,
   saveFilters,
   saveOverlays,
@@ -49,23 +54,44 @@ export function LiveMapView({
   positionsRef,
   wsRequest,
   wsConnected,
+  hashParams,
+  radarCommand,
+  onClearRadarCommand,
+  radarTracks,
+  onClearRadarTracks,
   onOpenFull,
 }) {
   const containerRef = useRef(null);
   const layerRef = useRef(null);
   const radarLayerRef = useRef(null);
   const feederRef = useRef(null);
-  const [selectedHex, setSelectedHex] = useState(null);
+  // Selection + label mode + open tool panel are mirrored in the URL so they
+  // deep-link and survive reload/back-forward (URL is the source of truth).
+  // Selection pushes a history entry (Back deselects); the display toggles use
+  // replaceState (default) so they don't spam Back.
+  const [selectedHex, setSelectedHex] = useHashParamState('selected', null, {
+    parse: (v) => v.toUpperCase(),
+    serialize: (v) => v || '',
+    replace: false,
+  });
   const [panelOpen, setPanelOpen] = useState(true);
-  const [labelMode, setLabelMode] = useState('auto');
+  const [labelMode, setLabelMode] = useHashParamState('labelMode', 'auto');
   const [labelDensity, setLabelDensity] = useState('full');
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState(loadFilters);
   const [overlays, setOverlays] = useState(loadOverlays);
-  const [openPanel, setOpenPanel] = useState(null); // 'filters' | 'layers' | 'legend' | null
+  // 'filters' | 'layers' | 'legend' | null
+  const [openPanel, setOpenPanel] = useHashParamState('toolPanel', null);
   const [zoom, setZoom] = useState(9);
   const [coords, setCoords] = useState(null); // {lat, lon, dist, brg}
   const [hoverTip, setHoverTip] = useState(null); // {kind:'pirep'|'notam', data, x, y}
+  const [selectedWildfire, setSelectedWildfire] = useState(null); // Watch Duty fire marker
+  const [selectedAirmet, setSelectedAirmet] = useState(null); // clicked G-AIRMET area
+  const [moreOpen, setMoreOpen] = useState(false); // mobile overflow controls sheet
+
+  // On phones the 392px side panel + dense toolbar don't fit; panels/popovers
+  // render as bottom sheets and the toolbar collapses to a "more" overflow.
+  const { isMobile } = useBreakpoint();
 
   const feeder = feederLocation ? { lat: feederLocation.lat, lon: feederLocation.lon } : null;
   feederRef.current = feeder;
@@ -73,13 +99,44 @@ export function LiveMapView({
 
   const overlayData = useMapOverlayData({ wsRequest, wsConnected, feeder, aircraft, overlays });
 
+  // Active assistant filter, from (in priority): a live dock command
+  // (radarCommand), a rich deep-link (#map?rf=<json match spec>), or a simple
+  // hex/callsign list (#map?filter=A0E2E5,N739MH). Unified into { label, match }.
+  const activeFilter = useMemo(() => {
+    if (radarCommand?.match) {
+      return { label: radarCommand.label, match: radarCommand.match, view: radarCommand.view };
+    }
+    if (hashParams?.rf) {
+      try {
+        const spec = JSON.parse(hashParams.rf);
+        if (spec?.match) return { label: spec.label, match: spec.match, view: spec.view };
+        if (spec && typeof spec === 'object') return { label: spec.label, match: spec };
+      } catch {
+        /* malformed rf param — ignore */
+      }
+    }
+    if (hashParams?.filter) {
+      const hexes = String(hashParams.filter)
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      if (hexes.length) return { label: `${hexes.length} aircraft`, match: { hexes } };
+    }
+    return null;
+  }, [radarCommand, hashParams?.rf, hashParams?.filter]);
+
   const filterFn = useMemo(() => {
     const base = makeFilterFn(filters);
+    const radar = makeRadarMatchFn(activeFilter?.match, feeder);
     // Ghosts (non-ICAO ~ duplicates of a real ICAO track) are hidden unless the
     // Layers "Ghost Tracks" toggle is on.
-    if (overlays.showGhosts) return base;
-    return (a) => !a.ghost && base(a);
-  }, [filters, overlays.showGhosts]);
+    return (a) => {
+      if (!overlays.showGhosts && a.ghost) return false;
+      if (radar && !radar(a)) return false;
+      return base(a);
+    };
+    // feeder identity is stable per render; distMax handles its absence.
+  }, [filters, overlays.showGhosts, activeFilter]);
   // Only highlight *active* events: the 24h snapshot includes long-finished
   // events, and resolved ones are flagged (not removed) by the socket layer —
   // without this filter an aircraft stays permanently marked on the map.
@@ -119,9 +176,23 @@ export function LiveMapView({
     if (!mapRef.current || layerRef.current) return undefined;
     const map = mapRef.current;
     layerRef.current = new CanvasAircraftLayer(map, {
+      // Only one side pane at a time: selecting an aircraft clears any fire/airmet
+      // selection (and vice-versa) so the plane and fire panels never co-exist.
       onSelect: (hex) => {
         setSelectedHex(hex);
+        setSelectedWildfire(null);
+        setSelectedAirmet(null);
         if (hex) setPanelOpen(true);
+      },
+      onWildfireSelect: (wf) => {
+        setSelectedWildfire(wf);
+        setSelectedHex(null);
+        setSelectedAirmet(null);
+      },
+      onAirmetSelect: (a) => {
+        setSelectedAirmet(a);
+        setSelectedHex(null);
+        setSelectedWildfire(null);
       },
       // Each callback only clears the tip it owns, so a pirep→notam move (which
       // fires both a pirep-null and a notam-set in one event) doesn't clobber.
@@ -144,6 +215,10 @@ export function LiveMapView({
             : cur?.kind === 'airspace'
               ? null
               : cur
+        ),
+      onAirmetHover: (a, pt) =>
+        setHoverTip((cur) =>
+          a ? { kind: 'airmet', data: a, x: pt.x, y: pt.y } : cur?.kind === 'airmet' ? null : cur
         ),
     });
     const onZoomEnd = () => setZoom(map.getZoom());
@@ -182,11 +257,52 @@ export function LiveMapView({
     if (!layer) return;
     layer.setData(annotated, positionsRef);
     layer.setSelected(selectedHex);
+    layer.setSelectedWildfire(selectedWildfire?.id ?? null);
     layer.setSafetyHexes(safetyHexes);
     layer.setLabelMode(labelMode);
     layer.setLabelDensity(labelDensity);
     layer.setFilter(filterFn);
-  }, [annotated, positionsRef, selectedHex, safetyHexes, labelMode, labelDensity, filterFn]);
+  }, [
+    annotated,
+    positionsRef,
+    selectedHex,
+    selectedWildfire,
+    safetyHexes,
+    labelMode,
+    labelDensity,
+    filterFn,
+  ]);
+
+  // When the assistant applies/changes a radar filter, move the view to it:
+  // explicit center/zoom, or fit to the matched aircraft (view === 'fit').
+  const appliedViewRef = useRef(null);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !activeFilter) {
+      appliedViewRef.current = null;
+      return;
+    }
+    // Only reposition once per distinct command (not on every aircraft tick).
+    const key = JSON.stringify({ m: activeFilter.match, v: activeFilter.view });
+    if (appliedViewRef.current === key) return;
+    appliedViewRef.current = key;
+
+    const view = activeFilter.view;
+    if (view && typeof view === 'object' && Array.isArray(view.center)) {
+      map.setView(view.center, view.zoom || map.getZoom());
+      return;
+    }
+    // Fit to the currently-matched aircraft.
+    const match = makeRadarMatchFn(activeFilter.match, feeder);
+    const pts = (annotated || [])
+      .filter((a) => typeof a.lat === 'number' && typeof a.lon === 'number' && (!match || match(a)))
+      .map((a) => [a.lat, a.lon]);
+    if (pts.length === 1) {
+      map.setView(pts[0], Math.max(map.getZoom(), 11));
+    } else if (pts.length > 1) {
+      map.fitBounds(L.latLngBounds(pts), { padding: [40, 40], maxZoom: 12 });
+    }
+  }, [activeFilter, mapRef]);
 
   // push overlay flags + data + display prefs to the canvas layer
   useEffect(() => {
@@ -203,6 +319,32 @@ export function LiveMapView({
       showCoast: overlays.showCoast,
     });
   }, [overlays, overlayData]);
+
+  // Historical flown-path overlay pushed by the assistant (plot_tracks): draw the
+  // polylines on the radar and fit the view to them once per distinct command.
+  const appliedTracksRef = useRef(null);
+  useEffect(() => {
+    const layer = layerRef.current;
+    const map = mapRef.current;
+    if (!layer) return;
+    const tracks = radarTracks?.tracks || null;
+    layer.setHistoricalTracks(tracks);
+    if (!tracks || !map) return;
+    const key = radarTracks.ts || JSON.stringify(radarTracks.label);
+    if (appliedTracksRef.current === key) return;
+    appliedTracksRef.current = key;
+    const pts = [];
+    for (const t of Object.values(tracks)) {
+      const raw = Array.isArray(t?.pts) ? t.pts : Array.isArray(t) ? t : [];
+      for (const p of raw) {
+        const lat = Array.isArray(p) ? p[0] : p?.lat;
+        const lon = Array.isArray(p) ? p[1] : p?.lon;
+        if (typeof lat === 'number' && typeof lon === 'number') pts.push([lat, lon]);
+      }
+    }
+    if (pts.length === 1) map.setView(pts[0], Math.max(map.getZoom(), 11));
+    else if (pts.length > 1) map.fitBounds(L.latLngBounds(pts), { padding: [50, 50], maxZoom: 12 });
+  }, [radarTracks, mapRef]);
 
   // range rings toggle
   useEffect(() => {
@@ -242,6 +384,30 @@ export function LiveMapView({
   // render gate and the invalidateSize effect so the map resizes when either
   // toggles.
   const panelVisible = panelOpen && !!selected;
+
+  // Tool popovers (filters/layers/legend) are absolute-positioned cards on
+  // desktop but would fall off a phone screen — render them as bottom sheets
+  // there. The inner panels keep their own heads (titles/reset/close); sheet
+  // CSS strips the card chrome so they sit flush.
+  const wrapPanel = (name, node) =>
+    isMobile ? (
+      <BottomSheet key={name} open onOpenChange={(o) => !o && setOpenPanel(null)} padded={false}>
+        {node}
+      </BottomSheet>
+    ) : (
+      <div className={`lm__pop lm__pop--${name}`}>{node}</div>
+    );
+
+  // Side detail panels (aircraft / wildfire / airmet) are a fixed 392px column
+  // on desktop; on a phone that squeezes the map, so slide them up as a sheet.
+  const wrapSide = (node, onClose) =>
+    isMobile ? (
+      <BottomSheet open onOpenChange={(o) => !o && onClose()} padded={false} maxHeight="82vh">
+        {node}
+      </BottomSheet>
+    ) : (
+      node
+    );
 
   const patchFilters = (patch) =>
     setFilters((f) => {
@@ -315,13 +481,51 @@ export function LiveMapView({
           onZoom={doZoom}
           onRecenter={recenter}
           onFullscreen={fullscreen}
+          isMobile={isMobile}
+          onOpenMore={() => setMoreOpen(true)}
         />
 
         <div className="lm__stage">
           <div ref={containerRef} className="lm__surface" data-testid="lm-surface" />
 
-          {openPanel === 'filters' && (
-            <div className="lm__pop lm__pop--filters">
+          {activeFilter && (
+            <div className="lm__focus" role="status">
+              <Icon name="filter" size={12} />
+              <span>
+                Assistant filter: <b>{activeFilter.label || 'filtered'}</b>
+              </span>
+              <button
+                type="button"
+                className="lm__focus-clear"
+                onClick={() => {
+                  onClearRadarCommand?.();
+                  if (hashParams?.rf || hashParams?.filter) window.location.hash = '#map';
+                }}
+              >
+                Clear
+              </button>
+            </div>
+          )}
+
+          {radarTracks?.tracks && Object.keys(radarTracks.tracks).length > 0 && (
+            <div className="lm__focus lm__focus--tracks" role="status">
+              <Icon name="activity" size={12} />
+              <span>
+                {radarTracks.label || `Tracks (${Object.keys(radarTracks.tracks).length})`}
+              </span>
+              <button
+                type="button"
+                className="lm__focus-clear"
+                onClick={() => onClearRadarTracks?.()}
+              >
+                Clear
+              </button>
+            </div>
+          )}
+
+          {openPanel === 'filters' &&
+            wrapPanel(
+              'filters',
               <FilterPanel
                 filters={filters}
                 onChange={patchFilters}
@@ -330,18 +534,11 @@ export function LiveMapView({
                   setFilters(DEFAULT_FILTERS);
                 }}
               />
-            </div>
-          )}
-          {openPanel === 'layers' && (
-            <div className="lm__pop lm__pop--layers">
-              <LayersPanel overlays={overlays} onChange={patchOverlays} />
-            </div>
-          )}
-          {openPanel === 'legend' && (
-            <div className="lm__pop lm__pop--legend">
-              <LegendPanel onClose={() => setOpenPanel(null)} />
-            </div>
-          )}
+            )}
+          {openPanel === 'layers' &&
+            wrapPanel('layers', <LayersPanel overlays={overlays} onChange={patchOverlays} />)}
+          {openPanel === 'legend' &&
+            wrapPanel('legend', <LegendPanel onClose={() => setOpenPanel(null)} />)}
 
           {/* coordinate readout */}
           <div className="lm__coords">
@@ -387,14 +584,109 @@ export function LiveMapView({
         </div>
       </div>
 
-      {panelVisible && (
-        <DetailPanel
-          apiBase={apiBase}
-          aircraft={selected}
-          track={overlayData.trails?.[(selectedHex || '').toUpperCase()] || []}
-          onClose={() => setPanelOpen(false)}
-          onOpenFull={onOpenFull}
-        />
+      {panelVisible &&
+        wrapSide(
+          <DetailPanel
+            apiBase={apiBase}
+            aircraft={selected}
+            track={overlayData.trails?.[(selectedHex || '').toUpperCase()] || []}
+            onClose={() => setPanelOpen(false)}
+            onOpenFull={onOpenFull}
+          />,
+          () => setPanelOpen(false)
+        )}
+
+      {selectedWildfire &&
+        wrapSide(
+          <WildfirePanel
+            apiBase={apiBase}
+            fire={selectedWildfire}
+            onClose={() => setSelectedWildfire(null)}
+          />,
+          () => setSelectedWildfire(null)
+        )}
+
+      {selectedAirmet &&
+        wrapSide(
+          <AirmetPanel
+            airmet={selectedAirmet}
+            apiBase={apiBase}
+            onClose={() => setSelectedAirmet(null)}
+          />,
+          () => setSelectedAirmet(null)
+        )}
+
+      {isMobile && (
+        <BottomSheet open={moreOpen} onOpenChange={setMoreOpen} title="Map controls">
+          <div className="lm__more-sheet">
+            <div className="lm__more-row">
+              <span>Labels</span>
+              <div className="lm__seg" role="group" aria-label="Label visibility">
+                <button
+                  type="button"
+                  className={labelMode === 'auto' ? 'lm__seg-on' : ''}
+                  onClick={() => setLabelMode('auto')}
+                >
+                  Auto
+                </button>
+                <button
+                  type="button"
+                  className={labelMode === 'all' ? 'lm__seg-on' : ''}
+                  onClick={() => setLabelMode('all')}
+                >
+                  All
+                </button>
+              </div>
+            </div>
+            <div className="lm__more-row">
+              <span>Density</span>
+              <div className="lm__seg" role="group" aria-label="Label density">
+                <button
+                  type="button"
+                  className={labelDensity === 'full' ? 'lm__seg-on' : ''}
+                  onClick={() => setLabelDensity('full')}
+                >
+                  Full
+                </button>
+                <button
+                  type="button"
+                  className={labelDensity === 'minimal' ? 'lm__seg-on' : ''}
+                  onClick={() => setLabelDensity('minimal')}
+                >
+                  Min
+                </button>
+              </div>
+            </div>
+            <div className="lm__more-row">
+              <span>Zoom</span>
+              <input
+                type="range"
+                min={3}
+                max={18}
+                value={zoom}
+                onChange={(e) => doZoom(Number(e.target.value))}
+                aria-label="Zoom"
+                className="lm__zoom-slider"
+              />
+              <span className="lm__zoom-val">{zoom}</span>
+            </div>
+            <button
+              type="button"
+              className="lm__more-btn"
+              onClick={() => {
+                recenter();
+                setMoreOpen(false);
+              }}
+            >
+              <Icon name="crosshair" size={16} strokeWidth={1.7} />
+              <span>Recenter on feeder</span>
+            </button>
+            <button type="button" className="lm__more-btn" onClick={fullscreen}>
+              <Icon name="fullscreen" size={16} strokeWidth={1.7} />
+              <span>Toggle fullscreen</span>
+            </button>
+          </div>
+        </BottomSheet>
       )}
     </div>
   );

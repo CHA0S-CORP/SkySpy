@@ -25,6 +25,9 @@ services:
     image: pgvector/pgvector:pg16
     container_name: skyspy-postgres
     restart: unless-stopped
+    # Docker's default /dev/shm is 64M; parallel VACUUM/ANALYZE + hash ops need
+    # more shared memory or fail with "No space left on device".
+    shm_size: 256mb
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-adsb}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-adsb}
@@ -140,6 +143,21 @@ services:
       ASSISTANT_MODEL: ${ASSISTANT_MODEL:-}
       ASSISTANT_MAX_STEPS: ${ASSISTANT_MAX_STEPS:-6}
       ASSISTANT_TIMEOUT: ${ASSISTANT_TIMEOUT:-60}
+
+      # Runtime web search (grounds the airframe card generator + type photos).
+      # Enable the bundled SearXNG with `--profile search`; default provider is
+      # the keyless wikipedia so it works even without that service.
+      WEB_SEARCH_ENABLED: ${WEB_SEARCH_ENABLED:-True}
+      WEB_SEARCH_PROVIDER: ${WEB_SEARCH_PROVIDER:-wikipedia}
+      WEB_SEARCH_API_KEY: ${WEB_SEARCH_API_KEY:-}
+      WEB_SEARCH_URL: ${WEB_SEARCH_URL:-http://searxng:8080}
+      WEB_SEARCH_MAX_RESULTS: ${WEB_SEARCH_MAX_RESULTS:-5}
+      WEB_SEARCH_USER_AGENT: ${WEB_SEARCH_USER_AGENT:-skyspy/3 (+https://github.com/skyspy/skyspy)}
+
+      # Airframe type-card generator (daily LLM back-fill of newly-seen types)
+      AIRFRAME_CARD_GEN_ENABLED: ${AIRFRAME_CARD_GEN_ENABLED:-False}
+      AIRFRAME_CARD_GEN_BATCH: ${AIRFRAME_CARD_GEN_BATCH:-8}
+      AIRFRAME_CARD_GEN_MIN_TAILS: ${AIRFRAME_CARD_GEN_MIN_TAILS:-1}
 
       # OpenSky Database
       OPENSKY_DB_ENABLED: ${OPENSKY_DB_ENABLED:-True}
@@ -257,6 +275,16 @@ services:
       LLM_CACHE_TTL: ${LLM_CACHE_TTL:-3600}
       LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-500}
       LLM_TEMPERATURE: ${LLM_TEMPERATURE:-0.1}
+      # Runtime web search + airframe type-card generator (task runs on the worker)
+      WEB_SEARCH_ENABLED: ${WEB_SEARCH_ENABLED:-True}
+      WEB_SEARCH_PROVIDER: ${WEB_SEARCH_PROVIDER:-wikipedia}
+      WEB_SEARCH_API_KEY: ${WEB_SEARCH_API_KEY:-}
+      WEB_SEARCH_URL: ${WEB_SEARCH_URL:-http://searxng:8080}
+      WEB_SEARCH_MAX_RESULTS: ${WEB_SEARCH_MAX_RESULTS:-5}
+      WEB_SEARCH_USER_AGENT: ${WEB_SEARCH_USER_AGENT:-skyspy/3 (+https://github.com/skyspy/skyspy)}
+      AIRFRAME_CARD_GEN_ENABLED: ${AIRFRAME_CARD_GEN_ENABLED:-False}
+      AIRFRAME_CARD_GEN_BATCH: ${AIRFRAME_CARD_GEN_BATCH:-8}
+      AIRFRAME_CARD_GEN_MIN_TAILS: ${AIRFRAME_CARD_GEN_MIN_TAILS:-1}
       OPENSKY_DB_ENABLED: ${OPENSKY_DB_ENABLED:-True}
       OPENSKY_DB_PATH: /data/opensky/aircraft-database.csv
       S3_ENABLED: ${S3_ENABLED:-False}
@@ -384,6 +412,30 @@ services:
               capabilities: [gpu]
     networks:
       - skyspy-network
+
+  # SearXNG meta-search — general web-search backend for the LLM
+  # (services/web_search.py). Opt-in via `--profile search`; then set
+  # WEB_SEARCH_PROVIDER=searxng (WEB_SEARCH_URL already defaults to this service).
+  searxng:
+    image: searxng/searxng:latest
+    container_name: skyspy-searxng
+    restart: unless-stopped
+    profiles:
+      - search
+    environment:
+      SEARXNG_BASE_URL: http://searxng:8080/
+      SEARXNG_SECRET: ${SEARXNG_SECRET:-change-me-searxng-secret}
+      UWSGI_WORKERS: ${SEARXNG_WORKERS:-2}
+      UWSGI_THREADS: "4"
+    volumes:
+      - ./searxng:/etc/searxng:rw
+    networks:
+      - skyspy-network
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
 
 # =============================================================================
 # Networks

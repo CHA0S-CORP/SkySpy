@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
 import { Icon } from '../v2/primitives';
+import { LockedFeature } from './LockedFeature';
+import { withAuth } from '../../lib/authHeader';
+import { TURB_SEVERITY } from '../../hooks/useTurbulenceOverlay';
 
 /**
  * Opt-in structured LLM analysis of a single ACARS message, rendered as an
@@ -14,7 +17,7 @@ import { Icon } from '../v2/primitives';
  */
 export function AcarsAiAnalysis({ apiBase, id }) {
   const [open, setOpen] = useState(false);
-  const [status, setStatus] = useState('idle'); // idle | loading | ready | error | unavailable
+  const [status, setStatus] = useState('idle'); // idle | loading | ready | error | unavailable | locked
   const [data, setData] = useState(null);
   const [errMsg, setErrMsg] = useState('');
 
@@ -25,7 +28,12 @@ export function AcarsAiAnalysis({ apiBase, id }) {
 
     setStatus('loading');
     try {
-      const res = await fetch(`${apiBase}/api/v1/acars/${id}/ai-analysis`);
+      const res = await fetch(`${apiBase}/api/v1/acars/${id}/ai-analysis`, { headers: withAuth() });
+      // 401/403 = AI is gated for this (anonymous) user — offer sign-in.
+      if (res.status === 401 || res.status === 403) {
+        setStatus('locked');
+        return;
+      }
       const json = res.ok ? await res.json() : null;
       if (json && json.available === false) {
         setStatus('unavailable');
@@ -62,6 +70,13 @@ export function AcarsAiAnalysis({ apiBase, id }) {
           {status === 'unavailable' && (
             <div className="acars-ai__msg">AI analysis is disabled on this server</div>
           )}
+          {status === 'locked' && (
+            <LockedFeature
+              variant="inline"
+              title="Sign in to unlock AI analysis"
+              subtitle="Structured, plain-English decoding of this ACARS message is available to signed-in users."
+            />
+          )}
           {status === 'error' && <div className="acars-ai__msg">{errMsg}</div>}
           {status === 'ready' && data && <AnalysisBody a={data} />}
         </div>
@@ -91,6 +106,8 @@ function AnalysisBody({ a }) {
       )}
 
       {a.summary && <p className="acars-ai__summary">{a.summary}</p>}
+
+      {a.turbulence?.level && a.turbulence.level !== 'none' && <TurbulenceRow t={a.turbulence} />}
 
       {a.fields?.length > 0 && (
         <dl className="acars-ai__fields">
@@ -132,6 +149,30 @@ function AnalysisBody({ a }) {
           ))}
         </ul>
       )}
+    </div>
+  );
+}
+
+/**
+ * Area-turbulence badge for an ACARS position report: the synthesized rough-air
+ * risk (G-AIRMET + PIREPs + winds-aloft shear) at the message's position. Distinct
+ * from the per-aircraft live turbulence badge on the map. Reuses TURB_SEVERITY.
+ */
+function TurbulenceRow({ t }) {
+  const sev = TURB_SEVERITY[t.level] || TURB_SEVERITY.default;
+  return (
+    <div
+      className={`acars-ai__turb acars-ai__turb--${t.level}`}
+      style={{ backgroundColor: sev.color, borderColor: sev.stroke }}
+      title={`Area turbulence risk at this report's position: ${sev.label}${
+        t.score != null ? ` (${t.score}/100)` : ''
+      }`}
+    >
+      <Icon name="alert-triangle" size={11} strokeWidth={2} />
+      <span>
+        Area turbulence: {sev.label}
+        {t.score != null ? ` · ${t.score}` : ''}
+      </span>
     </div>
   );
 }

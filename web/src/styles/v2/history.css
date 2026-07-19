@@ -304,6 +304,14 @@
   border-color: var(--warn);
   color: var(--txt);
 }
+.v2-hist__toggle--fav {
+  background: color-mix(in srgb, var(--warn) 18%, transparent);
+  border-color: var(--warn);
+  color: var(--txt);
+}
+.v2-hist__toggle--fav svg {
+  fill: var(--warn);
+}
 .v2-hist__sorts {
   display: flex;
   align-items: center;
@@ -1227,4 +1235,217 @@
 }
 .v2-notams__card-time {
   margin-left: auto;
+}
+
+/* ============================================================
+   PIREPs tab — NOTAM-style card grid. Cards reuse .v2-notams__*
+   structure; this layer adds the report-type pill, hazard accents,
+   the sort control and the mini-map position pin.
+   ============================================================ */
+
+.v2-pireps__card {
+  gap: 9px;
+}
+.v2-pireps__card--urgent {
+  background: color-mix(in srgb, var(--danger, #ff5d5d) 5%, transparent);
+}
+.v2-pireps__card--urgent:hover {
+  background: color-mix(in srgb, var(--danger, #ff5d5d) 9%, transparent);
+}
+.v2-pireps__card-station {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  letter-spacing: 0.4px;
+}
+.v2-pireps__rtype {
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+.v2-pireps__rtype--urgent {
+  color: var(--danger, #ff5d5d);
+  background: color-mix(in srgb, var(--danger, #ff5d5d) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--danger, #ff5d5d) 42%, transparent);
+}
+.v2-pireps__rtype--routine {
+  color: var(--dim);
+  background: var(--bg3);
+  border: 1px solid var(--bord);
+}
+.v2-pireps__ac {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--dim);
+}
+
+/* Urgent-only toggle in the controls row. */
+.v2-pirep__urgent-toggle--on {
+  color: var(--danger, #ff5d5d);
+  border-color: color-mix(in srgb, var(--danger, #ff5d5d) 42%, var(--bord));
+  background: color-mix(in srgb, var(--danger, #ff5d5d) 11%, transparent);
+}
+
+/* Sort control (Severity / Recent / Type). */
+.v2-pirep__sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 28px;
+  padding: 0 4px 0 9px;
+  border-radius: 8px;
+  background: var(--bg1);
+  border: 1px solid var(--bord);
+  color: var(--dim2);
+}
+.v2-pirep__sort-btn {
+  height: 22px;
+  padding: 0 9px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dim);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    color 0.12s,
+    background 0.12s;
+}
+.v2-pirep__sort-btn:hover {
+  color: var(--txt);
+}
+.v2-pirep__sort-btn--on {
+  color: var(--accent2);
+  background: color-mix(in srgb, var(--accent2) 15%, transparent);
+}
+
+/* Mini-map reported-position pin (used by PirepMap on the detail page). */
+.v2-pirep__map-pin span {
+  display: block;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--c, #f5b544);
+  border: 2px solid #05070a;
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--c, #f5b544) 30%, transparent),
+    0 0 10px color-mix(in srgb, var(--c, #f5b544) 60%, transparent);
+}
+
+/* ==========================================================================
+   Responsive — mobile / tablet reflow (canonical 1024 / 768 / 480 breakpoints).
+   Only NEW media blocks below; desktop base rules above are untouched.
+   ========================================================================== */
+
+@media (max-width: 1024px) {
+  .v2-hist__kpis {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .v2-hist__top {
+    padding: 12px 14px 0;
+  }
+  .v2-hist__body {
+    padding: 0 14px 14px;
+  }
+  /* top row wraps: ranges + collapsed KPIs + action buttons stack cleanly */
+  .v2-hist__toprow {
+    flex-wrap: wrap;
+  }
+  .v2-hist__ranges {
+    flex-wrap: wrap;
+  }
+  .v2-hist__kpis {
+    flex-basis: 100%;
+    grid-template-columns: repeat(2, 1fr);
+  }
+  /* activity + stats panels stack their inner grid full width */
+  .v2-hist__activity,
+  .v2-hist__stats {
+    flex-wrap: wrap;
+  }
+  .v2-hist__stats-grid {
+    flex-basis: 100%;
+    grid-template-columns: repeat(2, 1fr);
+  }
+  /* session cards + NOTAM/PIREP card grids to single column */
+  .v2-hist__grid,
+  .v2-notams__grid,
+  .v2-arch__tfrs,
+  .v2-arch__pirep-list {
+    grid-template-columns: 1fr;
+  }
+  /* filters + sorts: search takes full width, controls wrap below it */
+  .v2-hist__search {
+    flex-basis: 100%;
+    min-width: 0;
+  }
+  .v2-hist__filters .v2-select,
+  .v2-hist__filters .v2-hist__toggle {
+    flex: 1 1 auto;
+  }
+  /* ACARS controls stack; search grows full width */
+  .v2-acars__controls {
+    flex-wrap: wrap;
+  }
+  .v2-acars__search {
+    flex-basis: 100%;
+    max-width: none;
+  }
+  .v2-acars__live {
+    margin-left: 0;
+  }
+  /* ACARS pseudo-table: scroll horizontally rather than crush columns */
+  .v2-acars__list {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .v2-acars__head,
+  .v2-acars__row {
+    min-width: 340px;
+  }
+  /* NOTAMs stat/search bar wraps; search no longer pinned right */
+  .v2-notams__stats {
+    flex-wrap: wrap;
+  }
+  .v2-notams__search {
+    flex-basis: 100%;
+    max-width: none;
+    margin-left: 0;
+  }
+}
+
+@media (max-width: 480px) {
+  .v2-hist {
+    font-size: 12px;
+  }
+  .v2-hist__top {
+    padding: 10px 11px 0;
+  }
+  .v2-hist__body {
+    padding: 0 11px 11px;
+  }
+  .v2-hist__kpis,
+  .v2-hist__stats-grid {
+    grid-template-columns: 1fr;
+  }
+  /* session card inner metrics can crush at <480 — give each metric room */
+  .v2-hist__card {
+    padding: 13px 13px;
+  }
+  .v2-hist__card-metrics {
+    grid-template-columns: 1fr 1fr;
+    row-gap: 10px;
+  }
+  .v2-acars__head,
+  .v2-acars__row {
+    min-width: 300px;
+  }
 }

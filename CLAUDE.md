@@ -24,12 +24,23 @@ Additional resources: `docs/` (guides 00-19), `web/src/STRUCTURE.md` (frontend a
 ### Start Development Environment (Docker)
 
 ```bash
-make dev              # Start all services with mock data
+make dev              # All open: AUTH_MODE=public, DEV_MODE=True — auth gates bypassed (fast local dev)
+make dev-public       # PUBLIC map/dashboard, sign-in for AI (AUTH_MODE=public, DEV_MODE=False) + seed users — mirrors public deploy
+make dev-public-down  # Stop the public-auth stack
+make dev-auth         # Everything requires login (AUTH_MODE=hybrid, DEV_MODE=False) + seed admin/admin + user/user
+make dev-auth-down    # Stop the auth-enforced stack
+make dev-auth-seed    # Re-seed the local admin + test user (manage.py seed_dev_users)
 make dev-down         # Stop services
 make dev-logs         # View logs
 make clean            # Stop containers, remove volumes, clear caches
 make lint             # Run all linters (Python + Go + Frontend)
 ```
+
+`make dev-auth` uses the `docker-compose.dev-auth.yaml` overlay to run the dev stack
+with authentication enforced (so you can test login / roles / the AI + sensitive
+gates). It seeds two users via `manage.py seed_dev_users`: `admin`/`admin` (superuser,
+passes every gate) and `user`/`user` (viewer role — AI/LLM shows the sign-in gate).
+Override with `DEV_ADMIN_PASSWORD` / `DEV_USER_PASSWORD` / `DEV_USER_ROLE`.
 
 Services: Dashboard :3000, Django API :8000, Django Admin :8000/admin/ (admin/admin), Mock Ultrafeeder :18080, Mock Dump978 :18081, PgBouncer :5432, Redis :6379, Celery worker + beat also start.
 
@@ -156,14 +167,16 @@ React Frontend (Vite) / Go TUI Client
 - **Path aliases**: `@/*` maps to `src/*`
 - **Build**: Vite with manual chunking (vendor, Radix UI, TanStack, Leaflet, Framer Motion). Production base path `/static/`.
 - **Dev proxy**: Vite proxies `/api`, `/socket.io`, `/ws`, `/health` to backend at :8000
+- **Routing / deep-links**: hash routing (`#<tab>?<params>`) via `lib/hashRoute.js`. Screen view state (search/filter/sort/sub-tab/selection/range) is deep-linked with the `useHashParamState` hook — URL is the source of truth, params omitted at default, replaceState for in-screen changes. Full param reference: `docs/21-deep-linking.md`. The assistant prompt (`services/assistant/agent.py`) lists these so the LLM can link filtered views.
 - **Testing**: Vitest with jsdom, react-leaflet mocked. Coverage target 80% (currently relaxed to 40% in CI — TODO to restore). Go CLI target is 70%.
 - **Storybook**: Available via `npm run storybook` on port 6006.
 
 ### Authentication
 
 - `AUTH_MODE` env var: `public` | `private` | `hybrid` (per-feature access)
-- JWT (access/refresh), API Keys, OIDC/SSO (Keycloak, Authentik, Azure AD, Okta, Auth0, Authelia)
-- Custom permission: `IsAuthenticatedOrPublic`
+- JWT (access/refresh), API Keys, OIDC/SSO (Google, Auth0, Okta, Azure AD, Keycloak, Authentik, Authelia). OIDC endpoints are auto-discovered from `OIDC_PROVIDER_URL/.well-known/openid-configuration` (`auth/oidc.py`); ID tokens verified via JWKS, userinfo fallback. Custom backend in `auth/backends.py`.
+- Permissions: `IsAuthenticatedOrPublic`, `FeatureBasedPermission`, `RequireAuthenticated` (ignores public bypass — used for sensitive/system endpoints), `CanUseAssistant` (auth + `assistant.view`, gates AI/chat even in public mode). See `auth/permissions.py`.
+- Public-deploy hardening + what stays auth-gated in public mode: `docs/20-public-deploy-checklist.md`.
 
 ### Docker Profiles
 
@@ -189,6 +202,45 @@ FEEDER_LAT/LON                 # Antenna location for distance calc
 AIRSPACE_FETCH_RADIUS_NM=250
 GEODATA_FETCH_RADIUS_NM=250
 AIRSPACE_EXTRA_REGIONS=[]
+
+# FAA enroute structure = US airways + named waypoints/fixes. geodata.py::
+# refresh_faa_enroute() fetches the FAA Aeronautical Information Services ArcGIS
+# FeatureServers (ATS_Route lines, DesignatedPoints points; keyless, authoritative,
+# 28-day cycle) as GeoJSON within GEODATA_FETCH_RADIUS_NM of the feeder (+
+# AIRSPACE_EXTRA_REGIONS), paginating with resultOffset (ArcGIS caps 1000-2000/req).
+# Rows land in CachedGeoJSON as data_type us_airways / us_fixes and are served by
+# the generic GET /aviation/geojson/<type>/ endpoint + drawn as the Airways/Fixes
+# map layers. Refreshed by the daily refresh_all_geodata beat task (also a
+# standalone tasks/geodata.py::refresh_faa_enroute). US-only: a non-US feeder
+# fetches nothing (existing cache left intact). Separately, per-flight route lookup
+# (external_db.fetch_route via adsb.im -> adsbdb -> hexdb) now returns an ordered
+# `waypoints` list (origin -> [midpoints] -> destination) so the UI can draw the
+# leg polyline for a selected aircraft.
+FAA_ENROUTE_ENABLED=True
+FAA_AIRWAYS_URL=https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/ATS_Route/FeatureServer/0/query
+FAA_FIXES_URL=https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/DesignatedPoints/FeatureServer/0/query
+FAA_ENROUTE_MAX_FEATURES=8000
+
+# Per-aircraft turbulence risk. services/turbulence.py::assess_turbulence(lat,lon,alt)
+# synthesizes a 0-100 score + level (none/light/moderate/severe) from NWS G-AIRMET
+# turbulence forecast polygons (AirspaceAdvisory, hand-rolled ray-cast point-in-polygon
+# — no shapely), nearby turbulence PIREPs (CachedPirep, distance/recency/altitude
+# weighted), and winds-aloft vertical shear (best-effort; AWC usually serves raw FB
+# text so shear contributes 0 rather than penalizing). tasks/turbulence.py::
+# score_aircraft_turbulence scores the current_aircraft cache OFF the hot path every
+# TURB_SCORE_INTERVAL s (low_priority queue) and caches turb:by_hex for TURB_SCORE_TTL.
+# Surfaced via GET /api/v1/aviation/turbulence{,/advisories,/aircraft}, a map TURB
+# badge + turbulence/winds-aloft overlays, the #weather screen, and turbulence_score /
+# turbulence_level AlertRule rule_types (level compared by rank, overlaid in
+# alerts.check_alerts via _overlay_turbulence). TURB_LEVEL_* set the band thresholds.
+TURB_ENABLED=True
+TURB_SCORE_INTERVAL=60
+TURB_SCORE_TTL=180
+TURB_PIREP_RADIUS_NM=150
+TURB_PIREP_HOURS=3
+TURB_LEVEL_LIGHT=20
+TURB_LEVEL_MODERATE=45
+TURB_LEVEL_SEVERE=70
 
 # Feature toggles
 AUTH_MODE=public|private|hybrid
@@ -222,10 +274,79 @@ OPENSANCTIONS_API_URL=https://api.opensanctions.org
 OPENSANCTIONS_API_KEY=
 OPENSANCTIONS_DATASET=default
 
+# Watch Duty wildfire overlay (services/wildfires.py, via the libwatchduty PyPI
+# client). When WILDFIRES_ENABLED, a 5-min Celery beat task polls the public
+# api.watchduty.org geo_events feed, keeps active wildfires within
+# WILDFIRES_RADIUS_NM of FEEDER_LAT/LON (haversine — no server-side bbox),
+# threat-scores each with libwatchduty.compute_threat, and caches them in
+# CachedWildfire. Rendered on the Live Map as a toggleable "Wildfires" layer of
+# threat-colored markers (Socket.IO `wildfires` request + REST
+# /api/v1/aviation/wildfires/); clicking a marker opens a detail panel fed by the
+# per-fire /wildfires/<id>/bundle endpoint (reports feed, PTZ camera stills,
+# Broadcastify scanner feeds — get_fire_bundle, fetched on demand, cached ~120s).
+# Also exposed to the assistant as the get_nearby_wildfires tool. Watch Duty is
+# US/CA-centric, so a non-US feeder caches nothing. Read endpoints are public;
+# WATCHDUTY_API_TOKEN is optional (raises the feeder rate limit only). Off by default.
+WILDFIRES_ENABLED=False
+WILDFIRES_REFRESH_INTERVAL=300
+WILDFIRES_RADIUS_NM=250        # defaults to GEODATA_FETCH_RADIUS_NM
+# Max fire→camera distance (nm) for the per-fire detail bundle. Watch Duty's
+# /cameras/ is the whole network (not fire-scoped), so _best_cameras drops any
+# camera farther than this from the fire (else a lookout hundreds of km away
+# shows unrelated terrain — reads as "wrong location"). Each returned camera
+# carries distance_km for the panel caption.
+WILDFIRES_CAMERA_RADIUS_NM=50
+WATCHDUTY_BASE_URL=https://api.watchduty.org/api/v1
+# Auth (optional). Read endpoints (fires/reports/cameras) are public; the global
+# aircraft catalog (services.wildfires.list_aircraft) needs a token. Provide a
+# WATCHDUTY_API_TOKEN directly, or WATCHDUTY_USERNAME + WATCHDUTY_PASSWORD to log
+# in — the service authenticates once and caches the DRF token (6h).
+WATCHDUTY_API_TOKEN=
+WATCHDUTY_USERNAME=
+WATCHDUTY_PASSWORD=
+
 # REST throttling (public dashboards are anonymous - keep anon above one
-# dashboard's polling volume)
+# dashboard's polling volume). The scoped rates below throttle expensive /
+# external-fan-out endpoints per user-or-IP (see api/throttles.py); a scope with
+# no rate configured (as in test_settings) disables that throttle.
 API_THROTTLE_ANON=600/minute
 API_THROTTLE_USER=2000/minute
+API_THROTTLE_AUTH=5/minute              # login/auth endpoints
+API_THROTTLE_UPLOAD=10/minute           # audio upload
+API_THROTTLE_EXTERNAL_LOOKUP=10/minute  # external DB / route lookups (OpenSky/ADSBX/FAA)
+API_THROTTLE_WEATHER=30/minute          # METAR/TAF/PIREP/SIGMET/NEXRAD
+API_THROTTLE_GEODATA=60/minute          # geojson / terrain
+
+# Public-deploy hardening (production, DEBUG=False). See docs/20-public-deploy-checklist.md.
+# CSRF_TRUSTED_ORIGINS defaults to CORS_ALLOWED_ORIGINS. HTTPS/HSTS auto-enable when
+# DEBUG=False (behind a TLS-terminating proxy via SECURE_PROXY_SSL_HEADER); /health is
+# exempt from SSL redirect. Override SECURE_SSL_REDIRECT / SECURE_HSTS_SECONDS as needed.
+CSRF_TRUSTED_ORIGINS=
+SECURE_SSL_REDIRECT=True
+SECURE_HSTS_SECONDS=31536000
+
+# AI/assistant + chat are auth-gated in production: they require an authenticated user with
+# the assistant.view permission (roles analyst/admin/superadmin by default) EVEN in
+# AUTH_MODE=public — anonymous visitors can't use the LLM. Enforced by CanUseAssistant.
+# All other LLM-backed endpoints (aviation explain/pirep-summary, acars ai-summary/ai-analysis,
+# airframe flight-history + type-cards/generate) are gated by CanUseLLM (same auth, no
+# ASSISTANT_ENABLED requirement) + rate-limited. Socket.IO auth: middleware/auth.py on connect.
+# Other endpoints hardened for public deploy: /system/info + /metrics require auth;
+# /system/status strips feeder location/PID/tasks for anon; /lookup/aircraft + /lookup/opensky
+# require auth + throttle; audio upload/transcribe require auth. Alert/notification/chat
+# querysets are owner-scoped. PhotoServeView (/api/v1/photos/<hex>) is ALWAYS public
+# (AllowAny) — cached images, and <img> can't send a JWT, so gating would break photos.
+# DEV BYPASS: all of the above enforcement + owner-scoping is RELAXED when DEBUG=True
+# (local dev works without login); it enforces only when DEBUG=False (required for public
+# deploy). Gated via _dev_bypass() in auth/permissions.py + `if settings.DEBUG` in the
+# owner-scoped get_queryset()s; the frontend mirrors this via auth/config `dev_mode`.
+
+# Webhook SSRF allowlist. Alert/notification webhook URLs are blocked when they
+# target a private/internal IP (SSRF prevention in services/notifications.py).
+# This comma-separated list of IPs/CIDRs is exempt, so webhooks can reach a
+# trusted internal receiver (e.g. self-hosted n8n at 10.42.252.10). Empty
+# (default) = block all private targets. Checked in _is_blocked_ip().
+NOTIFICATION_WEBHOOK_ALLOWED_PRIVATE_CIDRS=
 
 # Statistics screen KPI tick (stats:tick broadcast) interval in seconds
 # (RPi celery profile overrides to 30)
@@ -246,8 +367,16 @@ EMBEDDING_DIM=1536
 # model. Endpoint at POST /api/v1/assistant/ask/ and SSE /api/v1/assistant/stream/.
 ASSISTANT_ENABLED=False
 ASSISTANT_MODEL=         # defaults to LLM_MODEL
-ASSISTANT_MAX_STEPS=10   # tool-call budget/query; higher = chain more tools into one synthesized answer
-ASSISTANT_TIMEOUT=60
+# Tool-call budget per query (recursion limit = MAX_STEPS*2+2). Higher = deeper
+# tool chains into one synthesized answer. Safe to raise on large-context models
+# (128k) — the binding constraint is ASSISTANT_TIMEOUT, not context, since each
+# step is a sequential model+tool round-trip. Raise the timeout alongside it.
+ASSISTANT_MAX_STEPS=15
+# Budget cap applied in COMPACT MODE (small context window, see
+# ASSISTANT_CONTEXT_WINDOW): deep tool chains would overflow an 8k window, so the
+# effective budget is min(MAX_STEPS, MAX_STEPS_COMPACT) there.
+ASSISTANT_MAX_STEPS_COMPACT=8
+ASSISTANT_TIMEOUT=120
 # Auto-inject a compact live-traffic snapshot into each query so answers are
 # grounded in the current picture without spending a tool call. Disable on
 # tiny/RPi models if the extra context hurts.
@@ -260,7 +389,7 @@ ASSISTANT_MAX_HISTORY_CHARS=3000  # per-message cap
 # Ollama). When <=16000 the assistant auto-switches to COMPACT MODE: a short system
 # prompt (COMPACT_SYSTEM_PROMPT), first-sentence-only tool descriptions, and tighter
 # result/history/briefing/page-context caps — the fixed SYSTEM_PROMPT (~3k tokens) +
-# 31 tool schemas would otherwise overflow an 8k window on the first model call
+# the tool schemas would otherwise overflow an 8k window on the first model call
 # ("prompt contains at least 8193 input tokens"). 0 (default) = assume large, no
 # compaction.
 ASSISTANT_CONTEXT_WINDOW=0
@@ -270,6 +399,49 @@ ASSISTANT_CONTEXT_WINDOW=0
 # S3_ENABLED, else same-origin /api/v1/photos/<hex>. Set a public asset base to
 # force <base>/<HEX>.jpg (e.g. https://sky-spy-assets.s3.amazonaws.com/photos).
 ASSISTANT_PHOTO_BASE_URL=
+
+# Auto-generated airframe type cards. The v2 Airframes screen ships a hand-curated
+# static reference library (web/.../airframesData.js). The daily
+# generate_airframe_type_cards Celery task (low_priority queue, 07:30 UTC) finds
+# ICAO type designators this station has actually tracked but that are missing
+# from that library. For each it runs a LIVE WEB SEARCH (services/web_search.py)
+# to ground the facts, has the LLM write a factual card from those sources, and
+# FETCHES a public type photo (Wikipedia/Wikimedia lead image) — downloaded into
+# the photo cache under key TYPE-<code> and served same-origin at
+# /api/v1/photos/TYPE-<code>. Results go in the AirframeTypeCard model. The model
+# NEVER draws: it picks a diagram *archetype* from services/airframe_archetypes.py
+# (a fixed <Planform> shape vocabulary — kind/engines/mount/tail/sweep/wing/blades)
+# and the front-end renders the same to-scale blueprint as a static card. Cards
+# surface via GET /api/v1/airframes/type-cards/ and the screen merges them BEHIND
+# the static library (a static entry always wins a type collision); generated
+# cards show an "AUTO" chip, confidence caveat + source/credit. Requires
+# LLM_ENABLED (and WEB_SEARCH_ENABLED for grounding/photos). BATCH bounds LLM
+# calls per run; MIN_TAILS skips one-off mis-decodes (only types with >= N tails).
+# CURATED_TYPE_CODES in services/airframe_card_gen.py mirrors the static library
+# ids to avoid regenerating a card the merge would hide — keep roughly in sync.
+AIRFRAME_CARD_GEN_ENABLED=False
+AIRFRAME_CARD_GEN_BATCH=8
+AIRFRAME_CARD_GEN_MIN_TAILS=1
+
+# Runtime web search (services/web_search.py) — reusable, grounds LLM output in
+# live web sources + supplies public type photos. Provider: wikipedia (keyless
+# default) | tavily | brave (WEB_SEARCH_API_KEY) | searxng (WEB_SEARCH_URL) |
+# duckduckgo (keyless scrape). All calls go through http_client (circuit breaker
+# + retry). Wikipedia always supplies the airframe type photo. UA must carry
+# contact info or Wikimedia 403s.
+#
+# A SearXNG meta-search container is bundled for general web search: it runs by
+# default in the dev stack (make dev; reachable at http://searxng:8080, debug UI
+# on :18090) and in prod under `--profile search`. Config: ./searxng/settings.yml
+# (enables the JSON API web_search.py consumes; disables the bot limiter for
+# internal calls). .env.test points the dev stack at it (WEB_SEARCH_PROVIDER=
+# searxng); prod defaults to keyless wikipedia so it works without the profile.
+WEB_SEARCH_ENABLED=True
+WEB_SEARCH_PROVIDER=wikipedia
+WEB_SEARCH_API_KEY=
+WEB_SEARCH_URL=http://searxng:8080
+WEB_SEARCH_MAX_RESULTS=5
+WEB_SEARCH_USER_AGENT=skyspy/3 (+https://github.com/skyspy/skyspy)
 
 # Aircraft photo enrichment. The photo chain is planespotters (hex then reg) →
 # airport-data.com (hex/reg) → hexdb.io → flickr (GA tail fallback). Planespotters'

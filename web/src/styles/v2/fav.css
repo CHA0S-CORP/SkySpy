@@ -1,0 +1,29 @@
+/* Favorite (star) toggle — used on the aircraft detail header, history rows, etc. */
+.fav-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px;
+  border: none;
+  background: transparent;
+  color: var(--dim);
+  cursor: pointer;
+  border-radius: 7px;
+  transition:
+    color 0.12s,
+    background 0.12s,
+    transform 0.08s;
+}
+.fav-btn:hover {
+  color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 12%, transparent);
+}
+.fav-btn:active {
+  transform: scale(0.9);
+}
+.fav-btn--on {
+  color: var(--warn);
+}
+.fav-btn--on svg {
+  fill: var(--warn);
+}

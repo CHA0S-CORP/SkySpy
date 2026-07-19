@@ -52,6 +52,17 @@ def _format_altitude(altitude: Any) -> str | None:
     return None
 
 
+def _format_airframe(data: dict[str, Any], aircraft: dict[str, Any]) -> str | None:
+    """Human label for the airframe: "Manufacturer Model", else type name."""
+    manufacturer = data.get("manufacturer") or aircraft.get("manufacturer")
+    model = data.get("model") or aircraft.get("model")
+    parts = [str(p).strip() for p in (manufacturer, model) if p and str(p).strip()]
+    if parts:
+        return " ".join(parts)
+    type_name = data.get("type_name") or aircraft.get("type_name") or aircraft.get("desc")
+    return str(type_name).strip() if type_name and str(type_name).strip() else None
+
+
 class DiscordFormatter:
     """
     Formats notifications as Discord embeds.
@@ -115,6 +126,28 @@ class DiscordFormatter:
                 }
             )
 
+        # Aircraft (manufacturer / model / type name)
+        airframe = _format_airframe(data, aircraft)
+        if airframe:
+            fields.append(
+                {
+                    "name": "Aircraft",
+                    "value": airframe,
+                    "inline": True,
+                }
+            )
+
+        # Operator / owner
+        operator = data.get("operator") or aircraft.get("ownOp") or aircraft.get("owner")
+        if operator:
+            fields.append(
+                {
+                    "name": "Operator",
+                    "value": str(operator),
+                    "inline": True,
+                }
+            )
+
         # Altitude
         altitude = _format_altitude(aircraft.get("alt"))
         if altitude is not None:
@@ -160,11 +193,21 @@ class DiscordFormatter:
             )
 
         # Military indicator
-        if aircraft.get("military"):
+        if data.get("military") or aircraft.get("military"):
             fields.append(
                 {
                     "name": "\U0001f6e1 Military",
                     "value": "Yes",
+                    "inline": True,
+                }
+            )
+
+        # Law enforcement indicator
+        if data.get("law_enforcement"):
+            fields.append(
+                {
+                    "name": "\U0001f693 Law Enforcement",
+                    "value": data.get("law_enforcement_description") or data.get("law_enforcement_category") or "Yes",
                     "inline": True,
                 }
             )
@@ -367,6 +410,41 @@ class SlackFormatter:
                 {
                     "type": "mrkdwn",
                     "text": f"*Distance:* {distance:.1f} NM",
+                }
+            )
+
+        airframe = _format_airframe(data, aircraft)
+        if airframe:
+            fields.append(
+                {
+                    "type": "mrkdwn",
+                    "text": f"*Aircraft:* {airframe}",
+                }
+            )
+
+        operator = data.get("operator") or aircraft.get("ownOp") or aircraft.get("owner")
+        if operator:
+            fields.append(
+                {
+                    "type": "mrkdwn",
+                    "text": f"*Operator:* {operator}",
+                }
+            )
+
+        if data.get("military") or aircraft.get("military"):
+            fields.append(
+                {
+                    "type": "mrkdwn",
+                    "text": "*Military:* Yes",
+                }
+            )
+
+        if data.get("law_enforcement"):
+            le_label = data.get("law_enforcement_description") or data.get("law_enforcement_category") or "Yes"
+            fields.append(
+                {
+                    "type": "mrkdwn",
+                    "text": f"*Law Enforcement:* {le_label}",
                 }
             )
 

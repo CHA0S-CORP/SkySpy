@@ -1,8 +1,13 @@
-import React, { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import React, { useEffect, useRef, useState } from 'react';
 import { Icon, Switch, toast } from '../../primitives';
+import { useHashParamState } from '../../../../hooks/useHashParamState';
 import { useAlertRules } from '../../../../hooks/useAlertRules';
+import { useAlertInbox, inboxKey } from '../../../../hooks/useAlertInbox';
+import { playAlertSound } from '../../../../utils/alertSound';
 import { CreateRuleModal } from './CreateRuleModal';
+import { NotificationsTab } from './NotificationsTab';
+import { InboxTab } from './InboxTab';
+import { AlertDetailModal } from './AlertDetailModal';
 import { priorityConfig, ruleCondSummary } from './alertsModel';
 
 const RULE_ICONS = {
@@ -12,51 +17,15 @@ const RULE_ICONS = {
   info: 'map-pin',
 };
 
-const CHANNEL_DEFS = [
-  {
-    id: 'browser',
-    name: 'Browser Push',
-    detail: 'Desktop notifications',
-    color: 'var(--accent2)',
-    icon: 'bell',
-  },
-  {
-    id: 'sound',
-    name: 'Audio Alerts',
-    detail: 'Chime on trigger',
-    color: 'var(--accent)',
-    icon: 'volume',
-  },
-  {
-    id: 'webhook',
-    name: 'Webhook',
-    detail: 'POST to configured URL',
-    color: 'var(--warn)',
-    icon: 'link',
-  },
-  {
-    id: 'email',
-    name: 'Email',
-    detail: 'Via notification server',
-    color: 'var(--mil)',
-    icon: 'mail',
-  },
-];
+// Local-sink settings (client-side): browser push + chime on trigger.
+const LOCAL_KEY = 'skyspy-alert-channels';
 
-const CHANNELS_KEY = 'skyspy-alert-channels';
-
-function loadChannels() {
+function loadLocal() {
   try {
-    return (
-      JSON.parse(localStorage.getItem(CHANNELS_KEY)) || {
-        browser: false,
-        sound: true,
-        webhook: false,
-        email: false,
-      }
-    );
+    const v = JSON.parse(localStorage.getItem(LOCAL_KEY));
+    return { sound: true, browser: false, ...(v && typeof v === 'object' ? v : {}) };
   } catch {
-    return { browser: false, sound: true, webhook: false, email: false };
+    return { sound: true, browser: false };
   }
 }
 
@@ -71,82 +40,107 @@ function relTime(iso) {
 }
 
 /**
- * v2 Alerts screen (designs/Alerts.dc.html): Rules / History / Notifications
- * tabs + Create Alert Rule modal. Rules via useAlertRules (REST list +
- * alert-rule-* socket RPC), history via REST seed + live alert:triggered feed.
+ * v2 Alerts screen: Rules / Inbox / History / Notifications tabs + Create Rule
+ * modal + rich Alert Detail modal. Rules via useAlertRules; inbox (local sink)
+ * via useAlertInbox (AlertHistory seed + live alert:triggered), with an optional
+ * chime + browser push; notification channels (custom targets) via NotificationsTab.
  *
  * @param {object} props
  * @param {string} props.apiBase
  * @param {Function} props.wsRequest
  * @param {boolean} props.wsConnected
  * @param {object[]} props.aircraft
+ * @param {(hex: string, callsign?: string) => void} [props.onOpenMap]
+ * @param {(hex: string, callsign?: string) => void} [props.onFullDetail]
  */
-export function AlertsScreen({ apiBase, wsRequest, wsConnected, aircraft }) {
-  const [tab, setTab] = useState('rules');
+export function AlertsScreen({
+  apiBase,
+  wsRequest,
+  wsConnected,
+  aircraft,
+  onOpenMap,
+  onFullDetail,
+}) {
+  // Deep-linked view state (#alerts?tab=&q=&priority=&status=). The rule
+  // filters live in useAlertRules; the URL is the source of truth and its
+  // values are pushed into the hook's setters below.
+  const [tab, setTab] = useHashParamState('tab', 'rules', { replace: false });
+  const [q, setQ] = useHashParamState('q', '');
+  const [priority, setPriority] = useHashParamState('priority', 'all');
+  const [statusF, setStatusF] = useHashParamState('status', 'all');
   const [modalOpen, setModalOpen] = useState(false);
-  const [channels, setChannels] = useState(loadChannels);
+  const [editingRule, setEditingRule] = useState(null);
+  const [local, setLocal] = useState(loadLocal);
+  const [detailAlert, setDetailAlert] = useState(null);
 
   const {
     filteredRules,
     rules,
     realtimeAlerts,
     refetch,
-    searchQuery,
     setSearchQuery,
-    priorityFilter,
     setPriorityFilter,
-    statusFilter,
     setStatusFilter,
     handleToggle,
+    handleDelete,
+    pendingDelete,
+    handleUndoDelete,
   } = useAlertRules({ apiBase, wsRequest, wsConnected, onToast: (msg) => toast(msg) });
 
-  const { data: historyData } = useQuery({
-    queryKey: ['v2-alert-history', apiBase],
-    enabled: tab === 'history',
-    refetchInterval: 60000,
-    queryFn: async () => {
-      try {
-        const res = await fetch(`${apiBase}/api/v1/alerts/history/`);
-        if (!res.ok) return [];
-        const data = await res.json();
-        return data.results || data.alerts || (Array.isArray(data) ? data : []);
-      } catch {
-        return [];
-      }
-    },
+  // Mirror the URL-backed filters into useAlertRules (one-way: URL → hook) so
+  // filteredRules recomputes on deep-link, reload, and back/forward.
+  useEffect(() => setSearchQuery(q), [q, setSearchQuery]);
+  useEffect(() => setPriorityFilter(priority), [priority, setPriorityFilter]);
+  useEffect(() => setStatusFilter(statusF), [statusF, setStatusFilter]);
+
+  const { items, unreadCount, markRead, markAllRead, clear } = useAlertInbox({
+    realtimeAlerts,
+    enabled: true,
   });
 
-  const fired = useMemo(() => {
-    const seed = historyData || [];
-    const live = realtimeAlerts || [];
-    const seen = new Set();
-    const all = [...live, ...seed].filter((f) => {
-      // Live socket payloads carry no id, REST rows do - an id-based key
-      // never matches across the two sources and every alert rendered twice.
-      // Both share rule_id/icao/timestamp, so dedup on content (bucketed to
-      // a minute; rule cooldowns are >= 1 min so this cannot merge two real
-      // firings of the same rule+aircraft).
-      const ts = Date.parse(f.timestamp ?? f.triggered_at ?? '') || 0;
-      const key = `${f.rule_id ?? f.rule_name ?? f.ruleName}-${f.icao ?? f.icao_hex}-${Math.floor(ts / 60000)}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-    return all.slice(0, 100);
-  }, [historyData, realtimeAlerts]);
+  // Local sink: chime + browser push on each newly-arrived live alert.
+  const lastSeenKeyRef = useRef(null);
+  useEffect(() => {
+    const top = (realtimeAlerts || [])[0];
+    if (!top) return;
+    const key = inboxKey(top);
+    if (lastSeenKeyRef.current === null) {
+      // Prime on first render so we don't chime for the initial snapshot.
+      lastSeenKeyRef.current = key;
+      return;
+    }
+    if (key === lastSeenKeyRef.current) return;
+    lastSeenKeyRef.current = key;
 
-  const setChannel = (id, on) => {
-    const next = { ...channels, [id]: on };
-    setChannels(next);
+    if (local.sound) playAlertSound(top.priority);
+    if (
+      local.browser &&
+      typeof Notification !== 'undefined' &&
+      Notification.permission === 'granted'
+    ) {
+      const cs = top.callsign || top.icao || top.aircraft?.hex || 'aircraft';
+      new Notification(top.rule_name || 'SkySpy Alert', {
+        body: top.message || `${cs} triggered an alert`,
+        icon: '/static/favicon.svg',
+        tag: `alert-${key}`,
+      });
+    }
+  }, [realtimeAlerts, local.sound, local.browser]);
+
+  const setLocalSetting = (id, on) => {
+    const next = { ...local, [id]: on };
+    setLocal(next);
     try {
-      localStorage.setItem(CHANNELS_KEY, JSON.stringify(next));
+      localStorage.setItem(LOCAL_KEY, JSON.stringify(next));
     } catch {
       // persistence best-effort
     }
     if (id === 'browser' && on && typeof Notification !== 'undefined') {
       Notification.requestPermission();
     }
-    toast(`${CHANNEL_DEFS.find((c) => c.id === id)?.name} ${on ? 'enabled' : 'disabled'}`);
+    toast(
+      `${id === 'sound' ? 'Alert sound' : 'Desktop notifications'} ${on ? 'enabled' : 'disabled'}`
+    );
   };
 
   const onCreate = async (payload) => {
@@ -163,9 +157,39 @@ export function AlertsScreen({ apiBase, wsRequest, wsConnected, aircraft }) {
     refetch();
   };
 
+  const onUpdate = async (payload) => {
+    if (!wsRequest || !wsConnected) {
+      toast('Not connected to server');
+      return;
+    }
+    const result = await wsRequest('alert-rule-update', payload);
+    if (result?.error) {
+      toast('Failed to update rule');
+      return;
+    }
+    toast('Alert rule updated');
+    refetch();
+  };
+
+  const openCreate = () => {
+    setEditingRule(null);
+    setModalOpen(true);
+  };
+  const openEdit = (rule) => {
+    setEditingRule(rule);
+    setModalOpen(true);
+  };
+
+  const openDetail = (alert) => {
+    setDetailAlert(alert);
+    // Mark read when opened (server ack + local fallback).
+    if (alert?.__unread) markRead(alert);
+  };
+
   const tabs = [
     { key: 'rules', label: 'Rules', count: rules.length },
-    { key: 'history', label: 'History', count: fired.length || null },
+    { key: 'inbox', label: 'Inbox', count: unreadCount || null },
+    { key: 'history', label: 'History', count: items.length || null },
     { key: 'notif', label: 'Notifications', count: null },
   ];
 
@@ -192,13 +216,27 @@ export function AlertsScreen({ apiBase, wsRequest, wsConnected, aircraft }) {
         <button
           type="button"
           className="v2-btn"
-          onClick={() => setModalOpen(true)}
+          onClick={openCreate}
           data-testid="v2-alerts-new-rule"
         >
           <Icon name="plus" size={15} strokeWidth={2.2} />
           New Rule
         </button>
       </div>
+
+      {/* Undo bar for a pending rule delete */}
+      {pendingDelete?.rule && (
+        <div className="v2-alerts__undo" role="status">
+          <Icon name="trash" size={15} strokeWidth={1.8} />
+          <span>
+            Rule <strong>{pendingDelete.rule.name}</strong> deleted
+          </span>
+          <button type="button" className="v2-btn v2-alerts__undo-btn" onClick={handleUndoDelete}>
+            <Icon name="refresh-cw" size={13} strokeWidth={1.9} />
+            Undo
+          </button>
+        </div>
+      )}
 
       {/* Rules tab */}
       {tab === 'rules' && (
@@ -207,16 +245,16 @@ export function AlertsScreen({ apiBase, wsRequest, wsConnected, aircraft }) {
             <div className="v2-alerts__search">
               <Icon name="search" size={15} strokeWidth={1.8} />
               <input
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
                 placeholder="Search rules…"
                 aria-label="Search rules"
               />
             </div>
             <select
               className="v2-select"
-              value={priorityFilter}
-              onChange={(e) => setPriorityFilter(e.target.value)}
+              value={priority}
+              onChange={(e) => setPriority(e.target.value)}
               aria-label="Priority filter"
             >
               <option value="all">All Priorities</option>
@@ -227,8 +265,8 @@ export function AlertsScreen({ apiBase, wsRequest, wsConnected, aircraft }) {
             </select>
             <select
               className="v2-select"
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
+              value={statusF}
+              onChange={(e) => setStatusF(e.target.value)}
               aria-label="Status filter"
             >
               <option value="all">All Status</option>
@@ -244,11 +282,7 @@ export function AlertsScreen({ apiBase, wsRequest, wsConnected, aircraft }) {
               <div className="v2-alerts__empty">
                 <Icon name="bell" size={38} strokeWidth={1.3} />
                 <span>No rules match your filters</span>
-                <button
-                  type="button"
-                  className="v2-alerts__create"
-                  onClick={() => setModalOpen(true)}
-                >
+                <button type="button" className="v2-alerts__create" onClick={openCreate}>
                   <Icon name="plus" size={15} strokeWidth={2.2} />
                   Create Rule
                 </button>
@@ -308,6 +342,24 @@ export function AlertsScreen({ apiBase, wsRequest, wsConnected, aircraft }) {
                           {relTime(r.last_triggered)}
                         </span>
                         <div className="v2-alerts__topbar-spacer" />
+                        <button
+                          type="button"
+                          className="v2-iconbtn"
+                          onClick={() => openEdit(r)}
+                          aria-label={`Edit ${r.name}`}
+                          title="Edit rule"
+                        >
+                          <Icon name="edit" size={15} strokeWidth={1.8} />
+                        </button>
+                        <button
+                          type="button"
+                          className="v2-iconbtn v2-alerts__rule-del"
+                          onClick={() => handleDelete(r)}
+                          aria-label={`Delete ${r.name}`}
+                          title="Delete rule"
+                        >
+                          <Icon name="trash" size={15} strokeWidth={1.8} />
+                        </button>
                         <Switch
                           checked={!!r.enabled}
                           onCheckedChange={() => handleToggle(r)}
@@ -323,26 +375,47 @@ export function AlertsScreen({ apiBase, wsRequest, wsConnected, aircraft }) {
         </>
       )}
 
-      {/* History tab */}
+      {/* Inbox tab (local sink) */}
+      {tab === 'inbox' && (
+        <InboxTab
+          items={items}
+          unreadCount={unreadCount}
+          onMarkRead={markRead}
+          onMarkAllRead={markAllRead}
+          onClear={clear}
+          onOpen={openDetail}
+        />
+      )}
+
+      {/* History tab (chronological log) */}
       {tab === 'history' && (
         <div className="v2-alerts__scroll v2-alerts__scroll--padded">
-          {fired.length === 0 ? (
+          {items.length === 0 ? (
             <div className="v2-alerts__empty">
               <Icon name="clock" size={38} strokeWidth={1.3} />
               <span>No alerts fired yet</span>
             </div>
           ) : (
             <div className="v2-alerts__feed">
-              {fired.map((f, i) => {
+              {items.map((f) => {
                 const pri = f.priority || f.severity || 'info';
                 const pc = priorityConfig(pri);
                 const cs = f.callsign || f.aircraft?.flight || f.icao || f.aircraft?.hex || '—';
                 const ts = f.timestamp || f.triggered_at || f.created_at;
                 return (
                   <div
-                    key={f.id ?? i}
-                    className="v2-alerts__fired"
+                    key={f.__key}
+                    className="v2-alerts__fired v2-alerts__fired--click"
                     style={{ borderLeftColor: pc.color }}
+                    onClick={() => openDetail(f)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        openDetail(f);
+                      }
+                    }}
                   >
                     <span
                       className="v2-alerts__fired-icon"
@@ -383,35 +456,34 @@ export function AlertsScreen({ apiBase, wsRequest, wsConnected, aircraft }) {
         </div>
       )}
 
-      {/* Notifications tab */}
-      {tab === 'notif' && (
-        <div className="v2-alerts__scroll v2-alerts__scroll--padded">
-          <div className="v2-alerts__channels">
-            {CHANNEL_DEFS.map((c) => (
-              <div key={c.id} className="v2-alerts__channel">
-                <span className="v2-alerts__channel-icon" style={{ color: c.color }}>
-                  <Icon name={c.icon} size={19} strokeWidth={1.7} />
-                </span>
-                <div className="v2-alerts__channel-body">
-                  <div className="v2-alerts__channel-name">{c.name}</div>
-                  <div className="v2-alerts__channel-detail">{c.detail}</div>
-                </div>
-                <Switch
-                  checked={!!channels[c.id]}
-                  onCheckedChange={(on) => setChannel(c.id, on)}
-                  label={c.name}
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* Notifications tab (local sink toggles + channel manager) */}
+      {tab === 'notif' && <NotificationsTab local={local} onLocalChange={setLocalSetting} />}
 
       <CreateRuleModal
         open={modalOpen}
-        onOpenChange={setModalOpen}
+        onOpenChange={(o) => {
+          setModalOpen(o);
+          if (!o) setEditingRule(null);
+        }}
         onCreate={onCreate}
+        onUpdate={onUpdate}
+        rule={editingRule}
         aircraft={aircraft}
+      />
+
+      <AlertDetailModal
+        open={!!detailAlert}
+        onOpenChange={(o) => !o && setDetailAlert(null)}
+        alert={detailAlert}
+        apiBase={apiBase}
+        onOpenMap={(hex, call) => {
+          setDetailAlert(null);
+          onOpenMap?.(hex, call);
+        }}
+        onFullDetail={(hex, call) => {
+          setDetailAlert(null);
+          onFullDetail?.(hex, call);
+        }}
       />
     </div>
   );

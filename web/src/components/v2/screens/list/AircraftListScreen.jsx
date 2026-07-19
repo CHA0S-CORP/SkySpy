@@ -1,6 +1,7 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { Icon, Switch } from '../../primitives';
 import { useBulkAircraftInfo } from '../../../../hooks/useBulkAircraftInfo';
+import { useHashParamState, boolParam } from '../../../../hooks/useHashParamState';
 import { CHIP_DEFS, COLUMNS, FILTER_TESTS, selectAircraft, toRow } from './listModel';
 
 /**
@@ -15,11 +16,12 @@ import { CHIP_DEFS, COLUMNS, FILTER_TESTS, selectAircraft, toRow } from './listM
  * @param {string} [props.apiBase] - API base (defaults to the app's relative base)
  */
 export function AircraftListScreen({ aircraft, onSelectAircraft, apiBase }) {
-  const [query, setQuery] = useState('');
-  const [filter, setFilter] = useState(null);
-  const [sortBy, setSortBy] = useState('dist');
-  const [sortDir, setSortDir] = useState('asc');
-  const [showGhosts, setShowGhosts] = useState(false);
+  // Deep-linked view state (#aircraft?q=&filter=&sort=&sortDir=&ghosts=)
+  const [query, setQuery] = useHashParamState('q', '');
+  const [filter, setFilter] = useHashParamState('filter', null);
+  const [sortBy, setSortBy] = useHashParamState('sort', 'dist');
+  const [sortDir, setSortDir] = useHashParamState('sortDir', 'asc');
+  const [showGhosts, setShowGhosts] = useHashParamState('ghosts', false, boolParam);
 
   const counts = useMemo(() => {
     const c = {};
@@ -40,6 +42,8 @@ export function AircraftListScreen({ aircraft, onSelectAircraft, apiBase }) {
   const enrichment = useBulkAircraftInfo(shownHexes, apiBase);
 
   const militaryCount = counts.military ?? 0;
+  const emergencyCount = counts.emergency ?? 0;
+  const airborneCount = aircraft.length - (counts.ground ?? 0);
 
   const onSort = (key) => {
     if (sortBy === key) {
@@ -52,6 +56,48 @@ export function AircraftListScreen({ aircraft, onSelectAircraft, apiBase }) {
 
   return (
     <div className="v2-list" data-testid="v2-aircraft-list">
+      <div className="v2-list__summary" data-testid="v2-list-summary">
+        <div className="v2-list__kpi">
+          <span className="v2-list__kpi-icon">
+            <Icon name="radar" size={17} strokeWidth={1.7} />
+          </span>
+          <span className="v2-list__kpi-body">
+            <span className="v2-list__kpi-value">{aircraft.length}</span>
+            <span className="v2-list__kpi-label">Tracked</span>
+          </span>
+        </div>
+        <div className="v2-list__kpi">
+          <span className="v2-list__kpi-icon v2-list__kpi-icon--air">
+            <Icon name="send" size={16} strokeWidth={1.7} />
+          </span>
+          <span className="v2-list__kpi-body">
+            <span className="v2-list__kpi-value">{airborneCount}</span>
+            <span className="v2-list__kpi-label">Airborne</span>
+          </span>
+        </div>
+        <div className="v2-list__kpi">
+          <span className="v2-list__kpi-icon v2-list__kpi-icon--mil">
+            <Icon name="shield" size={16} strokeWidth={1.7} />
+          </span>
+          <span className="v2-list__kpi-body">
+            <span className="v2-list__kpi-value">{militaryCount}</span>
+            <span className="v2-list__kpi-label">Military</span>
+          </span>
+        </div>
+        <div
+          className={`v2-list__kpi ${emergencyCount ? 'v2-list__kpi--alert' : ''}`}
+          data-testid="v2-list-kpi-emergency"
+        >
+          <span className="v2-list__kpi-icon v2-list__kpi-icon--alert">
+            <Icon name="alert-triangle" size={16} strokeWidth={1.8} />
+          </span>
+          <span className="v2-list__kpi-body">
+            <span className="v2-list__kpi-value">{emergencyCount}</span>
+            <span className="v2-list__kpi-label">Emergency</span>
+          </span>
+        </div>
+      </div>
+
       <div className="v2-list__toolbar">
         <div className="v2-list__search">
           <Icon name="search" size={16} strokeWidth={1.8} />
@@ -104,9 +150,15 @@ export function AircraftListScreen({ aircraft, onSelectAircraft, apiBase }) {
                 onClick={() => onSort(key)}
                 aria-sort={active ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
               >
-                {label}
-                <span className="v2-list__th-arrow">
-                  {active ? (sortDir === 'asc' ? '▲' : '▼') : ''}
+                <span className="v2-list__th-label">{label}</span>
+                <span className="v2-list__th-arrow" aria-hidden="true">
+                  {active && (
+                    <Icon
+                      name={sortDir === 'asc' ? 'chevron-up' : 'chevron-down'}
+                      size={12}
+                      strokeWidth={2.6}
+                    />
+                  )}
                 </span>
               </button>
             );
@@ -122,7 +174,7 @@ export function AircraftListScreen({ aircraft, onSelectAircraft, apiBase }) {
               <button
                 key={r.hex}
                 type="button"
-                className="v2-list__row"
+                className={`v2-list__row${r.isEmergency ? ' v2-list__row--alert' : ''}`}
                 style={{ borderLeftColor: r.accent }}
                 onClick={() => onSelectAircraft(r.hex)}
                 data-testid={`v2-list-row-${r.hex}`}

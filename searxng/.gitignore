@@ -1,0 +1,4 @@
+# Ignore SearXNG runtime files the container may generate; keep our config.
+*
+!.gitignore
+!settings.yml

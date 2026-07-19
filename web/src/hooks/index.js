@@ -81,6 +81,7 @@ export {
 export { useAudioPlayback } from './useAudioPlayback';
 
 // UI hooks
+export { useBreakpoint, BREAKPOINTS } from './useBreakpoint';
 export { useListPreferences } from './useListPreferences';
 export { useSortState } from './useSortState';
 export { useToast } from './useToast';

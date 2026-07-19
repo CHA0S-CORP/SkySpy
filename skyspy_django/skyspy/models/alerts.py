@@ -226,12 +226,12 @@ class AlertHistory(models.Model):
     def __str__(self):
         return f"{self.rule_name} - {self.icao_hex} @ {self.triggered_at}"
 
-    def acknowledge(self, user):
-        """Mark this alert as acknowledged."""
+    def acknowledge(self, user=None):
+        """Mark this alert as acknowledged (user may be None in public mode)."""
         from django.utils import timezone
 
         self.acknowledged = True
-        self.acknowledged_by = user
+        self.acknowledged_by = user if (user is not None and getattr(user, "is_authenticated", False)) else None
         self.acknowledged_at = timezone.now()
         self.save(update_fields=["acknowledged", "acknowledged_by", "acknowledged_at"])
 

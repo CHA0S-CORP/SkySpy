@@ -60,6 +60,8 @@ export function useMapOverlayData({
       notams: plainNotams,
       tfrs,
       pireps: overlays.pireps ? aviationData.pireps || [] : [],
+      airmets: overlays.airmets ? aviationData.airspaceAdvisories || [] : [],
+      wildfires: overlays.wildfires ? aviationData.wildfires || [] : [],
     };
   }, [overlays, trackHistory, aviationData, notams]);
 }

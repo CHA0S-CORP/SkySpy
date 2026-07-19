@@ -15,12 +15,24 @@ const CARTO_ATTR = '© OpenStreetMap contributors © CARTO';
  * Aircraft positions render as the same heading-rotated dart the Live Map uses
  * (via aircraftArrowIcon) so every map is visually consistent.
  *
+ * When `flights` (a list of per-leg point arrays) is supplied, every leg is drawn
+ * as a faint gray line and the `activeIndex` leg is highlighted in accent, so the
+ * whole recorded history stays framed while one flight is played back.
+ *
  * @param {object} props
- * @param {Array<{lat:number, lon:number}>} props.points - track points (lat/lon)
+ * @param {Array<{lat:number, lon:number}>} props.points - active leg track points (lat/lon)
+ * @param {Array<Array<{lat:number, lon:number}>>} [props.flights] - all legs (dimmed backdrop)
+ * @param {number} [props.activeIndex] - index of the highlighted leg in `flights`
  * @param {{lat:number, lon:number, track?:number}|null} props.replayPoint - scrubber position
  * @param {{lat:number, lon:number, track?:number}|null} props.livePoint - current live position
  */
-export function DetailTrackMap({ points = [], replayPoint = null, livePoint = null }) {
+export function DetailTrackMap({
+  points = [],
+  flights = null,
+  activeIndex = 0,
+  replayPoint = null,
+  livePoint = null,
+}) {
   const containerRef = useRef(null);
   const mapRef = useRef(null);
   const trackRef = useRef(null);
@@ -56,28 +68,48 @@ export function DetailTrackMap({ points = [], replayPoint = null, livePoint = nu
     };
   }, []);
 
-  // Draw / update the track polyline and fit bounds when points change.
+  // Draw the flight legs (dim backdrop + highlighted active leg) and fit bounds
+  // to the whole recorded history when the tracks change.
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    const latlngs = points
-      .filter((p) => typeof p.lat === 'number' && typeof p.lon === 'number')
-      .map((p) => [p.lat, p.lon]);
     if (trackRef.current) {
       trackRef.current.remove();
       trackRef.current = null;
     }
-    if (latlngs.length < 2) return;
-    trackRef.current = L.polyline(latlngs, {
-      color:
-        getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#3ddc84',
-      weight: 2.5,
-      opacity: 0.95,
-      lineJoin: 'round',
-      lineCap: 'round',
-    }).addTo(map);
-    map.fitBounds(trackRef.current.getBounds(), { padding: [24, 24] });
-  }, [points]);
+    const accent = cssColor('--accent') || '#3ddc84';
+    const dim = cssColor('--dim2') || '#5a6472';
+    const toLatLngs = (leg) =>
+      (leg || [])
+        .filter((p) => typeof p.lat === 'number' && typeof p.lon === 'number')
+        .map((p) => [p.lat, p.lon]);
+    // Prefer the per-leg list; fall back to the single active track.
+    const legs = Array.isArray(flights) && flights.length ? flights : points.length ? [points] : [];
+    const group = L.layerGroup();
+    const allLatLngs = [];
+    // Inactive legs first (underneath), active leg last so it draws on top.
+    const drawLeg = (leg, active) => {
+      const latlngs = toLatLngs(leg);
+      if (latlngs.length < 2) return;
+      L.polyline(latlngs, {
+        color: active ? accent : dim,
+        weight: active ? 2.5 : 1.5,
+        opacity: active ? 0.95 : 0.35,
+        lineJoin: 'round',
+        lineCap: 'round',
+      }).addTo(group);
+      allLatLngs.push(...latlngs);
+    };
+    legs.forEach((leg, i) => {
+      if (i === activeIndex && legs.length > 1) return;
+      drawLeg(leg, legs.length === 1);
+    });
+    if (legs.length > 1 && legs[activeIndex]) drawLeg(legs[activeIndex], true);
+    if (allLatLngs.length < 2) return;
+    group.addTo(map);
+    trackRef.current = group;
+    map.fitBounds(L.latLngBounds(allLatLngs), { padding: [24, 24] });
+  }, [points, flights, activeIndex]);
 
   // Move the playback marker; create it lazily.
   useEffect(() => {

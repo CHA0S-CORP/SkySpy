@@ -12,6 +12,32 @@ const safeJson = async (res) => {
   }
 };
 
+// Map each backend event_type (models/safety.py) to a coarse UI category, so the
+// filter menu can offer a handful of toggles instead of one per raw type.
+export const SAFETY_EVENT_CATEGORIES = {
+  proximity: ['proximity_conflict'],
+  tcas: ['tcas_ra', 'tcas_ta'],
+  vertical_speed: ['extreme_vs', 'vs_reversal'],
+  emergency_squawk: [
+    'squawk_hijack',
+    'squawk_radio_failure',
+    'squawk_emergency',
+    'emergency_squawk',
+    '7500',
+    '7600',
+    '7700',
+  ],
+};
+
+// Resolve a raw event_type to its filter category (defaults to 'other').
+export function safetyEventCategory(eventType) {
+  const t = (eventType || '').toLowerCase();
+  for (const [category, types] of Object.entries(SAFETY_EVENT_CATEGORIES)) {
+    if (types.includes(t)) return category;
+  }
+  return 'other';
+}
+
 /**
  * Hook for managing safety events: fetching, merging WS data, computing active conflicts,
  * alarm monitoring, and emergency squawk notifications.
@@ -22,6 +48,7 @@ export function useSafetyEvents({
   wsConnected,
   config,
   aircraft,
+  hiddenSafetyCategories, // array of category keys to hide from the map (rings + banner)
   alarmHook, // { playConflictAlarm, getHighestSeverity, startAlarmLoop, stopAlarmLoop, sendNotification, acknowledgeEvent, acknowledgedEvents }
 }) {
   const [safetyEvents, setSafetyEvents] = useState([]);
@@ -91,11 +118,16 @@ export function useSafetyEvents({
   // tight 60s window is reserved for the audible alarm / banner-flash behavior in
   // the alarm-monitoring effect below.
   const DISPLAY_WINDOW_MS = 10 * 60 * 1000;
+  const hiddenCategories = useMemo(
+    () => new Set(hiddenSafetyCategories || []),
+    [hiddenSafetyCategories]
+  );
   const activeConflicts = useMemo(() => {
     const cutoff = Date.now() - DISPLAY_WINDOW_MS;
     return safetyEvents
       .filter((event) => {
         if (acknowledgedEvents.has(event.id)) return false;
+        if (hiddenCategories.has(safetyEventCategory(event.event_type))) return false;
         const eventTime = new Date(event.timestamp).getTime();
         // Keep events without a parseable timestamp (fail-open) and anything
         // within the display window.
@@ -145,7 +177,7 @@ export function useSafetyEvents({
           verticalFt,
         };
       });
-  }, [safetyEvents, acknowledgedEvents, aircraft]);
+  }, [safetyEvents, acknowledgedEvents, aircraft, hiddenCategories]);
 
   // Monitor for new safety events and trigger alarms/notifications.
   // Alarms/flash are gated on a tight recency window (60s) so old snapshot events

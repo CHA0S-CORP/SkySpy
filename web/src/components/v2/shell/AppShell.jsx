@@ -9,11 +9,11 @@ import { Icon, ToastHost } from '../primitives';
 // Everything else scrolls in the pane (`.v2-content { overflow-y:auto }`).
 // Screens that manage an internal scroll region (list/alerts/audio/history)
 // set their own root to height:100% and still work under an auto pane.
-const FLUSH_TABS = new Set(['map', 'cannonball']);
+const FLUSH_TABS = new Set(['map', 'cannonball', 'wildfires']);
 
 // Not-yet-migrated views that render inside the pane and depend on the legacy
 // .content-area padding. (v2 screens supply their own padding.)
-const LEGACY_PANE_TABS = new Set(['event', 'admin']);
+const LEGACY_PANE_TABS = new Set(['event', 'admin', 'access']);
 
 /**
  * v2 application shell: header + nav rail + routed content pane.

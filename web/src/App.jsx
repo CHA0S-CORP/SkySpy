@@ -15,17 +15,21 @@ import { HistoryScreen } from './components/v2/screens/history/HistoryScreen';
 import { StatsScreen } from './components/v2/screens/stats/StatsScreen';
 import { AdvancedAnalyticsScreen } from './components/v2/screens/analytics/AdvancedAnalyticsScreen';
 import { AirframesScreen } from './components/v2/screens/airframes/AirframesScreen';
+import { WeatherScreen } from './components/v2/screens/weather/WeatherScreen';
+import { WildfiresScreen } from './components/v2/screens/wildfires/WildfiresScreen';
 
 // View components
 // Note: NotamsView and ArchiveView are now integrated into HistoryView
 import { SafetyEventPage, AdminConfigView } from './components/views';
 import { CannonballScreen } from './components/v2/screens/cannonball/CannonballScreen';
+import { AccessControlView } from './components/v2/screens/access';
 
 // Map components
 import { MapView } from './components/map';
 
 import { DetailScreen } from './components/v2/screens/detail/DetailScreen';
 import { NotamDetailScreen } from './components/v2/screens/notam/NotamDetailScreen';
+import { PirepDetailScreen } from './components/v2/screens/pirep/PirepDetailScreen';
 import { LiveMapView } from './components/livemap/LiveMapView';
 
 // Auth components
@@ -40,6 +44,7 @@ import { useSocketIOData, useSocketIOPositions } from './hooks/socket';
 
 // Utils
 import { getConfig } from './utils';
+import { parseHash, navigate, setHashParams as routeSetHashParams } from './lib/hashRoute';
 
 // Helper to safely parse JSON from fetch response
 const safeJson = async (res) => {
@@ -53,64 +58,9 @@ const safeJson = async (res) => {
   }
 };
 
-// ============================================================================
-// Hash Routing Utilities
-// ============================================================================
-
-const VALID_TABS = [
-  'map',
-  'aircraft',
-  'stats',
-  'analytics',
-  'airframes',
-  'history',
-  'audio',
-  'notams',
-  'pireps',
-  'archive',
-  'alerts',
-  'system',
-  'assistant',
-  'admin',
-  'airframe',
-  'event',
-  'notam',
-  'login',
-  'cannonball',
-];
-
-// Legacy standalone routes folded into History tabs (kept for bookmarks)
-const HISTORY_TAB_ALIASES = ['notams', 'pireps', 'archive'];
-
-function parseHash() {
-  const hash = window.location.hash.slice(1); // Remove #
-  if (!hash) return { tab: 'map', params: {} };
-
-  const [path, queryString] = hash.split('?');
-  let tab = VALID_TABS.includes(path) ? path : 'map';
-  const params = {};
-
-  if (queryString) {
-    const searchParams = new URLSearchParams(queryString);
-    for (const [key, value] of searchParams) {
-      params[key] = value;
-    }
-  }
-
-  if (HISTORY_TAB_ALIASES.includes(tab)) {
-    params.data = tab;
-    tab = 'history';
-  }
-
-  return { tab, params };
-}
-
-function buildHash(tab, params = {}) {
-  const paramEntries = Object.entries(params).filter(([, v]) => v != null && v !== '');
-  if (paramEntries.length === 0) return `#${tab}`;
-  const queryString = new URLSearchParams(paramEntries).toString();
-  return `#${tab}?${queryString}`;
-}
+// Hash-routing core (parseHash/buildHash/navigate/setHashParams) lives in
+// ./lib/hashRoute so App and the per-screen useHashParamState hook share one
+// format.
 
 // ============================================================================
 // Main App
@@ -120,6 +70,9 @@ export default function App() {
   const [hashState, setHashState] = useState(parseHash);
   const [config, setConfig] = useState(getConfig);
   const [showSettings, setShowSettings] = useState(false);
+  // Live radar-control command from the assistant dock (filter/zoom the map).
+  const [radarCommand, setRadarCommand] = useState(null);
+  const [radarTracks, setRadarTracks] = useState(null);
 
   // Phase 5.1: Initialize pro mode theme CSS variables on app startup
   // (legacy [data-pro-theme]; coexists with the v2 [data-theme] until legacy UI retires)
@@ -153,20 +106,16 @@ export default function App() {
     }
   }, [activeTab, isAuthenticated]);
 
-  // Update hash when navigating
+  // Update hash when navigating (push a new history entry)
   const setActiveTab = useCallback((tab, params = {}) => {
-    const newHash = buildHash(tab, params);
-    window.location.hash = newHash;
+    navigate(tab, params);
   }, []);
 
-  // Update hash params without changing tab
-  const setHashParams = useCallback(
-    (params) => {
-      const newHash = buildHash(hashState.tab, { ...hashState.params, ...params });
-      window.location.hash = newHash;
-    },
-    [hashState]
-  );
+  // Merge params into the current tab's hash. Reads the live URL, so it's safe
+  // even if several writers fire in one tick (see hashRoute.setHashParams).
+  const setHashParams = useCallback((params) => {
+    routeSetHashParams(params);
+  }, []);
 
   // Listen for hash changes (back/forward navigation, manual URL changes)
   useEffect(() => {
@@ -317,8 +266,13 @@ export default function App() {
     const lookupTail = async () => {
       try {
         const currentApiBaseUrl = apiBaseUrlRef.current;
+        // no-store: never serve this lookup (or a cached redirect) from the HTTP
+        // cache. A misconfigured backend can hand back a 301 permanent redirect,
+        // which browsers cache stickily and keep replaying even after it's fixed —
+        // poisoning the tail→hex resolution so the airframe page can't open.
         const res = await fetch(
-          `${currentApiBaseUrl}/api/v1/airframes/registration/${encodeURIComponent(tail)}/`
+          `${currentApiBaseUrl}/api/v1/airframes/registration/${encodeURIComponent(tail)}/`,
+          { cache: 'no-store' }
         );
         const data = await safeJson(res);
         if (data?.icao_hex) {
@@ -398,6 +352,11 @@ export default function App() {
                 positionsRef={positionsRef}
                 wsRequest={wsRequest}
                 wsConnected={isReady}
+                hashParams={hashParams}
+                radarCommand={radarCommand}
+                onClearRadarCommand={() => setRadarCommand(null)}
+                radarTracks={radarTracks}
+                onClearRadarTracks={() => setRadarTracks(null)}
                 onOpenFull={(hex) => setActiveTab('airframe', { icao: hex })}
               />
             ))}
@@ -423,7 +382,27 @@ export default function App() {
               onSelectAircraft={(hex) => setActiveTab('airframe', { icao: hex })}
             />
           )}
-          {activeTab === 'airframes' && <AirframesScreen />}
+          {activeTab === 'airframes' && (
+            <AirframesScreen onSelectAircraft={(hex) => setActiveTab('airframe', { icao: hex })} />
+          )}
+          {activeTab === 'weather' && (
+            <WeatherScreen
+              apiBase={config.apiBaseUrl}
+              aircraft={aircraft}
+              wsRequest={wsRequest}
+              wsConnected={isReady}
+              feederLocation={status?.location}
+              onSelectAircraft={(hex) => setActiveTab('airframe', { icao: hex })}
+              onOpenMap={(hex) => setActiveTab('map', { selected: hex })}
+            />
+          )}
+          {activeTab === 'wildfires' && (
+            <WildfiresScreen
+              apiBase={config.apiBaseUrl}
+              feederLocation={status?.location}
+              onOpenMap={() => setActiveTab('map')}
+            />
+          )}
           {/* History view includes Sessions/Sightings/ACARS/Safety/NOTAMs/PIREPs/Archive tabs */}
           {activeTab === 'history' && (
             <HistoryScreen
@@ -431,6 +410,7 @@ export default function App() {
               onSelectAircraft={(hex) => setActiveTab('airframe', { icao: hex })}
               onViewEvent={(eventId) => setActiveTab('event', { id: eventId })}
               onViewNotam={(notamId) => setActiveTab('notam', { id: notamId })}
+              onViewPirep={(pirepId) => setActiveTab('pirep', { id: pirepId })}
               hashParams={hashParams}
             />
           )}
@@ -449,6 +429,8 @@ export default function App() {
               wsRequest={wsRequest}
               wsConnected={isReady}
               aircraft={aircraft}
+              onFullDetail={(hex, call) => setActiveTab('airframe', { icao: hex, call })}
+              onOpenMap={(hex) => setActiveTab('map', { selected: hex })}
             />
           )}
           {activeTab === 'system' && (
@@ -458,8 +440,9 @@ export default function App() {
               feederLocation={status?.location}
             />
           )}
-          {activeTab === 'assistant' && <AssistantScreen />}
+          {activeTab === 'assistant' && <AssistantScreen hashParams={hashParams} />}
           {activeTab === 'admin' && <AdminConfigView apiBase={config.apiBaseUrl} />}
+          {activeTab === 'access' && <AccessControlView />}
           {activeTab === 'airframe' &&
             (hashParams.icao || hashParams.call || hashParams.tail) &&
             (() => {
@@ -511,6 +494,7 @@ export default function App() {
                   live={foundAircraft}
                   call={hashParams.call}
                   connected={isReady}
+                  layout={hashParams.layout}
                   onClose={() => window.history.back()}
                   onViewEvent={(eventId) => setActiveTab('event', { id: eventId })}
                 />
@@ -543,6 +527,15 @@ export default function App() {
               onClose={() => window.history.back()}
             />
           )}
+          {activeTab === 'pirep' && hashParams.id && (
+            <PirepDetailScreen
+              pirepId={hashParams.id}
+              apiBase={config.apiBaseUrl}
+              onClose={() => window.history.back()}
+              onSelectAircraft={(hex) => setActiveTab('airframe', { icao: hex })}
+              onViewPirep={(pirepId) => setActiveTab('pirep', { id: pirepId })}
+            />
+          )}
         </>
       </AppShell>
 
@@ -557,7 +550,21 @@ export default function App() {
       {/* App-wide support chat — available on every shell page except the full
           assistant screen itself. Sees the current page as context. */}
       {activeTab !== 'assistant' && (
-        <SupportChatDock onExpand={() => setActiveTab('assistant')} />
+        <SupportChatDock
+          onExpand={(sessionId) =>
+            setActiveTab('assistant', sessionId ? { session: String(sessionId) } : {})
+          }
+          onRadarCommand={(cmd) => {
+            // Apply the assistant's filter/zoom to the live radar, switching to it.
+            setRadarCommand({ ...cmd, ts: Date.now() });
+            if (hashState.tab !== 'map') setActiveTab('map');
+          }}
+          onRadarTracks={(cmd) => {
+            // Draw the assistant's historical flown-path polylines on the radar.
+            setRadarTracks({ ...cmd, ts: Date.now() });
+            if (hashState.tab !== 'map') setActiveTab('map');
+          }}
+        />
       )}
     </PageContextProvider>
   );

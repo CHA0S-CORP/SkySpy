@@ -10,8 +10,13 @@ import LoginPage from './LoginPage';
 export default function ProtectedRoute({ children, requiredPermissions = [], requireAll = true }) {
   const { status, config, hasAnyPermission, hasAllPermissions } = useAuth();
 
-  // If auth is disabled or public mode, show content
-  if (!config.authEnabled || config.publicMode) {
+  // Render the app for anyone in public OR hybrid mode. Hybrid = per-feature
+  // access: anonymous visitors should reach the shell and see whatever features
+  // are marked "Public (anonymous)"; NavRail's canAccessFeature (and each
+  // screen) gate the rest. Only `private` mode requires a global sign-in — so a
+  // feature set to Public no longer gets blocked by a blanket login wall.
+  const globalLoginRequired = config.authEnabled && config.authMode === 'private';
+  if (!globalLoginRequired) {
     return children;
   }
 

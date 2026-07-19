@@ -1,0 +1,1196 @@
+/* =========================================================================
+   Wildfires screen + Live Map fire panel.
+   Ember-heat treatment layered over the shared tactical-dark v2 tokens:
+   a warm charcoal base, per-fire --fire-color accent (threat tier), and a
+   soft radial ember glow behind detail headers.
+   ========================================================================= */
+
+.v2-fires {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background:
+    radial-gradient(
+      120% 80% at 100% 0%,
+      color-mix(in srgb, var(--danger) 7%, transparent),
+      transparent 60%
+    ),
+    var(--bg0);
+  color: var(--txt);
+  font-family: var(--font-sans);
+}
+
+/* ---- masthead ---- */
+.v2-fires__masthead {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--bord);
+  background: linear-gradient(180deg, var(--bg1), color-mix(in srgb, var(--bg1) 82%, transparent));
+  overflow: hidden;
+}
+/* Animated heat-haze wash bleeding down from the top-right corner. */
+.v2-fires__haze {
+  position: absolute;
+  inset: -40% -10% auto 30%;
+  height: 220%;
+  background: radial-gradient(
+    60% 60% at 80% 0%,
+    color-mix(in srgb, var(--danger) 22%, transparent),
+    color-mix(in srgb, var(--warn) 9%, transparent) 45%,
+    transparent 72%
+  );
+  pointer-events: none;
+  filter: blur(6px);
+  animation: v2-fires-haze 9s ease-in-out infinite;
+}
+@keyframes v2-fires-haze {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    opacity: 0.9;
+    transform: translate3d(-3%, 2%, 0) scale(1.06);
+  }
+}
+.v2-fires__title {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  color: var(--warn);
+}
+.v2-fires__title-flame {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  color: var(--warn);
+  background: radial-gradient(
+    circle at 50% 120%,
+    color-mix(in srgb, var(--danger) 40%, transparent),
+    color-mix(in srgb, var(--warn) 14%, transparent) 60%,
+    var(--bg2)
+  );
+  border: 1px solid color-mix(in srgb, var(--warn) 34%, var(--bord2));
+  box-shadow: 0 0 18px color-mix(in srgb, var(--danger) 22%, transparent);
+  animation: v2-fires-flicker 3.4s ease-in-out infinite;
+}
+@keyframes v2-fires-flicker {
+  0%,
+  100% {
+    box-shadow: 0 0 16px color-mix(in srgb, var(--danger) 20%, transparent);
+    transform: scale(1);
+  }
+  40% {
+    box-shadow: 0 0 26px color-mix(in srgb, var(--danger) 34%, transparent);
+    transform: scale(1.03) rotate(-1deg);
+  }
+  70% {
+    box-shadow: 0 0 20px color-mix(in srgb, var(--warn) 26%, transparent);
+    transform: scale(1.01) rotate(1deg);
+  }
+}
+.v2-fires__legend {
+  position: relative;
+}
+.v2-fires__title h1 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--txt);
+}
+.v2-fires__title p {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--dim);
+  font-family: var(--font-mono);
+  letter-spacing: 0.02em;
+}
+.v2-fires__legend {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.v2-fires__pill {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--bord2);
+  color: var(--dim);
+  letter-spacing: 0.03em;
+}
+.v2-fires__pill--high {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 45%, transparent);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+}
+.v2-fires__pill--elevated {
+  color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 40%, transparent);
+  background: color-mix(in srgb, var(--warn) 10%, transparent);
+}
+.v2-fires__pill--low {
+  color: #80ed99;
+  border-color: color-mix(in srgb, #80ed99 35%, transparent);
+}
+.v2-fires__refresh {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid var(--bord2);
+  background: var(--bg2);
+  color: var(--dim);
+  cursor: pointer;
+  transition:
+    color 0.15s,
+    border-color 0.15s;
+}
+.v2-fires__refresh:hover {
+  color: var(--txt);
+  border-color: var(--warn);
+}
+.v2-fires__refresh .is-spin {
+  animation: v2-sweep 0.9s linear infinite;
+}
+
+/* ---- situational readout band ---- */
+.v2-fires__readout {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 9px 22px;
+  border-bottom: 1px solid var(--bord);
+  background: color-mix(in srgb, var(--bg1) 55%, var(--bg0));
+  font-family: var(--font-mono);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.v2-fires__readout::-webkit-scrollbar {
+  display: none;
+}
+.v2-fires__readout-metric {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  color: var(--dim);
+  white-space: nowrap;
+}
+.v2-fires__readout-metric > svg {
+  align-self: center;
+  color: var(--dim2);
+}
+.v2-fires__readout-val {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--txt);
+  letter-spacing: -0.01em;
+}
+.v2-fires__readout-key {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--dim2);
+}
+.v2-fires__readout-metric--evac,
+.v2-fires__readout-metric--evac > svg {
+  color: var(--danger);
+}
+.v2-fires__readout-metric--evac .v2-fires__readout-val {
+  color: var(--danger);
+}
+.v2-fires__readout-metric--evac .v2-fires__readout-key {
+  color: color-mix(in srgb, var(--danger) 70%, var(--dim2));
+}
+.v2-fires__readout-sep {
+  width: 1px;
+  height: 20px;
+  flex: none;
+  background: var(--bord2);
+}
+.v2-fires__readout-top {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px 5px 10px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--fire-color, var(--warn)) 40%, var(--bord2));
+  background: color-mix(in srgb, var(--fire-color, var(--warn)) 10%, transparent);
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+.v2-fires__readout-top:hover {
+  background: color-mix(in srgb, var(--fire-color, var(--warn)) 18%, transparent);
+}
+.v2-fires__readout-top-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--fire-color, var(--warn));
+  box-shadow: 0 0 8px var(--fire-color, var(--warn));
+  animation: v2-fires-pulse 1.8s ease-in-out infinite;
+}
+@keyframes v2-fires-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.4;
+    transform: scale(0.78);
+  }
+}
+.v2-fires__readout-top-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--dim);
+}
+.v2-fires__readout-top-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--txt);
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---- body: master list + detail rail ---- */
+.v2-fires__body {
+  display: grid;
+  grid-template-columns: minmax(300px, 380px) 1fr;
+  flex: 1;
+  min-height: 0;
+}
+.v2-fires__list {
+  overflow-y: auto;
+  border-right: 1px solid var(--bord);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.v2-fires__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+  color: var(--dim);
+  font-size: 13px;
+  padding: 48px 20px;
+}
+
+/* ---- fire card ---- */
+.v2-fires__card {
+  position: relative;
+  display: flex;
+  flex: none;
+  gap: 0;
+  padding: 0;
+  border: 1px solid var(--bord);
+  border-radius: 11px;
+  background: var(--bg1);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  transition:
+    border-color 0.15s,
+    transform 0.15s,
+    background 0.15s,
+    box-shadow 0.15s;
+  animation: v2-fires-cardin 0.4s ease both;
+}
+@keyframes v2-fires-cardin {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.v2-fires__card:hover {
+  border-color: color-mix(in srgb, var(--fire-color, var(--bord2)) 55%, var(--bord2));
+  transform: translateX(2px);
+  box-shadow: -6px 0 20px -12px var(--fire-color, transparent);
+}
+.v2-fires__card.is-active {
+  border-color: var(--fire-color, var(--warn));
+  background: color-mix(in srgb, var(--fire-color, var(--warn)) 9%, var(--bg1));
+}
+.v2-fires__card-bar {
+  width: 4px;
+  flex: none;
+  background: var(--fire-color, var(--warn));
+  box-shadow: 0 0 12px var(--fire-color, var(--warn));
+}
+/* HIGH-threat cards breathe an ember flicker along the accent bar. */
+.v2-fires__card.is-hot .v2-fires__card-bar {
+  animation: v2-fires-baremb 2.6s ease-in-out infinite;
+}
+@keyframes v2-fires-baremb {
+  0%,
+  100% {
+    box-shadow: 0 0 10px var(--fire-color);
+    opacity: 0.85;
+  }
+  50% {
+    box-shadow: 0 0 18px var(--fire-color);
+    opacity: 1;
+  }
+}
+/* ---- card containment micro-bar ---- */
+.v2-fires__card-cont {
+  margin-top: 9px;
+  height: 3px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bord2) 60%, transparent);
+  overflow: hidden;
+}
+.v2-fires__card-cont-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent), var(--accent2));
+  transition: width 0.5s ease;
+}
+/* ---- loading skeletons ---- */
+.v2-fires__skel {
+  flex: none;
+  height: 68px;
+  border-radius: 11px;
+  border: 1px solid var(--bord);
+  background: linear-gradient(
+    100deg,
+    var(--bg1) 30%,
+    color-mix(in srgb, var(--bg2) 80%, var(--bg1)) 50%,
+    var(--bg1) 70%
+  );
+  background-size: 220% 100%;
+  animation: v2-fires-shimmer 1.3s ease-in-out infinite;
+}
+@keyframes v2-fires-shimmer {
+  from {
+    background-position: 180% 0;
+  }
+  to {
+    background-position: -80% 0;
+  }
+}
+.v2-fires__card-main {
+  padding: 11px 13px;
+  flex: 1;
+  min-width: 0;
+}
+.v2-fires__card-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.v2-fires__card-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--txt);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.v2-fires__card-tier {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  flex: none;
+  min-width: 30px;
+  text-align: center;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--fire-color, var(--warn)) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--fire-color, var(--warn)) 35%, transparent);
+}
+.v2-fires__card-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 5px;
+  font-size: 11.5px;
+  font-family: var(--font-mono);
+  color: var(--dim);
+}
+.v2-fires__card-evac {
+  color: var(--danger);
+  font-weight: 700;
+  border: 1px solid color-mix(in srgb, var(--danger) 45%, transparent);
+  border-radius: 4px;
+  padding: 0 4px;
+  letter-spacing: 0.04em;
+}
+.v2-fires__card-ago {
+  margin-left: auto;
+  color: var(--dim2);
+}
+
+/* ---- detail rail ---- */
+.v2-fires__detail {
+  overflow-y: auto;
+  min-height: 0;
+}
+.v2-fires__detail--empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  height: 100%;
+  color: var(--dim);
+  font-size: 13px;
+  text-align: center;
+  padding: 40px;
+}
+.v2-fires__detail-head {
+  position: relative;
+  padding: 20px 22px 16px;
+  border-bottom: 1px solid var(--bord);
+  overflow: hidden;
+}
+.v2-fires__detail-headrow {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.v2-fires__detail-headmain {
+  min-width: 0;
+}
+.v2-fires__detail-head.is-hot .v2-fires__glow {
+  animation: v2-fires-glowpulse 4s ease-in-out infinite;
+}
+@keyframes v2-fires-glowpulse {
+  0%,
+  100% {
+    opacity: 0.14;
+  }
+  50% {
+    opacity: 0.26;
+  }
+}
+/* ---- threat gauge (SVG radial) ---- */
+.v2-fires__gauge {
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+}
+.v2-fires__gauge svg {
+  display: block;
+}
+.v2-fires__gauge-val {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-mono);
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.v2-fires__tier-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 8px currentColor;
+}
+/* ---- detail containment bar ---- */
+.v2-fires__contbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.v2-fires__contbar-track {
+  flex: 1;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--bg2);
+  border: 1px solid var(--bord);
+  overflow: hidden;
+}
+.v2-fires__contbar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent), var(--accent2));
+  box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 50%, transparent);
+  transition: width 0.6s ease;
+}
+.v2-fires__contbar-cap {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--dim);
+  letter-spacing: 0.02em;
+}
+/* ---- eyebrow count chip ---- */
+.v2-fires__eyebrow-count {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--bg2);
+  border: 1px solid var(--bord2);
+  color: var(--dim);
+  font-size: 10px;
+  letter-spacing: 0;
+}
+/* ---- empty-state flame pulse ---- */
+.v2-fires__empty-flame {
+  color: var(--dim2);
+  animation: v2-fires-flicker 3.4s ease-in-out infinite;
+}
+.v2-fires__glow {
+  position: absolute;
+  inset: -60% 40% auto -10%;
+  height: 260px;
+  background: radial-gradient(circle at 20% 0%, var(--fire-color, var(--warn)), transparent 70%);
+  opacity: 0.16;
+  pointer-events: none;
+}
+.v2-fires__detail-title {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 19px;
+  font-weight: 650;
+  color: var(--txt);
+}
+.v2-fires__detail-tier {
+  position: relative;
+  margin-top: 6px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.v2-fires__rx,
+.lm-fire__rx {
+  font-size: 10px;
+  color: var(--accent2);
+  border: 1px solid color-mix(in srgb, var(--accent2) 45%, transparent);
+  border-radius: 4px;
+  padding: 1px 5px;
+  letter-spacing: 0.06em;
+}
+.v2-fires__map-btn {
+  position: relative;
+  margin-top: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 11px;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  color: var(--txt);
+  background: var(--bg2);
+  border: 1px solid var(--bord2);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.v2-fires__map-btn:hover {
+  border-color: var(--warn);
+}
+.v2-fires__detail-body {
+  padding: 18px 22px 40px;
+}
+
+/* ---- stats row (shared look with panel) ---- */
+.v2-fires__stats,
+.lm-fire__stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.v2-fires__stat,
+.lm-fire__stat {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 12px;
+  border-radius: 10px;
+  background: var(--bg2);
+  border: 1px solid var(--bord);
+}
+.v2-fires__stat-val,
+.lm-fire__stat-val {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--txt);
+}
+.v2-fires__stat-label,
+.lm-fire__stat-label {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--dim);
+}
+
+/* ---- evac ---- */
+.v2-fires__evac,
+.lm-fire__evac {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+.v2-fires__evac-row,
+.lm-fire__evac-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  font-size: 12.5px;
+  line-height: 1.45;
+  padding: 9px 11px;
+  border-radius: 8px;
+  border: 1px solid var(--bord);
+}
+.v2-fires__evac-row strong,
+.lm-fire__evac-row strong {
+  color: var(--txt);
+}
+.v2-fires__evac-row--order,
+.lm-fire__evac-row--order {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 9%, transparent);
+  border-color: color-mix(in srgb, var(--danger) 35%, transparent);
+}
+.v2-fires__evac-row--warn,
+.lm-fire__evac-row--warn {
+  color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 8%, transparent);
+  border-color: color-mix(in srgb, var(--warn) 32%, transparent);
+}
+
+/* ---- eyebrow ---- */
+.v2-fires__eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--dim);
+  margin: 18px 0 9px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--bord);
+}
+
+/* ---- cameras ---- */
+.v2-fires__cams,
+.lm-fire__cams {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+.v2-fires__cam,
+.lm-fire__cam {
+  position: relative;
+  margin: 0;
+  border-radius: 9px;
+  overflow: hidden;
+  border: 1px solid var(--bord);
+  background: var(--bg2);
+}
+.v2-fires__cam img,
+.lm-fire__cam img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  transition: transform 0.4s ease;
+}
+.v2-fires__cam:hover img {
+  transform: scale(1.06);
+}
+.v2-fires__cam-live {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px 2px 5px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--danger) 85%, #000);
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+.v2-fires__cam-live::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #fff;
+  animation: v2-blink 1.4s ease-in-out infinite;
+}
+.v2-fires__cam figcaption,
+.lm-fire__cam figcaption {
+  padding: 5px 8px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---- reports feed ---- */
+.v2-fires__reports,
+.lm-fire__reports {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.v2-fires__report,
+.lm-fire__report {
+  display: flex;
+  gap: 11px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--bord);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.v2-fires__report-time,
+.lm-fire__report-time {
+  flex: none;
+  width: 58px;
+  color: var(--dim2);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding-top: 1px;
+}
+.v2-fires__report-msg,
+.lm-fire__report-msg {
+  color: var(--txt);
+  min-width: 0;
+}
+.v2-fires__report-msg p,
+.lm-fire__report-msg p {
+  margin: 0 0 6px;
+}
+.v2-fires__muted,
+.lm-fire__muted {
+  color: var(--dim);
+  font-size: 12.5px;
+  padding: 6px 0;
+}
+
+/* ---- scanner feeds ---- */
+.v2-fires__feeds,
+.lm-fire__feeds {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.v2-fires__feed,
+.lm-fire__feed {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--bord);
+}
+.v2-fires__feed a,
+.lm-fire__feed a {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--accent2);
+  text-decoration: none;
+  font-size: 12.5px;
+  min-width: 0;
+}
+.v2-fires__feed a span,
+.lm-fire__feed-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.v2-fires__feed a:hover,
+.lm-fire__feed a:hover {
+  text-decoration: underline;
+}
+.v2-fires__feed-live,
+.lm-fire__feed-live {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--dim2);
+}
+.v2-fires__feed-live.is-online,
+.lm-fire__feed-live.is-online {
+  color: var(--accent);
+}
+
+/* ---- narrow: stack list over detail ---- */
+@media (max-width: 860px) {
+  .v2-fires__body {
+    grid-template-columns: 1fr;
+  }
+  .v2-fires__list {
+    border-right: none;
+    border-bottom: 1px solid var(--bord);
+    max-height: 45%;
+  }
+}
+
+/* =========================================================================
+   Live Map fire panel (reuses .lm-panel shell; ember header treatment)
+   ========================================================================= */
+.lm-fire__banner {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  justify-content: flex-end;
+  min-height: 96px;
+  padding: 14px 16px;
+  background:
+    linear-gradient(180deg, transparent, color-mix(in srgb, var(--fire-color) 22%, transparent)),
+    var(--bg2);
+  border-bottom: 1px solid var(--bord);
+}
+/* When a camera still is available it becomes the header image (like the
+   aircraft panel's photo banner); a scrim keeps the title/threat legible. */
+.lm-fire__banner--photo {
+  min-height: 168px;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+.lm-fire__banner-scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(5, 7, 10, 0.15) 0%, rgba(5, 7, 10, 0.82) 100%);
+  pointer-events: none;
+}
+.lm-fire__cam-tag {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--txt);
+  background: rgba(5, 7, 10, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 5px;
+  padding: 2px 6px;
+  max-width: 70%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lm-fire__glow {
+  position: absolute;
+  inset: -70% 30% auto -20%;
+  height: 200px;
+  background: radial-gradient(circle at 25% 10%, var(--fire-color), transparent 70%);
+  opacity: 0.22;
+  pointer-events: none;
+}
+.lm-fire__head {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.lm-fire__name {
+  font-size: 17px;
+  font-weight: 650;
+  color: var(--txt);
+}
+.lm-fire__tier {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+.lm-fire__tier-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  box-shadow: 0 0 8px currentColor;
+}
+.lm-fire__score {
+  background: color-mix(in srgb, var(--fire-color) 20%, transparent);
+  border-radius: 5px;
+  padding: 1px 6px;
+}
+.lm-fire__contain {
+  height: 5px;
+  border-radius: 999px;
+  background: var(--bg2);
+  overflow: hidden;
+  margin-bottom: 14px;
+}
+.lm-fire__contain-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--warn), var(--accent));
+  border-radius: 999px;
+}
+.lm-fire__addr {
+  font-size: 12px;
+  color: var(--dim);
+  font-family: var(--font-mono);
+  margin-bottom: 14px;
+}
+
+/* ---- camera expand / lightbox ---- */
+/* Hero-banner expand affordance (opens the closest camera in the lightbox). */
+.lm-fire__expand {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(5, 7, 10, 0.6);
+  color: var(--txt);
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    transform 0.15s ease;
+}
+.lm-fire__expand:hover {
+  background: rgba(5, 7, 10, 0.85);
+  transform: scale(1.06);
+}
+
+/* Thumbnail becomes a button that expands the still. Reset the native button. */
+.lm-fire__cam-btn,
+.v2-fires__cam-btn {
+  display: block;
+  position: relative;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+/* Zoom hint badge, revealed on hover/focus of a camera thumbnail. */
+.lm-fire__cam-zoom {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  background: rgba(5, 7, 10, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #fff;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  pointer-events: none;
+}
+.lm-fire__cam-btn:hover .lm-fire__cam-zoom,
+.lm-fire__cam-btn:focus-visible .lm-fire__cam-zoom,
+.v2-fires__cam-btn:hover .lm-fire__cam-zoom,
+.v2-fires__cam-btn:focus-visible .lm-fire__cam-zoom {
+  opacity: 1;
+}
+
+/* Full-screen camera lightbox (shared: Live Map panel + Wildfires screen). */
+.lm-camlb {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  background: rgba(3, 5, 8, 0.88);
+  backdrop-filter: blur(3px);
+}
+.lm-camlb__figure {
+  position: relative;
+  margin: 0;
+  max-width: min(1200px, 92vw);
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+}
+.lm-camlb__img {
+  max-width: 100%;
+  max-height: 82vh;
+  object-fit: contain;
+  border-radius: 8px;
+  border: 1px solid var(--bord);
+  background: #000;
+}
+.lm-camlb__cap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 4px 0;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--txt);
+}
+.lm-camlb__dist,
+.lm-camlb__count {
+  color: var(--dim);
+  font-size: 12px;
+}
+.lm-camlb__count {
+  margin-left: auto;
+}
+.lm-camlb__close {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(5, 7, 10, 0.6);
+  color: var(--txt);
+  cursor: pointer;
+}
+.lm-camlb__close:hover {
+  background: rgba(5, 7, 10, 0.9);
+}
+.lm-camlb__nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(5, 7, 10, 0.55);
+  color: var(--txt);
+  cursor: pointer;
+}
+.lm-camlb__nav:hover {
+  background: rgba(5, 7, 10, 0.85);
+}
+.lm-camlb__nav--prev {
+  left: 20px;
+}
+.lm-camlb__nav--next {
+  right: 20px;
+}
+
+/* ── responsive (canonical breakpoints) ──────────────────────────────────── */
+@media (max-width: 768px) {
+  /* Masthead: let the threat-legend pills wrap under the title. */
+  .v2-fires__masthead {
+    flex-wrap: wrap;
+    padding: 16px;
+  }
+  .v2-fires__legend {
+    flex-wrap: wrap;
+  }
+  .v2-fires__readout {
+    padding: 9px 16px;
+  }
+  .v2-fires__detail-head {
+    padding: 18px 16px 14px;
+  }
+  .v2-fires__detail-body {
+    padding: 16px 16px 36px;
+  }
+  /* Detail header: gauge drops below the title/threat block. */
+  .v2-fires__detail-headrow {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .v2-fires__masthead {
+    padding: 14px;
+    gap: 12px;
+  }
+  .v2-fires__title h1 {
+    font-size: 18px;
+  }
+  /* Stats: three tiny cells get cramped — go two-up. */
+  .v2-fires__stats,
+  .lm-fire__stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  /* Camera grid to a single column on the smallest screens. */
+  .v2-fires__cams,
+  .lm-fire__cams {
+    grid-template-columns: 1fr;
+  }
+  /* Lightbox uses less padding so the image fills more of the viewport. */
+  .lm-camlb {
+    padding: 16px;
+  }
+  .lm-camlb__nav {
+    width: 38px;
+    height: 38px;
+  }
+  .lm-camlb__nav--prev {
+    left: 8px;
+  }
+  .lm-camlb__nav--next {
+    right: 8px;
+  }
+}

@@ -5,6 +5,9 @@
  * error handling and response parsing.
  */
 
+import { getClientId } from './clientId';
+import { withAuth } from './authHeader';
+
 const API_BASE = '/api/v1';
 
 /**
@@ -129,11 +132,15 @@ async function apiRequest(endpoint, options = {}) {
     }
   }
 
-  // Build headers
-  const headers = {
+  // Build headers. X-Client-Id scopes anonymous-owned resources (chat sessions)
+  // to this browser in public AUTH_MODE; ignored by other endpoints. withAuth
+  // attaches the JWT bearer when signed in — required for authed endpoints in
+  // bearer-only mode (JWT_AUTH_COOKIE=False); harmless (omitted) when anonymous.
+  const headers = withAuth({
     'Content-Type': 'application/json',
+    'X-Client-Id': getClientId(),
     ...customHeaders,
-  };
+  });
 
   // Set up abort controller for timeout
   const controller = new AbortController();
@@ -244,6 +251,39 @@ export const api = {
    */
   getAircraftStats: () => apiRequest('/aircraft/stats/'),
 
+  /**
+   * Get distinct-tail counts per airframe type actually seen by this station.
+   * @param {Object} [params] - Query parameters (hours: recency window, omit for all-time)
+   * @returns {Promise<{types: Record<string, number>}>} Map of type designator → seen count
+   */
+  getSeenAirframeTypes: (params) => apiRequest('/airframes/seen-types/', { params }),
+
+  /**
+   * Get the seen tails of one airframe type, newest first (paginated for lazy loading).
+   * @param {string} type - ICAO type designator (e.g. B738)
+   * @param {Object} [params] - Query parameters (limit, offset)
+   * @returns {Promise<{results: Object[], count: number, next_offset: number|null}>}
+   */
+  getSeenAirframesByType: (type, params) =>
+    apiRequest('/airframes/seen/', { params: { type, ...params } }),
+
+  /**
+   * Get auto-generated airframe type cards (LLM-written for types seen here but
+   * absent from the curated static library). Each card is `Airframe`-shaped with
+   * `generated: true`; the Airframes screen merges these behind the static ones.
+   * @returns {Promise<{cards: Object[], count: number}>}
+   */
+  getGeneratedAirframeCards: () => apiRequest('/airframes/type-cards/'),
+
+  /**
+   * Queue on-demand LLM generation of a reference card for a type designator not
+   * yet in the library. Resolves with `{status:'queued', type_code}` (202); the
+   * card appears in getGeneratedAirframeCards() once the worker finishes.
+   * @param {string} type - ICAO type designator (e.g. SU95)
+   */
+  generateAirframeCard: (type) =>
+    apiRequest('/airframes/type-cards/generate/', { method: 'POST', body: { type } }),
+
   // =========================================================================
   // Stats endpoints
   // =========================================================================
@@ -346,10 +386,71 @@ export const api = {
   acknowledgeAlert: (id) => apiRequest(`/alerts/history/${id}/acknowledge/`, { method: 'POST' }),
 
   /**
+   * Acknowledge all unacknowledged alerts
+   * @returns {Promise<Object>} { acknowledged: number }
+   */
+  acknowledgeAllAlerts: () => apiRequest('/alerts/history/acknowledge-all/', { method: 'POST' }),
+
+  /**
+   * Clear alert history (own alerts / owner-less in public mode)
+   * @returns {Promise<Object>} { deleted: number }
+   */
+  clearAlertHistory: () => apiRequest('/alerts/history/clear/', { method: 'DELETE' }),
+
+  /**
    * Get alert service metrics
    * @returns {Promise<Object>} Alert service metrics
    */
   getAlertMetrics: () => apiRequest('/alerts/rules/metrics/'),
+
+  // =========================================================================
+  // Notification channel endpoints (custom alert targets)
+  // =========================================================================
+
+  /**
+   * List notification channels (custom alert targets). Apprise URLs are masked.
+   * @returns {Promise<Object>} { results: [...] } or array
+   */
+  getNotificationChannels: (params) => apiRequest('/notifications/channels/', { params }),
+
+  /**
+   * Get available notification channel types
+   * @returns {Promise<Object>} { types: [...] } or list of type descriptors
+   */
+  getNotificationChannelTypes: () => apiRequest('/notifications/channels/types/'),
+
+  /**
+   * Create a notification channel
+   * @param {Object} data - { name, channel_type, apprise_url, description?, enabled?, supports_rich? }
+   * @returns {Promise<Object>} Created channel
+   */
+  createNotificationChannel: (data) =>
+    apiRequest('/notifications/channels/', { method: 'POST', body: data }),
+
+  /**
+   * Update a notification channel
+   * @param {number|string} id
+   * @param {Object} data
+   * @returns {Promise<Object>} Updated channel
+   */
+  updateNotificationChannel: (id, data) =>
+    apiRequest(`/notifications/channels/${id}/`, { method: 'PATCH', body: data }),
+
+  /**
+   * Delete a notification channel
+   * @param {number|string} id
+   * @returns {Promise<void>}
+   */
+  deleteNotificationChannel: (id) =>
+    apiRequest(`/notifications/channels/${id}/`, { method: 'DELETE' }),
+
+  /**
+   * Send a test notification through a channel
+   * @param {number|string} id
+   * @returns {Promise<Object>} { success, message, verified }
+   */
+  testNotificationChannel: (id) =>
+    apiRequest(`/notifications/channels/${id}/test/`, { method: 'POST' }),
 
   // =========================================================================
   // History endpoints
@@ -565,6 +666,20 @@ export const api = {
    */
   getAirports: (params) => apiRequest('/aviation/airports/', { params }),
 
+  /**
+   * Get active wildfires near a point (cached Watch Duty markers)
+   * @param {Object} [params] - { lat, lon, radius_nm }
+   * @returns {Promise<Object>} { wildfires: [...], count }
+   */
+  getWildfires: (params) => apiRequest('/aviation/wildfires/', { params }),
+
+  /**
+   * Get the per-fire detail bundle (reports, cameras, scanner feeds)
+   * @param {number|string} eventId - Watch Duty geo_event id
+   * @returns {Promise<Object>} { event, reports, cameras, radio_feeds }
+   */
+  getWildfireBundle: (eventId) => apiRequest(`/aviation/wildfires/${eventId}/bundle/`),
+
   // =========================================================================
   // Map endpoints
   // =========================================================================
@@ -610,12 +725,6 @@ export const api = {
    * @returns {Promise<Object>} Notifications list
    */
   getNotifications: (params) => apiRequest('/notifications/', { params }),
-
-  /**
-   * Get notification channels
-   * @returns {Promise<Object>} Notification channels list
-   */
-  getNotificationChannels: () => apiRequest('/notifications/channels/'),
 
   // =========================================================================
   // Admin endpoints
@@ -670,6 +779,59 @@ export const api = {
      */
     importConfigs: (data) => apiRequest('/admin/import/', { method: 'POST', body: data }),
   },
+
+  // =========================================================================
+  // Assistant chat sessions (saved conversations)
+  // =========================================================================
+
+  /**
+   * List saved chat sessions for the current owner (account or X-Client-Id).
+   * @returns {Promise<Object>} DRF paginated list of session summaries
+   */
+  getChatSessions: () => apiRequest('/assistant/sessions/'),
+
+  /**
+   * Get a single chat session with its ordered messages.
+   * @param {number|string} id - Session id
+   * @returns {Promise<Object>} Session with `messages`
+   */
+  getChatSession: (id) => apiRequest(`/assistant/sessions/${id}/`),
+
+  /**
+   * Create a new (empty) chat session.
+   * @param {Object} body - `{ title?, surface? }`
+   * @returns {Promise<Object>} Created session
+   */
+  createChatSession: (body) => apiRequest('/assistant/sessions/', { method: 'POST', body }),
+
+  /**
+   * Append completed turns to a session.
+   * @param {number|string} id - Session id
+   * @param {Array<Object>} messages - `[{ role, text, steps?, sources?, photos?, maps? }]`
+   * @returns {Promise<Object>} Updated session with messages
+   */
+  appendChatMessages: (id, messages) =>
+    apiRequest(`/assistant/sessions/${id}/messages/`, { method: 'POST', body: { messages } }),
+
+  /**
+   * Delete a saved chat session.
+   * @param {number|string} id - Session id
+   * @returns {Promise<null>}
+   */
+  deleteChatSession: (id) => apiRequest(`/assistant/sessions/${id}/`, { method: 'DELETE' }),
+
+  /**
+   * Suggested follow-up prompts for the current conversation. Generated by a
+   * separate, tool-free LLM context (never touches the agent's answer).
+   * @param {Array<{role:string,content:string}>} history - prior turns
+   * @param {string} [context] - optional page context
+   * @returns {Promise<{suggestions: string[]}>}
+   */
+  getAssistantSuggestions: (history, context) =>
+    apiRequest('/assistant/suggest/', {
+      method: 'POST',
+      body: context ? { history, context } : { history },
+    }),
 };
 
 export default api;

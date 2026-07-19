@@ -1,0 +1,688 @@
+/* ==========================================================================
+   PIREP detail page (#pirep?id=…) — sibling of the NOTAM detail screen.
+   Left: AI briefing + decoded grid + raw. Right: live location map, closest
+   aircraft, adjacent pilot reports. Shares the v2 dark visual language.
+   ========================================================================== */
+
+.v2-pird {
+  padding: 16px 20px 24px;
+  overflow-y: auto;
+  height: 100%;
+}
+.v2-pird--center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 60vh;
+  text-align: center;
+}
+.v2-pird__loading {
+  color: var(--dim);
+  font-size: 14px;
+}
+
+/* --- title bar --- */
+.v2-pird__titlebar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-bottom: 14px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--bord);
+}
+.v2-pird__back,
+.v2-pird__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 9px;
+  background: var(--bg1);
+  border: 1px solid var(--bord);
+  color: var(--dim);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+}
+.v2-pird__back {
+  width: 32px;
+  justify-content: center;
+  padding: 0;
+}
+.v2-pird__back:hover,
+.v2-pird__btn:hover {
+  color: var(--txt);
+  border-color: var(--bord2);
+}
+.v2-pird__id {
+  font-family: var(--font-mono);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  color: var(--txt);
+}
+.v2-pird__cat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 7px;
+  border: 1px solid;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+.v2-pird__rtype {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.7px;
+  color: var(--dim);
+  background: var(--bg3);
+  border: 1px solid var(--bord);
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+.v2-pird__urgent {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  color: var(--danger, #ff5d5d);
+  background: color-mix(in srgb, var(--danger, #ff5d5d) 13%, transparent);
+  border: 1px solid color-mix(in srgb, var(--danger, #ff5d5d) 42%, transparent);
+  padding: 3px 9px;
+  border-radius: 6px;
+}
+.v2-pird__urgent-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--danger, #ff5d5d);
+  box-shadow: 0 0 7px var(--danger, #ff5d5d);
+  animation: v2-blink 1.4s infinite;
+}
+.v2-pird__sev {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: capitalize;
+  padding: 3px 9px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+}
+.v2-pird__sev--caution {
+  color: var(--warn, #f5b544);
+  background: color-mix(in srgb, var(--warn, #f5b544) 13%, transparent);
+  border-color: color-mix(in srgb, var(--warn, #f5b544) 40%, transparent);
+}
+.v2-pird__sev--hazardous,
+.v2-pird__sev--severe {
+  color: var(--danger, #ff5d5d);
+  background: color-mix(in srgb, var(--danger, #ff5d5d) 13%, transparent);
+  border-color: color-mix(in srgb, var(--danger, #ff5d5d) 42%, transparent);
+}
+.v2-pird__spacer {
+  flex: 1;
+}
+.v2-pird__window {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--dim);
+}
+
+/* --- 2-column layout --- */
+.v2-pird__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.v2-pird__col {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+@media (max-width: 900px) {
+  .v2-pird__grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* --- AI briefing --- */
+.v2-pird__brief {
+  border-radius: 14px;
+  padding: 16px;
+  background:
+    radial-gradient(
+      120% 100% at 0% 0%,
+      color-mix(in srgb, var(--accent2) 12%, transparent),
+      transparent 60%
+    ),
+    var(--bg1);
+  border: 1px solid color-mix(in srgb, var(--accent2) 26%, var(--bord));
+}
+.v2-pird__brief-head {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin-bottom: 12px;
+}
+.v2-pird__brief-spark {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--accent2) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent2) 32%, transparent);
+}
+.v2-pird__brief-titles {
+  flex: 1;
+  min-width: 0;
+}
+.v2-pird__brief-eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--accent2);
+}
+.v2-pird__brief-sub {
+  font-size: 11px;
+  color: var(--dim);
+  margin-top: 1px;
+}
+.v2-pird__regen {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 7px;
+  background: transparent;
+  border: 1px solid var(--bord);
+  color: var(--dim);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.v2-pird__regen:hover:not(:disabled) {
+  color: var(--txt);
+  border-color: var(--bord2);
+}
+.v2-pird__regen:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.v2-pird__headline {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--txt);
+}
+.v2-pird__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+.v2-pird__tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--dim);
+  background: var(--bg2);
+  border: 1px solid var(--bord);
+}
+.v2-pird__tag--ai {
+  color: var(--accent, #6ee7a8);
+  border-color: color-mix(in srgb, var(--accent, #6ee7a8) 40%, transparent);
+}
+.v2-pird__tag.v2-pird__sev--severe {
+  color: var(--danger, #ff5d5d);
+  border-color: color-mix(in srgb, var(--danger, #ff5d5d) 42%, transparent);
+}
+.v2-pird__tag.v2-pird__sev--caution {
+  color: var(--warn, #f5b544);
+  border-color: color-mix(in srgb, var(--warn, #f5b544) 40%, transparent);
+}
+.v2-pird__summary {
+  margin: 12px 0 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--dim2);
+  border-left: 2px solid color-mix(in srgb, var(--accent2) 45%, transparent);
+  padding-left: 11px;
+}
+.v2-pird__skel {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-top: 12px;
+}
+.v2-pird__skel span {
+  height: 11px;
+  border-radius: 4px;
+  background: linear-gradient(
+    90deg,
+    var(--bg2) 25%,
+    color-mix(in srgb, var(--accent2) 14%, var(--bg2)) 50%,
+    var(--bg2) 75%
+  );
+  background-size: 200% 100%;
+  animation: flighthist-shimmer 1.3s ease-in-out infinite;
+}
+.v2-pird__skel span:nth-child(2) {
+  width: 70%;
+}
+.v2-pird__notes {
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.v2-pird__notes li {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--dim2);
+}
+.v2-pird__notes li svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: var(--warn, #f5b544);
+}
+
+/* --- section cards --- */
+.v2-pird__card {
+  border-radius: 13px;
+  background: var(--bg1);
+  border: 1px solid var(--bord);
+  padding: 14px 16px;
+}
+.v2-pird__card--noloc {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--dim);
+  font-size: 12.5px;
+}
+.v2-pird__card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 11px;
+}
+.v2-pird__card-title {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--dim2);
+}
+.v2-pird__turb-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px;
+  border: 1px solid;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  color: var(--txt);
+}
+.v2-pird__turb-badge svg {
+  flex-shrink: 0;
+}
+.v2-pird__coord,
+.v2-pird__count {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--dim);
+}
+.v2-pird__count {
+  min-width: 20px;
+  text-align: center;
+  padding: 1px 8px;
+  border-radius: 12px;
+  background: var(--bg3);
+}
+.v2-pird__copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 9px;
+  border-radius: 6px;
+  background: transparent;
+  border: 1px solid var(--bord);
+  color: var(--dim);
+  font-family: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.v2-pird__copy:hover {
+  color: var(--txt);
+  border-color: var(--bord2);
+}
+
+/* decoded fields */
+.v2-pird__fields {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 1px;
+  background: var(--bord);
+  border: 1px solid var(--bord);
+  border-radius: 9px;
+  overflow: hidden;
+}
+.v2-pird__field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 11px;
+  background: var(--bg1);
+}
+.v2-pird__field-k {
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+.v2-pird__field-v {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--txt);
+}
+
+/* raw */
+.v2-pird__raw {
+  margin: 0;
+  padding: 12px;
+  border-radius: 9px;
+  background: linear-gradient(180deg, #0c1116, var(--bg0, #090c11));
+  border: 1px solid var(--bord);
+  border-left: 2px solid color-mix(in srgb, var(--accent, #6ee7a8) 55%, transparent);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  color: color-mix(in srgb, var(--accent, #6ee7a8) 80%, var(--txt));
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* map */
+.v2-pird__map-note {
+  margin-top: 8px;
+  font-size: 10.5px;
+  color: var(--dim);
+  font-style: italic;
+}
+
+.v2-pird__empty-row {
+  padding: 16px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--dim);
+  font-style: italic;
+}
+
+/* --- closest-aircraft table (grid so columns align across rows) --- */
+.v2-pird__actable {
+  border: 1px solid var(--bord);
+  border-radius: 9px;
+  overflow: hidden;
+}
+.v2-pird__ac-head,
+.v2-pird__ac-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 52px 78px 84px;
+  gap: 10px;
+  align-items: center;
+}
+.v2-pird__ac-head {
+  padding: 7px 12px;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--bord);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--dim2);
+}
+.v2-pird__ac-head span:not(:first-child) {
+  text-align: right;
+}
+.v2-pird__ac-row {
+  width: 100%;
+  padding: 9px 12px;
+  background: var(--bg1);
+  border: none;
+  border-bottom: 1px solid var(--bord);
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+  transition: background 0.12s;
+}
+.v2-pird__ac-row:last-child {
+  border-bottom: none;
+}
+.v2-pird__ac-row:hover {
+  background: var(--bg2);
+}
+.v2-pird__ac-cs {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--txt);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.v2-pird__ac-cs svg {
+  flex: 0 0 auto;
+}
+.v2-pird__ac-alt,
+.v2-pird__ac-delta,
+.v2-pird__ac-dist {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.v2-pird__ac-alt {
+  color: var(--dim);
+}
+.v2-pird__ac-delta {
+  font-weight: 600;
+  color: var(--dim2);
+}
+.v2-pird__ac-delta--up {
+  color: var(--accent2, #7cc4ff);
+}
+.v2-pird__ac-delta--down {
+  color: var(--warn, #f5b544);
+}
+.v2-pird__ac-dist {
+  color: var(--accent2);
+}
+.v2-pird__ac-dist em {
+  font-style: normal;
+  color: var(--dim);
+}
+
+/* --- adjacent PIREPs list --- */
+.v2-pird__list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--bord);
+  border: 1px solid var(--bord);
+  border-radius: 9px;
+  overflow: hidden;
+}
+.v2-pird__adj-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 12px;
+  background: var(--bg1);
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+  transition: background 0.12s;
+}
+.v2-pird__adj-row:hover {
+  background: var(--bg2);
+}
+.v2-pird__adj-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 18px;
+  padding: 0 7px;
+  border-radius: 5px;
+  border: 1px solid;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.v2-pird__adj-station {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--txt);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.v2-pird__adj-dist {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--accent2);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- muted briefing tag --- */
+.v2-pird__tag--muted {
+  color: var(--dim);
+}
+
+/* --- keyboard focus rings (a11y) --- */
+.v2-pird__back:focus-visible,
+.v2-pird__btn:focus-visible,
+.v2-pird__regen:focus-visible,
+.v2-pird__copy:focus-visible,
+.v2-pird__ac-row:focus-visible,
+.v2-pird__adj-row:focus-visible {
+  outline: 2px solid var(--accent2);
+  outline-offset: -2px;
+}
+
+/* --- one orchestrated page-load reveal --- */
+.v2-pird__col > * {
+  animation: v2-pird-rise 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.v2-pird__col > *:nth-child(2) {
+  animation-delay: 0.06s;
+}
+.v2-pird__col > *:nth-child(3) {
+  animation-delay: 0.12s;
+}
+.v2-pird__col > *:nth-child(4) {
+  animation-delay: 0.18s;
+}
+@keyframes v2-pird-rise {
+  from {
+    opacity: 0;
+    transform: translateY(9px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .v2-pird__urgent-dot,
+  .v2-pird__skel span,
+  .v2-pird__col > * {
+    animation: none;
+  }
+}
+
+/* ==========================================================================
+   Responsive — mobile / tablet reflow (canonical 768 / 480 breakpoints).
+   Grid already collapses at 900px above; these add padding + table scroll.
+   Only NEW media blocks below; desktop base rules are untouched.
+   ========================================================================== */
+
+@media (max-width: 768px) {
+  .v2-pird {
+    padding: 12px 14px 18px;
+  }
+  .v2-pird__id {
+    font-size: 18px;
+  }
+  /* decoded field grid to two columns on phones */
+  .v2-pird__fields {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  /* closest-aircraft pseudo-table: scroll horizontally, don't crush columns */
+  .v2-pird__actable {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .v2-pird__ac-head,
+  .v2-pird__ac-row {
+    min-width: 320px;
+  }
+}
+
+@media (max-width: 480px) {
+  .v2-pird {
+    padding: 11px 11px 16px;
+  }
+  .v2-pird__id {
+    font-size: 16px;
+  }
+  /* single column decoded fields on the smallest phones */
+  .v2-pird__fields {
+    grid-template-columns: 1fr;
+  }
+}

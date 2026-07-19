@@ -4,7 +4,22 @@ import {
   airspaceDescription,
   airspaceLabel,
   normAirspaceClass,
+  airmetRgb,
+  airmetLabel,
 } from './render/symbology';
+
+const AIRMET_HAZARD_NAMES = {
+  'TURB-LO': 'Turbulence (low)',
+  'TURB-HI': 'Turbulence (high)',
+  TURB: 'Turbulence',
+  ICE: 'Icing',
+  FZLVL: 'Freezing level',
+  IFR: 'IFR',
+  MT_OBSC: 'Mountain obscuration',
+  MTN_OBSCN: 'Mountain obscuration',
+  LLWS: 'Low-level wind shear',
+  SFC_WND: 'Surface wind',
+};
 
 /**
  * Lightweight hover tooltip for non-aircraft canvas markers (PIREPs, NOTAMs/
@@ -21,14 +36,23 @@ export function HoverTip({ tip }) {
     left: Math.max(8, tip.x + 14),
     top: Math.max(8, tip.y + 14),
   };
+  if (tip.kind === 'airmet') {
+    const hazard = (tip.data.hazard || '').toUpperCase();
+    style['--airmet-color'] = `rgb(${airmetRgb(hazard)})`;
+  }
   const body = {
     pirep: <PirepBody p={tip.data} />,
     notam: <NotamBody n={tip.data} />,
     airport: <AirportBody a={tip.data} />,
     airspace: <AirspaceBody a={tip.data} />,
+    airmet: <AirmetBody a={tip.data} />,
   }[tip.kind];
   return (
-    <div className="lm__tip" style={style} role="tooltip">
+    <div
+      className={`lm__tip${tip.kind === 'airmet' ? ' lm__tip--airmet' : ''}`}
+      style={style}
+      role="tooltip"
+    >
       {body}
     </div>
   );
@@ -123,6 +147,31 @@ function AirspaceBody({ a }) {
       {desc && <div className="lm__tip-raw">{desc}</div>}
       {agency && <div className="lm__tip-raw">Controlled by {agency}</div>}
       {schedule && <div className="lm__tip-raw">Active {schedule}</div>}
+    </>
+  );
+}
+
+function AirmetBody({ a }) {
+  const hazard = (a.hazard || '').toUpperCase();
+  const name = AIRMET_HAZARD_NAMES[hazard] || airmetLabel(hazard);
+  const fl = (ft) => (ft == null ? null : `FL${Math.round(ft / 100)}`);
+  const lower = fl(a.lower_alt_ft);
+  const upper = fl(a.upper_alt_ft);
+  const band = lower || upper ? `${lower || 'SFC'} – ${upper || '—'}` : null;
+  const isLine = a.polygon?.type === 'LineString';
+  return (
+    <>
+      <div className="lm__tip-head">
+        <span className="lm__tip-airmet-tag">
+          {a.severity ? String(a.severity).toUpperCase() : 'AIRMET'}
+        </span>
+        <span className="lm__tip-airmet-haz">{hazard}</span>
+        {band && <span className="lm__tip-alt">{band}</span>}
+      </div>
+      <div className="lm__tip-sub">{name}</div>
+      <div className="lm__tip-airmet-foot">
+        {isLine ? 'Advisory line' : 'Forecast hazard area'} · click for details
+      </div>
     </>
   );
 }

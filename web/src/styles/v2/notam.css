@@ -541,3 +541,39 @@
   font-size: 11px;
   color: var(--dim);
 }
+
+/* ==========================================================================
+   Responsive — mobile / tablet reflow (canonical 768 / 480 breakpoints).
+   Grid already collapses at 900px above; these add padding + form tightening.
+   Only NEW media blocks below; desktop base rules are untouched.
+   ========================================================================== */
+
+@media (max-width: 768px) {
+  .v2-ntm {
+    padding: 12px 14px 18px;
+  }
+  /* title bar already wraps; keep long ids from forcing overflow */
+  .v2-ntm__id {
+    font-size: 19px;
+  }
+  /* decoded field grid drops to two columns on phones */
+  .v2-ntm__fields {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .v2-ntm {
+    padding: 11px 11px 16px;
+  }
+  .v2-ntm__id {
+    font-size: 17px;
+  }
+  /* single column everywhere on the smallest phones */
+  .v2-ntm__fields {
+    grid-template-columns: 1fr;
+  }
+  .v2-ntm__brief-cols {
+    grid-template-columns: 1fr;
+  }
+}

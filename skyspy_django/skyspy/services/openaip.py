@@ -70,6 +70,11 @@ AIRSPACE_TYPES = {
     33: "LMA",
 }
 
+# OpenAIP `icaoClass` enum → ICAO airspace class letter. 7 (UNCLASSIFIED) and
+# 8 (SUA/other) have no A–G letter, so they map to None and the caller falls
+# back to the type-based label.
+ICAO_CLASSES = {0: "A", 1: "B", 2: "C", 3: "D", 4: "E", 5: "F", 6: "G"}
+
 # OpenAIP vertical limit unit enums (per Core API airspace schema):
 # 0 = Meter, 1 = Feet, 6 = Flight Level
 ALTITUDE_UNITS = {0: "m", 1: "ft", 6: "fl"}
@@ -301,11 +306,17 @@ def _parse_airspace(item: dict[str, Any]) -> dict[str, Any] | None:
         if not geometry:
             return None
 
+        # ICAO airspace class (0=A .. 6=G) is authoritative for the A–G label;
+        # the `type` enum (CTR/TMA/…) is a poor proxy that mislabeled Class B as
+        # D. None for unclassified/SUA — caller falls back to the type mapping.
+        icao_class = ICAO_CLASSES.get(item.get("icaoClass"))
+
         return {
             "id": item.get("_id", ""),
             "name": item.get("name", "Unknown"),
             "type": airspace_type,
             "type_id": airspace_type_id,
+            "icao_class": icao_class,
             "country": item.get("country", ""),
             "floor_ft": floor_ft,
             "ceiling_ft": ceiling_ft,
@@ -346,11 +357,14 @@ def get_airports(
     if cached:
         return cached
 
-    radius_km = radius_nm * 1.852
+    # Clamp to OpenAIP's max `dist` (requests above ~200 km / this ceiling return
+    # HTTP 400). The airspace path already did this; airports/navaids did not, so
+    # any radius > ~27 nm silently 400'd and returned nothing.
+    dist_m = min(int(radius_nm * 1852), OPENAIP_MAX_DIST_M)
 
     params = {
         "pos": f"{lat},{lon}",
-        "dist": int(radius_km * 1000),
+        "dist": dist_m,
         "limit": 200,
     }
 
@@ -438,11 +452,12 @@ def get_navaids(
     if cached:
         return cached
 
-    radius_km = radius_nm * 1.852
+    # Clamp to OpenAIP's max `dist` (see get_airports) — unclamped radii 400'd.
+    dist_m = min(int(radius_nm * 1852), OPENAIP_MAX_DIST_M)
 
     params = {
         "pos": f"{lat},{lon}",
-        "dist": int(radius_km * 1000),
+        "dist": dist_m,
         "limit": 200,
     }
 
