@@ -289,11 +289,20 @@ export function AuthProvider({ children }) {
         let timeoutId = null;
         let popupCheckInterval = null;
         let isCleanedUp = false;
+        let broadcastChannel = null;
 
         const cleanup = () => {
           if (isCleanedUp) return;
           isCleanedUp = true;
           window.removeEventListener('message', handleMessage);
+          if (broadcastChannel) {
+            try {
+              broadcastChannel.close();
+            } catch {
+              /* noop */
+            }
+            broadcastChannel = null;
+          }
           if (timeoutId) clearTimeout(timeoutId);
           if (popupCheckInterval) clearInterval(popupCheckInterval);
           oidcCleanupRef.current = null;
@@ -301,6 +310,30 @@ export function AuthProvider({ children }) {
         };
 
         oidcCleanupRef.current = cleanup;
+
+        // Shared completion path for both transports. The main window keeps its
+        // `popup` handle from window.open even when the popup's own opener is
+        // severed by the IdP's COOP, so we close it from here on success.
+        const complete = (payload) => {
+          if (isCleanedUp) return;
+          cleanup();
+          if (payload && payload.access) {
+            storeTokens(payload.access, payload.refresh);
+            const userData = createUserData(payload.user);
+            setUser(userData);
+            storeUser(userData);
+            setStatus('authenticated');
+            scheduleTokenRefresh(payload.access);
+            try {
+              if (popup && !popup.closed) popup.close();
+            } catch {
+              /* noop */
+            }
+            resolve({ success: true });
+          } else {
+            reject(new Error('OIDC authentication failed'));
+          }
+        };
 
         const handleMessage = (event) => {
           if (isCleanedUp) return;
@@ -310,22 +343,25 @@ export function AuthProvider({ children }) {
             return;
           }
           if (event.data && event.data.type === 'oidc_callback') {
-            cleanup();
-            if (event.data.access) {
-              storeTokens(event.data.access, event.data.refresh);
-              const userData = createUserData(event.data.user);
-              setUser(userData);
-              storeUser(userData);
-              setStatus('authenticated');
-              scheduleTokenRefresh(event.data.access);
-              resolve({ success: true });
-            } else {
-              reject(new Error('OIDC authentication failed'));
-            }
+            complete(event.data);
           }
         };
 
         window.addEventListener('message', handleMessage);
+
+        // Primary transport: BroadcastChannel is same-origin only (so it needs
+        // no origin check) and survives opener severance from cross-origin IdP
+        // navigation, unlike window.opener.postMessage.
+        try {
+          broadcastChannel = new BroadcastChannel('skyspy_oidc');
+          broadcastChannel.onmessage = (event) => {
+            if (event.data && event.data.type === 'oidc_callback') {
+              complete(event.data);
+            }
+          };
+        } catch {
+          broadcastChannel = null;
+        }
 
         popupCheckInterval = setInterval(() => {
           if (isCleanedUp) return;

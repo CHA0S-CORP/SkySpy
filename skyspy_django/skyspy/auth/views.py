@@ -499,18 +499,34 @@ class OIDCCallbackView(APIView):
         <body>
         <script>
             const data = {json_data};
-            if (window.opener) {{
-                window.opener.postMessage({{type: 'oidc_callback', ...data}}, '{post_message_origin}');
-                window.close();
-            }} else {{
-                // Store tokens and redirect
-                localStorage.setItem('access_token', data.access);
-                localStorage.setItem('refresh_token', data.refresh);
-                localStorage.setItem('user', JSON.stringify(data.user));
-                window.location.href = '{escaped_redirect_url}';
-            }}
+            // Primary handoff: BroadcastChannel is same-origin only and does NOT
+            // depend on window.opener, which browsers sever when the popup
+            // navigates cross-origin to the IdP (COOP). This makes the popup flow
+            // reliable regardless of the IdP's COOP headers.
+            try {{
+                const bc = new BroadcastChannel('skyspy_oidc');
+                bc.postMessage({{type: 'oidc_callback', ...data}});
+                bc.close();
+            }} catch (e) {{}}
+            // Back-compat: also try the opener if it survived.
+            try {{
+                if (window.opener) {{
+                    window.opener.postMessage({{type: 'oidc_callback', ...data}}, '{post_message_origin}');
+                }}
+            }} catch (e) {{}}
+            // Fallback: persist with the app's real storage keys so a full-page
+            // redirect still authenticates if messaging is unavailable.
+            try {{
+                if (data.access) localStorage.setItem('skyspy_access_token', data.access);
+                if (data.refresh) localStorage.setItem('skyspy_refresh_token', data.refresh);
+                if (data.user) localStorage.setItem('skyspy_user', JSON.stringify(data.user));
+            }} catch (e) {{}}
+            // Close if possible; the opener also closes us on success. If we are
+            // an orphaned popup that can't self-close, redirect into the app.
+            window.close();
+            setTimeout(function () {{ window.location.href = '{escaped_redirect_url}'; }}, 150);
         </script>
-        <p>Authentication complete. Redirecting...</p>
+        <p>Authentication complete. You can close this window.</p>
         </body>
         </html>
         """
