@@ -3,6 +3,7 @@ ACARS/VDL2 message model for aircraft data link communications.
 """
 
 from django.db import models
+from django.utils import timezone
 
 
 class AcarsMessage(models.Model):
@@ -13,7 +14,11 @@ class AcarsMessage(models.Model):
         ("vdlm2", "VDL Mode 2"),
     ]
 
-    timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
+    # default (not auto_now_add) so the real upstream message time parsed in
+    # acars._store_message is honored. auto_now_add always overwrote it with the
+    # ingest time — badly wrong for the airframes.io firehose poller, which
+    # re-emits messages seconds/minutes old in a rolling window.
+    timestamp = models.DateTimeField(default=timezone.now, db_index=True)
 
     # Message source
     source = models.CharField(max_length=10, choices=SOURCE_CHOICES, default="acars")

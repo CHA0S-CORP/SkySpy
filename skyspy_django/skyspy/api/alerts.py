@@ -16,7 +16,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from skyspy.api.params import parse_int
-from skyspy.api.throttles import AuthRateThrottle
+from skyspy.api.throttles import AlertWriteRateThrottle
 from skyspy.auth.authentication import APIKeyAuthentication, OptionalJWTAuthentication
 from skyspy.auth.permissions import CanAccessAlert, IsOwnerOrAdmin
 from skyspy.models import AlertAggregate, AlertHistory, AlertRule, AlertSubscription
@@ -41,11 +41,35 @@ class AlertRuleViewSet(viewsets.ModelViewSet):
 
     authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
     permission_classes = [CanAccessAlert, IsOwnerOrAdmin]
-    throttle_classes = [AuthRateThrottle]
 
     queryset = AlertRule.objects.all()
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ["enabled", "priority", "rule_type", "visibility"]
+
+    # Only mutating actions are throttled, and on a dedicated `alert_write`
+    # scope — NOT the login `auth` scope (5/min), which previously capped every
+    # read too and shared its bucket with the login endpoints (browsing rules
+    # burned the brute-force budget, HTTP 429 on a normal dashboard). Reads
+    # (list/retrieve/my_rules/shared/metrics/export) fall through to the global
+    # user/anon throttles.
+    _WRITE_ACTIONS = {
+        "create",
+        "update",
+        "partial_update",
+        "destroy",
+        "toggle",
+        "test",
+        "test_rule",
+        "bulk_create",
+        "bulk_delete",
+        "bulk_toggle",
+        "import_rules",
+    }
+
+    def get_throttles(self):
+        if getattr(self, "action", None) in self._WRITE_ACTIONS:
+            return [AlertWriteRateThrottle()]
+        return super().get_throttles()
 
     def get_serializer_class(self):
         if self.action == "create":

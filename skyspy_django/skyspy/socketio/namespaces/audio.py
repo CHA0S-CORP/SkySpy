@@ -55,7 +55,7 @@ class AudioNamespace(socketio.AsyncNamespace):
         and sends initial state.
         """
         # Authenticate the connection
-        user, error = await authenticate_socket(auth)
+        user, error, api_key_scopes = await authenticate_socket(auth)
 
         if error:
             from django.conf import settings as django_settings
@@ -72,14 +72,15 @@ class AudioNamespace(socketio.AsyncNamespace):
             sid,
             {
                 "user": user,
+                "api_key_scopes": api_key_scopes,
                 "auth_error": error,
                 "rate_limiter": RateLimiter(),
             },
             namespace="/audio",
         )
 
-        # Check permission to access audio
-        if not await check_topic_permission(user, "audio"):
+        # Check permission to access audio (scoped API keys are constrained)
+        if not await check_topic_permission(user, "audio", api_key_scopes):
             logger.warning(f"Audio namespace permission denied for {sid}")
             return False  # Reject connection
 
@@ -233,13 +234,14 @@ class AudioNamespace(socketio.AsyncNamespace):
 
         session = await sio.get_session(sid, namespace="/audio")
         user = session.get("user")
+        scopes = session.get("api_key_scopes")
 
         joined = []
         for topic in topics:
             topics_to_join = self.supported_topics if topic == "all" else [topic]
 
             for t in topics_to_join:
-                if t in self.supported_topics and await check_topic_permission(user, "audio"):
+                if t in self.supported_topics and await check_topic_permission(user, "audio", scopes):
                     room_name = f"audio_{t}"
                     await self.enter_room(sid, room_name)
                     joined.append(t)

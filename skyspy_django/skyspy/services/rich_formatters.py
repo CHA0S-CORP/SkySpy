@@ -30,6 +30,32 @@ EVENT_TYPE_ICONS = {
 }
 
 
+def normalize_event_family(event_type: str | None) -> str | None:
+    """Map a raw event_type to a rich-format family, or None if unrecognized.
+
+    safety.py emits concrete types (``squawk_emergency``, ``tcas_ra``,
+    ``proximity_conflict``, ``extreme_vs``, ``vs_reversal``) that don't match the
+    bucket names RichFormatter.format() / EVENT_TYPE_ICONS use — so rich embeds
+    were silently never produced for real safety events (fell back to plain text,
+    generic warning icon). Normalize to a family: alert / emergency / tcas /
+    proximity / safety. A genuinely unknown type returns None so the factory keeps
+    its "no rich formatting" contract rather than mis-rendering arbitrary events.
+    """
+    et = (event_type or "").lower()
+    if et == "alert":
+        return "alert"
+    if et.startswith("squawk") or "emergency" in et:
+        return "emergency"
+    if et.startswith("tcas"):
+        return "tcas"
+    if et.startswith("proximity"):
+        return "proximity"
+    # extreme_vs, vs_reversal, plain "safety" -> generic safety family
+    if et in ("safety", "extreme_vs", "vs_reversal") or "vs" in et or et == "military":
+        return "safety"
+    return None
+
+
 def _format_altitude(altitude: Any) -> str | None:
     """
     Format an altitude value for display.
@@ -50,6 +76,37 @@ def _format_altitude(altitude: Any) -> str | None:
     if isinstance(altitude, (int, float)):
         return f"{int(altitude):,} ft"
     return None
+
+
+def _coerce_float(value: Any) -> float | None:
+    """Coerce a possibly-string ADS-B numeric to float, else None.
+
+    ADS-B / cached JSON frequently carries gs/distance_nm/vr as strings; the raw
+    numeric format specs (e.g. ``f"{v:,.0f}"``) raise ValueError on those, and
+    the formatters have no except clause — one bad field aborted the whole
+    dispatch loop. Returning None lets the caller simply omit the field.
+    """
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _format_speed(value: Any) -> str | None:
+    v = _coerce_float(value)
+    return f"{v:,.0f} kts" if v is not None else None
+
+
+def _format_distance(value: Any) -> str | None:
+    v = _coerce_float(value)
+    return f"{v:.1f} NM" if v is not None else None
+
+
+def _format_vr(value: Any) -> str | None:
+    v = _coerce_float(value)
+    return f"{v:+,.0f} ft/min" if v is not None else None
 
 
 def _format_airframe(data: dict[str, Any], aircraft: dict[str, Any]) -> str | None:
@@ -160,23 +217,23 @@ class DiscordFormatter:
             )
 
         # Speed
-        speed = aircraft.get("gs")
+        speed = _format_speed(aircraft.get("gs"))
         if speed is not None:
             fields.append(
                 {
                     "name": "Speed",
-                    "value": f"{speed:,.0f} kts",
+                    "value": speed,
                     "inline": True,
                 }
             )
 
         # Distance
-        distance = aircraft.get("distance_nm")
+        distance = _format_distance(aircraft.get("distance_nm"))
         if distance is not None:
             fields.append(
                 {
                     "name": "Distance",
-                    "value": f"{distance:.1f} NM",
+                    "value": distance,
                     "inline": True,
                 }
             )
@@ -241,7 +298,7 @@ class DiscordFormatter:
         event_type = data.get("event_type", "safety")
         severity = data.get("severity", "warning")
         color = PRIORITY_COLORS.get(severity, PRIORITY_COLORS["warning"])
-        icon = EVENT_TYPE_ICONS.get(event_type, "\U000026a0")
+        icon = EVENT_TYPE_ICONS.get(normalize_event_family(event_type), "\U000026a0")
 
         fields = []
 
@@ -269,12 +326,12 @@ class DiscordFormatter:
 
         # Event-specific fields
         if event_type == "tcas" or "vertical_rate" in str(data.get("message", "")).lower():
-            vr = aircraft.get("vr")
+            vr = _format_vr(aircraft.get("vr"))
             if vr is not None:
                 fields.append(
                     {
                         "name": "Vertical Rate",
-                        "value": f"{vr:+,} ft/min",
+                        "value": vr,
                         "inline": True,
                     }
                 )
@@ -395,21 +452,21 @@ class SlackFormatter:
                 }
             )
 
-        speed = aircraft.get("gs")
+        speed = _format_speed(aircraft.get("gs"))
         if speed is not None:
             fields.append(
                 {
                     "type": "mrkdwn",
-                    "text": f"*Speed:* {speed:,.0f} kts",
+                    "text": f"*Speed:* {speed}",
                 }
             )
 
-        distance = aircraft.get("distance_nm")
+        distance = _format_distance(aircraft.get("distance_nm"))
         if distance is not None:
             fields.append(
                 {
                     "type": "mrkdwn",
-                    "text": f"*Distance:* {distance:.1f} NM",
+                    "text": f"*Distance:* {distance}",
                 }
             )
 
@@ -498,7 +555,7 @@ class SlackFormatter:
         event_type = data.get("event_type", "safety")
         severity = data.get("severity", "warning")
         color = PRIORITY_COLORS.get(severity, PRIORITY_COLORS["warning"])
-        icon = EVENT_TYPE_ICONS.get(event_type, "\U000026a0")
+        icon = EVENT_TYPE_ICONS.get(normalize_event_family(event_type), "\U000026a0")
 
         blocks = []
 
@@ -556,12 +613,12 @@ class SlackFormatter:
                 }
             )
 
-        vr = aircraft.get("vr")
+        vr = _format_vr(aircraft.get("vr"))
         if vr is not None:
             fields.append(
                 {
                     "type": "mrkdwn",
-                    "text": f"*Vertical Rate:* {vr:+,} ft/min",
+                    "text": f"*Vertical Rate:* {vr}",
                 }
             )
 
@@ -619,17 +676,19 @@ class RichFormatter:
         Returns:
             Formatted payload or None if channel doesn't support rich formatting
         """
+        family = normalize_event_family(event_type)
+        if family is None:
+            return None
+
         if channel_type == "discord":
-            if event_type == "alert":
+            if family == "alert":
                 return self.discord.format_alert(data)
-            elif event_type in ("safety", "tcas", "emergency", "proximity"):
-                return self.discord.format_safety_event(data)
+            return self.discord.format_safety_event(data)
 
         elif channel_type == "slack":
-            if event_type == "alert":
+            if family == "alert":
                 return self.slack.format_alert(data)
-            elif event_type in ("safety", "tcas", "emergency", "proximity"):
-                return self.slack.format_safety_event(data)
+            return self.slack.format_safety_event(data)
 
         return None
 

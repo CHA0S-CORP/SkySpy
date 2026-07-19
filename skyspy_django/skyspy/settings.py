@@ -409,6 +409,10 @@ REST_FRAMEWORK = {
         "external_lookup": get_env("API_THROTTLE_EXTERNAL_LOOKUP", "10/minute"),
         "weather": get_env("API_THROTTLE_WEATHER", "30/minute"),
         "geodata": get_env("API_THROTTLE_GEODATA", "60/minute"),
+        # Alert-rule writes (create/update/toggle/bulk/import). A dedicated bucket
+        # so alert CRUD volume never shares the login `auth` bucket (which would
+        # let rule browsing burn the brute-force login budget, and vice versa).
+        "alert_write": get_env("API_THROTTLE_ALERT_WRITE", "60/minute"),
     },
 }
 

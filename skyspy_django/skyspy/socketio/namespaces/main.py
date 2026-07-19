@@ -207,7 +207,7 @@ class MainNamespace(
 
         try:
             # Authenticate
-            user, error = await authenticate_socket(auth)
+            user, error, api_key_scopes = await authenticate_socket(auth)
 
             if error:
                 auth_mode = getattr(settings, "AUTH_MODE", "hybrid")
@@ -218,10 +218,13 @@ class MainNamespace(
 
             # Store user in session
             # Note: subscribed_topics uses a list instead of set for JSON serialization compatibility
+            # api_key_scopes constrains every later topic/request permission check
+            # for scoped API keys (falsy = unscoped = full user perms).
             await sio.save_session(
                 sid,
                 {
                     "user": user,
+                    "api_key_scopes": api_key_scopes,
                     "subscribed_topics": [],
                     "client_filters": {},
                     "rate_limiter": RateLimiter({**DEFAULT_RATE_LIMITS, **getattr(settings, "WS_RATE_LIMITS", {})}),
@@ -302,6 +305,7 @@ class MainNamespace(
             async with self._session_lock(sid):
                 session = await sio.get_session(sid)
                 user = session.get("user")
+                scopes = session.get("api_key_scopes")
                 # Use list instead of set for JSON serialization compatibility
                 subscribed = list(session.get("subscribed_topics", []))
 
@@ -315,7 +319,7 @@ class MainNamespace(
                         continue
 
                     # Check permission
-                    if not await check_topic_permission(user, topic):
+                    if not await check_topic_permission(user, topic, scopes):
                         logger.warning(f"Permission denied for {sid} to subscribe to {topic}")
                         denied.append(topic)
                         continue
@@ -467,13 +471,14 @@ class MainNamespace(
         """Join default rooms based on user permissions."""
         async with self._session_lock(sid):
             session = await sio.get_session(sid)
+            scopes = session.get("api_key_scopes")
             subscribed = set(session.get("subscribed_topics", []))
 
-            if await check_topic_permission(user, "aircraft"):
+            if await check_topic_permission(user, "aircraft", scopes):
                 await sio.enter_room(sid, "topic_aircraft")
                 subscribed.add("aircraft")
 
-            if await check_topic_permission(user, "stats"):
+            if await check_topic_permission(user, "stats", scopes):
                 await sio.enter_room(sid, "topic_stats")
                 subscribed.add("stats")
 
@@ -486,11 +491,12 @@ class MainNamespace(
 
         session = await sio.get_session(sid)
         user = session.get("user")
+        scopes = session.get("api_key_scopes")
         subscribed = set(session.get("subscribed_topics", []))
 
         # Send aircraft snapshot (default subscription) only if permitted,
         # mirroring the permission check in _join_default_rooms
-        if await check_topic_permission(user, "aircraft"):
+        if await check_topic_permission(user, "aircraft", scopes):
             try:
                 await self._emit_cached_snapshot(sid, "aircraft")
             except Exception as e:  # broad: snapshot boundary must not abort connect; emit spans many mixins/cache
@@ -607,6 +613,14 @@ class MainNamespace(
 
         session = await sio.get_session(sid)
         user = session.get("user")
+
+        # A scoped API key is constrained to its granted scopes even when the
+        # owning user (or a superuser) would otherwise pass — mirrors REST.
+        from skyspy.socketio.middleware.permissions import scope_denies
+
+        if scope_denies(session.get("api_key_scopes"), required_perm):
+            logger.warning(f"Denying request {request_type}: API key scopes do not cover {required_perm}")
+            return False
 
         if not user or not user.is_authenticated:
             return await self._is_feature_public(required_perm)

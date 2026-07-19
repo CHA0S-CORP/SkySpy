@@ -140,7 +140,7 @@ class TestSocketIOAuthentication:
             mock_settings.WS_REJECT_INVALID_TOKENS = False
             mock_settings.API_KEY_ENABLED = True
 
-            user, error = await authenticate_socket({"token": token})
+            user, error, _scopes = await authenticate_socket({"token": token})
 
             assert error is None
             assert user.is_authenticated
@@ -157,7 +157,7 @@ class TestSocketIOAuthentication:
             mock_settings.WS_REJECT_INVALID_TOKENS = False
             mock_settings.API_KEY_ENABLED = True
 
-            user, error = await authenticate_socket({"token": expired_jwt_token})
+            user, error, _scopes = await authenticate_socket({"token": expired_jwt_token})
 
             # In hybrid mode with WS_REJECT_INVALID_TOKENS=False, should return error but not reject
             assert error is not None
@@ -176,7 +176,7 @@ class TestSocketIOAuthentication:
             mock_settings.WS_REJECT_INVALID_TOKENS = False
             mock_settings.API_KEY_ENABLED = True
 
-            user, error = await authenticate_socket({"token": raw_key})
+            user, error, _scopes = await authenticate_socket({"token": raw_key})
 
             assert error is None
             assert user.is_authenticated
@@ -191,7 +191,7 @@ class TestSocketIOAuthentication:
         with patch("skyspy.socketio.middleware.auth.settings") as mock_settings:
             mock_settings.AUTH_MODE = "public"
 
-            user, error = await authenticate_socket({})
+            user, error, _scopes = await authenticate_socket({})
 
             assert error is None
             assert isinstance(user, AnonymousUser)
@@ -205,7 +205,7 @@ class TestSocketIOAuthentication:
         with patch("skyspy.socketio.middleware.auth.settings") as mock_settings:
             mock_settings.AUTH_MODE = "private"
 
-            user, error = await authenticate_socket({})
+            user, error, _scopes = await authenticate_socket({})
 
             assert error is not None
             assert "required" in error.lower()
@@ -220,7 +220,7 @@ class TestSocketIOAuthentication:
             mock_settings.AUTH_MODE = "private"
             mock_settings.API_KEY_ENABLED = True
 
-            user, error = await authenticate_socket({"token": "invalid_token"})
+            user, error, _scopes = await authenticate_socket({"token": "invalid_token"})
 
             assert error is not None
 
@@ -835,7 +835,7 @@ class TestConnectionLifecycle:
 
         with patch("skyspy.socketio.namespaces.main.sio", mock_sio_server):
             with patch(
-                "skyspy.socketio.namespaces.main.authenticate_socket", AsyncMock(return_value=(AnonymousUser(), None))
+                "skyspy.socketio.namespaces.main.authenticate_socket", AsyncMock(return_value=(AnonymousUser(), None, None))
             ):
                 with patch("skyspy.socketio.namespaces.main.check_topic_permission", AsyncMock(return_value=True)):
                     namespace = MainNamespace("/")
@@ -856,7 +856,7 @@ class TestConnectionLifecycle:
         with patch("skyspy.socketio.namespaces.main.sio", mock_sio_server):
             with patch(
                 "skyspy.socketio.namespaces.main.authenticate_socket",
-                AsyncMock(return_value=(AnonymousUser(), "Authentication required")),
+                AsyncMock(return_value=(AnonymousUser(), "Authentication required", None)),
             ):
                 with patch("skyspy.socketio.namespaces.main.settings") as mock_settings:
                     mock_settings.AUTH_MODE = "private"
@@ -957,7 +957,7 @@ class TestSocketIOIntegration:
         with patch("skyspy.socketio.namespaces.main.sio", mock_sio_server):
             with patch(
                 "skyspy.socketio.namespaces.main.authenticate_socket",
-                AsyncMock(return_value=(user, None)),
+                AsyncMock(return_value=(user, None, None)),
             ):
                 with patch("skyspy.socketio.namespaces.main.check_topic_permission", AsyncMock(return_value=True)):
                     namespace = MainNamespace("/")

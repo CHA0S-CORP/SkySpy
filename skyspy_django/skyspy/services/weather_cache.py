@@ -251,6 +251,11 @@ def get_cached_pireps(
             "acType": pirep.aircraft_type,
             "turbType": pirep.turbulence_type,
             "turbFreq": pirep.turbulence_freq,
+            # Turbulence layer band — consumed by turbulence._score_pireps to taper
+            # altitude weighting. Without these keys the scorer's base/top band was
+            # always None (dead altitude-band logic).
+            "turbulence_base_ft": pirep.turbulence_base_ft,
+            "turbulence_top_ft": pirep.turbulence_top_ft,
             "iceType": pirep.icing_type,
             "iceInt": pirep.icing_intensity,
             "skyCondition": pirep.sky_cover,
@@ -337,6 +342,11 @@ def get_historical_pireps(
             "acType": pirep.aircraft_type,
             "turbType": pirep.turbulence_type,
             "turbFreq": pirep.turbulence_freq,
+            # Turbulence layer band — consumed by turbulence._score_pireps to taper
+            # altitude weighting. Without these keys the scorer's base/top band was
+            # always None (dead altitude-band logic).
+            "turbulence_base_ft": pirep.turbulence_base_ft,
+            "turbulence_top_ft": pirep.turbulence_top_ft,
             "iceType": pirep.icing_type,
             "iceInt": pirep.icing_intensity,
             "skyCondition": pirep.sky_cover,

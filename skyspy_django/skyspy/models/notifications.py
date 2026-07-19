@@ -235,6 +235,12 @@ class NotificationLog(models.Model):
     )
     icao_hex = models.CharField(max_length=10, blank=True, null=True, db_index=True)
     callsign = models.CharField(max_length=10, blank=True, null=True)
+    # Rendered title + priority persisted so a retry re-dispatches with the
+    # ORIGINAL title/priority instead of a generic "SkysPy Notification"/"warning"
+    # (which stripped the emergency context from the highest-severity alerts —
+    # exactly the ones most likely to need a retry).
+    title = models.CharField(max_length=255, blank=True, null=True)
+    priority = models.CharField(max_length=20, blank=True, null=True)
     message = models.TextField(blank=True, null=True)
     details = models.JSONField(blank=True, null=True)
 

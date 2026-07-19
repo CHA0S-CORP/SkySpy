@@ -256,9 +256,12 @@ export function useWatchList({ enableAudio = true } = {}) {
         setWatchList((prev) => prev.filter((item) => item.hex !== upperHex));
         playRemoveSound();
 
-        // Sync to backend (fire and forget)
+        // Sync to backend (fire and forget). Must send the auth header like
+        // every other watchlist call — without it a signed-in user's DELETE
+        // 401s and the item reappears on the next mount sync.
         fetch(`/api/v1/watchlist/${upperHex}/`, {
           method: 'DELETE',
+          headers: withAuth(),
         }).catch(() => {});
 
         return true;

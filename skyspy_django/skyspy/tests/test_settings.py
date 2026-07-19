@@ -90,6 +90,7 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {
         "auth": None,
         "upload": None,
+        "alert_write": None,
     },
 }
 

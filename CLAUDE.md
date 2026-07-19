@@ -319,6 +319,7 @@ API_THROTTLE_UPLOAD=10/minute           # audio upload
 API_THROTTLE_EXTERNAL_LOOKUP=10/minute  # external DB / route lookups (OpenSky/ADSBX/FAA)
 API_THROTTLE_WEATHER=30/minute          # METAR/TAF/PIREP/SIGMET/NEXRAD
 API_THROTTLE_GEODATA=60/minute          # geojson / terrain
+API_THROTTLE_ALERT_WRITE=60/minute      # alert-rule writes (create/update/toggle/bulk/import) — own bucket, NOT the login `auth` scope, so alert CRUD never shares the brute-force login budget (reads fall through to user/anon)
 
 # Public-deploy hardening (production, DEBUG=False). See docs/20-public-deploy-checklist.md.
 # CSRF_TRUSTED_ORIGINS defaults to CORS_ALLOWED_ORIGINS. HTTPS/HSTS auto-enable when

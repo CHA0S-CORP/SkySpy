@@ -63,20 +63,37 @@ REQUEST_PERMISSIONS = {
 }
 
 
-async def check_topic_permission(user: User | AnonymousUser, topic: str) -> bool:
+def scope_denies(scopes, permission: str) -> bool:
+    """Return True when a SCOPED API key's scope list does NOT cover a permission.
+
+    A falsy `scopes` (None / empty list) means the connection is unscoped — a
+    JWT, an anonymous session, or an unscoped key — so it is NOT restricted here
+    and full user permissions apply. A truthy scope list constrains the key to
+    exactly the granted permissions, mirroring the REST FeatureBasedPermission.
+    """
+    from skyspy.auth.permissions import _scope_covers_permission
+
+    if not scopes:
+        return False
+    return not _scope_covers_permission(scopes, permission)
+
+
+async def check_topic_permission(user: User | AnonymousUser, topic: str, scopes: list | None = None) -> bool:
     """
     Check if user has permission to subscribe to a topic.
 
     Args:
         user: User or AnonymousUser instance
         topic: Topic name (e.g., 'aircraft', 'alerts', 'safety')
+        scopes: connecting API key's scope list (falsy = unscoped = full perms)
 
     Returns:
         True if user has permission, False otherwise
     """
     auth_mode = getattr(settings, "AUTH_MODE", "hybrid")
 
-    # Public mode - all permissions granted
+    # Public mode - all permissions granted (no key identity is established in
+    # public mode, so there is nothing to scope-restrict here)
     if auth_mode == "public":
         return True
 
@@ -88,16 +105,23 @@ async def check_topic_permission(user: User | AnonymousUser, topic: str) -> bool
         logger.warning(f"Unknown topic requested: {topic}")
         return False
 
+    # A scoped API key must not exceed its granted scopes, even for a privileged
+    # owning user (mirrors REST). Enforced before the superuser bypass below.
+    if scope_denies(scopes, permission):
+        logger.warning(f"API key scopes do not cover topic permission {permission}")
+        return False
+
     return await _check_permission(user, permission)
 
 
-async def check_request_permission(user: User | AnonymousUser, request_type: str) -> bool:
+async def check_request_permission(user: User | AnonymousUser, request_type: str, scopes: list | None = None) -> bool:
     """
     Check if user has permission to make a specific request.
 
     Args:
         user: User or AnonymousUser instance
         request_type: Request type (e.g., 'get_aircraft', 'create_alert')
+        scopes: connecting API key's scope list (falsy = unscoped = full perms)
 
     Returns:
         True if user has permission, False otherwise
@@ -114,6 +138,10 @@ async def check_request_permission(user: User | AnonymousUser, request_type: str
     if not permission:
         # Unknown request type - deny by default
         logger.warning(f"Unknown request type: {request_type}")
+        return False
+
+    if scope_denies(scopes, permission):
+        logger.warning(f"API key scopes do not cover request permission {permission}")
         return False
 
     return await _check_permission(user, permission)

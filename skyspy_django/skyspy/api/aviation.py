@@ -59,7 +59,7 @@ class AviationViewSet(viewsets.ViewSet):
     }
     _GEODATA_ACTIONS = {"geojson", "terrain_elevation", "terrain_grid"}
     # LLM-backed explainers (cost money) — require AI access + rate-limit.
-    _LLM_ACTIONS = {"explain"}
+    _LLM_ACTIONS = {"explain", "airmet_brief"}
 
     # RBAC-gated feature actions. These are gated on the `wildfires` / `weather`
     # FeatureAccess feature (via FeatureBasedPermission) so they honor role

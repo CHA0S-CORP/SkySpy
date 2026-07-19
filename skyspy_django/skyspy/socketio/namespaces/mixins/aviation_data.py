@@ -2,6 +2,7 @@
 
 import logging
 from datetime import timedelta
+from math import cos, pi
 
 from asgiref.sync import sync_to_async
 from django.conf import settings
@@ -133,7 +134,10 @@ class AviationDataMixin:
         limit = parse_int_param(params.get("limit"), 20, min_val=1, max_val=100)
 
         lat_delta = radius_nm / 60
-        lon_delta = radius_nm / 60
+        # cos(lat) longitude correction — a degree of longitude shrinks with
+        # latitude, so without this the box is too narrow E/W and airports/navaids/
+        # airspace east & west of the feeder silently drop (matches _get_pireps).
+        lon_delta = radius_nm / (60.0 * max(cos(lat * pi / 180), 0.1))
 
         queryset = CachedAirport.objects.filter(
             latitude__gte=lat - lat_delta,
@@ -196,7 +200,10 @@ class AviationDataMixin:
         limit = parse_int_param(params.get("limit"), 50, min_val=1, max_val=200)
 
         lat_delta = radius_nm / 60
-        lon_delta = radius_nm / 60
+        # cos(lat) longitude correction — a degree of longitude shrinks with
+        # latitude, so without this the box is too narrow E/W and airports/navaids/
+        # airspace east & west of the feeder silently drop (matches _get_pireps).
+        lon_delta = radius_nm / (60.0 * max(cos(lat * pi / 180), 0.1))
 
         queryset = CachedNavaid.objects.filter(
             latitude__gte=lat - lat_delta,
@@ -238,7 +245,10 @@ class AviationDataMixin:
             radius_nm = 100.0
 
         lat_delta = radius_nm / 60
-        lon_delta = radius_nm / 60
+        # cos(lat) longitude correction — a degree of longitude shrinks with
+        # latitude, so without this the box is too narrow E/W and airports/navaids/
+        # airspace east & west of the feeder silently drop (matches _get_pireps).
+        lon_delta = radius_nm / (60.0 * max(cos(lat * pi / 180), 0.1))
 
         queryset = AirspaceBoundary.objects.filter(
             center_lat__gte=lat - lat_delta,
@@ -394,7 +404,9 @@ class AviationDataMixin:
             lon = float(lon)
             radius_nm = float(radius_nm)
             lat_delta = radius_nm / 60
-            lon_delta = radius_nm / 60
+            # cos(lat) longitude correction (see _get_airports) so the weather
+            # bbox isn't too narrow E/W at the feeder latitude.
+            lon_delta = radius_nm / (60.0 * max(cos(lat * pi / 180), 0.1))
             bbox = f"{lat - lat_delta},{lon - lon_delta},{lat + lat_delta},{lon + lon_delta}"
         except (ValueError, TypeError):
             bbox = "24,-130,50,-60"
@@ -421,7 +433,9 @@ class AviationDataMixin:
             lon = float(lon)
             radius_nm = float(radius_nm)
             lat_delta = radius_nm / 60
-            lon_delta = radius_nm / 60
+            # cos(lat) longitude correction (see _get_airports) so the weather
+            # bbox isn't too narrow E/W at the feeder latitude.
+            lon_delta = radius_nm / (60.0 * max(cos(lat * pi / 180), 0.1))
             bbox = f"{lat - lat_delta},{lon - lon_delta},{lat + lat_delta},{lon + lon_delta}"
         except (ValueError, TypeError):
             bbox = "24,-130,50,-60"

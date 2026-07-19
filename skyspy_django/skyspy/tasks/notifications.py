@@ -76,6 +76,8 @@ def send_notification_task(
             notification_type=event_type,
             icao_hex=context.get("icao") if context else None,
             callsign=context.get("callsign") if context else None,
+            title=title[:255] if title else None,
+            priority=priority,
             message=body[:500] if body else None,
             details=context,
             channel=channel,
@@ -201,9 +203,11 @@ def process_notification_queue():
             # Re-queue for delivery
             send_notification_task.delay(
                 channel_url=log_entry.channel_url,
-                title="SkysPy Notification",  # Original title not stored
+                # Preserve the original title/priority so a retried critical alert
+                # isn't downgraded to a generic "warning" titled "SkysPy Notification".
+                title=log_entry.title or "SkysPy Notification",
                 body=log_entry.message or "",
-                priority="warning",
+                priority=log_entry.priority or "info",
                 event_type=log_entry.notification_type,
                 channel_type=log_entry.channel.channel_type if log_entry.channel else "webhook",
                 channel_id=log_entry.channel_id,

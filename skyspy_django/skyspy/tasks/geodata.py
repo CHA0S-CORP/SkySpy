@@ -257,14 +257,39 @@ def cleanup_old_pireps(retention_hours: int = 24):
         return 0
 
 
+# Continental-US fallback box (minLat,minLon,maxLat,maxLon) used only when the
+# feeder location is unset — a feeder-less install keeps the old behavior.
+_CONUS_BBOX = "24,-130,50,-60"
+
+
+def _feeder_weather_bbox() -> str:
+    """AWC bbox (minLat,minLon,maxLat,maxLon) around the feeder, else CONUS.
+
+    The PIREP/METAR/TAF refresh tasks previously hardcoded the CONUS box and the
+    beat schedule calls them with no args, so a non-US feeder cached zero relevant
+    weather (breaking the weather layer + turbulence PIREP scoring). Derive the
+    box from FEEDER_LAT/LON within GEODATA_FETCH_RADIUS_NM, mirroring
+    refresh_nexrad_cache; fall back to CONUS when no feeder location is set.
+    """
+    feeder_lat = getattr(settings, "FEEDER_LAT", None)
+    feeder_lon = getattr(settings, "FEEDER_LON", None)
+    if feeder_lat is None or feeder_lon is None:
+        return _CONUS_BBOX
+    radius_nm = getattr(settings, "GEODATA_FETCH_RADIUS_NM", 250) or 250
+    deg = radius_nm / 60.0
+    return f"{feeder_lat - deg},{feeder_lon - deg},{feeder_lat + deg},{feeder_lon + deg}"
+
+
 @shared_task(bind=True, max_retries=3)
 @singleton_task(timeout=600)
-def refresh_pireps(self, bbox: str = "24,-130,50,-60", hours: int = 6):
+def refresh_pireps(self, bbox: str = None, hours: int = 6):
     """
     Fetch PIREPs from Aviation Weather Center and store in database.
 
-    Runs every 10 minutes.
+    Runs every 10 minutes. bbox defaults to a box around the feeder location.
     """
+    if bbox is None:
+        bbox = _feeder_weather_bbox()
     from datetime import datetime
 
     from skyspy.socketio.utils import sync_emit
@@ -297,15 +322,18 @@ def refresh_pireps(self, bbox: str = "24,-130,50,-60", hours: int = 6):
 
 @shared_task(bind=True, max_retries=3)
 @singleton_task(timeout=600)
-def refresh_metars(self, bbox: str = "24,-130,50,-60", hours: int = 2):
+def refresh_metars(self, bbox: str = None, hours: int = 2):
     """
     Fetch METARs from Aviation Weather Center and cache them.
 
-    Runs every 10 minutes.
+    Runs every 10 minutes. bbox defaults to a box around the feeder location.
     """
     from datetime import datetime
 
     from skyspy.socketio.utils import sync_emit
+
+    if bbox is None:
+        bbox = _feeder_weather_bbox()
 
     logger.info("Fetching METARs from Aviation Weather Center")
 
@@ -336,12 +364,15 @@ def refresh_metars(self, bbox: str = "24,-130,50,-60", hours: int = 2):
 
 @shared_task(bind=True, max_retries=3)
 @singleton_task(timeout=900)
-def refresh_tafs(self, bbox: str = "24,-130,50,-60"):
+def refresh_tafs(self, bbox: str = None):
     """
     Fetch TAFs from Aviation Weather Center and cache them.
 
-    Runs every 30 minutes.
+    Runs every 30 minutes. bbox defaults to a box around the feeder location.
     """
+    if bbox is None:
+        bbox = _feeder_weather_bbox()
+
     logger.info("Fetching TAFs from Aviation Weather Center")
 
     try:

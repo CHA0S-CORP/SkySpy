@@ -100,3 +100,15 @@ class GeodataRateThrottle(_ConfiguredScopeThrottle):
 
     scope = "geodata"
     default_rate = "60/minute"
+
+
+class AlertWriteRateThrottle(_ConfiguredScopeThrottle):
+    """Limit for alert-rule mutations (create/update/toggle/bulk/import).
+
+    Uses its own scope rather than the login `auth` scope so alert CRUD volume
+    never shares the brute-force login bucket. Reads (list/my-rules/export) stay
+    on the global user/anon throttles.
+    """
+
+    scope = "alert_write"
+    default_rate = "60/minute"
