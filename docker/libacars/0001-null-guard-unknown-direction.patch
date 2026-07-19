@@ -1,0 +1,38 @@
+diff --git a/libacars/adsc.c b/libacars/adsc.c
+index df04b63..5c572ed 100644
+--- a/libacars/adsc.c
++++ b/libacars/adsc.c
+@@ -1690,7 +1690,12 @@ la_proto_node *la_adsc_parse(uint8_t const *buf, int len, la_msg_dir msg_dir, la
+ 		tag_table = la_adsc_uplink_tag_descriptor_table;
+ 	else if(msg_dir == LA_MSG_DIR_AIR2GND)
+ 		tag_table = la_adsc_downlink_tag_descriptor_table;
+-	la_assert(tag_table != NULL);
++	// Unknown/unsupported direction leaves tag_table NULL; la_assert() is a
++	// no-op in release builds, so guard it or la_adsc_tag_parse() NULL-derefs.
++	if(tag_table == NULL) {
++		msg->err = true;
++		return node;
++	}
+ 
+ 	msg->err = false;
+ 	switch(imi) {
+diff --git a/libacars/cpdlc.c b/libacars/cpdlc.c
+index ba9a56e..17cf40a 100644
+--- a/libacars/cpdlc.c
++++ b/libacars/cpdlc.c
+@@ -35,7 +35,14 @@ la_proto_node *la_cpdlc_parse(uint8_t const *buf, int len, la_msg_dir msg_dir) {
+ 	} else if(msg_dir == LA_MSG_DIR_AIR2GND) {
+ 		msg->asn_type = &asn_DEF_FANSATCDownlinkMessage;
+ 	}
+-	la_assert(msg->asn_type != NULL);
++	// Unknown/unsupported direction leaves asn_type NULL. Release builds compile
++	// la_assert() to a no-op, so without this guard the dereferences below
++	// (msg->asn_type->name, la_asn1_decode_as) SIGSEGV the whole process on
++	// malformed/unknown-direction CPDLC payloads.
++	if(msg->asn_type == NULL) {
++		msg->err = true;
++		return node;
++	}
+ 	if(len == 0) {
+ 		// empty payload is not an error
+ 		la_debug_print(D_INFO, "Empty CPDLC message, decoding skipped\n");

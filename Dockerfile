@@ -26,8 +26,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
+# Patch libacars before building: v2.2.0 (latest release, no upstream fix)
+# SIGSEGVs on malformed / unknown-direction CPDLC and ADS-C payloads. la_cpdlc_parse
+# / la_adsc_parse leave their ASN.1 descriptor / tag-table NULL for
+# LA_MSG_DIR_UNKNOWN and only guard it with la_assert(), which the Release build
+# compiles to a no-op — so the decoder dereferences NULL and crashes the process.
+# The patch adds a real NULL guard that returns an error node instead.
+COPY docker/libacars/0001-null-guard-unknown-direction.patch /tmp/libacars-nullguard.patch
 RUN git clone --depth 1 --branch v2.2.0 https://github.com/szpajder/libacars.git /tmp/libacars \
     && cd /tmp/libacars \
+    && git apply /tmp/libacars-nullguard.patch \
     && mkdir build && cd build \
     && cmake -DCMAKE_BUILD_TYPE=Release .. \
     && make -j$(nproc) \
