@@ -68,6 +68,7 @@ flowchart LR
 | 🏁 | [**Quick Start**](./00-quick-start.md) | Get running in 5 minutes with Docker |
 | 🏗️ | [**Overview**](./01-overview.md) | Architecture, tech stack, core concepts |
 | ⚙️ | [**Configuration**](./02-configuration.md) | Complete environment and settings reference |
+| 📡 | [**Open Data Feeds**](./22-open-data-feeds.md) | Run with real aircraft + ACARS, no hardware |
 
 ---
 

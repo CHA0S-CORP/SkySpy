@@ -225,7 +225,7 @@ SkySpy is a sophisticated aircraft tracking platform that captures position data
 - Docker & Docker Compose
 - Python 3.12+ (for local development)
 - Node.js 20+ (for local development)
-- ADS-B receiver (Ultrafeeder/readsb/dump1090)
+- ADS-B receiver (Ultrafeeder/readsb/dump1090) — **optional**: run with no hardware on keyless open data ([guide](docs/22-open-data-feeds.md))
 
 ### Docker Compose (Recommended)
 
@@ -479,11 +479,11 @@ skyspy/
 
 ## Data Sources
 
-- **Aircraft Positions:** Ultrafeeder (readsb/dump1090) JSON API
+- **Aircraft Positions:** Ultrafeeder (readsb/dump1090) JSON API, or keyless community feed (adsb.lol/adsb.fi/airplanes.live) via `AIRCRAFT_STREAM_MODE=adsblol` — no hardware
 - **UAT Positions:** dump978 for 978MHz reception
 - **Aircraft Info:** hexdb.io, OpenSky Network, Planespotters.net
 - **Aviation Weather:** Aviation Weather Center (aviationweather.gov)
-- **ACARS/VDL2:** dumpvdl2, acarsdec receivers
+- **ACARS/VDL2:** dumpvdl2, acarsdec receivers, or the keyless airframes.io firehose via `AIRFRAMES_ACARS_ENABLED=True` — no hardware
 
 ## Contributing
 

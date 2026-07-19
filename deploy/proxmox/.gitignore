@@ -1,0 +1,6 @@
+# Secrets / generated artifacts — never commit
+.env
+.admin_password
+id_ed25519
+id_ed25519.pub
+.known_hosts

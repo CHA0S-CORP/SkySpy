@@ -1,0 +1,53 @@
+# Overlay merged on top of the repo docker-compose.yml on the VM:
+#   docker compose -f docker-compose.yml \
+#                  -f deploy/proxmox/docker-compose.prod.yml \
+#                  --profile acars up -d --build
+#
+# Adds the reverse proxy (service name "skyspy" so the Cloudflare tunnel's
+# http://skyspy:80 resolves on the shared network) and the cloudflared connector.
+# The --profile acars flag brings up acars-listener, which runs `manage.py
+# run_acars` = the airframes.io firehose poller (no local UDP radio required).
+
+services:
+  # The repo's prod docker-compose.yml passes env via explicit `environment:`
+  # interpolation and does NOT forward the newer feature vars (adsblol stream,
+  # airframes ACARS, Watch Duty, wildfires, DEV_MODE, OpenAIP, CSRF origins).
+  # Attach the generated .env as an env_file so those reach the containers; the
+  # base `environment:` block still wins for core infra (DATABASE_URL, REDIS_URL).
+  # NOTE: this Compose build interpolates env_file values, so any literal `$` in
+  # a secret must be escaped as `$$` in .env (gen-env.sh / setup handles this),
+  # else Compose treats `$word` as a variable and blanks it in the container.
+  api:
+    env_file: [.env]
+  celery-worker:
+    env_file: [.env]
+  celery-beat:
+    env_file: [.env]
+  acars-listener:
+    env_file: [.env]
+
+  # Reverse proxy. MUST be named `skyspy` — the tunnel ingress points at
+  # http://skyspy:80 and resolves it via docker DNS on skyspy-network.
+  skyspy:
+    image: nginx:alpine
+    container_name: skyspy-nginx
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "80:80"          # LAN access on the VM; Cloudflare reaches it in-network
+    volumes:
+      - ./deploy/proxmox/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - skyspy-network
+
+  # Cloudflare named tunnel (remote-managed ingress: radar.chaos.navy -> skyspy:80).
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: skyspy-cloudflared
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      - skyspy
+    networks:
+      - skyspy-network

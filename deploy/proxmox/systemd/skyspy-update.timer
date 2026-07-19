@@ -1,0 +1,12 @@
+[Unit]
+Description=Poll for new SkySpy releases every 5 minutes
+
+[Timer]
+# First run 2 min after boot, then every 5 min. Jitter avoids hammering GHCR.
+OnBootSec=2min
+OnUnitActiveSec=5min
+RandomizedDelaySec=30
+Persistent=true
+
+[Install]
+WantedBy=timers.target
