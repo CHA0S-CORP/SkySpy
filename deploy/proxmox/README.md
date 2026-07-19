@@ -54,6 +54,33 @@ OIDCClaimMapping.objects.update_or_create(
 "
 ```
 
+## Auto-update on release
+
+`skyspy-update.timer` polls GHCR every 5 min and, on a new `:latest` digest,
+pulls + recreates the app services (`skyspy-update.sh`; migrations re-run via the
+api entrypoint). It's currently **disabled** because `ghcr.io/cha0s-corp/skyspy:latest`
+carries an unrelated image (uvicorn/atc-whisper), not the Django backend — the
+updater has a guard that refuses any image lacking `/app/manage.py`, so it can't
+crash-loop the stack even if enabled early.
+
+Re-enable once the release pipeline publishes the correct Django API image:
+
+```bash
+sudo systemctl enable --now skyspy-update.timer
+systemctl list-timers skyspy-update.timer
+```
+
+The stack currently runs images built from source on the VM (base + prod
+overlays). The release overlay (`docker-compose.release.yml`) switches to the
+GHCR image and is what the updater targets.
+
+## Public-radar feature access
+
+`set-public-features.sh` (run by `deploy.sh`) makes `aircraft safety history
+acars weather wildfires` publicly readable while `assistant`/AI, `system`,
+`users`, `roles`, `alerts`, `audio`, `cannonball` stay login-gated. Re-run it
+after any DB rebuild (FeatureAccess resets to `authenticated` on migration).
+
 ## Verify
 
 ```bash

@@ -25,6 +25,15 @@ if [ "$before" = "$after" ] && [ -n "$before" ]; then
   exit 0
 fi
 
+# Sanity guard: only deploy an image that is actually the SkySpy Django backend.
+# The ghcr `skyspy` package has been observed carrying an unrelated image
+# (uvicorn app.main:app) which crash-loops this stack. Refuse anything without
+# the Django entrypoint so a premature re-enable can't take the site down.
+if ! sudo docker run --rm --entrypoint sh "$IMAGE" -c 'test -f /app/manage.py' 2>/dev/null; then
+  log "REFUSING: pulled image ${after} is not the SkySpy Django app (no /app/manage.py)"
+  exit 0
+fi
+
 log "new image ${after} (was ${before:-none}) — recreating app services"
 # Recreate only the app services; postgres/redis/nginx/cloudflared untouched.
 "$CTL" up -d api celery-worker celery-beat acars-listener
