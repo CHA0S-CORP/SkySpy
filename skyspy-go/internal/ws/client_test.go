@@ -1186,25 +1186,29 @@ func TestClient_ChannelBuffer(t *testing.T) {
 	client.Start()
 	defer client.Stop()
 
-	// Wait for some messages
-	time.Sleep(500 * time.Millisecond)
-
-	// Drain the channel and count messages
+	// Drain as the server sends. The read loop now applies backpressure (blocks
+	// on a full channel) instead of dropping, so a live consumer receives more
+	// than the 100-message buffer — the old drop-on-full path capped at <=100.
 	received := 0
+	idle := time.NewTimer(750 * time.Millisecond)
+	defer idle.Stop()
+drain:
 	for {
 		select {
 		case <-client.AircraftMessages():
 			received++
-		default:
-			goto done
+			if !idle.Stop() {
+				<-idle.C
+			}
+			idle.Reset(750 * time.Millisecond)
+		case <-idle.C:
+			break drain
 		}
 	}
-done:
 
-	// We should receive at most buffer size (100) messages
-	// Some may be dropped due to full channel
-	if received > 100 {
-		t.Errorf("Received more than buffer size: %d", received)
+	// A single buffer's worth (150 sent) exceeds the 100 cap, proving no silent drop.
+	if received <= 100 {
+		t.Errorf("Expected backpressure to deliver more than the 100 buffer, got %d", received)
 	}
 }
 

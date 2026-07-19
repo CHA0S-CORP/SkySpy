@@ -1,6 +1,7 @@
 package airband
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -67,7 +68,7 @@ func TestUploader_SuccessfulUpload(t *testing.T) {
 		HasFrequency: true,
 	}
 
-	if !uploader.Upload(meta) {
+	if !uploader.Upload(context.Background(), meta) {
 		t.Error("expected upload to succeed")
 	}
 }
@@ -99,7 +100,7 @@ func TestUploader_NonRetryable400(t *testing.T) {
 		FileSize:    5000,
 	}
 
-	if uploader.Upload(meta) {
+	if uploader.Upload(context.Background(), meta) {
 		t.Error("expected upload to fail on 400")
 	}
 }
@@ -131,7 +132,7 @@ func TestUploader_NonRetryable413(t *testing.T) {
 		FileSize:    5000,
 	}
 
-	if uploader.Upload(meta) {
+	if uploader.Upload(context.Background(), meta) {
 		t.Error("expected upload to fail on 413")
 	}
 }
@@ -168,7 +169,7 @@ func TestUploader_AuthHeaderSent(t *testing.T) {
 		FileSize:    5000,
 	}
 
-	uploader.Upload(meta)
+	uploader.Upload(context.Background(), meta)
 
 	if gotAuth != "ApiKey sk_test123" {
 		t.Errorf("expected auth header 'ApiKey sk_test123', got '%s'", gotAuth)

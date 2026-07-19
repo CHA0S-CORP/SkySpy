@@ -14,8 +14,10 @@ type AlertEngine struct {
 	geofenceManager *GeofenceManager
 
 	// Aircraft state tracking for geofence entry detection
-	prevStates map[string]*AircraftState
-	mutex      sync.RWMutex
+	prevStates     map[string]*AircraftState
+	prevStateSeen  map[string]time.Time
+	stateRetention time.Duration
+	mutex          sync.RWMutex
 
 	// Alert history
 	recentAlerts    []TriggeredAlert
@@ -32,6 +34,8 @@ func NewAlertEngine() *AlertEngine {
 		ruleSet:             NewRuleSet(),
 		geofenceManager:     NewGeofenceManager(),
 		prevStates:          make(map[string]*AircraftState),
+		prevStateSeen:       make(map[string]time.Time),
+		stateRetention:      time.Minute * 5,
 		recentAlerts:        []TriggeredAlert{},
 		maxRecentAlerts:     50,
 		highlightedAircraft: make(map[string]time.Time),
@@ -113,6 +117,7 @@ func (e *AlertEngine) CheckAircraft(state, prevState *AircraftState) []Triggered
 	// Update previous state tracking
 	e.mutex.Lock()
 	e.prevStates[state.Hex] = state
+	e.prevStateSeen[state.Hex] = time.Now()
 	e.mutex.Unlock()
 
 	// Record alerts in history
@@ -342,6 +347,14 @@ func (e *AlertEngine) CleanupOldData() {
 		}
 	}
 
+	// Clean up stale aircraft state tracking (aircraft that have disappeared)
+	for hex, seen := range e.prevStateSeen {
+		if now.Sub(seen) > e.stateRetention {
+			delete(e.prevStates, hex)
+			delete(e.prevStateSeen, hex)
+		}
+	}
+
 	// Clean up old rule triggers
 	e.ruleSet.ClearAllOldTriggers()
 }
@@ -351,6 +364,7 @@ func (e *AlertEngine) RemoveAircraftState(hex string) {
 	e.mutex.Lock()
 	defer e.mutex.Unlock()
 	delete(e.prevStates, hex)
+	delete(e.prevStateSeen, hex)
 }
 
 // HasAction checks if any triggered alert has a specific action type

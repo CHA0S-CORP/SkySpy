@@ -281,10 +281,14 @@ func (c *Client) runConnection(url string, msgCh chan<- Message, topic string, s
 				continue
 			}
 
+			// Block (backpressure) rather than dropping: silently discarding a
+			// snapshot/remove message leaves ghost targets in the map. Still bail
+			// out promptly on shutdown.
 			select {
 			case msgCh <- msg:
-			default:
-				// Channel full, skip message
+			case <-c.stopCh:
+				conn.Close()
+				return
 			}
 		}
 

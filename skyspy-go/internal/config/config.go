@@ -232,7 +232,7 @@ func DefaultConfig() *Config {
 		},
 		Connection: ConnectionSettings{
 			Host:           "localhost",
-			Port:           80,
+			Port:           8000,
 			ReceiverLat:    0.0,
 			ReceiverLon:    0.0,
 			AutoReconnect:  true,

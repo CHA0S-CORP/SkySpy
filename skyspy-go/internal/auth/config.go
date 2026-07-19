@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"time"
 )
 
@@ -77,12 +78,12 @@ func FetchAuthConfig(baseURL string) (*AuthConfig, error) {
 func GetOIDCAuthorizationURL(baseURL, redirectURI string) (*OIDCAuthorizeResponse, error) {
 	client := &http.Client{Timeout: 10 * time.Second}
 
-	url := baseURL + "/api/v1/auth/oidc/authorize"
+	reqURL := baseURL + "/api/v1/auth/oidc/authorize"
 	if redirectURI != "" {
-		url += "?redirect_uri=" + redirectURI
+		reqURL += "?redirect_uri=" + url.QueryEscape(redirectURI)
 	}
 
-	resp, err := client.Get(url)
+	resp, err := client.Get(reqURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get OIDC auth URL: %w", err)
 	}

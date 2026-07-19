@@ -3,6 +3,7 @@ package alerts
 
 import (
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -195,70 +196,20 @@ func MatchesWildcard(pattern, value string) bool {
 
 // ParseFloat parses a string to float64, returns 0 on error
 func ParseFloat(s string) float64 {
-	var result float64
-Loop:
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		switch {
-		case c >= '0' && c <= '9':
-			result = result*10 + float64(c-'0')
-		case c == '.':
-			// Parse decimal part
-			decimal := 0.1
-			for j := i + 1; j < len(s); j++ {
-				ch := s[j]
-				if ch >= '0' && ch <= '9' {
-					result += float64(ch-'0') * decimal
-					decimal *= 0.1
-				} else {
-					break
-				}
-			}
-			return result * negMultiplier(s)
-		case c == '-' && i == 0:
-			// Negative number handled at end
-			continue
-		default:
-			break Loop
-		}
+	f, err := strconv.ParseFloat(strings.TrimSpace(s), 64)
+	if err != nil {
+		return 0
 	}
-
-	return result * negMultiplier(s)
-}
-
-// negMultiplier returns -1 if string starts with '-', 1 otherwise
-func negMultiplier(s string) float64 {
-	if s != "" && s[0] == '-' {
-		return -1
-	}
-	return 1
+	return f
 }
 
 // ParseInt parses a string to int, returns 0 on error
 func ParseInt(s string) int {
-	var result int
-	negative := false
-
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		switch {
-		case c >= '0' && c <= '9':
-			result = result*10 + int(c-'0')
-		case c == '-' && i == 0:
-			negative = true
-		default:
-			if negative {
-				return -result
-			}
-			return result
-		}
+	n, err := strconv.Atoi(strings.TrimSpace(s))
+	if err != nil {
+		return 0
 	}
-
-	if negative {
-		result = -result
-	}
-
-	return result
+	return n
 }
 
 // DefaultAlertRules returns the default alert rules

@@ -2,6 +2,7 @@ package airband
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"log/slog"
@@ -11,6 +12,10 @@ import (
 	"strconv"
 	"time"
 )
+
+// maxUploadBackoff caps the exponential retry backoff so a large maxRetries
+// can't produce a multi-day (or, past a 63-bit shift, overflowing) sleep.
+const maxUploadBackoff = 30 * time.Second
 
 // AuthProvider returns an Authorization header value (e.g. "Bearer xxx" or "ApiKey sk_xxx").
 type AuthProvider func() (string, error)
@@ -41,8 +46,9 @@ func NewUploader(host string, port, timeout, maxRetries int, authProvider AuthPr
 }
 
 // Upload sends a recording to POST /api/v1/audio/upload/ with retry and
-// exponential backoff. Returns true on success.
-func (u *Uploader) Upload(meta FileMetadata) bool {
+// exponential backoff. Returns true on success. Backoff sleeps abort early when
+// ctx is canceled so shutdown isn't delayed by an in-flight retry.
+func (u *Uploader) Upload(ctx context.Context, meta FileMetadata) bool {
 	channel := meta.ChannelName
 
 	if u.metrics != nil {
@@ -88,9 +94,20 @@ func (u *Uploader) Upload(meta FileMetadata) bool {
 		}
 
 		if attempt < u.maxRetries {
-			backoff := time.Duration(1<<uint(attempt)) * time.Second // 2s, 4s, 8s...
+			backoff := maxUploadBackoff
+			if attempt < 30 { // guard the shift; 1<<30 s already far exceeds the cap
+				if b := time.Duration(1<<uint(attempt)) * time.Second; b < backoff { // 2s, 4s, 8s...
+					backoff = b
+				}
+			}
 			u.logger.Info("retrying after backoff", "attempt", attempt, "backoff", backoff)
-			time.Sleep(backoff)
+			timer := time.NewTimer(backoff)
+			select {
+			case <-timer.C:
+			case <-ctx.Done():
+				timer.Stop()
+				return false
+			}
 		}
 	}
 
