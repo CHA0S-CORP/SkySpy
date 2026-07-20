@@ -140,12 +140,19 @@ class MainNamespace(
         # ACARS
         "acars-stats": "acars.view",
         "acars-snapshot": "acars.view",
-        # Aviation data
-        "airports": "airspace.view",
-        "navaids": "airspace.view",
-        "airspaces": "airspace.view",
-        "airspace-boundaries": "airspace.view",
-        "boundaries": "airspace.view",
+        # Aviation reference data (airports/navaids/airspace/AIRMET overlays).
+        # These map layers are public reference data — the REST equivalents in
+        # api/aviation.py are AllowAny. They were gated on "airspace.view", which
+        # does NOT exist in the RBAC model (no airspace feature/permission), so
+        # every non-superuser (and every anonymous hybrid visitor) was default-
+        # denied and the layers rendered empty. Gate them on the public
+        # "weather.view" feature instead — matching the sibling pireps/metars/tafs
+        # overlays below and the AllowAny REST intent.
+        "airports": "weather.view",
+        "navaids": "weather.view",
+        "airspaces": "weather.view",
+        "airspace-boundaries": "weather.view",
+        "boundaries": "weather.view",
         "wildfires": "wildfires.view",
         "pireps": "weather.view",
         "metars": "weather.view",

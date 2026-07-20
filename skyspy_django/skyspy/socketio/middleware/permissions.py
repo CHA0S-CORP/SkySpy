@@ -30,7 +30,9 @@ TOPIC_PERMISSIONS = {
     "audio": "audio.view",
     "system": "system.view_status",
     "stats": "stats.view",
-    "airspace": "airspace.view",
+    # Public map reference data — gate on the existing public "weather.view", not
+    # the nonexistent "airspace.view" that default-denied all non-superusers.
+    "airspace": "weather.view",
     "notams": "notams.view",
 }
 
