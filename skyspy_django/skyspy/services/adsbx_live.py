@@ -224,6 +224,9 @@ def get_aircraft_by_squawk(squawk: str) -> list[dict[str, Any]]:
     if not _is_enabled():
         return []
 
+    # Normalize before keying/URL-building like the sibling getters, so ' 7700'
+    # and '7700' don't create two cache entries + two upstream RapidAPI calls.
+    squawk = squawk.strip()
     cache_key = f"adsbx_squawk_{squawk}"
 
     cached = cache.get(cache_key)

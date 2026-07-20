@@ -503,6 +503,10 @@ class MainNamespace(
                 logger.error(f"Failed to send aircraft snapshot to {sid}: {e}", exc_info=True)
 
         for topic in ("safety", "alerts", "acars", "notams"):
+            # Normal path stores concrete topics (on_subscribe expands "all"), but
+            # keep the literal "all" fallback: a session whose subscribed set holds
+            # "all" (set directly, as in the initial-state contract/tests) gets
+            # every snapshot.
             if topic in subscribed or "all" in subscribed:
                 try:
                     await self._emit_cached_snapshot(sid, topic)

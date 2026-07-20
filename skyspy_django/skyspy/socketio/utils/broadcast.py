@@ -308,7 +308,7 @@ def broadcast_to_all(
 
 def broadcast_aircraft_update(
     aircraft_data: dict,
-    room: str = "aircraft:live",
+    room: str = "topic_aircraft",
     namespace: str = "/",
 ) -> bool:
     """
@@ -319,7 +319,8 @@ def broadcast_aircraft_update(
 
     Args:
         aircraft_data: The aircraft data dict (icao, position, altitude, etc.)
-        room: The room for aircraft updates (default 'aircraft:live')
+        room: The room for aircraft updates (default 'topic_aircraft' — the room
+            clients actually join via _join_default_rooms; NOT 'aircraft:live')
         namespace: The Socket.IO namespace (default '/')
 
     Returns:
@@ -335,7 +336,7 @@ def broadcast_aircraft_update(
 
 def broadcast_safety_event(
     event_data: dict,
-    room: str = "safety",
+    room: str = "topic_safety",
     namespace: str = "/",
 ) -> bool:
     """
@@ -346,7 +347,8 @@ def broadcast_safety_event(
 
     Args:
         event_data: The safety event data dict
-        room: The room for safety events (default 'safety')
+        room: The room for safety events (default 'topic_safety' — the room
+            clients actually join on the safety subscription; NOT 'safety')
         namespace: The Socket.IO namespace (default '/')
 
     Returns:

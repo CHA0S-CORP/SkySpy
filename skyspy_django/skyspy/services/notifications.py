@@ -72,6 +72,24 @@ def _is_blocked_ip(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
     return any(ip in blocked_range for blocked_range in _BLOCKED_IP_RANGES)
 
 
+def webhook_delivery_allowed(url: str) -> bool:
+    """Gate apprise delivery at the choke point (SSRF prevention).
+
+    Only http/https webhook targets are SSRF-validated (a rule webhook can point
+    at an internal IP with no other validation); native apprise schemes
+    (discord://, slack://, tgram://, mailto://, …) are not SSRF sinks and pass
+    through. Mirrors the _is_safe_url guard the alerts.py path already applies,
+    so no routing entry can bypass it.
+    """
+    try:
+        scheme = urlparse(url).scheme.lower()
+    except (ValueError, AttributeError):
+        return False
+    if scheme in ("http", "https"):
+        return _is_safe_url(url)
+    return True
+
+
 def _is_safe_url(url: str) -> bool:
     """
     Validate that a URL is safe to use as a webhook destination.

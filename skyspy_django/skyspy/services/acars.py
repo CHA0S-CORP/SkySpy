@@ -151,7 +151,8 @@ class AcarsService:
     def _compute_message_hash(self, msg: dict) -> str:
         """Compute hash for message deduplication.
 
-        Uses timestamp (rounded to second), icao_hex, label, and first 50 chars of text.
+        Uses timestamp (rounded to second), icao_hex, label, the frame sequence
+        identifiers (block_id/msg_num/ack), and first 50 chars of text.
         """
         ts = msg.get("timestamp", 0)
         if isinstance(ts, float):
@@ -159,8 +160,14 @@ class AcarsService:
         icao = msg.get("icao_hex", "") or ""
         label = msg.get("label", "") or ""
         text = (msg.get("text", "") or "")[:50]
+        # Include frame sequence identifiers so two distinct same-second frames
+        # with the same label and empty/identical text (common on the airframes.io
+        # firehose) are not collapsed into one and silently dropped.
+        block_id = msg.get("block_id", "") or ""
+        msg_num = msg.get("msg_num", "") or ""
+        ack = msg.get("ack", "") or ""
 
-        key = f"{ts}:{icao}:{label}:{text}"
+        key = f"{ts}:{icao}:{label}:{block_id}:{msg_num}:{ack}:{text}"
         return hashlib.sha256(key.encode()).hexdigest()[:32]  # Truncate to 32 chars for efficiency
 
     def _is_duplicate(self, msg: dict, source: str) -> bool:
@@ -325,7 +332,18 @@ class AcarsService:
         lon = station.get("longitude")
         if lat is None or lon is None:
             lat, lon = station.get("geoipLatitude"), station.get("geoipLongitude")
-        if lat is not None and lon is not None and self._af_radius_nm > 0 and self._af_lat is not None:
+        if (
+            lat is not None
+            and lon is not None
+            and self._af_radius_nm > 0
+            and self._af_lat is not None
+            and self._af_lon is not None  # both center coords required; guard the haversine deref
+        ):
+            try:
+                lat, lon = float(lat), float(lon)
+            except (TypeError, ValueError):
+                # A bad/string station coord shouldn't abort the whole poll batch.
+                return False
             return self._haversine_nm(self._af_lat, self._af_lon, lat, lon) <= self._af_radius_nm
         return False
 
@@ -356,6 +374,7 @@ class AcarsService:
             "station_id": station.get("ident"),
             "depa": m.get("departingAirport"),
             "dsta": m.get("destinationAirport"),
+            "eta": m.get("eta") or flight.get("eta"),
         }
         return source, flat
 
@@ -656,6 +675,9 @@ class AcarsService:
                     mode=msg.get("mode"),
                     text=msg.get("text"),
                     decoded=None,  # Decoded in background via Celery
+                    depa=msg.get("depa"),
+                    dsta=msg.get("dsta"),
+                    eta=str(msg["eta"]) if msg.get("eta") is not None else None,
                     signal_level=msg.get("signal_level"),
                     noise_level=msg.get("noise_level"),
                     error_count=msg.get("error_count"),

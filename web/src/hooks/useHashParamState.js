@@ -1,4 +1,4 @@
-import { useCallback, useRef, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react';
 import { getHashParams, setHashParams } from '../lib/hashRoute';
 
 // Subscribe once to the `hashchange` event (fired by real navigation AND by the
@@ -87,6 +87,12 @@ export function useHashParamState(key, defaultValue, opts = {}) {
     },
     [key]
   );
+
+  // Clear any pending debounced write on unmount so a timer that fires after the
+  // component is gone doesn't mutate the URL for a screen the user already left.
+  useEffect(() => () => {
+    if (timer.current) clearTimeout(timer.current);
+  }, []);
 
   return [value, setValue];
 }

@@ -240,7 +240,10 @@ class AlertRuleViewSet(viewsets.ModelViewSet):
         # Invalidate cache
         alert_service.invalidate_cache()
 
-        return Response(AlertRuleSerializer(rule).data, status=status.HTTP_201_CREATED)
+        # Pass request context so is_owner/can_edit/can_delete resolve correctly
+        # for the creating user (they read self.context["request"]; without it the
+        # UI hides edit/delete controls on a rule the user just created).
+        return Response(AlertRuleSerializer(rule, context={"request": request}).data, status=status.HTTP_201_CREATED)
 
     def perform_update(self, serializer):
         """Update and invalidate cache."""
@@ -270,7 +273,7 @@ class AlertRuleViewSet(viewsets.ModelViewSet):
         rule.enabled = not rule.enabled
         rule.save()
         alert_service.invalidate_cache()
-        return Response(AlertRuleSerializer(rule).data)
+        return Response(AlertRuleSerializer(rule, context={"request": request}).data)
 
     @extend_schema(summary="Get user's own rules", responses={200: AlertRuleSerializer(many=True)})
     @action(detail=False, methods=["get"], url_path="my-rules")
@@ -279,7 +282,9 @@ class AlertRuleViewSet(viewsets.ModelViewSet):
         if not request.user.is_authenticated:
             return Response({"rules": [], "count": 0})
 
-        queryset = AlertRule.objects.filter(owner=request.user)
+        # Route through get_queryset() so the serializer's channel-id and
+        # subscriber-count reads hit the prefetch/annotation instead of an N+1.
+        queryset = self.get_queryset().filter(owner=request.user)
         serializer = AlertRuleSerializer(queryset, many=True, context={"request": request})
         return Response({"rules": serializer.data, "count": queryset.count()})
 
@@ -287,8 +292,12 @@ class AlertRuleViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["get"])
     def shared(self, request):
         """Get shared rules available for subscription."""
-        queryset = AlertRule.objects.filter(visibility__in=["shared", "public"], enabled=True).exclude(
-            owner=request.user if request.user.is_authenticated else None
+        # get_queryset() adds the prefetch/annotation the serializer needs
+        # (avoids per-rule channel + subscriber-count queries).
+        queryset = (
+            self.get_queryset()
+            .filter(visibility__in=["shared", "public"], enabled=True)
+            .exclude(owner=request.user if request.user.is_authenticated else None)
         )
 
         serializer = AlertRuleSerializer(queryset, many=True, context={"request": request})
@@ -419,7 +428,7 @@ class AlertRuleViewSet(viewsets.ModelViewSet):
             serializer = AlertRuleCreateSerializer(data=rule_data)
             if serializer.is_valid():
                 rule = serializer.save(owner=request.user) if request.user.is_authenticated else serializer.save()
-                created.append(AlertRuleSerializer(rule).data)
+                created.append(AlertRuleSerializer(rule, context={"request": request}).data)
             else:
                 errors.append({"index": i, "errors": serializer.errors})
 
@@ -514,11 +523,11 @@ class AlertRuleViewSet(viewsets.ModelViewSet):
         limit = max(0, min(limit, 1000))
 
         if request.user.is_authenticated:
-            queryset = AlertRule.objects.filter(owner=request.user)[:limit]
+            queryset = self.get_queryset().filter(owner=request.user)[:limit]
         else:
-            queryset = AlertRule.objects.filter(visibility="public")[:limit]
+            queryset = self.get_queryset().filter(visibility="public")[:limit]
 
-        serializer = AlertRuleSerializer(queryset, many=True)
+        serializer = AlertRuleSerializer(queryset, many=True, context={"request": request})
         return Response(
             {
                 "rules": serializer.data,
@@ -552,7 +561,7 @@ class AlertRuleViewSet(viewsets.ModelViewSet):
             serializer = AlertRuleCreateSerializer(data=rule_data)
             if serializer.is_valid():
                 rule = serializer.save(owner=request.user) if request.user.is_authenticated else serializer.save()
-                created.append(AlertRuleSerializer(rule).data)
+                created.append(AlertRuleSerializer(rule, context={"request": request}).data)
             else:
                 errors.append({"index": i, "errors": serializer.errors})
 
@@ -578,6 +587,11 @@ class AlertSubscriptionViewSet(viewsets.ModelViewSet):
     - POST /api/v1/alerts/subscriptions/ - Subscribe to a rule (with rule_id in body)
     - DELETE /api/v1/alerts/subscriptions/{rule_id}/ - Unsubscribe from a rule
     """
+
+    # Match the sibling alert ViewSets: authenticate + gate on alert access
+    # (incl. API-key scopes) rather than inheriting the project-wide DRF default.
+    authentication_classes = [OptionalJWTAuthentication, APIKeyAuthentication]
+    permission_classes = [CanAccessAlert]
 
     queryset = AlertSubscription.objects.all()
     serializer_class = AlertSubscriptionSerializer

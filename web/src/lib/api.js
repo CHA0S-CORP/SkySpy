@@ -115,10 +115,13 @@ async function apiRequest(endpoint, options = {}) {
     params,
     headers: customHeaders = {},
     timeout = DEFAULT_TIMEOUT,
+    // For endpoints outside the /api/v1 base (e.g. /health) — skip the API_BASE
+    // prefix but keep the shared .ok/content-type/timeout/ApiError handling.
+    absolutePath = false,
   } = options;
 
   // Build URL with query parameters
-  let url = `${API_BASE}${endpoint}`;
+  let url = absolutePath ? endpoint : `${API_BASE}${endpoint}`;
   if (params) {
     const searchParams = new URLSearchParams();
     for (const [key, value] of Object.entries(params)) {
@@ -590,7 +593,7 @@ export const api = {
    * Get health check status
    * @returns {Promise<Object>} Health status of all services
    */
-  getHealthCheck: () => fetch('/health').then((r) => r.json()),
+  getHealthCheck: () => apiRequest('/health', { absolutePath: true }),
 
   /**
    * Get API information

@@ -12,7 +12,7 @@ import logging
 from celery import shared_task
 
 from skyspy.models import AcarsMessage
-from skyspy.services.acars_decoder import decode_message_text
+from skyspy.services.acars_decoder import decode_message_text, infer_acars_direction
 from skyspy.services.libacars_binding import is_available as libacars_is_available
 from skyspy.tasks.locks import singleton_task
 
@@ -45,10 +45,10 @@ def decode_acars_message(self, message_id: int):
         return
 
     try:
-        # Determine message direction
-        # In ACARS, we typically don't have explicit direction in our model
-        # Default to unknown
-        direction = 0
+        # Infer direction from the persisted block-id (digit=downlink, letter=
+        # uplink); falls back to 0/unknown. A concrete direction both improves
+        # CPDLC/ADS-C decoding and avoids the crash-prone unknown-direction path.
+        direction = infer_acars_direction({"block_id": message.block_id})
 
         # Decode the message text
         decoded = decode_message_text(
@@ -118,11 +118,14 @@ def process_acars_decode_queue():
         "80",  # OOOI events
     ]
 
+    # Oldest-first (FIFO): under sustained load a newest-first order re-selects
+    # the same recent 50 each cycle and starves older undecoded messages forever.
+    # Matches the transcription queue and the intent of the {} sentinel above.
     messages = AcarsMessage.objects.filter(
         decoded__isnull=True,
         text__isnull=False,
         label__in=decodable_labels,
-    ).order_by("-timestamp")[:50]
+    ).order_by("timestamp")[:50]
 
     queued = 0
     for message in messages:

@@ -38,6 +38,12 @@ class AcarsMessage(models.Model):
     mode = models.CharField(max_length=5, blank=True, null=True)
     text = models.TextField(blank=True, null=True)
 
+    # Route metadata (origin/destination/ETA) — parsed from the source message
+    # (notably the airframes.io firehose) and persisted instead of discarded.
+    depa = models.CharField(max_length=10, blank=True, null=True)
+    dsta = models.CharField(max_length=10, blank=True, null=True)
+    eta = models.CharField(max_length=32, blank=True, null=True)
+
     # Decoded content (for known message types)
     decoded = models.JSONField(blank=True, null=True)
 

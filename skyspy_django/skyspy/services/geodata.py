@@ -619,10 +619,19 @@ def fetch_faa_layer(url: str, envelope: str, out_fields: str, page: int, max_fea
         batch = data.get("features") if isinstance(data, dict) else None
         if not batch:
             break
+        got = len(batch)
         features.extend(batch)
-        if len(batch) < page:
+        # ArcGIS caps each response at the server's maxRecordCount (often 1000),
+        # which can be < the requested `page` (2000 for airways), and signals
+        # truncation with exceededTransferLimit — NOT by returning exactly `page`
+        # rows. Trust that flag and advance by the ACTUAL count returned, so we
+        # neither stop a page early nor loop with a mismatched offset.
+        truncated = bool(
+            data.get("exceededTransferLimit") or (data.get("properties") or {}).get("exceededTransferLimit")
+        )
+        if not truncated and got < page:
             break
-        offset += page
+        offset += got
     return features[:max_features]
 
 

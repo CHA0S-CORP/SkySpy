@@ -154,13 +154,19 @@ def get_bulk_aircraft_info(icao_list: list[str]) -> dict[str, dict]:
         except DatabaseError as e:
             logger.debug(f"Bulk database lookup failed: {type(e).__name__}: {e}")
 
-    # Remaining from in-memory databases
+    # Remaining from in-memory databases. Mirror the single get_aircraft_info
+    # path: identity gap-fill (once, rate-limited) + persist, so bulk callers get
+    # the same enriched/persisted data instead of a row recomputed every restart.
     for icao in missing_icaos:
         data = external_db.lookup_all(icao)
         if data:
             info = _normalize_external_data(icao, data)
+            attempted = False
+            if _needs_identity(info) and _can_fetch_from_api(icao):
+                info, attempted = _gap_fill_identity(icao, info)
             result[icao] = info
             _update_cache(icao, info)
+            _save_to_database(icao, info, identity_enriched=attempted)
 
     return result
 

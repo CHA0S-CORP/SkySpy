@@ -171,6 +171,18 @@ app.conf.beat_schedule = {
         "task": "skyspy.tasks.external_db.update_stale_databases",
         "schedule": 21600.0,  # 6 hours
     },
+    # Registration/ownership analysis - populate the RegistrationAnalysis table
+    # that the ownership screen + RegistrationAnalysisViewSet read from. Without
+    # these two the table stays empty and ownership analysis shows nothing. Runs
+    # after the 4 AM external-DB sync so FAA owner/registration data is loaded.
+    "analyze-new-sightings-daily": {
+        "task": "skyspy.tasks.registration_analysis.analyze_new_sightings",
+        "schedule": crontab(hour=5, minute=0),
+    },
+    "analyze-known-aircraft-daily": {
+        "task": "skyspy.tasks.registration_analysis.analyze_known_aircraft_batch",
+        "schedule": crontab(hour=5, minute=30),
+    },
     # Geographic data refresh - daily at 3:30 AM UTC
     "refresh-geodata-daily": {
         "task": "skyspy.tasks.geodata.refresh_all_geodata",
@@ -581,6 +593,9 @@ app.conf.task_routes = {
     "skyspy.tasks.analytics.refresh_acars_stats": {"queue": "polling"},
     # Unified stats aggregation (runs every 60s, combines aircraft/safety/acars stats)
     "skyspy.tasks.analytics.aggregate_all_stats": {"queue": "polling"},
+    # Cheap cache-only KPI tick (every 10s) — keep on the fast polling queue, not
+    # the default queue behind slower cleanup/monitoring work (avoids sparkline jitter).
+    "skyspy.tasks.analytics.emit_stats_tick": {"queue": "polling"},
     # Low-priority expensive analytics tasks (RPi optimization)
     "skyspy.tasks.analytics.refresh_time_comparison_stats": {"queue": "low_priority"},
     "skyspy.tasks.analytics.refresh_tracking_quality_stats": {"queue": "low_priority"},

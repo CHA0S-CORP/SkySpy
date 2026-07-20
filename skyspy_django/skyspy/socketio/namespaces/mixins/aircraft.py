@@ -223,7 +223,9 @@ class AircraftHandlerMixin:
 
         return {
             "total": len(cached),
-            "with_position": sum(1 for ac in cached if ac.get("lat")),
+            # `is not None`, not truthiness — lat/lon 0.0 (equator/prime meridian)
+            # are valid positions that truthiness would drop.
+            "with_position": sum(1 for ac in cached if ac.get("lat") is not None and ac.get("lon") is not None),
             "military": military,
             "emergency": emergency,
             "categories": categories,
@@ -235,13 +237,17 @@ class AircraftHandlerMixin:
     def _get_top_aircraft(self):
         """Get top 5 aircraft by various metrics."""
         cached = cache.get("current_aircraft", [])
-        with_position = [ac for ac in cached if ac.get("lat") and ac.get("lon")]
+        # `is not None` so lat/lon/distance/gs of 0.0 aren't dropped — e.g. an
+        # aircraft directly overhead (distance_nm == 0) is exactly the "closest".
+        with_position = [ac for ac in cached if ac.get("lat") is not None and ac.get("lon") is not None]
 
         closest = sorted(
-            [ac for ac in with_position if ac.get("distance_nm")], key=lambda x: x.get("distance_nm", 999)
+            [ac for ac in with_position if ac.get("distance_nm") is not None], key=lambda x: x.get("distance_nm", 999)
         )[:5]
 
-        fastest = sorted([ac for ac in with_position if ac.get("gs")], key=lambda x: x.get("gs", 0), reverse=True)[:5]
+        fastest = sorted(
+            [ac for ac in with_position if ac.get("gs") is not None], key=lambda x: x.get("gs", 0), reverse=True
+        )[:5]
 
         highest = sorted(
             [ac for ac in with_position if ac.get("alt_baro") or ac.get("alt")],

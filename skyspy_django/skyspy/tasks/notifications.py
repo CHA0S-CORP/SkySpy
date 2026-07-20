@@ -87,6 +87,17 @@ def send_notification_task(
         )
 
     try:
+        # SSRF gate at the delivery choke point: an http(s) webhook (e.g. a rule
+        # webhook routed here with no other validation) targeting an internal IP
+        # is blocked; native apprise schemes pass through.
+        from skyspy.services.notifications import webhook_delivery_allowed
+
+        if not webhook_delivery_allowed(channel_url):
+            logger.warning("Blocked notification delivery to unsafe webhook URL")
+            if log_entry:
+                log_entry.mark_failed("Blocked unsafe webhook URL (SSRF)")
+            return {"status": "blocked", "error": "unsafe webhook URL"}
+
         apobj = apprise.Apprise()
         apobj.add(channel_url)
 
