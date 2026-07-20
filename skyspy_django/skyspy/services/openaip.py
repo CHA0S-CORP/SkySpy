@@ -239,7 +239,11 @@ def get_airspaces(
     if not _is_enabled():
         return []
 
-    cache_key = f"openaip_airspace_{lat:.2f}_{lon:.2f}_{radius_nm}"
+    # Key on the EFFECTIVE (clamped) radius, not the requested one: the fetch
+    # below clamps to OPENAIP_MAX_DIST_M, so 100nm and 250nm return identical
+    # data — sharing one cache entry avoids redundant rate-limited fetches
+    # (OpenAIP rate-limiting to empty is a known airspace-layer failure mode).
+    cache_key = f"openaip_airspace_{lat:.2f}_{lon:.2f}_{min(radius_nm, OPENAIP_MAX_DIST_M / 1852):.0f}"
     cached = cache.get(cache_key)
     if cached:
         return cached
@@ -353,7 +357,7 @@ def get_airports(
     if not _is_enabled():
         return []
 
-    cache_key = f"openaip_airports_{lat:.2f}_{lon:.2f}_{radius_nm}"
+    cache_key = f"openaip_airports_{lat:.2f}_{lon:.2f}_{min(radius_nm, OPENAIP_MAX_DIST_M / 1852):.0f}"
     cached = cache.get(cache_key)
     if cached:
         return cached
@@ -448,7 +452,7 @@ def get_navaids(
     if not _is_enabled():
         return []
 
-    cache_key = f"openaip_navaids_{lat:.2f}_{lon:.2f}_{radius_nm}"
+    cache_key = f"openaip_navaids_{lat:.2f}_{lon:.2f}_{min(radius_nm, OPENAIP_MAX_DIST_M / 1852):.0f}"
     cached = cache.get(cache_key)
     if cached:
         return cached

@@ -1,4 +1,5 @@
 import { useCallback, useRef, useEffect } from 'react';
+import { withAuth } from '../../lib/authHeader';
 
 /**
  * Helper to safely parse JSON from fetch response
@@ -112,9 +113,16 @@ export function useAircraftInfoFetcher({
         } else {
           // HTTP fallback when socket is not connected
           try {
-            let res = await fetch(`${apiBaseUrl}/api/v1/airframes/${icao}/`);
+            // Attach the JWT: /lookup/aircraft requires auth (RequireAuthenticated,
+            // ignores the public bypass), so a bare fetch 401s a signed-in user in
+            // hybrid/private mode. withAuth() is a no-op when signed out.
+            let res = await fetch(`${apiBaseUrl}/api/v1/airframes/${icao}/`, {
+              headers: withAuth(),
+            });
             if (res.status === 404) {
-              res = await fetch(`${apiBaseUrl}/api/v1/lookup/aircraft/${icao}`);
+              res = await fetch(`${apiBaseUrl}/api/v1/lookup/aircraft/${icao}`, {
+                headers: withAuth(),
+              });
             }
             if (res.status === 404) {
               data = { icao_hex: icao, found: false };

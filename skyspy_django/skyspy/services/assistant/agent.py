@@ -12,6 +12,7 @@ Uses LangChain 1.x ``create_agent`` (a LangGraph graph). All LangChain imports
 are local to this module so the rest of the codebase stays LangChain-free.
 """
 
+import asyncio
 import json
 import logging
 import re
@@ -80,6 +81,27 @@ SYSTEM_PROMPT = (
     "time_comparison (vs baseline), find_safety_events (emergencies), and "
     "metric_correlations (odd telemetry); then lead with the one or two genuinely "
     "notable findings, each with its number.\n"
+    "\n"
+    "AVIATION DOMAIN CONTEXT (use to judge what is NORMAL vs genuinely noteworthy — "
+    "always weigh behavior against the aircraft's CLASS):\n"
+    "- General aviation (GA): light piston/turboprop singles & twins, helicopters, "
+    "gliders. Usually VFR, ~80-200 kt, 1,500-12,000 ft. Orbits, figure-8s, holding, "
+    "and repeated circuits near an airport or practice area are typically NORMAL — "
+    "flight training, aerial photography, pipeline/traffic watch, banner tow — not a "
+    "threat. ADS-B emitter categories A1 (light <15,500 lb) and A7 (rotorcraft) are "
+    "almost always GA. Do NOT flag routine GA training/pattern work as suspicious.\n"
+    "- Commercial air transport: airliners & cargo (categories A3/A4/A5, heavy jets). "
+    "IFR, cruise ~FL280-FL410, 400-500 kt, on filed airways between airports. Steady "
+    "high-altitude cruise is EXPECTED. An airliner squawking 7500/7600/7700, holding, "
+    "or diverting IS notable.\n"
+    "- Military: fighters/transports/tankers/ISR — special-use airspace (MOAs), "
+    "refueling tracks, low-level routes, or persistent orbits over an area (ISR/"
+    "tanker). Often the genuinely interesting traffic.\n"
+    "- Law enforcement / surveillance: Cessnas, PC-12s, helicopters flying tight "
+    "repeated orbits or grid lines over a town at ~1,500-5,000 ft AGL. Confirm with "
+    "identify_law_enforcement before calling something surveillance.\n"
+    "- Same geometry, different meaning: a light GA aircraft orbiting a practice area "
+    "is routine; the same orbit by an airliner, or over a sensitive site, is not.\n"
     "\n"
     "FORMATTING: Write your answer in GitHub-flavored Markdown. Use **bold** for "
     "key figures, bullet lists for multiple items, and Markdown tables when "
@@ -310,7 +332,7 @@ def _max_steps() -> int:
     """The tool-call budget for this request. Capped harder in compact mode: a
     small window can't afford many accumulating tool results, so deep chains would
     overflow it before settling on an answer."""
-    steps = int(getattr(settings, "ASSISTANT_MAX_STEPS", 15))
+    steps = int(getattr(settings, "ASSISTANT_MAX_STEPS", 20))
     if compact_mode():
         steps = min(steps, int(getattr(settings, "ASSISTANT_MAX_STEPS_COMPACT", 8)))
     return max(1, steps)
@@ -983,6 +1005,54 @@ def _summarize_steps(messages) -> list[dict]:
     return [{"tool": name, "args": args, "result_preview": obs[:200]} for name, obs, args in _tool_messages(messages)]
 
 
+def _force_final_answer(query: str, context: str | None, history, gathered: list[str]) -> str:
+    """Last-resort synthesis when the tool-call budget is exhausted.
+
+    The react agent hit the recursion limit mid-chain, so its last turn was a
+    tool call, not an answer — returning a bare "I couldn't settle" apology
+    throws away everything it already gathered. Instead make ONE more model call
+    with NO tools bound, feeding the accumulated tool outputs, and ask it to
+    answer directly from that data. Returns "" on any failure so the caller can
+    fall back to the apology string.
+    """
+    if not gathered:
+        return ""
+    try:
+        from langchain_openai import ChatOpenAI
+
+        llm = ChatOpenAI(
+            base_url=getattr(settings, "LLM_API_URL", None),
+            api_key=getattr(settings, "LLM_API_KEY", "") or "sk-noauth",
+            model=getattr(settings, "ASSISTANT_MODEL", None) or settings.LLM_MODEL,
+            temperature=0,
+            timeout=getattr(settings, "ASSISTANT_TIMEOUT", 60),
+            max_retries=1,
+        )
+        # Cap total gathered data so the synthesis call can't itself overflow the
+        # context window (esp. compact/RPi models).
+        cap = int(getattr(settings, "ASSISTANT_MAX_RESULT_CHARS", 6000))
+        blob = "\n\n".join(g for g in gathered if g)[: cap * 3]
+        messages = _normalize_history(history)
+        messages.append(
+            {
+                "role": "system",
+                "content": (
+                    "You have run out of tool budget. Using ONLY the data already gathered "
+                    "below, give the best possible direct answer to the user's question. Be "
+                    "concise and specific. Do NOT mention tools, budgets, or that you were "
+                    "interrupted — just answer."
+                ),
+            }
+        )
+        messages.append({"role": "user", "content": _compose_query(query, context)})
+        messages.append({"role": "user", "content": f"Data gathered so far:\n{blob}"})
+        out = llm.invoke(messages)
+        return _as_str(getattr(out, "content", "")) or ""
+    except Exception as e:  # broad: best-effort fallback; must never raise
+        logger.warning("assistant force-final synthesis failed: %s: %s", type(e).__name__, e)
+        return ""
+
+
 def ask(query: str, context: str | None = None, history=None, user=None) -> dict:
     """
     Answer a question with the tool-calling agent (synchronous).
@@ -1004,22 +1074,35 @@ def ask(query: str, context: str | None = None, history=None, user=None) -> dict
     token = set_current_user(user)
     try:
         graph = _build_agent()
-        result = graph.invoke(
+        # Stream state snapshots (not just the final return) so that if the agent
+        # hits the recursion limit we still hold the last full message state — and
+        # can synthesize a final answer from the tool data it already gathered
+        # instead of discarding everything.
+        last_state = None
+        for last_state in graph.stream(  # noqa: B007 — used after the loop (recursion fallback)
             {"messages": _build_messages(query, context, history)},
+            stream_mode="values",
             config={"recursion_limit": _recursion_limit()},
-        )
+        ):
+            pass
+        result = last_state or {}
     except GraphRecursionError:
         # The agent chained more tool calls than ASSISTANT_MAX_STEPS allows without
-        # settling on an answer. Degrade gracefully instead of erroring out.
+        # settling on an answer. Force a final tool-less synthesis from the data
+        # gathered so far rather than erroring out with a bare apology.
         logger.warning("assistant.ask hit recursion limit (%s steps)", _recursion_limit())
+        partial_messages = (last_state or {}).get("messages", []) if isinstance(last_state, dict) else []
+        gathered = [obs for _name, obs, _args in _tool_messages(partial_messages)]
+        answer = _force_final_answer(query, context, history, gathered)
         return {
-            "answer": (
+            "answer": answer
+            or (
                 "I gathered a lot of data but couldn't settle on a final answer within my "
                 "step budget. Try narrowing the question, or raise ASSISTANT_MAX_STEPS."
             ),
             "steps": [],
             "sources": [],
-            "status": "incomplete",
+            "status": "incomplete" if not answer else "ok",
         }
     except Exception as e:  # broad: agent/LLM/endpoint failure modes are unknowable
         logger.warning(f"assistant.ask failed: {type(e).__name__}: {e}")
@@ -1071,6 +1154,9 @@ async def astream(query: str, context: str | None = None, history=None, user=Non
         return
 
     final_text, seen_sources, sources, photos, maps = [], set(), [], [], []
+    # Raw tool outputs, kept so a recursion-limit hit can synthesize a final answer
+    # from the data already gathered instead of apologizing (see except below).
+    gathered: list[str] = []
     # Fallback for backends that don't emit per-token deltas: the content of the
     # last model turn, captured at on_chat_model_end. Without it final.answer would
     # be "" on non-streaming endpoints even though sync ask() returns text.
@@ -1091,6 +1177,8 @@ async def astream(query: str, context: str | None = None, history=None, user=Non
                 yield {"type": "tool", "tool": event.get("name"), "args": event.get("data", {}).get("input")}
             elif kind == "on_tool_end":
                 obs = _as_str(_obs_output(event))
+                if obs:
+                    gathered.append(obs)
                 # Render airframe photos from the tool call itself (deterministic,
                 # server-templated src) instead of trusting a model-emitted URL.
                 tool_name = event.get("name")
@@ -1139,9 +1227,15 @@ async def astream(query: str, context: str | None = None, history=None, user=Non
         # and finalize with whatever tokens/sources/photos/maps we accumulated.
         logger.warning("assistant.astream hit recursion limit (%s steps)", _recursion_limit())
         if not final_text:
+            # Synthesize a final answer from the gathered tool data (blocking LLM
+            # call, so off-thread to avoid stalling the event loop).
+            synthesized = await asyncio.to_thread(_force_final_answer, query, context, history, gathered)
             final_text.append(
-                "I gathered a lot of data but couldn't settle on a final answer within my "
-                "step budget. Try narrowing the question, or raise ASSISTANT_MAX_STEPS."
+                synthesized
+                or (
+                    "I gathered a lot of data but couldn't settle on a final answer within my "
+                    "step budget. Try narrowing the question, or raise ASSISTANT_MAX_STEPS."
+                )
             )
     except Exception as e:  # broad: streaming loop must end cleanly
         logger.warning(f"assistant.astream failed: {type(e).__name__}: {e}")

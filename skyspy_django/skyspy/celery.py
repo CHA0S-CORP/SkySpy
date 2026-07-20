@@ -102,11 +102,15 @@ from django.conf import settings as _beat_settings  # noqa: E402
 _wildfire_interval = float(getattr(_beat_settings, "WILDFIRES_REFRESH_INTERVAL", 300) or 300)
 
 app.conf.beat_schedule = {
-    # Aircraft polling - every 1 second (skipped when streaming is active)
+    # Aircraft polling - every 2s FALLBACK (no-op when the stream is active, which
+    # is the normal deployment). Was 1.0s: with the stream active this queued 86k
+    # pointless no-op tasks/day onto the realtime queue. The stream's own 30s
+    # health-check (start_aircraft_stream) recovers a dead stream, so a 2s poll
+    # fallback is ample. expire=2.0 so a briefly-busy worker discards stale ones.
     "poll-aircraft-every-2s": {
         "task": "skyspy.tasks.aircraft.poll_aircraft",
-        "schedule": 1.0,
-        "options": {"expire_seconds": 1.0},  # Don't queue if missed
+        "schedule": 2.0,
+        "options": {"expire_seconds": 2.0},  # Don't run if not picked up in time
     },
     # Aircraft streaming - check/start every 30 seconds
     # (actual stream runs continuously, this just ensures it's running)
@@ -576,26 +580,32 @@ for _entry in app.conf.beat_schedule.values():
 
 # Task routing
 app.conf.task_routes = {
-    # High-priority aircraft polling (time-sensitive)
+    # -- polling queue = REALTIME HOT PATH ONLY --------------------------------
+    # This queue is consumed by the dedicated gevent `celery-worker-realtime`
+    # (queues=polling). Keep it to cheap, latency-sensitive tasks ONLY so the
+    # live feed is never starved by heavy compute or blocking external HTTP
+    # (which runs on the separate threads `celery-worker`). See
+    # docs/24-celery-worker-rearchitecture.md.
     "skyspy.tasks.aircraft.poll_aircraft": {"queue": "polling"},
-    "skyspy.tasks.aircraft.update_stats_cache": {"queue": "polling"},
-    "skyspy.tasks.aircraft.update_safety_stats": {"queue": "polling"},
-    # Aircraft streaming (long-running, uses polling queue for priority)
+    # Aircraft streaming (long-running stream loop + 30s health check)
     "skyspy.tasks.aircraft_stream.stream_aircraft": {"queue": "polling"},
     "skyspy.tasks.aircraft_stream.start_aircraft_stream": {"queue": "polling"},
+    # Cheap cache-only KPI tick (every 10s) — stays on the fast realtime queue so
+    # sparklines don't jitter behind slower work.
+    "skyspy.tasks.analytics.emit_stats_tick": {"queue": "polling"},
+    # -- moved OFF polling: heavy/compute stats now on default/low_priority so
+    #    they can't block the 1-2s realtime tasks (were on polling, caused the
+    #    83k backlog when they ran long). --
+    "skyspy.tasks.aircraft.update_stats_cache": {"queue": "default"},
+    "skyspy.tasks.aircraft.update_safety_stats": {"queue": "default"},
+    "skyspy.tasks.analytics.aggregate_all_stats": {"queue": "default"},
+    "skyspy.tasks.analytics.update_antenna_analytics": {"queue": "low_priority"},
+    "skyspy.tasks.analytics.refresh_acars_stats": {"queue": "low_priority"},
     # Aircraft stream cold path (database writes - separate queue to not block hot path)
     "skyspy.tasks.aircraft_stream.flush_stream_to_database": {"queue": "database"},
     "skyspy.tasks.aircraft_stream.process_new_aircraft_lookups": {"queue": "database"},
     # Aircraft stream stale cleanup (quick, in-memory operation)
     "skyspy.tasks.aircraft_stream.cleanup_stale_aircraft": {"queue": "default"},
-    # Antenna analytics (runs frequently, should be quick)
-    "skyspy.tasks.analytics.update_antenna_analytics": {"queue": "polling"},
-    "skyspy.tasks.analytics.refresh_acars_stats": {"queue": "polling"},
-    # Unified stats aggregation (runs every 60s, combines aircraft/safety/acars stats)
-    "skyspy.tasks.analytics.aggregate_all_stats": {"queue": "polling"},
-    # Cheap cache-only KPI tick (every 10s) — keep on the fast polling queue, not
-    # the default queue behind slower cleanup/monitoring work (avoids sparkline jitter).
-    "skyspy.tasks.analytics.emit_stats_tick": {"queue": "polling"},
     # Low-priority expensive analytics tasks (RPi optimization)
     "skyspy.tasks.analytics.refresh_time_comparison_stats": {"queue": "low_priority"},
     "skyspy.tasks.analytics.refresh_tracking_quality_stats": {"queue": "low_priority"},
@@ -639,8 +649,9 @@ app.conf.task_routes = {
     "skyspy.tasks.rag.*": {"queue": "database"},
     # Airframe type-card generation (LLM calls, daily back-fill — not time-sensitive)
     "skyspy.tasks.airframe_cards.*": {"queue": "low_priority"},
-    # Cannonball tasks (pattern analysis is time-sensitive)
-    "skyspy.tasks.cannonball.analyze_aircraft_patterns": {"queue": "polling"},
+    # Cannonball pattern analysis — time-sensitive but compute-heavy, so keep it
+    # on `default` (io worker), NOT the realtime `polling` queue it would block.
+    "skyspy.tasks.cannonball.analyze_aircraft_patterns": {"queue": "default"},
     "skyspy.tasks.cannonball.cleanup_cannonball_sessions": {"queue": "database"},
     "skyspy.tasks.cannonball.cleanup_old_patterns": {"queue": "low_priority"},
     "skyspy.tasks.cannonball.aggregate_cannonball_stats": {"queue": "low_priority"},

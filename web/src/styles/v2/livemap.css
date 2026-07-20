@@ -1631,6 +1631,11 @@
   flex: 1 1 auto;
   border-left: none;
   max-height: none;
+  /* The sheet body (.v2-sheet__body) already owns the scroll. On desktop the
+     panel self-scrolls (overflow-y:auto above), but inside a sheet that nests
+     two scroll containers — the inner one swallows touch scroll and any pinned
+     child sticks to the wrong scroller. Hand scrolling to the sheet body. */
+  overflow: visible;
 }
 .v2-sheet .lm-panel-pop {
   width: 100%;

@@ -25,6 +25,17 @@
   scroll-behavior: smooth;
 }
 
+/* When embedded in a mobile bottom sheet (.v2-sheet__body), the sheet body is
+   the single scroll owner (see v2/primitives.css). Nesting this container's own
+   overflow/max-height inside it fights the sheet scroll and makes the sticky
+   header/telemetry pin to the wrong scroller. Yield to the sheet: no self-scroll,
+   no height cap — the sticky offsets then correctly pin to the sheet body. */
+.v2-sheet__body .aircraft-detail-v2 {
+  overflow: visible;
+  max-height: none;
+  height: auto;
+}
+
 /* ============================================================================
    Compact Header (48px) - Sticky at top
    ============================================================================ */
@@ -1295,6 +1306,16 @@
    Mobile Responsive (< 768px)
    ============================================================================ */
 @media (max-width: 767px) {
+  /* The modal wrapper (.aircraft-detail-modal) goes full-height at <=600px, so
+     the 90vh base cap leaves a dead zone at the bottom of the sheet. Fill the
+     modal and let this one container own the scroll (sticky header/telemetry pin
+     to it). NOTE: overridden to overflow:visible when embedded in a bottom sheet
+     via `.v2-sheet__body .aircraft-detail-v2` above. */
+  .aircraft-detail-v2 {
+    max-height: 100%;
+    height: 100%;
+  }
+
   .detail-v2-header {
     padding: 0 12px;
   }
@@ -1379,9 +1400,12 @@
    Extra Small Mobile (< 480px)
    ============================================================================ */
 @media (max-width: 479px) {
+  /* Fill the modal (which is height:100% of the overlay). `100%` over `100vh`
+     dodges the iOS mobile-Safari toolbar overshoot that `vh` units cause. The
+     767px block already sets this; kept explicit here for clarity. */
   .aircraft-detail-v2 {
-    max-height: 100vh;
-    height: 100vh;
+    max-height: 100%;
+    height: 100%;
   }
 
   .detail-v2-header-left {
