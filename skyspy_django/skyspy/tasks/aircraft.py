@@ -69,12 +69,20 @@ def queue_new_aircraft_for_lookup(aircraft_list: list):
     if new_aircraft:
         from skyspy.tasks.external_db import fetch_aircraft_info
 
-        dispatched = new_aircraft[:20]  # Limit batch size
-        for icao in dispatched:
-            fetch_aircraft_info.delay(icao)
-        # Only mark dispatched aircraft as seen - the remainder will be
-        # picked up and dispatched on subsequent cycles
-        _seen_aircraft.update(dispatched)
+        considered = new_aircraft[:20]  # Limit batch size
+        dispatched = []
+        for icao in considered:
+            # Cross-path in-flight gate: the polling and streaming paths keep
+            # separate in-memory "seen" sets, so on cold start both could look up
+            # the same hex. cache.add is atomic — only the first caller across
+            # either path dispatches; the 30s TTL lets it retry if the lookup dies.
+            if cache.add(f"aircraft_lookup_inflight:{icao}", True, 30):
+                fetch_aircraft_info.delay(icao)
+                dispatched.append(icao)
+        # Mark all considered aircraft as seen (even those a concurrent path is
+        # already looking up) so we don't re-evaluate them every cycle; the
+        # remainder of new_aircraft is picked up on subsequent cycles.
+        _seen_aircraft.update(considered)
         logger.debug(f"Queued {len(dispatched)} of {len(new_aircraft)} new aircraft for lookup")
 
 
@@ -395,7 +403,11 @@ def _safe_altitude(value):
 # Cache lock to prevent overlapping session update runs (which would create
 # duplicate sessions - there is no unique constraint on icao_hex+window)
 _SESSION_UPDATE_LOCK_KEY = "update_aircraft_sessions_lock"
-_SESSION_UPDATE_LOCK_TIMEOUT = 60  # seconds - safety net if a run dies mid-way
+_SESSION_UPDATE_LOCK_TIMEOUT = 30  # seconds - safety net if a run dies mid-way
+# Rows per bulk_update/bulk_create query. The batched implementation runs well
+# under the 5s beat cadence even at ~1000 aircraft; this just bounds the size of
+# any single SQL statement.
+_SESSION_UPDATE_BATCH_SIZE = 200
 
 
 @shared_task
@@ -423,70 +435,121 @@ def update_aircraft_sessions(aircraft_data: list):
 
 
 def _update_aircraft_sessions(aircraft_data: list):
-    """Inner implementation of session updates (called with the lock held)."""
+    """Inner implementation of session updates (called with the lock held).
+
+    Batched: one SELECT resolves the open session for every hex in the snapshot,
+    updates/creates are accumulated in memory, then flushed via bulk_update /
+    bulk_create in a single transaction. This replaces the previous
+    one-transaction-per-aircraft loop (~2000 round trips at 1000 aircraft, which
+    routinely exceeded the 5s beat and caused lock-induced cycle skips).
+    """
     now = timezone.now()
     session_cutoff = now - timedelta(minutes=5)  # 5 min session gap
+
+    # Distinct hexes present in this snapshot.
+    icaos = []
+    seen_icaos = set()
+    for ac in aircraft_data:
+        icao = ac.get("hex", "").upper()
+        if icao and icao not in seen_icaos:
+            seen_icaos.add(icao)
+            icaos.append(icao)
+    if not icaos:
+        return
+
+    # One query for the most-recent open session per hex (was one SELECT/aircraft).
+    existing_by_icao: dict[str, AircraftSession] = {}
+    for session in AircraftSession.objects.filter(icao_hex__in=icaos, last_seen__gte=session_cutoff).order_by(
+        "icao_hex", "-last_seen"
+    ):
+        # order_by puts the newest row first within each hex group; keep it.
+        if session.icao_hex not in existing_by_icao:
+            existing_by_icao[session.icao_hex] = session
+
+    to_update: dict[int, AircraftSession] = {}  # keyed by pk to dedupe
+    to_create: dict[str, AircraftSession] = {}  # keyed by hex (pk not yet assigned)
 
     for ac in aircraft_data:
         icao = ac.get("hex", "").upper()
         if not icao:
             continue
 
-        # Short per-aircraft transaction instead of one long transaction
-        with transaction.atomic():
-            # Find or create session (most recent matching session wins)
-            session = (
-                AircraftSession.objects.filter(icao_hex=icao, last_seen__gte=session_cutoff)
-                .order_by("-last_seen")
-                .first()
+        alt = _safe_altitude(ac.get("alt_baro") or ac.get("alt_geom"))
+        distance = ac.get("distance_nm")
+        vr = ac.get("baro_rate") or ac.get("geom_rate")
+        rssi = ac.get("rssi")
+
+        # Resolve the working session: a create pending from this batch, or the
+        # fetched existing row (reused across duplicate hexes so merges stack).
+        pending_new = to_create.get(icao)
+        session = pending_new if pending_new is not None else existing_by_icao.get(icao)
+
+        if session is not None:
+            # Update logic (identical to the original; applies in-memory to both
+            # persisted rows and pending creates).
+            session.callsign = ac.get("flight") or session.callsign
+            session.last_seen = now
+            session.total_positions += 1
+
+            if alt is not None:
+                session.min_altitude = min(session.min_altitude or alt, alt)
+                session.max_altitude = max(session.max_altitude or alt, alt)
+
+            if distance is not None:
+                session.min_distance_nm = min(session.min_distance_nm or distance, distance)
+                session.max_distance_nm = max(session.max_distance_nm or distance, distance)
+
+            if vr is not None:
+                session.max_vertical_rate = max(abs(session.max_vertical_rate or 0), abs(vr))
+
+            if rssi is not None:
+                session.min_rssi = min(session.min_rssi or rssi, rssi)
+                session.max_rssi = max(session.max_rssi or rssi, rssi)
+
+            # Pending creates are flushed via bulk_create; only persisted rows
+            # need an UPDATE.
+            if pending_new is None:
+                to_update[session.pk] = session
+        else:
+            # Create new session (deferred to bulk_create).
+            to_create[icao] = AircraftSession(
+                icao_hex=icao,
+                callsign=ac.get("flight"),
+                first_seen=now,
+                last_seen=now,
+                total_positions=1,
+                min_altitude=alt,
+                max_altitude=alt,
+                min_distance_nm=distance,
+                max_distance_nm=distance,
+                max_vertical_rate=abs(vr) if vr else None,
+                min_rssi=rssi,
+                max_rssi=rssi,
+                is_military=ac.get("military", False),
+                category=ac.get("category"),
+                aircraft_type=ac.get("t"),
             )
 
-            alt = _safe_altitude(ac.get("alt_baro") or ac.get("alt_geom"))
-            distance = ac.get("distance_nm")
-            vr = ac.get("baro_rate") or ac.get("geom_rate")
-            rssi = ac.get("rssi")
+    update_fields = [
+        "callsign",
+        "last_seen",
+        "total_positions",
+        "min_altitude",
+        "max_altitude",
+        "min_distance_nm",
+        "max_distance_nm",
+        "max_vertical_rate",
+        "min_rssi",
+        "max_rssi",
+    ]
 
-            if session:
-                # Update existing session
-                session.callsign = ac.get("flight") or session.callsign
-                session.last_seen = now
-                session.total_positions += 1
-
-                if alt is not None:
-                    session.min_altitude = min(session.min_altitude or alt, alt)
-                    session.max_altitude = max(session.max_altitude or alt, alt)
-
-                if distance is not None:
-                    session.min_distance_nm = min(session.min_distance_nm or distance, distance)
-                    session.max_distance_nm = max(session.max_distance_nm or distance, distance)
-
-                if vr is not None:
-                    session.max_vertical_rate = max(abs(session.max_vertical_rate or 0), abs(vr))
-
-                if rssi is not None:
-                    session.min_rssi = min(session.min_rssi or rssi, rssi)
-                    session.max_rssi = max(session.max_rssi or rssi, rssi)
-
-                session.save()
-            else:
-                # Create new session
-                AircraftSession.objects.create(
-                    icao_hex=icao,
-                    callsign=ac.get("flight"),
-                    first_seen=now,
-                    last_seen=now,
-                    total_positions=1,
-                    min_altitude=alt,
-                    max_altitude=alt,
-                    min_distance_nm=distance,
-                    max_distance_nm=distance,
-                    max_vertical_rate=abs(vr) if vr else None,
-                    min_rssi=rssi,
-                    max_rssi=rssi,
-                    is_military=ac.get("military", False),
-                    category=ac.get("category"),
-                    aircraft_type=ac.get("t"),
-                )
+    with transaction.atomic():
+        if to_update:
+            AircraftSession.objects.bulk_update(
+                list(to_update.values()), update_fields, batch_size=_SESSION_UPDATE_BATCH_SIZE
+            )
+        if to_create:
+            AircraftSession.objects.bulk_create(list(to_create.values()), batch_size=_SESSION_UPDATE_BATCH_SIZE)
 
 
 @shared_task(ignore_result=True)

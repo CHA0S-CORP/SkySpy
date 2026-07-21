@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Icon, Switch } from '../../primitives';
 import { useBulkAircraftInfo } from '../../../../hooks/useBulkAircraftInfo';
 import { useHashParamState, boolParam } from '../../../../hooks/useHashParamState';
@@ -17,7 +17,15 @@ import { CHIP_DEFS, COLUMNS, FILTER_TESTS, selectAircraft, toRow } from './listM
  */
 export function AircraftListScreen({ aircraft, onSelectAircraft, apiBase }) {
   // Deep-linked view state (#aircraft?q=&filter=&sort=&sortDir=&ghosts=)
-  const [query, setQuery] = useHashParamState('q', '');
+  // The search query write to the URL is debounced, so the expensive filter+sort
+  // (rows useMemo) runs at most ~3x/sec instead of on every keystroke. A local
+  // input state keeps the field itself responsive; it re-syncs if `query` changes
+  // externally (back/forward, deep link).
+  const [query, setQuery] = useHashParamState('q', '', { debounceMs: 300 });
+  const [queryInput, setQueryInput] = useState(query);
+  useEffect(() => {
+    setQueryInput(query);
+  }, [query]);
   const [filter, setFilter] = useHashParamState('filter', null);
   const [sortBy, setSortBy] = useHashParamState('sort', 'dist');
   const [sortDir, setSortDir] = useHashParamState('sortDir', 'asc');
@@ -102,8 +110,11 @@ export function AircraftListScreen({ aircraft, onSelectAircraft, apiBase }) {
         <div className="v2-list__search">
           <Icon name="search" size={16} strokeWidth={1.8} />
           <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            value={queryInput}
+            onChange={(e) => {
+              setQueryInput(e.target.value);
+              setQuery(e.target.value);
+            }}
             placeholder="Search ICAO, callsign, type, squawk…"
             aria-label="Search aircraft"
           />

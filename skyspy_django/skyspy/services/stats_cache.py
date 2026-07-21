@@ -22,7 +22,9 @@ RPi Optimizations:
 - Configurable sample size via MAX_STATS_SAMPLE_SIZE setting
 """
 
+import contextlib
 import logging
+import time
 from datetime import timedelta
 
 from django.conf import settings
@@ -1139,11 +1141,43 @@ def get_top_aircraft() -> dict | None:
     return cache.get(CACHE_KEY_TOP_AIRCRAFT)
 
 
+def _refresh_under_lock(lock_key: str, refresh_fn, *, wait: float = 5.0) -> None:
+    """Run an expensive cache refresh once across concurrent callers.
+
+    On a cache miss, many WebSocket subscribers / requests can hit the same
+    None in one window and each run the full multi-query refresh (a stampede).
+    ``cache.add`` is atomic, so only the first caller acquires the lock and
+    refreshes; the others wait briefly for the lock to clear and then re-read the
+    value the winner published. Falls back to running the refresh directly if the
+    cache backend is unavailable.
+    """
+    try:
+        acquired = cache.add(lock_key, 1, max(1, int(wait) + 1))
+    except (ConnectionError, OSError):
+        refresh_fn()
+        return
+
+    if acquired:
+        try:
+            refresh_fn()
+        finally:
+            with contextlib.suppress(ConnectionError, OSError):
+                cache.delete(lock_key)
+        return
+
+    # Another caller is refreshing — wait briefly for it to finish.
+    deadline = time.monotonic() + wait
+    while time.monotonic() < deadline:
+        if cache.get(lock_key) is None:
+            break
+        time.sleep(0.05)
+
+
 def get_history_stats() -> dict | None:
     """Get cached history stats."""
     stats = cache.get(CACHE_KEY_HISTORY_STATS)
     if stats is None:
-        refresh_history_cache()
+        _refresh_under_lock("stats:refresh_lock:history", refresh_history_cache)
         stats = cache.get(CACHE_KEY_HISTORY_STATS)
     return stats
 
@@ -1152,7 +1186,7 @@ def get_history_trends() -> dict | None:
     """Get cached history trends."""
     trends = cache.get(CACHE_KEY_HISTORY_TRENDS)
     if trends is None:
-        refresh_history_cache()
+        _refresh_under_lock("stats:refresh_lock:history", refresh_history_cache)
         trends = cache.get(CACHE_KEY_HISTORY_TRENDS)
     return trends
 
@@ -1161,7 +1195,7 @@ def get_history_top() -> dict | None:
     """Get cached history top performers."""
     top = cache.get(CACHE_KEY_HISTORY_TOP)
     if top is None:
-        refresh_history_cache()
+        _refresh_under_lock("stats:refresh_lock:history", refresh_history_cache)
         top = cache.get(CACHE_KEY_HISTORY_TOP)
     return top
 
@@ -1170,7 +1204,7 @@ def get_safety_stats() -> dict | None:
     """Get cached safety stats."""
     stats = cache.get(CACHE_KEY_SAFETY_STATS)
     if stats is None:
-        refresh_safety_cache()
+        _refresh_under_lock("stats:refresh_lock:safety", refresh_safety_cache)
         stats = cache.get(CACHE_KEY_SAFETY_STATS)
     return stats
 
@@ -1179,7 +1213,9 @@ def get_flight_patterns_stats() -> dict | None:
     """Get cached flight patterns stats."""
     stats = cache.get(CACHE_KEY_FLIGHT_PATTERNS)
     if stats is None:
-        refresh_flight_patterns_cache(broadcast=False)
+        _refresh_under_lock(
+            "stats:refresh_lock:flight_patterns", lambda: refresh_flight_patterns_cache(broadcast=False)
+        )
         stats = cache.get(CACHE_KEY_FLIGHT_PATTERNS)
     return stats
 
@@ -1188,7 +1224,7 @@ def get_geographic_stats() -> dict | None:
     """Get cached geographic stats."""
     stats = cache.get(CACHE_KEY_GEOGRAPHIC_STATS)
     if stats is None:
-        refresh_geographic_cache(broadcast=False)
+        _refresh_under_lock("stats:refresh_lock:geographic", lambda: refresh_geographic_cache(broadcast=False))
         stats = cache.get(CACHE_KEY_GEOGRAPHIC_STATS)
     return stats
 
@@ -1651,7 +1687,9 @@ def get_tracking_quality_stats() -> dict | None:
     """Get cached tracking quality stats."""
     stats = cache.get(CACHE_KEY_TRACKING_QUALITY)
     if stats is None:
-        refresh_tracking_quality_cache(broadcast=False)
+        _refresh_under_lock(
+            "stats:refresh_lock:tracking_quality", lambda: refresh_tracking_quality_cache(broadcast=False)
+        )
         stats = cache.get(CACHE_KEY_TRACKING_QUALITY)
     return stats
 
@@ -1660,7 +1698,7 @@ def get_engagement_stats() -> dict | None:
     """Get cached engagement stats."""
     stats = cache.get(CACHE_KEY_ENGAGEMENT)
     if stats is None:
-        refresh_engagement_cache(broadcast=False)
+        _refresh_under_lock("stats:refresh_lock:engagement", lambda: refresh_engagement_cache(broadcast=False))
         stats = cache.get(CACHE_KEY_ENGAGEMENT)
     return stats
 

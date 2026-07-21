@@ -30,13 +30,14 @@ def _response(status_code=200, json_data=None, headers=None):
 
 
 def _patch_client(side_effect):
-    """Patch httpx.Client so .request() yields from side_effect (list or callable)."""
+    """Patch the process-shared pooled client so .request() yields from side_effect.
+
+    The client is now a long-lived singleton (http_client._get_client) rather than
+    a per-request `with httpx.Client() as client`, so we patch that accessor.
+    """
     client = MagicMock()
     client.request.side_effect = side_effect
-    cm = MagicMock()
-    cm.__enter__.return_value = client
-    cm.__exit__.return_value = False
-    return patch.object(http_client.httpx, "Client", return_value=cm), client
+    return patch.object(http_client, "_get_client", return_value=client), client
 
 
 @pytest.fixture(autouse=True)

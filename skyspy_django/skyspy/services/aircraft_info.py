@@ -431,7 +431,18 @@ def _cleanup_rate_limit_entries(now: float):
 
 
 def _fetch_from_external_apis(icao: str) -> dict | None:
-    """Fetch from external APIs (HexDB, adsb.lol, planespotters)."""
+    """Fetch from external APIs (HexDB, adsb.lol, planespotters).
+
+    Wrapped in single_flight so concurrent lookups for the SAME hex (new-aircraft
+    detection, alert gap-fill, the assistant tools and the airframe REST endpoint
+    can all fire at once) collapse to a single upstream waterfall instead of each
+    running the full sequential chain. Coalescing only affects concurrent callers;
+    sequential callers still run fresh (the lock is released immediately).
+    """
+    return http_client.single_flight(f"aircraft_info_ext:{icao}", lambda: _fetch_from_external_apis_impl(icao))
+
+
+def _fetch_from_external_apis_impl(icao: str) -> dict | None:
     info = {}
     sources = []
 

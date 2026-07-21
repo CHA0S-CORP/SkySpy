@@ -81,14 +81,23 @@ def analyze_aircraft_patterns(self):
             user_lon=user_lon,
         )
 
+        # Pre-fetch all known LE aircraft among the threat hexes in ONE query
+        # instead of a per-threat filter().first() (was N+1 every 5-10s).
+        threat_hexes = {t.hex for t in threat_objects if t.hex}
+        known_by_hex = (
+            {ka.icao_hex: ka for ka in CannonballKnownAircraft.objects.filter(icao_hex__in=threat_hexes)}
+            if threat_hexes
+            else {}
+        )
+
         # Convert threat objects to dicts and process
         threats = []
         for threat in threat_objects:
             threat_dict = threat.to_dict()
             threats.append(threat_dict)
 
-            # Check for known LE aircraft in database
-            known_aircraft = CannonballKnownAircraft.objects.filter(icao_hex=threat.hex).first()
+            # Check for known LE aircraft (O(1) lookup against the prefetched set)
+            known_aircraft = known_by_hex.get(threat.hex)
 
             if known_aircraft:
                 known_aircraft.record_detection()

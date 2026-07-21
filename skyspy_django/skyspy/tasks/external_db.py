@@ -254,6 +254,7 @@ def fetch_aircraft_info_batch(self, icao_list: list):
     to_lookup = [icao for icao in icao_list if icao.upper() not in existing]
 
     processed = 0
+    photo_icaos: list[str] = []
     for icao in to_lookup:
         try:
             # Use the existing fetch_aircraft_info logic inline
@@ -266,7 +267,10 @@ def fetch_aircraft_info_batch(self, icao_list: list):
                     defaults=_aircraft_info_defaults(icao, data),
                 )
                 processed += 1
-                _trigger_photo_fetch_if_enabled(icao)
+                # Collect for a single batched photo dispatch after the loop
+                # instead of one fetch_aircraft_photos.delay() per hex (which
+                # turned this 1 batch task into up to 51 tasks).
+                photo_icaos.append(icao)
             else:
                 # Mark as failed
                 AircraftInfo.objects.update_or_create(
@@ -279,6 +283,10 @@ def fetch_aircraft_info_batch(self, icao_list: list):
 
         except (DatabaseError, httpx.HTTPError, ValueError, KeyError, TypeError, AttributeError, OSError) as e:
             logger.debug(f"Batch lookup failed for {icao}: {e}")
+
+    # One batched photo dispatch (rate-limited inside batch_fetch_aircraft_photos)
+    # instead of a per-hex .delay() fan-out.
+    _trigger_batch_photo_fetch_if_enabled(photo_icaos)
 
     logger.debug(f"Batch processed {processed} aircraft info lookups")
     return {"processed": processed, "total": len(to_lookup)}
@@ -385,12 +393,14 @@ def fetch_aircraft_info(icao_hex: str):
         broadcast_airframe_error(icao, str(e), sources_tried=["error"])
 
 
+def _photo_fetch_enabled() -> bool:
+    """Whether automatic photo enrichment is enabled."""
+    return getattr(settings, "PHOTO_AUTO_DOWNLOAD", False) and getattr(settings, "PHOTO_CACHE_ENABLED", False)
+
+
 def _trigger_photo_fetch_if_enabled(icao: str):
     """Trigger photo fetch if PHOTO_AUTO_DOWNLOAD is enabled."""
-    if not getattr(settings, "PHOTO_AUTO_DOWNLOAD", False):
-        return
-
-    if not getattr(settings, "PHOTO_CACHE_ENABLED", False):
+    if not _photo_fetch_enabled():
         return
 
     try:
@@ -398,6 +408,18 @@ def _trigger_photo_fetch_if_enabled(icao: str):
         logger.debug(f"Queued photo fetch for {icao}")
     except (ConnectionError, OSError, RuntimeError, KombuOperationalError) as e:
         logger.debug(f"Failed to queue photo fetch for {icao}: {e}")
+
+
+def _trigger_batch_photo_fetch_if_enabled(icaos: list[str]):
+    """Dispatch a single batched, rate-limited photo fetch for many hexes."""
+    if not icaos or not _photo_fetch_enabled():
+        return
+
+    try:
+        batch_fetch_aircraft_photos.delay(icaos)
+        logger.debug(f"Queued batched photo fetch for {len(icaos)} aircraft")
+    except (ConnectionError, OSError, RuntimeError, KombuOperationalError) as e:
+        logger.debug(f"Failed to queue batched photo fetch: {e}")
 
 
 @shared_task
