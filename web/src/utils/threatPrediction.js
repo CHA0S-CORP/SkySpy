@@ -82,7 +82,12 @@ export function calculateETA(threat, closingSpeed) {
   // t* = -(p.v)/|v|^2, cpa = |p + v*t*|.
   const track = threat.track ?? threat.heading;
   const gs = threat.ground_speed ?? threat.gs;
-  if (typeof track === 'number' && typeof gs === 'number' && gs > 0 && typeof threat.bearing === 'number') {
+  if (
+    typeof track === 'number' &&
+    typeof gs === 'number' &&
+    gs > 0 &&
+    typeof threat.bearing === 'number'
+  ) {
     const brg = (threat.bearing * Math.PI) / 180;
     const trk = (track * Math.PI) / 180;
     const px = threat.distance_nm * Math.sin(brg);

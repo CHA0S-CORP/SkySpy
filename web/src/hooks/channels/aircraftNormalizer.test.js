@@ -27,13 +27,21 @@ describe('aircraftNormalizer ghost fields', () => {
 
 describe('aircraftNormalizer turbulence fields', () => {
   it('normalizes turbulence from snake_case', () => {
-    const out = normalizeAircraft({ hex: 'a1b2c3', turbulence_risk: 72, turbulence_level: 'severe' });
+    const out = normalizeAircraft({
+      hex: 'a1b2c3',
+      turbulence_risk: 72,
+      turbulence_level: 'severe',
+    });
     expect(out.turbulenceRisk).toBe(72);
     expect(out.turbulenceLevel).toBe('severe');
   });
 
   it('normalizes turbulence from camelCase', () => {
-    const out = normalizeAircraft({ hex: 'a1b2c3', turbulenceRisk: 40, turbulenceLevel: 'moderate' });
+    const out = normalizeAircraft({
+      hex: 'a1b2c3',
+      turbulenceRisk: 40,
+      turbulenceLevel: 'moderate',
+    });
     expect(out.turbulenceRisk).toBe(40);
     expect(out.turbulenceLevel).toBe('moderate');
   });

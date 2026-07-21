@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import App from './App';
 
 // Mock all heavy dependencies
@@ -9,6 +10,12 @@ vi.mock('./components/layout', () => ({
       <button onClick={onClose}>Close</button>
     </div>
   ),
+}));
+
+// SupportChatDock pulls in useAssistantChat -> useQueryClient; App tests only
+// exercise routing/wiring and don't wrap in a QueryClientProvider, so stub it.
+vi.mock('./components/v2/screens/assistant/SupportChatDock', () => ({
+  SupportChatDock: () => null,
 }));
 
 // Shell is unit-tested separately; App tests only exercise routing/wiring
@@ -506,12 +513,24 @@ describe('App', () => {
       });
 
       window.location.hash = '#airframe?tail=N12345';
+      // The airframe detail view uses react-query; wrap in a provider (as
+      // production does via main.jsx) so DetailScreen doesn't throw here.
+      const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
       await act(async () => {
-        render(<App />);
+        render(
+          <QueryClientProvider client={qc}>
+            <App />
+          </QueryClientProvider>
+        );
       });
 
       await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalledWith('/api/v1/airframes/registration/N12345/');
+        // Match the URL regardless of any options arg the fetch wrapper adds.
+        expect(
+          global.fetch.mock.calls.some(
+            ([u]) => String(u) === '/api/v1/airframes/registration/N12345/'
+          )
+        ).toBe(true);
       });
 
       // Must NOT use the sightings API - it has no registration filter and

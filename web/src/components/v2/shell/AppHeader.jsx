@@ -6,7 +6,10 @@ import { navigate } from '../../../lib/hashRoute';
 
 /** Initials for the avatar chip (max two letters). */
 function initials(name) {
-  const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+  const parts = String(name || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
   if (!parts.length) return '?';
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
@@ -96,7 +99,12 @@ function UserMenu() {
           <div className="v2-usermenu__sep" />
 
           {isAdmin && (
-            <button type="button" className="v2-usermenu__item" role="menuitem" onClick={() => go('admin')}>
+            <button
+              type="button"
+              className="v2-usermenu__item"
+              role="menuitem"
+              onClick={() => go('admin')}
+            >
               <Icon name="sliders" size={15} strokeWidth={1.9} />
               Admin Console
             </button>

@@ -15,7 +15,15 @@ const SQUARE_ADVISORY = {
   upper_alt_ft: 42000,
   polygon: {
     type: 'Polygon',
-    coordinates: [[[-101, 39], [-99, 39], [-99, 41], [-101, 41], [-101, 39]]],
+    coordinates: [
+      [
+        [-101, 39],
+        [-99, 39],
+        [-99, 41],
+        [-101, 41],
+        [-101, 39],
+      ],
+    ],
   },
 };
 
@@ -48,7 +56,10 @@ describe('useTurbulenceOverlay helpers', () => {
 
 describe('useTurbulenceOverlay', () => {
   it('filters advisories to the TURB slice', () => {
-    const advisories = [SQUARE_ADVISORY, { advisory_id: 'I1', hazard: 'ICE', polygon: SQUARE_ADVISORY.polygon }];
+    const advisories = [
+      SQUARE_ADVISORY,
+      { advisory_id: 'I1', hazard: 'ICE', polygon: SQUARE_ADVISORY.polygon },
+    ];
     const { result } = renderHook(() => useTurbulenceOverlay({ enabled: true, advisories }));
     expect(result.current.count).toBe(1);
     expect(result.current.turbulenceAreas[0].hazard).toBe('TURB-HI');

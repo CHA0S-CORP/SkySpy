@@ -37,7 +37,8 @@ describe('useAssistantChat conversation memory', () => {
   const bodyOf = (call) => JSON.parse(call[1].body);
   // The hook fires a one-shot auth probe to /assistant/suggest/ on mount, so
   // filter to the SSE stream calls to index sends independently of the probe.
-  const streamCalls = () => fetch.mock.calls.filter((c) => String(c[0]).includes('/assistant/stream/'));
+  const streamCalls = () =>
+    fetch.mock.calls.filter((c) => String(c[0]).includes('/assistant/stream/'));
 
   it('sends no history on the first turn, then prior turns on later ones', async () => {
     const { result } = renderChat();

@@ -118,7 +118,9 @@ describe('useAssistantChat error paths', () => {
       if (String(url).includes('/assistant/suggest/'))
         return Promise.resolve({ ok: true, status: 200 });
       call += 1;
-      return Promise.resolve(call === 1 ? httpErrorResponse(500) : sseResponse(REPLY('second answer')));
+      return Promise.resolve(
+        call === 1 ? httpErrorResponse(500) : sseResponse(REPLY('second answer'))
+      );
     });
     const { result } = renderChat();
     await act(async () => {

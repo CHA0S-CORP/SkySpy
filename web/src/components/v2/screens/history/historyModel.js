@@ -160,7 +160,8 @@ export function selectSessions(
   if (mil) list = list.filter((s) => categoryOfSession(s) === 'military');
   if (safe && safetyByHex)
     list = list.filter((s) => (safetyByHex.get((s.icao_hex || '').toUpperCase()) ?? 0) > 0);
-  if (fav && favoriteHexes) list = list.filter((s) => favoriteHexes.has((s.icao_hex || '').toUpperCase()));
+  if (fav && favoriteHexes)
+    list = list.filter((s) => favoriteHexes.has((s.icao_hex || '').toUpperCase()));
 
   const kf =
     {

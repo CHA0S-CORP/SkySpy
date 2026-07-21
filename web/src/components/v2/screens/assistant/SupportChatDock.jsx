@@ -59,7 +59,8 @@ function loadJson(key, valid) {
 }
 
 const loadSize = () => loadJson(SIZE_KEY, (r) => r && Number.isFinite(r.w) && Number.isFinite(r.h));
-const loadPos = () => loadJson(POS_KEY, (r) => r && Number.isFinite(r.left) && Number.isFinite(r.top));
+const loadPos = () =>
+  loadJson(POS_KEY, (r) => r && Number.isFinite(r.left) && Number.isFinite(r.top));
 
 export function SupportChatDock({ onExpand, onRadarCommand, onRadarTracks }) {
   const [open, setOpen] = useState(false);
@@ -123,34 +124,37 @@ export function SupportChatDock({ onExpand, onRadarCommand, onRadarTracks }) {
   }, []);
 
   // Drag the header to move the panel. Ignores clicks on the action buttons.
-  const onMoveStart = useCallback((e) => {
-    if (isMobile) return; // dock is a fixed bottom sheet on phones
-    if (e.target.closest('button')) return;
-    const rect = panelRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    e.preventDefault();
-    const startX = e.clientX;
-    const startY = e.clientY;
-    const startLeft = rect.left;
-    const startTop = rect.top;
-    const maxLeft = window.innerWidth - rect.width - 8;
-    const maxTop = window.innerHeight - rect.height - 8;
-    let latest = null;
+  const onMoveStart = useCallback(
+    (e) => {
+      if (isMobile) return; // dock is a fixed bottom sheet on phones
+      if (e.target.closest('button')) return;
+      const rect = panelRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      e.preventDefault();
+      const startX = e.clientX;
+      const startY = e.clientY;
+      const startLeft = rect.left;
+      const startTop = rect.top;
+      const maxLeft = window.innerWidth - rect.width - 8;
+      const maxTop = window.innerHeight - rect.height - 8;
+      let latest = null;
 
-    const onMove = (ev) => {
-      const left = Math.max(8, Math.min(maxLeft, startLeft + (ev.clientX - startX)));
-      const top = Math.max(8, Math.min(maxTop, startTop + (ev.clientY - startY)));
-      latest = { left, top };
-      setPos(latest);
-    };
-    const onUp = () => {
-      document.removeEventListener('pointermove', onMove);
-      document.removeEventListener('pointerup', onUp);
-      if (latest) persist(POS_KEY, latest);
-    };
-    document.addEventListener('pointermove', onMove);
-    document.addEventListener('pointerup', onUp);
-  }, [isMobile]);
+      const onMove = (ev) => {
+        const left = Math.max(8, Math.min(maxLeft, startLeft + (ev.clientX - startX)));
+        const top = Math.max(8, Math.min(maxTop, startTop + (ev.clientY - startY)));
+        latest = { left, top };
+        setPos(latest);
+      };
+      const onUp = () => {
+        document.removeEventListener('pointermove', onMove);
+        document.removeEventListener('pointerup', onUp);
+        if (latest) persist(POS_KEY, latest);
+      };
+      document.addEventListener('pointermove', onMove);
+      document.addEventListener('pointerup', onUp);
+    },
+    [isMobile]
+  );
 
   const store = usePageContextStore();
   const getContext = useCallback(() => composePageContext(store), [store]);

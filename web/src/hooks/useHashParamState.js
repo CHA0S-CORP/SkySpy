@@ -90,9 +90,12 @@ export function useHashParamState(key, defaultValue, opts = {}) {
 
   // Clear any pending debounced write on unmount so a timer that fires after the
   // component is gone doesn't mutate the URL for a screen the user already left.
-  useEffect(() => () => {
-    if (timer.current) clearTimeout(timer.current);
-  }, []);
+  useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+    },
+    []
+  );
 
   return [value, setValue];
 }

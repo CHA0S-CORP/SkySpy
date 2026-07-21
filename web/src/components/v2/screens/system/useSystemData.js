@@ -36,7 +36,16 @@ export function useSystemData(apiBase) {
           getJson(`${apiBase}/api/v1/acars/status`),
           getJson(`${apiBase}/api/v1/notifications/config`),
         ]);
-      return { status, health, info, databases, safetyStatus, acarsStats, acarsStatus, notifConfig };
+      return {
+        status,
+        health,
+        info,
+        databases,
+        safetyStatus,
+        acarsStats,
+        acarsStatus,
+        notifConfig,
+      };
     },
   });
 }

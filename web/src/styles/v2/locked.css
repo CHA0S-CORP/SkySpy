@@ -67,8 +67,16 @@
 .lockfx__scrim {
   z-index: 1;
   background:
-    radial-gradient(120% 90% at 50% 0%, transparent, color-mix(in srgb, var(--bg0) 78%, transparent) 78%),
-    repeating-linear-gradient(0deg, transparent 0 2px, color-mix(in srgb, var(--accent2) 5%, transparent) 2px 3px);
+    radial-gradient(
+      120% 90% at 50% 0%,
+      transparent,
+      color-mix(in srgb, var(--bg0) 78%, transparent) 78%
+    ),
+    repeating-linear-gradient(
+      0deg,
+      transparent 0 2px,
+      color-mix(in srgb, var(--accent2) 5%, transparent) 2px 3px
+    );
   backdrop-filter: blur(1px);
 }
 
@@ -95,7 +103,8 @@
   color: var(--accent2);
   background: color-mix(in srgb, var(--accent2) 14%, var(--bg1));
   border: 1px solid color-mix(in srgb, var(--accent2) 40%, transparent);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent2) 8%, transparent),
+  box-shadow:
+    0 0 0 4px color-mix(in srgb, var(--accent2) 8%, transparent),
     0 6px 20px color-mix(in srgb, var(--accent2) 22%, transparent);
 }
 
@@ -140,7 +149,10 @@
   color: var(--bg0);
   background: var(--accent2);
   border: 1px solid var(--accent2);
-  transition: transform 0.12s ease, box-shadow 0.2s ease, filter 0.2s ease;
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.2s ease,
+    filter 0.2s ease;
   box-shadow: 0 4px 16px color-mix(in srgb, var(--accent2) 30%, transparent);
 }
 .lockfx__btn:hover {
