@@ -964,7 +964,9 @@ class CachedPirepFactory(DjangoModelFactory):
     turbulence_type = "MOD"
     turbulence_freq = "OCNL"
     raw_text = factory.LazyAttribute(
-        lambda o: f"{o.location} UA /OV {o.location}/TM 1200/FL{o.flight_level:03d}/TP {o.aircraft_type}/TB {o.turbulence_type}"
+        lambda o: (
+            f"{o.location} UA /OV {o.location}/TM 1200/FL{o.flight_level:03d}/TP {o.aircraft_type}/TB {o.turbulence_type}"
+        )
     )
 
     class Params:
