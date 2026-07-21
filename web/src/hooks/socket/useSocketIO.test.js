@@ -99,7 +99,7 @@ describe('useSocketIO', () => {
           path: '/socket.io',
           // auth is a function so each reconnect attempt reads the current token
           auth: expect.any(Function),
-          transports: ['websocket', 'polling'],
+          transports: ['polling', 'websocket'],
         })
       );
 

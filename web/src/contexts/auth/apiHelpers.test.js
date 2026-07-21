@@ -281,11 +281,13 @@ describe('apiHelpers', () => {
 
       expect(result).toEqual({
         authEnabled: true,
+        authMode: 'hybrid',
         publicMode: false,
         oidcEnabled: false,
         localAuthEnabled: true,
         apiKeyEnabled: false,
         devMode: false,
+        mapClusterZoomThreshold: 8,
         features: {},
       });
     });
@@ -295,11 +297,13 @@ describe('apiHelpers', () => {
 
       expect(result).toEqual({
         authEnabled: false,
+        authMode: 'public',
         publicMode: true,
         oidcEnabled: false,
         localAuthEnabled: false,
         apiKeyEnabled: false,
         devMode: false,
+        mapClusterZoomThreshold: 8,
         features: {},
       });
     });
@@ -309,11 +313,13 @@ describe('apiHelpers', () => {
 
       expect(result).toEqual({
         authEnabled: true,
+        authMode: 'hybrid',
         publicMode: false,
         oidcEnabled: false,
         localAuthEnabled: true,
         apiKeyEnabled: false,
         devMode: false,
+        mapClusterZoomThreshold: 8,
         features: {},
       });
     });

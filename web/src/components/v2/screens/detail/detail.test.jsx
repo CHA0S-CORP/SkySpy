@@ -373,7 +373,7 @@ describe('DetailScreen', () => {
 
   it('renders the Radio Activity card from matched_radio_calls', async () => {
     renderScreen();
-    await waitFor(() => expect(screen.getByText('Radio Activity')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Radio Calls')).toBeInTheDocument());
     expect(screen.getByText(/Southwest 3838 descend/)).toBeInTheDocument();
     expect(screen.getByText('124.350 MHz')).toBeInTheDocument();
     expect(screen.getByText('91% match')).toBeInTheDocument();

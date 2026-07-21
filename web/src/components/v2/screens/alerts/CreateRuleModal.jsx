@@ -58,7 +58,6 @@ export function CreateRuleModal({ open, onOpenChange, onCreate, onUpdate, rule, 
     } else {
       reset();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, rule]);
 
   const matching = useMemo(() => matchCount(aircraft, conds), [aircraft, conds]);

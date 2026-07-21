@@ -33,6 +33,7 @@ describe('useAviationData', () => {
         airspaceAdvisories: [],
         metars: [],
         pireps: [],
+        wildfires: [],
       });
       expect(result.current.loading).toBe(false);
       expect(result.current.error).toBeNull();

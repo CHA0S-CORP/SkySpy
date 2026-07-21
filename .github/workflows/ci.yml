@@ -158,6 +158,8 @@ jobs:
       PROMETHEUS_ENABLED: 'false'
     steps:
       - uses: actions/checkout@v4
+      - name: Install GeoDjango system libs (GDAL/GEOS/PROJ)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends binutils gdal-bin libgdal-dev libgeos-dev libproj-dev
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -249,6 +251,8 @@ jobs:
       PROMETHEUS_ENABLED: 'false'
     steps:
       - uses: actions/checkout@v4
+      - name: Install GeoDjango system libs (GDAL/GEOS/PROJ)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends binutils gdal-bin libgdal-dev libgeos-dev libproj-dev
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -847,6 +851,8 @@ jobs:
       PROMETHEUS_ENABLED: 'false'
     steps:
       - uses: actions/checkout@v4
+      - name: Install GeoDjango system libs (GDAL/GEOS/PROJ)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends binutils gdal-bin libgdal-dev libgeos-dev libproj-dev
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'

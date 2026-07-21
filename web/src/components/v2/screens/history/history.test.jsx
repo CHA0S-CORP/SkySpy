@@ -338,7 +338,7 @@ describe('HistoryScreen', () => {
     await waitFor(() =>
       expect(screen.getByText('Moderate turbulence FL350 near SEA')).toBeInTheDocument()
     );
-    expect(screen.getByText('UUA')).toBeInTheDocument();
+    expect(screen.getByText('URGENT')).toBeInTheDocument();
     expect(screen.getByText('moderate')).toBeInTheDocument();
   });
 

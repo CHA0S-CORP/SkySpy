@@ -116,9 +116,12 @@ export function FlightHistoryCard({ apiBase, hex, variant = 'v2', refreshKey = 0
       if (regenerating) return;
       setRegenerating(true);
       try {
-        const res = await fetch(`${apiBase}/api/v1/airframes/${hexUC}/flight-history/?${mode}=true`, {
-          headers: withAuth(),
-        });
+        const res = await fetch(
+          `${apiBase}/api/v1/airframes/${hexUC}/flight-history/?${mode}=true`,
+          {
+            headers: withAuth(),
+          }
+        );
         if (res.ok && mounted.current) setData(await res.json());
       } catch {
         // Network hiccup — leave the existing summary in place.
@@ -139,7 +142,6 @@ export function FlightHistoryCard({ apiBase, hex, variant = 'v2', refreshKey = 0
     }
     runAction('refresh');
     // runAction is stable per apiBase/hexUC; only re-run when refreshKey changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshKey]);
 
   // AI gated for anonymous users — render the sign-in gate inside the card chrome.
