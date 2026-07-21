@@ -3,6 +3,7 @@ import L from 'leaflet';
 import { Icon, BottomSheet } from '../v2/primitives';
 import { useHashParamState } from '../../hooks/useHashParamState';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
+import { useAuth } from '../../contexts/AuthContext';
 import { useLiveLeafletMap } from './hooks/useLiveLeafletMap';
 import { useMapOverlayData } from './hooks/useMapOverlayData';
 import { CanvasAircraftLayer } from './render/CanvasAircraftLayer';
@@ -83,6 +84,14 @@ export function LiveMapView({
   // 'filters' | 'layers' | 'legend' | null
   const [openPanel, setOpenPanel] = useHashParamState('toolPanel', null);
   const [zoom, setZoom] = useState(9);
+  // Server-side clustering: below the threshold the map renders cluster bubbles
+  // (centroid + count) from the aircraft-clusters request instead of per-aircraft
+  // darts; at/above it, the normal dart stream. `moveTick` re-requests on pan.
+  const [clusters, setClusters] = useState(null);
+  const [moveTick, setMoveTick] = useState(0);
+  const { config: authConfig } = useAuth();
+  const clusterThreshold = authConfig?.mapClusterZoomThreshold ?? 8;
+  const clusterMode = zoom < clusterThreshold;
   const [coords, setCoords] = useState(null); // {lat, lon, dist, brg}
   const [hoverTip, setHoverTip] = useState(null); // {kind:'pirep'|'notam', data, x, y}
   const [selectedWildfire, setSelectedWildfire] = useState(null); // Watch Duty fire marker
@@ -220,8 +229,23 @@ export function LiveMapView({
         setHoverTip((cur) =>
           a ? { kind: 'airmet', data: a, x: pt.x, y: pt.y } : cur?.kind === 'airmet' ? null : cur
         ),
+      // Clicking a cluster bubble zooms into its bbox; the next request (now at a
+      // higher zoom) flips that area to raw points.
+      onClusterSelect: (bbox) => {
+        if (bbox && bbox.length === 4) {
+          const [s, w, n, e] = bbox;
+          map.fitBounds(
+            [
+              [s, w],
+              [n, e],
+            ],
+            { maxZoom: clusterThreshold + 2, padding: [40, 40] }
+          );
+        }
+      },
     });
     const onZoomEnd = () => setZoom(map.getZoom());
+    const onMoveEnd = () => setMoveTick((t) => t + 1);
     const onMouseMove = (e) => {
       const { lat, lng } = e.latlng;
       let dist = null;
@@ -239,10 +263,12 @@ export function LiveMapView({
       setCoords({ lat, lon: lng, dist, brg });
     };
     map.on('zoomend', onZoomEnd);
+    map.on('moveend', onMoveEnd);
     map.on('mousemove', onMouseMove);
     setZoom(map.getZoom());
     return () => {
       map.off('zoomend', onZoomEnd);
+      map.off('moveend', onMoveEnd);
       map.off('mousemove', onMouseMove);
       layerRef.current?.destroy();
       layerRef.current = null;
@@ -262,6 +288,7 @@ export function LiveMapView({
     layer.setLabelMode(labelMode);
     layer.setLabelDensity(labelDensity);
     layer.setFilter(filterFn);
+    layer.setClusters(clusterMode ? clusters : null);
   }, [
     annotated,
     positionsRef,
@@ -271,7 +298,40 @@ export function LiveMapView({
     labelMode,
     labelDensity,
     filterFn,
+    clusters,
+    clusterMode,
   ]);
+
+  // Request server-side clusters when zoomed out (debounced on pan/zoom); clear
+  // when zoomed in so the normal dart stream renders.
+  useEffect(() => {
+    if (!clusterMode || typeof wsRequest !== 'function' || !mapRef.current) {
+      setClusters(null);
+      return undefined;
+    }
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      const b = mapRef.current?.getBounds?.();
+      if (!b) return;
+      const bbox = {
+        north: b.getNorth(),
+        south: b.getSouth(),
+        east: b.getEast(),
+        west: b.getWest(),
+      };
+      wsRequest('aircraft-clusters', { zoom, bbox })
+        .then((res) => {
+          if (!cancelled) setClusters(res?.clustered ? res.clusters || [] : null);
+        })
+        .catch(() => {
+          if (!cancelled) setClusters(null);
+        });
+    }, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [clusterMode, zoom, moveTick, wsRequest, mapRef]);
 
   // When the assistant applies/changes a radar filter, move the view to it:
   // explicit center/zoom, or fit to the matched aircraft (view === 'fit').

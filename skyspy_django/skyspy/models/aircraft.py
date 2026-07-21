@@ -3,6 +3,7 @@ Aircraft-related models for position tracking, sessions, and cached aircraft inf
 """
 
 from django.conf import settings
+from django.contrib.gis.db import models as gis_models
 from django.db import models
 from pgvector.django import VectorField
 
@@ -38,6 +39,34 @@ class AircraftSighting(models.Model):
 
     def __str__(self):
         return f"{self.icao_hex} @ {self.timestamp}"
+
+
+class LiveAircraftPosition(models.Model):
+    """Current position of each live aircraft — one upserted row per icao_hex.
+
+    Fed off the cold path (tasks/aircraft_stream.flush_stream_to_database) and
+    pruned by LIVE_POSITION_TTL so it reflects only currently-tracked traffic.
+    Backs the map's server-side clustering (ST_ClusterDBSCAN over `geom`). Unlike
+    the PR1 reference-geodata points (geography, metre `dwithin`), `geom` here is
+    PLANAR geometry(Point, 4326): ST_ClusterDBSCAN needs geometry and its `eps` is
+    in the SRID's units (degrees), scaled by zoom.
+    """
+
+    icao_hex = models.CharField(max_length=10, unique=True, db_index=True)
+    callsign = models.CharField(max_length=10, blank=True, null=True)
+    geom = gis_models.PointField(srid=4326, spatial_index=True)
+    altitude = models.IntegerField(blank=True, null=True)
+    track = models.FloatField(blank=True, null=True)
+    ground_speed = models.FloatField(blank=True, null=True)
+    military = models.BooleanField(default=False)
+    emergency = models.BooleanField(default=False)
+    updated_at = models.DateTimeField(auto_now=True, db_index=True)
+
+    class Meta:
+        db_table = "live_aircraft_positions"
+
+    def __str__(self):
+        return f"{self.icao_hex} (live)"
 
 
 class AircraftSession(models.Model):

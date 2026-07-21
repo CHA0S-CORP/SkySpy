@@ -176,6 +176,7 @@ export function AuthProvider({ children }) {
         localAuthEnabled: data.local_auth_enabled,
         apiKeyEnabled: data.api_key_enabled,
         devMode: data.dev_mode || false,
+        mapClusterZoomThreshold: data.map_cluster_zoom_threshold ?? 8,
         features: data.features || {},
       });
       return data;

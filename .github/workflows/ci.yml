@@ -91,15 +91,46 @@ jobs:
       - run: uv tool run ruff check --output-format=github .
       - run: uv tool run ruff format --check .
 
+  # Build the combined PostGIS + pgvector image and push it to ghcr so the test
+  # service containers below can pull it (GHA service containers must be a
+  # pullable registry image — they can't build from a Dockerfile inline).
+  build-db-image:
+    name: Build DB Image
+    runs-on: ubuntu-latest
+    needs: [detect-changes]
+    if: needs.detect-changes.outputs.python == 'true'
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: ./docker/postgres
+          push: true
+          tags: ghcr.io/cha0s-corp/skyspy-postgres:pg16-postgis
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
   test-python-unit:
     name: Python Tests
     runs-on: ubuntu-latest
-    needs: [detect-changes]
+    needs: [detect-changes, build-db-image]
     if: needs.detect-changes.outputs.python == 'true'
     timeout-minutes: 20
     services:
       postgres:
-        image: pgvector/pgvector:pg16
+        image: ghcr.io/cha0s-corp/skyspy-postgres:pg16-postgis
+        credentials:
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
         env:
           POSTGRES_USER: adsb
           POSTGRES_PASSWORD: adsb
@@ -181,13 +212,16 @@ jobs:
   test-python-e2e:
     name: Python E2E Tests (non-blocking)
     runs-on: ubuntu-latest
-    needs: [detect-changes]
+    needs: [detect-changes, build-db-image]
     if: needs.detect-changes.outputs.python == 'true'
     continue-on-error: true
     timeout-minutes: 20
     services:
       postgres:
-        image: pgvector/pgvector:pg16
+        image: ghcr.io/cha0s-corp/skyspy-postgres:pg16-postgis
+        credentials:
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
         env:
           POSTGRES_USER: adsb
           POSTGRES_PASSWORD: adsb
@@ -771,7 +805,7 @@ jobs:
   export-openapi:
     name: Sync API to ReadMe
     runs-on: ubuntu-latest
-    needs: [detect-changes, docker-build-push]
+    needs: [detect-changes, docker-build-push, build-db-image]
     if: |
       always() &&
       github.event_name == 'push' &&
@@ -783,7 +817,10 @@ jobs:
       cancel-in-progress: false
     services:
       postgres:
-        image: pgvector/pgvector:pg16
+        image: ghcr.io/cha0s-corp/skyspy-postgres:pg16-postgis
+        credentials:
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
         env:
           POSTGRES_USER: adsb
           POSTGRES_PASSWORD: adsb

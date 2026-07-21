@@ -6,6 +6,8 @@ from math import cos, pi
 
 from asgiref.sync import sync_to_async
 from django.conf import settings
+from django.contrib.gis.geos import Point
+from django.contrib.gis.measure import D
 from django.core.cache import cache
 from django.db.models import Q
 from django.utils import timezone
@@ -133,18 +135,10 @@ class AviationDataMixin:
             radius_nm = 50.0
         limit = parse_int_param(params.get("limit"), 20, min_val=1, max_val=100)
 
-        lat_delta = radius_nm / 60
-        # cos(lat) longitude correction — a degree of longitude shrinks with
-        # latitude, so without this the box is too narrow E/W and airports/navaids/
-        # airspace east & west of the feeder silently drop (matches _get_pireps).
-        lon_delta = radius_nm / (60.0 * max(cos(lat * pi / 180), 0.1))
-
-        queryset = CachedAirport.objects.filter(
-            latitude__gte=lat - lat_delta,
-            latitude__lte=lat + lat_delta,
-            longitude__gte=lon - lon_delta,
-            longitude__lte=lon + lon_delta,
-        )
+        # True great-circle radius filter over the geography(Point) geom, GiST
+        # index-accelerated (replaces the hand-rolled cos(lat) bbox).
+        center = Point(lon, lat, srid=4326)
+        queryset = CachedAirport.objects.filter(geom__dwithin=(center, D(nm=radius_nm)))
 
         airports = []
         for apt in queryset[:limit]:
@@ -199,18 +193,8 @@ class AviationDataMixin:
             radius_nm = 100.0
         limit = parse_int_param(params.get("limit"), 50, min_val=1, max_val=200)
 
-        lat_delta = radius_nm / 60
-        # cos(lat) longitude correction — a degree of longitude shrinks with
-        # latitude, so without this the box is too narrow E/W and airports/navaids/
-        # airspace east & west of the feeder silently drop (matches _get_pireps).
-        lon_delta = radius_nm / (60.0 * max(cos(lat * pi / 180), 0.1))
-
-        queryset = CachedNavaid.objects.filter(
-            latitude__gte=lat - lat_delta,
-            latitude__lte=lat + lat_delta,
-            longitude__gte=lon - lon_delta,
-            longitude__lte=lon + lon_delta,
-        )
+        center = Point(lon, lat, srid=4326)
+        queryset = CachedNavaid.objects.filter(geom__dwithin=(center, D(nm=radius_nm)))
 
         navaids = []
         for nav in queryset[:limit]:
@@ -317,8 +301,6 @@ class AviationDataMixin:
     @sync_to_async
     def _get_pireps(self, params: dict):
         """Get PIREP data with spatial filtering."""
-        from math import cos, pi
-
         from skyspy.models import CachedPirep
 
         hours = parse_int_param(params.get("hours"), 6, min_val=1, max_val=24)
@@ -342,16 +324,10 @@ class AviationDataMixin:
             return cached_data
 
         cutoff = timezone.now() - timedelta(hours=hours)
-        query = CachedPirep.objects.filter(observation_time__gte=cutoff)
-
-        lat_delta = radius / 60.0
-        lon_delta = radius / (60.0 * max(cos(lat * pi / 180), 0.1))
-
-        query = query.filter(
-            latitude__gte=lat - lat_delta,
-            latitude__lte=lat + lat_delta,
-            longitude__gte=lon - lon_delta,
-            longitude__lte=lon + lon_delta,
+        center = Point(lon, lat, srid=4326)
+        query = CachedPirep.objects.filter(
+            observation_time__gte=cutoff,
+            geom__dwithin=(center, D(nm=radius)),
         )
 
         pireps = query.order_by("-observation_time")[:100]

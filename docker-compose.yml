@@ -22,7 +22,11 @@ services:
   # PostgreSQL Database
   # ---------------------------------------------------------------------------
   postgres:
-    image: pgvector/pgvector:pg16
+    # Combined PostGIS + pgvector image (docker/postgres/Dockerfile). PostGIS
+    # backs the spatial box queries / clustering; pgvector backs airframe RAG.
+    build:
+      context: ./docker/postgres
+    image: skyspy-postgres:pg16-postgis
     container_name: skyspy-postgres
     restart: unless-stopped
     # Docker's default /dev/shm is 64M; parallel VACUUM/ANALYZE + hash ops need
@@ -205,6 +209,7 @@ services:
       - photo_cache:/data/photos
       - radio_data:/data/radio
       - opensky_data:/data/opensky
+      - external_db_data:/data/external_db
     depends_on:
       postgres:
         condition: service_healthy
@@ -241,7 +246,7 @@ services:
       dockerfile: Dockerfile
     container_name: skyspy-celery-worker
     restart: unless-stopped
-    environment:
+    environment: &celery-worker-env
       DEBUG: ${DEBUG:-False}
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-your-secret-key-change-in-production}
       DATABASE_URL: postgresql://${POSTGRES_USER:-adsb}:${POSTGRES_PASSWORD:-adsb}@postgres:5432/${POSTGRES_DB:-adsb}
@@ -293,25 +298,80 @@ services:
       # Auth (needed for notification/alert processing with user context)
       AUTH_MODE: ${AUTH_MODE:-public}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-}
-      # Celery pool type for gevent detection
-      CELERY_POOL: gevent
-    volumes:
+      # IO/general worker uses the THREADS pool (not gevent): its tasks make
+      # blocking HTTPS calls (photos/routes/enrichment) which, under gevent's
+      # ssl=False monkeypatch, freeze the whole hub. Real threads give true
+      # blocking-I/O concurrency with no shared hub to starve. CELERY_POOL is not
+      # "gevent" here, so celery.py skips monkey.patch_all.
+      CELERY_POOL: threads
+    volumes: &celery-worker-volumes
       - photo_cache:/data/photos
       - radio_data:/data/radio
       - opensky_data:/data/opensky
-    depends_on:
+      # Persist the FAA/ADSBX/tar1090 reference DBs (DATA_DIR=/data/external_db).
+      # Without this the caches live in the ephemeral container layer and are
+      # WIPED on every recreate — so FAA owner data (ownership analysis) and
+      # aircraft enrichment reset to empty on each deploy until re-downloaded.
+      - external_db_data:/data/external_db
+    depends_on: &celery-worker-deps
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
     networks:
       - skyspy-network
+    # IO/general worker: everything EXCEPT the realtime `polling` queue. Threads
+    # pool so blocking external HTTP fan-out never starves other work.
     command: >
       celery -A skyspy worker
       --loglevel=info
-      --concurrency=100
-      --queues=polling,default,database,transcription,notifications,low_priority
+      --concurrency=24
+      --queues=default,database,transcription,notifications,low_priority
+      --pool=threads
+      --hostname=io@%h
+    # Real worker liveness check (the image's inherited HEALTHCHECK curls the
+    # API's :8000/health/, which workers don't serve → always false "unhealthy").
+    # Ping THIS worker specifically via the broker. $$ escapes compose interp.
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A skyspy inspect ping -d io@$$(hostname) -t 10 >/dev/null 2>&1 || exit 1"]
+      interval: 60s
+      timeout: 15s
+      retries: 3
+      start_period: 40s
+
+  # ---------------------------------------------------------------------------
+  # Celery Realtime Worker — dedicated to the `polling` hot path
+  # ---------------------------------------------------------------------------
+  # Isolated gevent worker consuming ONLY `polling` (poll_aircraft, stream,
+  # emit_stats_tick). Kept separate from the io worker so a photo/route fetch
+  # storm can never block the live feed (the 83k-backlog root cause). See
+  # docs/24-celery-worker-rearchitecture.md.
+  celery-worker-realtime:
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    container_name: skyspy-celery-worker-realtime
+    restart: unless-stopped
+    environment:
+      <<: *celery-worker-env
+      CELERY_POOL: gevent
+    volumes: *celery-worker-volumes
+    depends_on: *celery-worker-deps
+    networks:
+      - skyspy-network
+    command: >
+      celery -A skyspy worker
+      --loglevel=info
+      --concurrency=20
+      --queues=polling
       --pool=gevent
+      --hostname=realtime@%h
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A skyspy inspect ping -d realtime@$$(hostname) -t 10 >/dev/null 2>&1 || exit 1"]
+      interval: 60s
+      timeout: 15s
+      retries: 3
+      start_period: 40s
 
   # ---------------------------------------------------------------------------
   # Celery Beat (Periodic Task Scheduler)
@@ -459,3 +519,5 @@ volumes:
     name: skyspy-radio-data
   opensky_data:
     name: skyspy-opensky-data
+  external_db_data:
+    name: skyspy-external-db-data

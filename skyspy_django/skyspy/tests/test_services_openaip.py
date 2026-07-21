@@ -155,7 +155,9 @@ class GetAirspacesTests(TestCase):
     @patch("skyspy.services.openaip._make_request")
     def test_returns_cached_airspaces(self, mock_request):
         """Test that cached data is returned."""
-        cache_key = "openaip_airspace_47.00_-122.00_100"
+        # Cache key uses the EFFECTIVE (clamped) radius: 100nm clamps to
+        # OPENAIP_MAX_DIST_M (~27nm), so the key ends in _27, not _100.
+        cache_key = "openaip_airspace_47.00_-122.00_27"
         cached_data = [{"id": "cached", "name": "Test Airspace"}]
         cache.set(cache_key, cached_data, timeout=3600)
 

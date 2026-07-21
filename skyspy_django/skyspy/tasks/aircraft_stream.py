@@ -761,10 +761,11 @@ def update_state_and_broadcast(batch: list[dict], full_snapshot: bool = True):
         # 2. Position updates with removed list (lightest payload, lowest latency)
         broadcast_positions_fast(filtered_batch, all_removed, timestamp)
 
-        # 3. Aircraft update using differential updates (P2 optimization)
-        # This sends only changed data instead of full state every time
-        delta = compute_aircraft_delta(filtered_batch)
-        broadcast_aircraft_delta(delta, timestamp)
+        # 3. Differential (aircraft:delta) updates are computed once per second in
+        # sync_cache_state against the FULL aircraft list — not here. Computing a
+        # delta against a partial SSE slice made compute_aircraft_delta flag every
+        # aircraft not in the slice as "removed" (false removals churned the client
+        # map). Position movement still streams at full rate via broadcast_positions_fast.
 
         # 4. New aircraft events (still broadcast separately for clients
         # that need to know about new aircraft immediately)
@@ -793,12 +794,26 @@ def update_state_and_broadcast(batch: list[dict], full_snapshot: bool = True):
             if ac.get("lat") is not None and ac.get("lon") is not None:
                 if len(_db_write_buffer) >= cap:
                     _db_buffer_dropped += 1
-                _db_write_buffer.append(ac.copy())
+                # No .copy() needed: this cycle's dicts are replaced (not mutated
+                # in place) by subsequent cycles, and the only post-buffer mutator
+                # (annotate_ghosts) writes only ghost/ghost_of, which the flush
+                # never reads. Avoids ~250-500 dict copies/sec on the hot path.
+                _db_write_buffer.append(ac)
 
 
 def _bump_messages_total():
     global _messages_total
     _messages_total += 1
+
+
+def get_db_buffer_stats() -> tuple[int, int]:
+    """Return (current_depth, capacity) of the cold-path DB write buffer.
+
+    Exposed for queue-depth monitoring so the buffer filling toward maxlen
+    (silent oldest-drop) is visible before positions are actually lost.
+    """
+    with _db_buffer_lock:
+        return len(_db_write_buffer), (_db_write_buffer.maxlen or 0)
 
 
 def sync_cache_state():
@@ -821,6 +836,15 @@ def sync_cache_state():
     # dicts so the cached snapshot carries the flag. This is the one place the
     # full list is assembled - same rationale as safety monitoring below.
     annotate_ghosts(aircraft_list)
+
+    # Differential (aircraft:delta) update against the FULL aircraft set. Moved
+    # here (1/sec) from the per-batch hot path, where computing a delta against a
+    # partial SSE slice falsely flagged ~everything not in the slice as removed.
+    try:
+        delta = compute_aircraft_delta(aircraft_list)
+        broadcast_aircraft_delta(delta, timestamp)
+    except Exception as e:  # broad: delta broadcast (sync_emit) must never crash the stream loop
+        logger.warning(f"Failed to broadcast aircraft delta: {e}")
 
     cache.set_many(
         {
@@ -866,6 +890,69 @@ def _safe_altitude(value):
         except (ValueError, TypeError):
             return None
     return None
+
+
+def _upsert_live_positions(to_write: list):
+    """Upsert current live positions (one row per hex) + prune stale rows.
+
+    Feeds the map's server-side clustering (LiveAircraftPosition). Deduped by hex
+    (last write wins) so an in-batch duplicate can't collide on the unique key.
+    Wrapped in its own savepoint + broad guard so a geom/DB failure here never
+    poisons the sighting insert or the flush task.
+    """
+    from datetime import timedelta
+
+    from django.db import DatabaseError, transaction
+
+    from skyspy.models import LiveAircraftPosition
+    from skyspy.models.aviation import point_from_latlon
+
+    live_by_hex = {}
+    for ac in to_write:
+        hexid = (ac.get("hex") or "").upper()
+        if not hexid or ac.get("lat") is None or ac.get("lon") is None:
+            continue
+        live_by_hex[hexid] = ac
+
+    try:
+        if live_by_hex:
+            rows = [
+                LiveAircraftPosition(
+                    icao_hex=hexid,
+                    callsign=ac.get("flight"),
+                    geom=point_from_latlon(ac.get("lat"), ac.get("lon")),
+                    altitude=_safe_altitude(ac.get("alt_baro")) or _safe_altitude(ac.get("alt_geom")),
+                    track=ac.get("track"),
+                    ground_speed=ac.get("gs"),
+                    military=bool(ac.get("military", False)),
+                    emergency=bool(ac.get("emergency", False)),
+                )
+                for hexid, ac in live_by_hex.items()
+            ]
+            with transaction.atomic():
+                LiveAircraftPosition.objects.bulk_create(
+                    rows,
+                    update_conflicts=True,
+                    unique_fields=["icao_hex"],
+                    update_fields=[
+                        "callsign",
+                        "geom",
+                        "altitude",
+                        "track",
+                        "ground_speed",
+                        "military",
+                        "emergency",
+                        "updated_at",
+                    ],
+                )
+
+        # Prune rows older than the TTL so clusters reflect only live traffic.
+        ttl = getattr(settings, "LIVE_POSITION_TTL", 90)
+        cutoff = timezone.now() - timedelta(seconds=ttl)
+        with transaction.atomic():
+            LiveAircraftPosition.objects.filter(updated_at__lt=cutoff).delete()
+    except DatabaseError:
+        logger.debug("Live position upsert/prune skipped (DB error)", exc_info=True)
 
 
 @shared_task(bind=True, max_retries=1, ignore_result=True)
@@ -938,6 +1025,10 @@ def flush_stream_to_database(self):
                     AircraftSighting.objects.bulk_create(sightings, ignore_conflicts=True, batch_size=500)
                 logger.debug(f"Flushed {len(sightings)} stream sightings to database")
 
+            # Upsert current live positions (one row per hex) for map clustering.
+            # Own savepoint so a geom/DB error here can't poison the sighting insert.
+            _upsert_live_positions(to_write)
+
     except Exception as e:  # broad: flush must requeue the batch on ANY failure (no data loss)
         logger.error(f"Failed to flush stream data to database: {e}")
         # Re-queue the whole failed batch ahead of newly buffered rows so
@@ -968,13 +1059,17 @@ def process_new_aircraft_lookups(self):
             except IndexError:
                 break
 
-    # Queue batch lookup (single task for all ICAOs)
+    # Queue batch lookup (single task for all ICAOs). Apply the cross-path
+    # in-flight gate (shared key with the polling path in tasks/aircraft.py) so
+    # the two paths don't both look up the same hex on cold start.
     if to_lookup:
-        try:
-            fetch_aircraft_info_batch.delay(to_lookup)
-            logger.debug(f"Queued batch of {len(to_lookup)} aircraft for info lookup")
-        except Exception as e:  # broad: Celery enqueue/broker failure modes are unknowable; lookups are best-effort
-            logger.debug(f"Failed to queue batch lookup: {e}")
+        gated = [icao for icao in to_lookup if cache.add(f"aircraft_lookup_inflight:{icao}", True, 30)]
+        if gated:
+            try:
+                fetch_aircraft_info_batch.delay(gated)
+                logger.debug(f"Queued batch of {len(gated)} aircraft for info lookup")
+            except Exception as e:  # broad: Celery enqueue/broker failure modes are unknowable; lookups are best-effort
+                logger.debug(f"Failed to queue batch lookup: {e}")
 
     # Drain queued (hex, callsign) route lookups — one task per changed flight.
     route_pairs = []

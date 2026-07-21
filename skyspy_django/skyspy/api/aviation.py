@@ -4,7 +4,10 @@ Aviation weather and data API views.
 
 import logging
 from datetime import timedelta
+from math import cos, pi
 
+from django.contrib.gis.geos import Point
+from django.contrib.gis.measure import D
 from django.core.cache import cache
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, extend_schema
@@ -280,7 +283,6 @@ class AviationViewSet(viewsets.ViewSet):
     @action(detail=False, methods=["get"])
     def pireps(self, request):
         """Get PIREP data with optional spatial filtering."""
-        from math import cos, pi
 
         try:
             hours = int(request.query_params.get("hours", 6))
@@ -301,24 +303,15 @@ class AviationViewSet(viewsets.ViewSet):
 
         query = CachedPirep.objects.filter(observation_time__gte=cutoff)
 
-        # Add spatial filtering if lat/lon/radius provided
+        # Add spatial filtering if lat/lon/radius provided — true great-circle
+        # radius over the geography(Point) geom, GiST index-accelerated.
         if lat_str and lon_str:
             try:
                 lat = float(lat_str)
                 lon = float(lon_str)
                 radius = float(radius_str) if radius_str else 500
 
-                # Convert nautical miles to degrees (1 nm ≈ 1/60 degree)
-                lat_delta = radius / 60.0
-                # Adjust longitude delta for latitude (longitude degrees get smaller toward poles)
-                lon_delta = radius / (60.0 * max(cos(lat * pi / 180), 0.1))
-
-                query = query.filter(
-                    latitude__gte=lat - lat_delta,
-                    latitude__lte=lat + lat_delta,
-                    longitude__gte=lon - lon_delta,
-                    longitude__lte=lon + lon_delta,
-                )
+                query = query.filter(geom__dwithin=(Point(lon, lat, srid=4326), D(nm=radius)))
             except (ValueError, TypeError):
                 # Invalid coordinates - skip spatial filtering
                 pass
@@ -569,7 +562,10 @@ class AviationViewSet(viewsets.ViewSet):
                 lat = float(lat)
                 lon = float(lon)
                 lat_delta = radius_nm / 60
-                lon_delta = radius_nm / 60
+                # cos(lat) longitude correction so the box isn't too narrow E/W
+                # at higher latitudes (parity with the Socket.IO handler; boundaries
+                # are filtered by their center point, not a geography geom).
+                lon_delta = radius_nm / (60.0 * max(cos(lat * pi / 180), 0.1))
 
                 queryset = queryset.filter(
                     center_lat__gte=lat - lat_delta,
@@ -688,15 +684,8 @@ class AviationViewSet(viewsets.ViewSet):
             try:
                 lat = float(lat)
                 lon = float(lon)
-                lat_delta = radius_nm / 60
-                lon_delta = radius_nm / 60
-
-                queryset = queryset.filter(
-                    latitude__gte=lat - lat_delta,
-                    latitude__lte=lat + lat_delta,
-                    longitude__gte=lon - lon_delta,
-                    longitude__lte=lon + lon_delta,
-                )
+                # True great-circle radius over the geography(Point) geom.
+                queryset = queryset.filter(geom__dwithin=(Point(lon, lat, srid=4326), D(nm=radius_nm)))
             except (ValueError, TypeError):
                 pass  # Skip spatial filtering if coordinates invalid
 
@@ -744,15 +733,7 @@ class AviationViewSet(viewsets.ViewSet):
             try:
                 lat = float(lat)
                 lon = float(lon)
-                lat_delta = radius_nm / 60
-                lon_delta = radius_nm / 60
-
-                queryset = queryset.filter(
-                    latitude__gte=lat - lat_delta,
-                    latitude__lte=lat + lat_delta,
-                    longitude__gte=lon - lon_delta,
-                    longitude__lte=lon + lon_delta,
-                )
+                queryset = queryset.filter(geom__dwithin=(Point(lon, lat, srid=4326), D(nm=radius_nm)))
             except (ValueError, TypeError):
                 pass  # Skip spatial filtering if coordinates invalid
 

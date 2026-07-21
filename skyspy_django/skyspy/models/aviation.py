@@ -2,10 +2,39 @@
 Aviation data models for airports, navaids, GeoJSON overlays, and PIREPs.
 """
 
+from django.contrib.gis.db import models as gis_models
+from django.contrib.gis.geos import Point
 from django.db import models
 
+# Point `geom` is stored as geography(Point, 4326) so `__dwithin` gives true
+# metre/nm great-circle radius filtering (the semantics every call site wants).
+# The legacy latitude/longitude float columns are kept and dual-written for
+# serialization + back-compat; drop only once everything reads `geom`.
 
-class CachedAirport(models.Model):
+
+def point_from_latlon(lat, lon):
+    """Build a 4326 Point from lat/lon, or None if either is missing/invalid.
+
+    Shared by the point models' save() and by the bulk_create writers (which
+    bypass save()). Keep both in sync so a row always lands with a `geom`.
+    """
+    if lat is None or lon is None:
+        return None
+    try:
+        return Point(float(lon), float(lat), srid=4326)
+    except (TypeError, ValueError):
+        return None
+
+
+class _LatLonGeomMixin:
+    """Sync `geom` from `latitude`/`longitude` on every save()."""
+
+    def save(self, *args, **kwargs):
+        self.geom = point_from_latlon(self.latitude, self.longitude)
+        super().save(*args, **kwargs)
+
+
+class CachedAirport(_LatLonGeomMixin, models.Model):
     """Cached airport data from Aviation Weather Center."""
 
     AIRPORT_TYPES = [
@@ -27,6 +56,7 @@ class CachedAirport(models.Model):
     # Location
     latitude = models.FloatField(db_index=True)
     longitude = models.FloatField(db_index=True)
+    geom = gis_models.PointField(geography=True, srid=4326, null=True, blank=True, spatial_index=True)
     elevation_ft = models.IntegerField(blank=True, null=True)
 
     # Type and classification
@@ -47,7 +77,7 @@ class CachedAirport(models.Model):
         return f"{self.icao_id} - {self.name}"
 
 
-class CachedNavaid(models.Model):
+class CachedNavaid(_LatLonGeomMixin, models.Model):
     """Cached navigation aid data from Aviation Weather Center."""
 
     NAVAID_TYPES = [
@@ -76,6 +106,7 @@ class CachedNavaid(models.Model):
     # Location
     latitude = models.FloatField(db_index=True)
     longitude = models.FloatField(db_index=True)
+    geom = gis_models.PointField(geography=True, srid=4326, null=True, blank=True, spatial_index=True)
 
     # Technical details
     frequency = models.FloatField(blank=True, null=True)
@@ -136,7 +167,7 @@ class CachedGeoJSON(models.Model):
         return f"{self.data_type} - {self.name}"
 
 
-class CachedWildfire(models.Model):
+class CachedWildfire(_LatLonGeomMixin, models.Model):
     """Cached active wildfire (Watch Duty geo_event) near the feeder.
 
     Populated by ``services.wildfires.refresh_wildfires`` from the libwatchduty
@@ -154,6 +185,7 @@ class CachedWildfire(models.Model):
     # Location
     latitude = models.FloatField(db_index=True)
     longitude = models.FloatField(db_index=True)
+    geom = gis_models.PointField(geography=True, srid=4326, null=True, blank=True, spatial_index=True)
     address = models.CharField(max_length=300, blank=True, null=True)
 
     # Fire metrics (from geo_event.data)
@@ -185,7 +217,7 @@ class CachedWildfire(models.Model):
         return f"{self.event_id} - {self.name}"
 
 
-class CachedPirep(models.Model):
+class CachedPirep(_LatLonGeomMixin, models.Model):
     """Cached Pilot Reports (PIREPs) from Aviation Weather Center."""
 
     REPORT_TYPES = [
@@ -223,6 +255,7 @@ class CachedPirep(models.Model):
     # Location
     latitude = models.FloatField(blank=True, null=True, db_index=True)
     longitude = models.FloatField(blank=True, null=True, db_index=True)
+    geom = gis_models.PointField(geography=True, srid=4326, null=True, blank=True, spatial_index=True)
     location = models.CharField(max_length=50, blank=True, null=True)  # e.g., "KSEA"
 
     # Time

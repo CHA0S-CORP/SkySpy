@@ -16,6 +16,8 @@ from django.conf import settings
 from django.core.cache import cache
 from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
+from skyspy.services import http_client
+
 logger = logging.getLogger(__name__)
 
 # API configuration
@@ -171,17 +173,17 @@ def _retry_wait(retry_state) -> float:
 )
 def _http_get_openaip(url: str, params: dict | None, api_key: str, timeout: float = 15.0) -> httpx.Response:
     """HTTP GET with retry logic for OpenAIP API."""
-    with httpx.Client(timeout=timeout) as client:
-        response = client.get(
-            url,
-            params=params,
-            headers={
-                "x-openaip-api-key": api_key,
-                "Accept": "application/json",
-            },
-        )
-        response.raise_for_status()
-        return response
+    response = http_client.get_shared_client().get(
+        url,
+        params=params,
+        headers={
+            "x-openaip-api-key": api_key,
+            "Accept": "application/json",
+        },
+        timeout=timeout,
+    )
+    response.raise_for_status()
+    return response
 
 
 def _make_request(endpoint: str, params: dict | None = None, timeout: int = 15) -> dict[str, Any] | None:
@@ -218,6 +220,25 @@ def _make_request(endpoint: str, params: dict | None = None, timeout: int = 15) 
         return None
 
 
+def _clamped_dist_m(radius_nm: float) -> int:
+    """Clamp an OpenAIP search radius to the API's ~50km `dist` cap.
+
+    OpenAIP rejects dist > ~200km with HTTP 400 and returns nothing useful well
+    before that, so a larger requested radius is reduced to the ceiling. Logs a
+    warning when it clamps so a 250nm request that silently returns only ~27nm of
+    data is visible in the logs instead of looking like empty coverage.
+    """
+    requested_m = int(radius_nm * 1852)
+    if requested_m > OPENAIP_MAX_DIST_M:
+        logger.warning(
+            "OpenAIP search radius %.0fnm exceeds the ~%.0fnm API cap; fetching only the "
+            "capped area — set AIRSPACE_EXTRA_REGIONS for wider multi-site coverage",
+            radius_nm,
+            OPENAIP_MAX_DIST_M / 1852,
+        )
+    return min(requested_m, OPENAIP_MAX_DIST_M)
+
+
 def get_airspaces(
     lat: float,
     lon: float,
@@ -251,7 +272,7 @@ def get_airspaces(
     # Convert nm to meters for the API, clamped to OpenAIP's max `dist`
     # (requests above ~200 km return HTTP 400). A larger requested radius is
     # silently reduced to the ceiling rather than failing the whole fetch.
-    dist_m = min(int(radius_nm * 1852), OPENAIP_MAX_DIST_M)
+    dist_m = _clamped_dist_m(radius_nm)
 
     params = {
         "pos": f"{lat},{lon}",
@@ -365,7 +386,7 @@ def get_airports(
     # Clamp to OpenAIP's max `dist` (requests above ~200 km / this ceiling return
     # HTTP 400). The airspace path already did this; airports/navaids did not, so
     # any radius > ~27 nm silently 400'd and returned nothing.
-    dist_m = min(int(radius_nm * 1852), OPENAIP_MAX_DIST_M)
+    dist_m = _clamped_dist_m(radius_nm)
 
     params = {
         "pos": f"{lat},{lon}",
@@ -458,7 +479,7 @@ def get_navaids(
         return cached
 
     # Clamp to OpenAIP's max `dist` (see get_airports) — unclamped radii 400'd.
-    dist_m = min(int(radius_nm * 1852), OPENAIP_MAX_DIST_M)
+    dist_m = _clamped_dist_m(radius_nm)
 
     params = {
         "pos": f"{lat},{lon}",
@@ -557,11 +578,9 @@ def get_reporting_points(
     if cached:
         return cached
 
-    radius_km = radius_nm * 1.852
-
     params = {
         "pos": f"{lat},{lon}",
-        "dist": int(radius_km * 1000),
+        "dist": _clamped_dist_m(radius_nm),
         "limit": 200,
     }
 

@@ -25,6 +25,7 @@ from django.db import transaction
 from django.utils.dateparse import parse_datetime
 
 from skyspy.models import CachedWildfire
+from skyspy.models.aviation import point_from_latlon
 
 logger = logging.getLogger(__name__)
 
@@ -233,6 +234,8 @@ def refresh_wildfires() -> int:
                 is_active=bool(fire.get("is_active", True)),
                 latitude=lat,
                 longitude=lon,
+                # bulk_create bypasses Model.save() where geom is synced.
+                geom=point_from_latlon(lat, lon),
                 address=(fire.get("address") or "")[:300] or None,
                 acreage=_as_float(data.get("acreage")),
                 containment=_as_float(data.get("containment")),

@@ -40,6 +40,11 @@ class AircraftHandlerMixin:
         aircraft_list = await self._get_current_aircraft()
         return {"aircraft": aircraft_list, "count": len(aircraft_list), "timestamp": timezone.now().isoformat()}
 
+    async def _handle_aircraft_clusters(self, params: dict):
+        """Conditional map clustering: raw points at high zoom, ST_ClusterDBSCAN
+        clusters at low zoom. Keyed on viewport bbox + zoom."""
+        return await self._get_aircraft_clusters(params)
+
     async def _handle_aircraft_list(self, params: dict):
         """Return list of aircraft with optional filters."""
         return await self._get_aircraft_list(params)
@@ -98,6 +103,90 @@ class AircraftHandlerMixin:
                 if ac.get("hex") == icao or ac.get("icao_hex") == icao:
                     return ac
         return None
+
+    @staticmethod
+    def _parse_bbox(bbox):
+        """Return (w, s, e, n) from a {north,south,east,west} dict or [s,w,n,e]
+        list; falls back to the whole world when absent/invalid."""
+        try:
+            if isinstance(bbox, dict):
+                return (float(bbox["west"]), float(bbox["south"]), float(bbox["east"]), float(bbox["north"]))
+            if isinstance(bbox, (list, tuple)) and len(bbox) == 4:
+                s, w, n, e = (float(v) for v in bbox)
+                return (w, s, e, n)
+        except (KeyError, TypeError, ValueError):
+            pass
+        return (-180.0, -90.0, 180.0, 90.0)
+
+    @sync_to_async
+    def _get_aircraft_clusters(self, params: dict):
+        """Server-side map clustering over LiveAircraftPosition.
+
+        High zoom (>= MAP_CLUSTER_ZOOM_THRESHOLD): raw points within the viewport
+        bbox. Low zoom: ST_ClusterDBSCAN groups (centroid + count + bbox), with
+        `eps` (degrees) shrinking as zoom rises.
+        """
+        from django.contrib.gis.geos import Polygon
+        from django.db import DatabaseError, connection
+
+        from skyspy.models import LiveAircraftPosition
+
+        try:
+            zoom = float(params.get("zoom", 0))
+        except (TypeError, ValueError):
+            zoom = 0.0
+        w, s, e, n = self._parse_bbox(params.get("bbox"))
+
+        threshold = getattr(settings, "MAP_CLUSTER_ZOOM_THRESHOLD", 8)
+        max_points = getattr(settings, "MAP_CLUSTER_MAX_POINTS", 2000)
+
+        try:
+            if zoom >= threshold:
+                envelope = Polygon.from_bbox((w, s, e, n))
+                envelope.srid = 4326
+                qs = LiveAircraftPosition.objects.filter(geom__within=envelope)[:max_points]
+                aircraft = [
+                    {
+                        "hex": r.icao_hex,
+                        "flight": r.callsign,
+                        "lat": r.geom.y,
+                        "lon": r.geom.x,
+                        "alt": r.altitude,
+                        "track": r.track,
+                        "gs": r.ground_speed,
+                        "military": r.military,
+                        "emergency": r.emergency,
+                    }
+                    for r in qs
+                ]
+                return {"clustered": False, "aircraft": aircraft, "count": len(aircraft)}
+
+            eps_base = float(getattr(settings, "MAP_CLUSTER_EPS_BASE", 0.4))
+            eps = eps_base / (2 ** max(0, zoom - 3))
+            sql = """
+                SELECT ST_Y(ST_Centroid(ST_Collect(geom))) AS lat,
+                       ST_X(ST_Centroid(ST_Collect(geom))) AS lon,
+                       COUNT(*) AS cnt,
+                       ST_YMin(ST_Extent(geom)) AS s, ST_XMin(ST_Extent(geom)) AS w,
+                       ST_YMax(ST_Extent(geom)) AS n, ST_XMax(ST_Extent(geom)) AS e
+                FROM (
+                    SELECT geom, ST_ClusterDBSCAN(geom, eps := %s, minpoints := 1) OVER () AS cid
+                    FROM live_aircraft_positions
+                    WHERE geom && ST_MakeEnvelope(%s, %s, %s, %s, 4326)
+                ) t
+                GROUP BY cid
+            """
+            with connection.cursor() as cur:
+                cur.execute(sql, [eps, w, s, e, n])
+                rows = cur.fetchall()
+            clusters = [
+                {"lat": lat, "lon": lon, "count": cnt, "bbox": [cs, cw, cn, ce]}
+                for (lat, lon, cnt, cs, cw, cn, ce) in rows
+            ]
+            return {"clustered": True, "clusters": clusters, "count": sum(c["count"] for c in clusters)}
+        except DatabaseError:
+            logger.warning("aircraft-clusters query failed", exc_info=True)
+            return {"clustered": zoom < threshold, "clusters": [], "aircraft": [], "count": 0}
 
     @sync_to_async
     def _get_aircraft_list(self, filters: dict):

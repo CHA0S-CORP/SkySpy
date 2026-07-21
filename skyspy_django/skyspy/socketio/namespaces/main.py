@@ -104,6 +104,7 @@ class MainNamespace(
         "aircraft_list": "aircraft.view",
         "aircraft-list": "aircraft.view",
         "aircraft-snapshot": "aircraft.view",
+        "aircraft-clusters": "aircraft.view",
         "aircraft-info": "aircraft.view",
         "aircraft-info-bulk": "aircraft.view",
         "aircraft-stats": "aircraft.view",
