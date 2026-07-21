@@ -16,6 +16,8 @@ from django.conf import settings
 from django.core.cache import cache
 from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
+from skyspy.services import http_client
+
 logger = logging.getLogger(__name__)
 
 # API configuration (RapidAPI)
@@ -51,18 +53,18 @@ def _is_retryable_http_error(exc: BaseException) -> bool:
 )
 def _http_get_adsbx(url: str, params: dict | None, api_key: str, timeout: float = 15.0) -> httpx.Response:
     """HTTP GET with retry logic for ADS-B Exchange API."""
-    with httpx.Client(timeout=timeout) as client:
-        response = client.get(
-            url,
-            params=params,
-            headers={
-                "X-RapidAPI-Key": api_key,
-                "X-RapidAPI-Host": ADSBX_RAPIDAPI_HOST,
-                "Accept": "application/json",
-            },
-        )
-        response.raise_for_status()
-        return response
+    response = http_client.get_shared_client().get(
+        url,
+        params=params,
+        headers={
+            "X-RapidAPI-Key": api_key,
+            "X-RapidAPI-Host": ADSBX_RAPIDAPI_HOST,
+            "Accept": "application/json",
+        },
+        timeout=timeout,
+    )
+    response.raise_for_status()
+    return response
 
 
 def _make_request(endpoint: str, params: dict | None = None, timeout: int = 15) -> dict[str, Any] | None:
