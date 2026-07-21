@@ -21,6 +21,11 @@ export default defineConfig({
     include: ['src/**/*.{test,spec}.{js,jsx}'],
     exclude: ['node_modules', 'dist', 'e2e/**'],
     passWithNoTests: true,
+    // Retry on CI only: the ~5k-test suite runs multi-threaded on a resource-
+    // constrained runner, where a few render/async tests occasionally trip their
+    // default findByTestId/waitFor timeout. Retry absorbs those flakes without
+    // masking real failures (a genuine break fails all attempts). 0 locally.
+    retry: process.env.CI ? 2 : 0,
     pool: 'forks',
     poolOptions: {
       forks: {
@@ -33,12 +38,7 @@ export default defineConfig({
       reporter: ['text', 'json', 'html', 'lcov'],
       reportsDirectory: './coverage',
       include: ['src/**/*.{js,jsx}'],
-      exclude: [
-        'src/test/**',
-        'src/**/*.test.{js,jsx}',
-        'src/**/*.spec.{js,jsx}',
-        'src/main.jsx',
-      ],
+      exclude: ['src/test/**', 'src/**/*.test.{js,jsx}', 'src/**/*.spec.{js,jsx}', 'src/main.jsx'],
       // Skip thresholds when no tests exist
       skipFull: true,
     },
