@@ -16,7 +16,7 @@ const SAFETY_CATEGORY_OPTIONS = [
   { key: 'emergency_squawk', label: 'Emergency Squawk' },
 ];
 
-export function FilterMenuPanel({ trafficFilters, updateTrafficFilters, onClose }) {
+function FilterMenuPanelBase({ trafficFilters, updateTrafficFilters, onClose }) {
   const hiddenSafety = trafficFilters.hiddenSafetyCategories || [];
   const toggleSafetyCategory = (key) =>
     updateTrafficFilters((prev) => {
@@ -241,4 +241,7 @@ export function FilterMenuPanel({ trafficFilters, updateTrafficFilters, onClose 
   );
 }
 
+// Memoized: its props are stabilized by the caller (useCallback handlers), so it
+// no longer re-renders on every MapView tick while the panel is open.
+export const FilterMenuPanel = React.memo(FilterMenuPanelBase);
 export default FilterMenuPanel;
