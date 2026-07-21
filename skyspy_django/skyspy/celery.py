@@ -557,6 +557,43 @@ if _is_rpi_mode():
     app.conf.beat_schedule["update-engagement-stats-every-2m"]["schedule"] = crontab(minute="6-59/10")
     app.conf.beat_schedule["update-time-comparison-stats-every-5m"]["schedule"] = crontab(minute="*/15")
     app.conf.beat_schedule["update-antenna-analytics-every-5m"]["schedule"] = crontab(minute="8-59/10")
+else:
+    # Non-RPi: stagger the grouped 5-min / 2-min interval tasks across minute
+    # offsets so they don't all fire on the same wall-clock boundary (a mild
+    # thundering herd at the 5-min LCM). crontab's minute resolution is fine for
+    # these cadences. Keep an explicit interval-length expiry so the pile-up guard
+    # below doesn't fall back to its 6h cron default for them. Missing keys are
+    # skipped so a renamed/removed task can never crash worker startup.
+    _stagger_5m = [
+        "cleanup-sessions-every-5m",
+        "refresh-airspace-advisories-every-5m",
+        "update-antenna-analytics-every-5m",
+        "update-time-comparison-stats-every-5m",
+        "update-favorite-tracking-every-5m",
+        "swim-notams-every-5m",
+        "cleanup-memory-cache-every-5m",
+        "cleanup-cannonball-sessions-every-5m",
+        "refresh-nexrad-cache-every-5m",
+        "collect-worker-stats-every-5m",
+    ]
+    for _i, _key in enumerate(_stagger_5m):
+        _entry = app.conf.beat_schedule.get(_key)
+        if _entry is None:
+            continue
+        _entry["schedule"] = crontab(minute=f"{_i % 5}-59/5")
+        _entry.setdefault("options", {})["expire_seconds"] = 300.0
+
+    _stagger_2m = [
+        "update-flight-pattern-geographic-stats-every-2m",
+        "update-tracking-quality-stats-every-2m",
+        "update-engagement-stats-every-2m",
+    ]
+    for _i, _key in enumerate(_stagger_2m):
+        _entry = app.conf.beat_schedule.get(_key)
+        if _entry is None:
+            continue
+        _entry["schedule"] = crontab(minute=f"{_i % 2}-59/2")
+        _entry.setdefault("options", {})["expire_seconds"] = 120.0
 
 
 # =============================================================================
