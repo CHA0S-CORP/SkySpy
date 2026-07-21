@@ -124,11 +124,15 @@ class TestProcessNotificationQueue:
         # Make it due for retry (bypass auto_now_add / defaults via update).
         NotificationLog.objects.filter(id=log.id).update(next_retry_at=timezone.now() - timedelta(minutes=1))
 
-        with patch("skyspy.tasks.notifications.send_notification_task.delay") as mock_delay:
+        # Retries are now dispatched as a single celery group() of send-task
+        # signatures rather than N individual .delay() calls; mock the group so
+        # the real send task doesn't execute eagerly.
+        with patch("skyspy.tasks.notifications.group") as mock_group:
             result = process_notification_queue()
 
         assert result["processed"] == 1
-        mock_delay.assert_called_once()
+        mock_group.assert_called_once()
+        mock_group.return_value.apply_async.assert_called_once()
 
         # The row is claimed by pushing next_retry_at into the future so an
         # overlapping beat run won't re-enqueue it.

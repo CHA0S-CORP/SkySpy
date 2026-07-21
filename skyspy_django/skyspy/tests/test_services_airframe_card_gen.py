@@ -284,21 +284,30 @@ def test_discover_respects_min_tails():
 # --------------------------------------------------------------------------- #
 # Endpoint
 # --------------------------------------------------------------------------- #
+@pytest.fixture
+def _llm_user(api_client, django_user_model):
+    """Authenticate the shared api_client — the generate endpoint is gated by
+    CanUseLLM (authenticated + assistant.view; superusers pass)."""
+    user = django_user_model.objects.create_superuser("llm_gen", "llm_gen@test.local", "pw")
+    api_client.force_authenticate(user)
+    return user
+
+
 @pytest.mark.django_db
-def test_generate_endpoint_rejects_bad_type(api_client):
+def test_generate_endpoint_rejects_bad_type(api_client, _llm_user):
     resp = api_client.post("/api/v1/airframes/type-cards/generate/", {"type": "!!"}, format="json")
     assert resp.status_code == 400
 
 
 @pytest.mark.django_db
-def test_generate_endpoint_503_when_llm_unavailable(api_client):
+def test_generate_endpoint_503_when_llm_unavailable(api_client, _llm_user):
     with patch("skyspy.services.llm.llm_client.is_available", return_value=False):
         resp = api_client.post("/api/v1/airframes/type-cards/generate/", {"type": "SU95"}, format="json")
     assert resp.status_code == 503
 
 
 @pytest.mark.django_db
-def test_generate_endpoint_409_when_exists(api_client):
+def test_generate_endpoint_409_when_exists(api_client, _llm_user):
     AirframeTypeCard.objects.create(type_code="SU95")
     with patch("skyspy.services.llm.llm_client.is_available", return_value=True):
         resp = api_client.post("/api/v1/airframes/type-cards/generate/", {"type": "SU95"}, format="json")
@@ -306,7 +315,7 @@ def test_generate_endpoint_409_when_exists(api_client):
 
 
 @pytest.mark.django_db
-def test_generate_endpoint_queues_202(api_client):
+def test_generate_endpoint_queues_202(api_client, _llm_user):
     with (
         patch("skyspy.services.llm.llm_client.is_available", return_value=True),
         patch("skyspy.tasks.airframe_cards.generate_airframe_type_card.delay") as mock_delay,
@@ -318,7 +327,7 @@ def test_generate_endpoint_queues_202(api_client):
 
 
 @pytest.mark.django_db
-def test_generate_endpoint_409_for_curated_type(api_client):
+def test_generate_endpoint_409_for_curated_type(api_client, _llm_user):
     with patch("skyspy.services.llm.llm_client.is_available", return_value=True):
         resp = api_client.post("/api/v1/airframes/type-cards/generate/", {"type": "B738"}, format="json")
     assert resp.status_code == 409
