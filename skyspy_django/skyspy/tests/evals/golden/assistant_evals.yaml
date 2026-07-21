@@ -1,0 +1,108 @@
+# Golden eval cases for the assistant, run against a REAL model (Spark vLLM).
+#
+# Fields per case:
+#   id             unique name
+#   question       the user query
+#   history        optional prior turns [{role, content}]
+#   seed           true → run against the seeded_world dataset (default true)
+#   expected_tools {any_of: [...]} and/or {all_of: [...]} — which tools a good
+#                  answer calls; omit to skip tool scoring (e.g. memory answers)
+#   must_contain   list of entries the ANSWER must contain; an entry that is a
+#                  list means "any one of these" (case-insensitive)
+#   must_not_contain  hallucination canaries that must NOT appear
+#   format         [no_image_urls, valid_chart_blocks]
+#
+# Keep assertions robust to model phrasing: prefer expected_tools + canaries
+# over exact wording.
+
+- id: live-count
+  question: "How many aircraft are you tracking right now?"
+  expected_tools: {any_of: [live_traffic_summary, live_aircraft_map, platform_activity]}
+  format: [no_image_urls]
+
+- id: seeded-orbit
+  question: "Is SEEDER2 circling or orbiting? Check its recent track."
+  expected_tools: {any_of: [aircraft_track, detect_unusual_patterns, plot_tracks]}
+  must_contain:
+    - [orbit, circl, loiter]
+  format: [no_image_urls]
+
+- id: linear-not-orbit
+  question: "Has SEEDER1 been flying in circles in the last day?"
+  expected_tools: {any_of: [aircraft_track, detect_unusual_patterns, plot_tracks]}
+  must_not_contain: []
+
+- id: safety-events
+  question: "Were there any emergencies or safety events in the last 24 hours?"
+  expected_tools: {any_of: [find_safety_events, safety_summary, semantic_event_search]}
+  must_contain:
+    - ["7700", emergency, TCAS, tcas]
+
+- id: acars-notable
+  question: "Anything interesting or unusual on the ACARS datalink today?"
+  expected_tools: {any_of: [notable_acars_messages, semantic_acars_search, acars_summary]}
+  must_contain:
+    - [medical, divert, MEDICAL, DIVERT]
+
+- id: notam-ksea
+  question: "Are there any NOTAMs at KSEA right now?"
+  expected_tools: {any_of: [airport_notams, semantic_notam_search]}
+  must_contain:
+    - [16L, closed, CLSD, clsd]
+
+- id: pirep-turbulence
+  question: "Any pilot reports of turbulence near the station?"
+  expected_tools: {any_of: [recent_pireps, turbulence_forecast, semantic_pirep_search]}
+
+- id: squawk-7600
+  question: "What does squawk 7600 mean?"
+  expected_tools: {any_of: [decode_squawk]}
+  must_contain:
+    - [radio]
+  must_not_contain: [hijack]
+
+- id: squawk-1277
+  question: "A plane near me is squawking 1277 — what does that mean?"
+  expected_tools: {any_of: [decode_squawk]}
+  must_contain:
+    - [search, rescue, SAR]
+
+- id: military-callsign
+  question: "What kind of flight typically uses the callsign RCH123?"
+  expected_tools: {any_of: [military_reference, identify_military]}
+  must_contain:
+    - [airlift, mobility, transport, "Air Force", USAF]
+
+- id: photo-request
+  question: "Show me a photo of aircraft A1B2C3."
+  expected_tools: {all_of: [fetch_airframe_photo]}
+  format: [no_image_urls]
+
+- id: map-request
+  question: "Show all military aircraft on the map."
+  expected_tools: {any_of: [radar_filter, live_aircraft_map]}
+  format: [no_image_urls]
+
+- id: no-data-honesty
+  question: "Tell me everything you know about aircraft hex 000001."
+  expected_tools: {any_of: [lookup_airframe, aircraft_dossier]}
+  # A nonexistent hex must not grow a fabricated identity.
+  must_not_contain: [Boeing, Airbus, Cessna, Gulfstream]
+
+- id: multi-hop-seeded
+  question: "What do you know about SEEDER1 and where has it flown recently?"
+  expected_tools: {any_of: [aircraft_track, find_sightings, lookup_airframe, plot_tracks]}
+
+- id: conversation-memory
+  question: "and what about 7600?"
+  history:
+    - {role: user, content: "What does squawk 7700 mean?"}
+    - {role: assistant, content: "Squawk 7700 is the general emergency code."}
+  must_contain:
+    - [radio]
+  must_not_contain: [hijack]
+
+- id: chart-format
+  question: "Chart the ACARS message volume over the last 24 hours."
+  expected_tools: {any_of: [acars_timeline, acars_summary]}
+  format: [no_image_urls, valid_chart_blocks]

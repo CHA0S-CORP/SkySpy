@@ -76,7 +76,13 @@ function EmptyTab({ label }) {
  * @param {(eventId: string|number) => void} props.onViewEvent
  * @param {(notamId: string) => void} [props.onViewNotam] - open NOTAM detail
  */
-export function HistoryScreen({ apiBase, onSelectAircraft, onViewEvent, onViewNotam, onViewPirep }) {
+export function HistoryScreen({
+  apiBase,
+  onSelectAircraft,
+  onViewEvent,
+  onViewNotam,
+  onViewPirep,
+}) {
   // Deep-linked view state. The active tab is the `data` param (#history?data=…,
   // plus the legacy #notams/#pireps/#archive aliases that parseHash folds in);
   // the filters/sort round out the shareable state.
@@ -93,7 +99,9 @@ export function HistoryScreen({ apiBase, onSelectAircraft, onViewEvent, onViewNo
   const [sortBy, setSortBy] = useHashParamState('sort', 'time');
   const [sortDir, setSortDir] = useHashParamState('sortDir', 'desc');
   const [archiveIcao, setArchiveIcao] = useHashParamState('icao', '');
-  const [headerOpen, setHeaderOpen] = useState(false);
+  // Default expanded so the History screen shows its summary (KPIs, activity
+  // chart, server-computed stats) on load; collapsing is opt-in.
+  const [headerOpen, setHeaderOpen] = useState(true);
 
   const queryClient = useQueryClient();
   const { hexSet: favoriteHexes } = useFavorites();
@@ -134,7 +142,20 @@ export function HistoryScreen({ apiBase, onSelectAircraft, onViewEvent, onViewNo
         safetyByHex,
         favoriteHexes
       ),
-    [sessionList, query, cat, type, airline, mil, safe, fav, sortBy, sortDir, safetyByHex, favoriteHexes]
+    [
+      sessionList,
+      query,
+      cat,
+      type,
+      airline,
+      mil,
+      safe,
+      fav,
+      sortBy,
+      sortDir,
+      safetyByHex,
+      favoriteHexes,
+    ]
   );
   const cards = useMemo(
     () => filtered.map((s) => toSessionCard(s, safetyByHex)),

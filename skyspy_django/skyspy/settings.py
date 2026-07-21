@@ -807,6 +807,17 @@ ASSISTANT_MAX_HISTORY_CHARS = get_env("ASSISTANT_MAX_HISTORY_CHARS", "3000", int
 # stop overflowing the window on the very first model call. 0 (default) = assume a
 # large context, no compaction.
 ASSISTANT_CONTEXT_WINDOW = get_env("ASSISTANT_CONTEXT_WINDOW", "0", int)
+# When ASSISTANT_CONTEXT_WINDOW is 0/unset, probe the OpenAI-compatible endpoint
+# (GET /models) for the model's real window — vLLM reports max_model_len — so
+# compact mode engages automatically for small local models without manual
+# config. An explicit ASSISTANT_CONTEXT_WINDOW always wins; endpoints that don't
+# report a window (OpenAI/Ollama) fall back to assume-large. Cached ~10 min.
+ASSISTANT_CONTEXT_WINDOW_AUTO = get_env("ASSISTANT_CONTEXT_WINDOW_AUTO", "True", bool)
+# Give the assistant a live web_search tool (services/web_search.py). ANDed with
+# WEB_SEARCH_ENABLED — that flag alone only powers internal card-gen grounding;
+# this one deliberately opts the CHAT MODEL into reaching the internet. Off by
+# default.
+ASSISTANT_WEB_SEARCH_ENABLED = get_env("ASSISTANT_WEB_SEARCH_ENABLED", "False", bool)
 # Inject a compact live-situation snapshot into each assistant query so answers
 # are grounded in current traffic without spending a tool call. Disable on tiny
 # models / RPi if the extra context hurts.

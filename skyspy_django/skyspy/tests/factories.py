@@ -35,6 +35,8 @@ from skyspy.models import (
     SafetyEvent,
 )
 from skyspy.models.auth import APIKey, FeatureAccess
+from skyspy.models.aviation import CachedPirep
+from skyspy.models.notams import CachedNotam
 from skyspy.models.notifications import NotificationChannel, NotificationTemplate, UserNotificationPreference
 from skyspy.models.stats import DailyStats, PersonalRecord, RareSighting, SightingStreak
 from skyspy.models.watch_list import WatchedAircraft
@@ -942,3 +944,49 @@ class FeatureAccessFactory(DjangoModelFactory):
     feature = factory.Iterator(["aircraft", "alerts", "safety", "audio", "stats", "history", "admin"])
     read_access = "public"
     write_access = "authenticated"
+
+
+class CachedPirepFactory(DjangoModelFactory):
+    """Factory for CachedPirep (pilot report) model."""
+
+    class Meta:
+        model = CachedPirep
+
+    pirep_id = factory.Sequence(lambda n: f"PIREP-{n:06d}")
+    report_type = "UA"
+    location = "KSEA"
+    latitude = 47.44
+    longitude = -122.31
+    observation_time = factory.LazyFunction(timezone.now)
+    flight_level = 120
+    altitude_ft = 12000
+    aircraft_type = "B738"
+    turbulence_type = "MOD"
+    turbulence_freq = "OCNL"
+    raw_text = factory.LazyAttribute(
+        lambda o: f"{o.location} UA /OV {o.location}/TM 1200/FL{o.flight_level:03d}/TP {o.aircraft_type}/TB {o.turbulence_type}"
+    )
+
+    class Params:
+        severe = factory.Trait(report_type="UUA", turbulence_type="SEV")
+        icing = factory.Trait(turbulence_type=None, icing_type="MOD", icing_intensity="MOD")
+
+
+class CachedNotamFactory(DjangoModelFactory):
+    """Factory for CachedNotam model (active window spans now by default)."""
+
+    class Meta:
+        model = CachedNotam
+
+    notam_id = factory.Sequence(lambda n: f"NOTAM-{n:06d}")
+    notam_type = "D"
+    location = "KSEA"
+    latitude = 47.44
+    longitude = -122.31
+    effective_start = factory.LazyFunction(lambda: timezone.now() - timedelta(hours=1))
+    effective_end = factory.LazyFunction(lambda: timezone.now() + timedelta(hours=24))
+    text = "RWY 16L/34R CLSD"
+    raw_text = factory.LazyAttribute(lambda o: o.text)
+
+    class Params:
+        tfr = factory.Trait(notam_type="TFR", radius_nm=10.0, floor_ft=0, ceiling_ft=18000, reason="HAZARDS")

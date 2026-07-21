@@ -401,6 +401,10 @@ ASSISTANT_MAX_RESULT_CHARS = 6000
 ASSISTANT_MAX_HISTORY_MSGS = 16
 ASSISTANT_MAX_HISTORY_CHARS = 3000
 ASSISTANT_CONTEXT_WINDOW = 0
+# Off in tests: no probing a (nonexistent) endpoint for the model window.
+ASSISTANT_CONTEXT_WINDOW_AUTO = False
+# The assistant's web_search tool stays off in tests (gating asserted explicitly).
+ASSISTANT_WEB_SEARCH_ENABLED = False
 # Off in tests so tool-selection assertions see a clean query (no live snapshot).
 ASSISTANT_BRIEFING_ENABLED = False
 ASSISTANT_PHOTO_BASE_URL = ""

@@ -17,32 +17,7 @@ vi.mock('../../../../lib/api', () => ({
 }));
 
 import api from '../../../../lib/api';
-
-// Build a fake SSE fetch Response that streams the given frames.
-function sseResponse(frames) {
-  const enc = new TextEncoder();
-  let i = 0;
-  return {
-    ok: true,
-    status: 200,
-    body: {
-      getReader() {
-        return {
-          read() {
-            if (i < frames.length)
-              return Promise.resolve({ value: enc.encode(frames[i++]), done: false });
-            return Promise.resolve({ value: undefined, done: true });
-          },
-        };
-      },
-    },
-  };
-}
-
-const REPLY = (text) => [
-  `data: {"type":"token","text":${JSON.stringify(text)}}\n\n`,
-  `data: {"type":"final","answer":${JSON.stringify(text)},"sources":[]}\n\n`,
-];
+import { sseResponse, REPLY } from './useAssistantChat.testUtils';
 
 function wrapper({ children }) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });

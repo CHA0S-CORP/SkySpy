@@ -1,4 +1,4 @@
-.PHONY: test test-docker test-local test-verbose clean build help test-common test-python lint lint-python lint-go lint-frontend docs docs-openapi docs-storybook docs-go docs-socketio docs-screenshots dev dev-down dev-logs dev-auth dev-auth-down dev-auth-seed dev-public dev-public-down
+.PHONY: test test-docker test-local test-verbose clean build help test-common test-python eval-assistant lint lint-python lint-go lint-frontend docs docs-openapi docs-storybook docs-go docs-socketio docs-screenshots dev dev-down dev-logs dev-auth dev-auth-down dev-auth-seed dev-public dev-public-down
 
 # Default target
 help:
@@ -172,6 +172,24 @@ test-common:
 # Run all Python package tests
 test-python: test-common
 	@echo "✅ All Python package tests completed"
+
+# =============================================================================
+# Assistant Evals (real LLM — never CI)
+# =============================================================================
+
+# Run the golden assistant evals against a real vLLM endpoint (e.g. the Spark).
+# Usage: make eval-assistant ASSISTANT_EVAL_URL=http://spark:8000/v1
+# Optional: ASSISTANT_EVAL_MODEL / ASSISTANT_EVAL_API_KEY / ASSISTANT_EVAL_TIMEOUT.
+# Reports land in ./test-results/assistant-evals/ (one JSON per run, for drift diffs).
+eval-assistant:
+	@test -n "$(ASSISTANT_EVAL_URL)" || (echo "Set ASSISTANT_EVAL_URL (OpenAI-compatible base URL, e.g. http://spark:8000/v1)"; exit 1)
+	docker compose --env-file ./.env.test -f ./docker-compose.test.yaml --profile test run --rm \
+		-e ASSISTANT_EVAL_URL="$(ASSISTANT_EVAL_URL)" \
+		-e ASSISTANT_EVAL_MODEL="$(ASSISTANT_EVAL_MODEL)" \
+		-e ASSISTANT_EVAL_API_KEY="$(ASSISTANT_EVAL_API_KEY)" \
+		-e ASSISTANT_EVAL_TIMEOUT="$(ASSISTANT_EVAL_TIMEOUT)" \
+		-e EVAL_REPORT_DIR=/app/test-results/assistant-evals \
+		api-test pytest skyspy/tests/evals -m eval -v --tb=short -s -p no:cacheprovider
 
 # =============================================================================
 # Linting
