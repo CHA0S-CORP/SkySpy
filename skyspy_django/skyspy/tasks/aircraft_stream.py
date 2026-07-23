@@ -38,13 +38,17 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 #
 # IMPORTANT DEPLOYMENT CONSTRAINT: these module-level buffers are shared
-# between the producer (stream_aircraft on the `polling` queue) and the
-# consumers (flush_stream_to_database / process_new_aircraft_lookups on the
-# `database` queue, cleanup_stale_aircraft on `default`). This only works
-# because a single gevent worker process consumes all queues. If the queues
-# are ever split across multiple worker processes, the cold-path tasks will
-# see empty buffers and DB persistence/lookups will silently stop - move the
-# buffers to Redis before splitting workers.
+# between the producer (stream_aircraft) and the consumers
+# (flush_stream_to_database / process_new_aircraft_lookups / cleanup_stale_aircraft).
+# They only work when producer AND consumers run in the SAME worker process, so
+# ALL of them are pinned to the `polling` queue (see celery.py task_routes) which
+# a single dedicated realtime worker consumes. When the worker fleet was split
+# into a gevent `realtime` (polling) worker + a threads `io` worker, these
+# cold-path tasks were briefly left on the `database`/`default` queues (io
+# worker) — a DIFFERENT process — so they drained EMPTY buffers and
+# AircraftSighting/track persistence silently stopped. Keep them on `polling`.
+# The proper long-term fix is to move these buffers to Redis so producer and
+# consumers can live in different processes; until then, do NOT re-route them.
 
 # Current aircraft state (hot path - updated on every message)
 _aircraft_state: dict[str, dict] = {}  # icao -> aircraft data

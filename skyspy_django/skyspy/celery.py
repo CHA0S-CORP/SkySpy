@@ -638,11 +638,19 @@ app.conf.task_routes = {
     "skyspy.tasks.analytics.aggregate_all_stats": {"queue": "default"},
     "skyspy.tasks.analytics.update_antenna_analytics": {"queue": "low_priority"},
     "skyspy.tasks.analytics.refresh_acars_stats": {"queue": "low_priority"},
-    # Aircraft stream cold path (database writes - separate queue to not block hot path)
-    "skyspy.tasks.aircraft_stream.flush_stream_to_database": {"queue": "database"},
-    "skyspy.tasks.aircraft_stream.process_new_aircraft_lookups": {"queue": "database"},
-    # Aircraft stream stale cleanup (quick, in-memory operation)
-    "skyspy.tasks.aircraft_stream.cleanup_stale_aircraft": {"queue": "default"},
+    # Aircraft stream cold path — MUST stay on `polling` (the realtime worker),
+    # same process as stream_aircraft. These drain the module-level in-process
+    # buffers (_db_write_buffer / _aircraft_state in tasks/aircraft_stream.py);
+    # routing them to a different worker process makes them read EMPTY buffers, so
+    # AircraftSighting/track persistence silently stops (regressed the detail-page
+    # track map for 3 days after the io/realtime worker split). They stay light —
+    # flush is a batched DB write; process_new_aircraft_lookups only ENQUEUES the
+    # heavy external fetch_aircraft_info_batch/fetch_route tasks (which run on the
+    # io worker) — so co-locating them with the stream doesn't re-block the hot
+    # path. See the DEPLOYMENT CONSTRAINT note in tasks/aircraft_stream.py.
+    "skyspy.tasks.aircraft_stream.flush_stream_to_database": {"queue": "polling"},
+    "skyspy.tasks.aircraft_stream.process_new_aircraft_lookups": {"queue": "polling"},
+    "skyspy.tasks.aircraft_stream.cleanup_stale_aircraft": {"queue": "polling"},
     # Low-priority expensive analytics tasks (RPi optimization)
     "skyspy.tasks.analytics.refresh_time_comparison_stats": {"queue": "low_priority"},
     "skyspy.tasks.analytics.refresh_tracking_quality_stats": {"queue": "low_priority"},
