@@ -108,6 +108,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # Required for libacars runtime
     zlib1g \
     libxml2 \
+    # GeoDjango (django.contrib.gis) loads GEOS/GDAL/PROJ via ctypes at runtime.
+    # The -dev packages provide the unversioned libgeos_c.so / libgdal.so / libproj.so
+    # symlinks so GeoDjango auto-detects them without GEOS_LIBRARY_PATH pinning.
+    libgeos-dev \
+    libgdal-dev \
+    libproj-dev \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
@@ -133,7 +139,11 @@ COPY --chown=skyspy:skyspy ./skyspy_django/ .
 # Note: web/public files are already included in the frontend build (Vite copies them to dist)
 
 # Create required directories
-RUN mkdir -p /data/photos /data/radio /data/opensky staticfiles && \
+# Pre-create every /data subdir that gets a named volume so the volume inherits
+# skyspy ownership on first init (a named volume mounted over a path missing from
+# the image initializes empty + root-owned → the app can't write, breaking the
+# external_db FAA/ADSBX/tar1090 caches). external_db was previously omitted.
+RUN mkdir -p /data/photos /data/radio /data/opensky /data/external_db staticfiles && \
     chown -R skyspy:skyspy /data staticfiles
 
 # Collect static files (BUILD_MODE disables external service connections)

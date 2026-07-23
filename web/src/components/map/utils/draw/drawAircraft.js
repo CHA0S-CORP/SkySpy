@@ -106,16 +106,23 @@ export function drawAllAircraft(ctx, geo, data) {
   } = data;
 
   // Draw aircraft (if overlay enabled)
-  // Sort so aircraft with safety events are drawn last (on top)
+  // Order so aircraft with safety events are drawn last (on top).
   if (!overlays.aircraft) return;
 
-  const aircraftToDraw = [...sortedAircraft].sort((a, b) => {
-    const aHasSafety = conflictAircraft.has(a.hex?.toUpperCase());
-    const bHasSafety = conflictAircraft.has(b.hex?.toUpperCase());
-    if (aHasSafety && !bHasSafety) return 1; // a comes after b (drawn on top)
-    if (!aHasSafety && bHasSafety) return -1; // b comes after a
-    return 0;
-  });
+  // Single-pass stable partition instead of a full sort every rAF frame:
+  // O(n) with one Set.has per aircraft, vs the sort's O(n log n) with two
+  // Set.has per comparison. Preserves within-group order (matches the old
+  // stable sort's `return 0`).
+  const normalAircraft = [];
+  const safetyAircraft = [];
+  for (const ac of sortedAircraft) {
+    if (conflictAircraft.has(ac.hex?.toUpperCase())) {
+      safetyAircraft.push(ac);
+    } else {
+      normalAircraft.push(ac);
+    }
+  }
+  const aircraftToDraw = normalAircraft.concat(safetyAircraft);
 
   // Data block thinning: limit data blocks based on screen density
   // When many aircraft are visible, show fewer data blocks to reduce clutter

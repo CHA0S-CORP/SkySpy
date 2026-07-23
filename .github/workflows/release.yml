@@ -84,7 +84,12 @@ jobs:
     timeout-minutes: 10
     services:
       postgres:
-        image: pgvector/pgvector:pg16
+        # Combined PostGIS + pgvector image, published by the CI workflow's
+        # build-db-image job (docker/postgres/Dockerfile).
+        image: ghcr.io/cha0s-corp/skyspy-postgres:pg16-postgis
+        credentials:
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
         env:
           POSTGRES_USER: adsb
           POSTGRES_PASSWORD: adsb

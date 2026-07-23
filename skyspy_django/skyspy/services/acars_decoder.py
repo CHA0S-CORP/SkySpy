@@ -264,8 +264,11 @@ def parse_coordinates(text: str) -> dict | None:
     text_clean = text.replace(" ", "").replace("\n", "").replace("\r", "")
 
     # DDMM.m — 2/3-digit degrees followed by 2-digit minutes with a decimal.
+    # Reject minutes >= 60 (a garbled value like 78.5 would add 1.3 spurious
+    # degrees yet still pass the +/-90/180 range check) — fall through to the
+    # other formats instead.
     m = re.search(r"([NS])(\d{2})(\d{2}\.\d+)[,/]?([EW])(\d{3})(\d{2}\.\d+)", text_clean)
-    if m:
+    if m and float(m.group(3)) < 60 and float(m.group(6)) < 60:
         lat = int(m.group(2)) + float(m.group(3)) / 60
         lon = int(m.group(5)) + float(m.group(6)) / 60
         return _finish_coord(-lat if m.group(1) == "S" else lat, -lon if m.group(4) == "W" else lon)
@@ -285,8 +288,9 @@ def parse_coordinates(text: str) -> dict | None:
         return _finish_coord(-lat if m.group(2) == "S" else lat, -lon if m.group(4) == "W" else lon)
 
     # Legacy DDMMt packed form (minutes in tenths): N12345W123456.
+    # Minutes-in-tenths must be < 600 (i.e. < 60 minutes) to be valid.
     m = re.search(r"([NS])(\d{2})(\d{3})([EW])(\d{3})(\d{3})", text_clean)
-    if m:
+    if m and int(m.group(3)) < 600 and int(m.group(6)) < 600:
         lat = int(m.group(2)) + (int(m.group(3)) / 10) / 60
         lon = int(m.group(5)) + (int(m.group(6)) / 10) / 60
         return _finish_coord(-lat if m.group(1) == "S" else lat, -lon if m.group(4) == "W" else lon)
@@ -462,9 +466,13 @@ def decode_message_text(text: str, label: str = None, libacars_data: dict = None
                 pos_decoded["altitude_ft"] = int(alt_match.group(3)) * 100
                 pos_decoded["flight_level"] = f"FL{int(alt_match.group(3))}"
             else:
+                # The bare-number+FT alternative can match non-altitude figures
+                # (a "3400FT AGL" terrain note, a fuel value). Only accept a
+                # plausible cruise/approach altitude so those don't get plotted.
                 alt = int(alt_match.group(1) or alt_match.group(2))
-                pos_decoded["altitude_ft"] = alt
-                pos_decoded["flight_level"] = f"FL{alt // 100}"
+                if 0 < alt <= 60000:
+                    pos_decoded["altitude_ft"] = alt
+                    pos_decoded["flight_level"] = f"FL{alt // 100}"
 
         # Requested / next waypoint ident (e.g. "REQ POS JAWBN", "NEXT WPT MARNR").
         wpt_match = re.search(r"(?:REQ\s*POS|NEXT\s*WPT|WPT|TO)\s+([A-Z]{3,5})\b", text_upper)
@@ -696,16 +704,32 @@ def enrich_acars_message(msg: dict, *, decode_text: bool = False) -> dict:
         text = msg.get("text")
         libacars_data = msg.get("libacars")
         if text:
-            # Get message direction if available, matching MsgDir
-            # (1=GND2AIR/uplink, 2=AIR2GND/downlink)
-            direction = 0
-            if msg.get("fromaddr"):
-                direction = 2  # Downlink (air-to-ground): aircraft is the sender
-            elif msg.get("toaddr"):
-                direction = 1  # Uplink (ground-to-air): aircraft is the recipient
-
-            decoded_text = decode_message_text(text, label, libacars_data, direction)
+            decoded_text = decode_message_text(text, label, libacars_data, infer_acars_direction(msg))
             if decoded_text:
                 enriched["decoded_text"] = decoded_text
 
     return enriched
+
+
+def infer_acars_direction(msg: dict) -> int:
+    """Infer ACARS message direction, matching libacars MsgDir.
+
+    Returns 1 = GND2AIR/uplink, 2 = AIR2GND/downlink, 0 = unknown.
+
+    Prefers an explicit ``direction`` field, then the block-id convention (an
+    ACARS downlink block id is a digit, an uplink block id is a letter). The old
+    code keyed on ``fromaddr``/``toaddr``, which the normalize pipeline never
+    sets, so direction was always 0 (unknown) — the crash-prone CPDLC/ADS-C
+    path. Passing a concrete direction when we can tell also steers away from
+    that unknown-direction branch.
+    """
+    explicit = msg.get("direction")
+    if explicit in (1, 2):
+        return explicit
+    block_id = str(msg.get("block_id") or "").strip()
+    if len(block_id) == 1:
+        if block_id.isdigit():
+            return 2  # downlink (air-to-ground)
+        if block_id.isalpha():
+            return 1  # uplink (ground-to-air)
+    return 0

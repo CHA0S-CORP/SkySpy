@@ -108,7 +108,7 @@ export function AirframeCard({ frame, seenCount = 0, neverSeen = false, onOpen }
   };
 
   return (
-    <article
+    <div
       className="v2-af__card v2-af__card--btn"
       style={{ '--af-accent': color }}
       data-testid={`af-card-${frame.id}`}
@@ -188,6 +188,6 @@ export function AirframeCard({ frame, seenCount = 0, neverSeen = false, onOpen }
         <Spec label="Height" value={frame.height} unit="m" />
         <Spec label="First flt" value={frame.firstFlight} />
       </div>
-    </article>
+    </div>
   );
 }

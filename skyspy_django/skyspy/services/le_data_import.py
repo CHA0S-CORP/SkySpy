@@ -249,6 +249,28 @@ class LEDataImportService:
         skipped = 0
         errors = []
 
+        # Accumulate model instances so the DB writes can be flushed in bulk
+        # after the loop (bulk_update/bulk_create) instead of one query per row.
+        # Fields updated for high-confidence merges (was existing.save() → all fields).
+        confidence_update_fields = [
+            "agency_name",
+            "registration",
+            "aircraft_type",
+            "notes",
+            "data_source",
+            "confidence_score",
+            "evidence_links",
+        ]
+        to_create: list[CannonballKnownAircraft] = []
+        # icao_hex is unique, so an in-batch duplicate hex must reuse the same
+        # in-memory instance rather than being inserted/updated twice (the old
+        # per-row create() made the first write visible to the second lookup;
+        # deferred bulk_create does not, so we track pending state ourselves).
+        pending_create: dict[str, CannonballKnownAircraft] = {}
+        updates_by_pk: dict[int, CannonballKnownAircraft] = {}
+        full_update_pks: set[int] = set()
+        evidence_only_pks: set[int] = set()
+
         with transaction.atomic():
             for record in records:
                 try:
@@ -257,8 +279,16 @@ class LEDataImportService:
                         skipped += 1
                         continue
 
-                    # Check for existing record
-                    existing = CannonballKnownAircraft.objects.filter(icao_hex=icao_hex).first()
+                    # Resolve the working instance: a create still pending from an
+                    # earlier record in this batch, an existing row already being
+                    # updated this batch, or a fresh DB fetch.
+                    existing = pending_create.get(icao_hex)
+                    is_pending_create = existing is not None
+                    if existing is None:
+                        existing = CannonballKnownAircraft.objects.filter(icao_hex=icao_hex).first()
+                        if existing is not None and existing.pk in updates_by_pk:
+                            # Reuse the already-mutated instance so merges accumulate.
+                            existing = updates_by_pk[existing.pk]
 
                     if existing:
                         # Update if this source has higher confidence
@@ -275,7 +305,13 @@ class LEDataImportService:
                                 existing.evidence_links or [],
                                 [{"source": data_source.name, "url": data_source.url}],
                             )
-                            existing.save()
+                            # A pending create already carries these mutations and
+                            # is flushed via bulk_create; only persisted rows need
+                            # an UPDATE.
+                            if not is_pending_create:
+                                updates_by_pk[existing.pk] = existing
+                                full_update_pks.add(existing.pk)
+                                evidence_only_pks.discard(existing.pk)
                             updated += 1
                         else:
                             # Just update evidence links
@@ -283,11 +319,13 @@ class LEDataImportService:
                                 existing.evidence_links or [],
                                 [{"source": data_source.name, "url": data_source.url}],
                             )
-                            existing.save(update_fields=["evidence_links"])
+                            if not is_pending_create and existing.pk not in full_update_pks:
+                                updates_by_pk[existing.pk] = existing
+                                evidence_only_pks.add(existing.pk)
                             skipped += 1
                     else:
                         # Create new record
-                        CannonballKnownAircraft.objects.create(
+                        obj = CannonballKnownAircraft(
                             icao_hex=icao_hex,
                             registration=record.get("registration", ""),
                             agency_name=record.get("agency_name", "Unknown Agency"),
@@ -300,11 +338,23 @@ class LEDataImportService:
                             evidence_links=[{"source": data_source.name, "url": data_source.url}],
                             notes=record.get("notes", ""),
                         )
+                        pending_create[icao_hex] = obj
+                        to_create.append(obj)
                         imported += 1
 
                 except (DatabaseError, ValueError, KeyError, TypeError, AttributeError) as e:
                     errors.append(f"Error importing {record.get('icao_hex', 'unknown')}: {e}")
                     logger.warning(f"Error importing record: {e}")
+
+            # Flush accumulated writes in bulk (one query per category).
+            confidence_updates = [updates_by_pk[pk] for pk in full_update_pks]
+            evidence_updates = [updates_by_pk[pk] for pk in evidence_only_pks]
+            if confidence_updates:
+                CannonballKnownAircraft.objects.bulk_update(confidence_updates, confidence_update_fields)
+            if evidence_updates:
+                CannonballKnownAircraft.objects.bulk_update(evidence_updates, ["evidence_links"])
+            if to_create:
+                CannonballKnownAircraft.objects.bulk_create(to_create)
 
         return imported, updated, skipped, errors
 

@@ -57,6 +57,10 @@ class AuthConfigView(APIView):
             # Local dev (DEV_MODE): the backend relaxes auth gates, so the UI can
             # surface AI/system entries even to an anonymous dev session.
             "dev_mode": bool(getattr(settings, "DEV_MODE", False)),
+            # Map clustering threshold — the Live Map mirrors this to flip between
+            # cluster-bubble and raw-dart rendering (must match the server branch
+            # in mixins/aircraft.py::_get_aircraft_clusters).
+            "map_cluster_zoom_threshold": getattr(settings, "MAP_CLUSTER_ZOOM_THRESHOLD", 8),
         }
 
         # Include feature access configuration

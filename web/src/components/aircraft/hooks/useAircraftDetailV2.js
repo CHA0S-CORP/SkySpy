@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { getTailInfo } from '../../../utils';
+import { withAuth } from '../../../lib/authHeader';
 import { useAircraftPhoto } from './useAircraftPhoto';
 import { useAircraftAcars } from './useAircraftAcars';
 import { useAircraftSafety } from './useAircraftSafety';
@@ -219,8 +220,11 @@ export function useAircraftDetailV2({
         if (!info) {
           let infoData = null;
           // Try airframes endpoint first
+          // withAuth() attaches the JWT — /lookup/* require auth (RequireAuthenticated,
+          // no public bypass) so a bare fetch 401s a signed-in user in hybrid mode.
           let infoRes = await fetch(`${baseUrl}/api/v1/airframes/${hex}/`, {
             signal: abortController.signal,
+            headers: withAuth(),
           });
           infoData = await safeJson(infoRes);
 
@@ -228,6 +232,7 @@ export function useAircraftDetailV2({
           if (!infoData || infoData.error || infoRes.status === 404) {
             infoRes = await fetch(`${baseUrl}/api/v1/lookup/aircraft/${hex}`, {
               signal: abortController.signal,
+              headers: withAuth(),
             });
             infoData = await safeJson(infoRes);
           }
@@ -237,6 +242,7 @@ export function useAircraftDetailV2({
             try {
               const openskRes = await fetch(`${baseUrl}/api/v1/lookup/opensky/${hex}`, {
                 signal: abortController.signal,
+                headers: withAuth(),
               });
               const openskyData = await safeJson(openskRes);
               if (openskyData && !openskyData.error) {

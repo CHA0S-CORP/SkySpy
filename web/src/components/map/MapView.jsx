@@ -1939,35 +1939,47 @@ function MapView({
   }
 
   // Update URL when traffic filters change
-  const updateTrafficFilters = (newFiltersOrUpdater) => {
-    setTrafficFilters((prev) => {
-      const newFilters =
-        typeof newFiltersOrUpdater === 'function' ? newFiltersOrUpdater(prev) : newFiltersOrUpdater;
+  // useCallback (stable identity) so the memoized FilterMenuPanel doesn't
+  // re-render on every MapView tick while it's open. Only depends on
+  // setHashParams; setTrafficFilters is a stable setState.
+  const updateTrafficFilters = useCallback(
+    (newFiltersOrUpdater) => {
+      setTrafficFilters((prev) => {
+        const newFilters =
+          typeof newFiltersOrUpdater === 'function'
+            ? newFiltersOrUpdater(prev)
+            : newFiltersOrUpdater;
 
-      // Update URL with enabled boolean filters and altitude range
-      if (setHashParams) {
-        const boolKeys = [
-          'showMilitary',
-          'showCivil',
-          'showGround',
-          'showAirborne',
-          'showWithSquawk',
-          'showWithoutSquawk',
-          'safetyEventsOnly',
-          'showGA',
-          'showAirliners',
-        ];
-        const enabledFilters = boolKeys.filter((key) => newFilters[key]).join(',');
-        setHashParams({
-          filters: enabledFilters || undefined,
-          minAlt: newFilters.minAltitude !== 0 ? String(newFilters.minAltitude) : undefined,
-          maxAlt: newFilters.maxAltitude !== 60000 ? String(newFilters.maxAltitude) : undefined,
-        });
-      }
+        // Update URL with enabled boolean filters and altitude range
+        if (setHashParams) {
+          const boolKeys = [
+            'showMilitary',
+            'showCivil',
+            'showGround',
+            'showAirborne',
+            'showWithSquawk',
+            'showWithoutSquawk',
+            'safetyEventsOnly',
+            'showGA',
+            'showAirliners',
+          ];
+          const enabledFilters = boolKeys.filter((key) => newFilters[key]).join(',');
+          setHashParams({
+            filters: enabledFilters || undefined,
+            minAlt: newFilters.minAltitude !== 0 ? String(newFilters.minAltitude) : undefined,
+            maxAlt: newFilters.maxAltitude !== 60000 ? String(newFilters.maxAltitude) : undefined,
+          });
+        }
 
-      return newFilters;
-    });
-  };
+        return newFilters;
+      });
+    },
+    [setHashParams]
+  );
+
+  // Stable close handler so the memoized FilterMenuPanel's props are all stable
+  // (trafficFilters only changes on an actual filter edit, not per aircraft tick).
+  const closeFilterMenu = useCallback(() => setShowFilterMenu(false), []);
 
   // Open sidebar quick view for aircraft.
   // Function declaration (not const) so it hoists - useLeafletMap's argument
@@ -2540,7 +2552,7 @@ function MapView({
         <FilterMenuPanel
           trafficFilters={trafficFilters}
           updateTrafficFilters={updateTrafficFilters}
-          onClose={() => setShowFilterMenu(false)}
+          onClose={closeFilterMenu}
         />
       )}
 

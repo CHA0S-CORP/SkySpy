@@ -19,6 +19,7 @@ from django.utils import timezone
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from skyspy.models.notams import CachedNotam
+from skyspy.services import http_client
 from skyspy.services.cache import cached_with_ttl
 
 logger = logging.getLogger(__name__)
@@ -57,9 +58,7 @@ _last_refresh: datetime | None = None
 )
 def _http_post_with_retry(url: str, json_data: dict, headers: dict, timeout: float = 15.0) -> httpx.Response:
     """HTTP POST with retry logic for NOTAM API."""
-    with httpx.Client(timeout=timeout, follow_redirects=True) as client:
-        response = client.post(url, json=json_data, headers=headers)
-        return response
+    return http_client.get_shared_client().post(url, json=json_data, headers=headers, timeout=timeout)
 
 
 @retry(
@@ -70,9 +69,7 @@ def _http_post_with_retry(url: str, json_data: dict, headers: dict, timeout: flo
 )
 def _http_get_with_retry(url: str, headers: dict, timeout: float = 15.0) -> httpx.Response:
     """HTTP GET with retry logic for TFR API."""
-    with httpx.Client(timeout=timeout, follow_redirects=True) as client:
-        response = client.get(url, headers=headers)
-        return response
+    return http_client.get_shared_client().get(url, headers=headers, timeout=timeout)
 
 
 def haversine_nm(lat1: float, lon1: float, lat2: float, lon2: float) -> float:

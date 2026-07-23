@@ -22,7 +22,9 @@ RPi Optimizations:
 - Configurable sample size via MAX_STATS_SAMPLE_SIZE setting
 """
 
+import contextlib
 import logging
+import time
 from datetime import timedelta
 
 from django.conf import settings
@@ -397,30 +399,44 @@ def calculate_history_top(hours: int = 24, limit: int = 10) -> dict:
             "max_altitude": s.max_altitude,
         }
 
-    base_qs = AircraftSession.objects.filter(last_seen__gt=cutoff)
+    # Fetch the windowed sessions ONCE and derive all five leaderboards in
+    # Python. The sort columns (duration, max_distance_nm, max_altitude,
+    # total_positions, min_distance_nm) are not indexed, so five ORDER BY ... LIMIT
+    # queries each do a full sort of the same windowed set — one scan + in-memory
+    # sorts is cheaper (session-count is bounded, unlike sightings).
+    sessions = list(AircraftSession.objects.filter(last_seen__gt=cutoff))
+
+    def _duration(s):
+        return (s.last_seen - s.first_seen).total_seconds() if s.last_seen and s.first_seen else 0
 
     # Longest tracked (by duration)
-    longest_tracked = [
-        format_session(s)
-        for s in base_qs.annotate(duration=ExtractEpoch(F("last_seen") - F("first_seen"))).order_by("-duration")[:limit]
-    ]
+    longest_tracked = [format_session(s) for s in sorted(sessions, key=_duration, reverse=True)[:limit]]
 
     # Furthest distance
     furthest_distance = [
-        format_session(s) for s in base_qs.filter(max_distance_nm__isnull=False).order_by("-max_distance_nm")[:limit]
+        format_session(s)
+        for s in sorted(
+            (s for s in sessions if s.max_distance_nm is not None), key=lambda s: s.max_distance_nm, reverse=True
+        )[:limit]
     ]
 
     # Highest altitude
     highest_altitude = [
-        format_session(s) for s in base_qs.filter(max_altitude__isnull=False).order_by("-max_altitude")[:limit]
+        format_session(s)
+        for s in sorted(
+            (s for s in sessions if s.max_altitude is not None), key=lambda s: s.max_altitude, reverse=True
+        )[:limit]
     ]
 
     # Most positions
-    most_positions = [format_session(s) for s in base_qs.order_by("-total_positions")[:limit]]
+    most_positions = [
+        format_session(s) for s in sorted(sessions, key=lambda s: s.total_positions or 0, reverse=True)[:limit]
+    ]
 
     # Closest approach
     closest_approach = [
-        format_session(s) for s in base_qs.filter(min_distance_nm__isnull=False).order_by("min_distance_nm")[:limit]
+        format_session(s)
+        for s in sorted((s for s in sessions if s.min_distance_nm is not None), key=lambda s: s.min_distance_nm)[:limit]
     ]
 
     return {
@@ -895,15 +911,21 @@ def calculate_geographic_stats(hours: int = 24) -> dict:
         AircraftSession.objects.filter(last_seen__gt=cutoff).values_list("icao_hex", flat=True).distinct()
     )
 
-    aircraft_with_reg = AircraftInfo.objects.filter(icao_hex__in=recent_icaos, registration__isnull=False).exclude(
-        registration=""
+    # Fetch AircraftInfo for the recently-seen aircraft ONCE (bounded by the
+    # distinct-aircraft count) and derive the country / operator / city breakdowns
+    # in Python, instead of three separate icao_hex__in scans of the same rows.
+    info_rows = list(
+        AircraftInfo.objects.filter(icao_hex__in=recent_icaos).values(
+            "registration", "operator", "operator_icao", "city", "state", "country"
+        )
     )
 
     country_counts = {}
     total_with_reg = 0
-
-    for info in aircraft_with_reg.values("registration"):
-        reg = info["registration"]
+    for row in info_rows:
+        reg = row.get("registration")
+        if not reg:
+            continue
         country = _get_country_from_registration(reg)
         if country:
             country_counts[country] = country_counts.get(country, 0) + 1
@@ -925,44 +947,33 @@ def calculate_geographic_stats(hours: int = 24) -> dict:
     # ==========================================================================
     # Airlines/Operators frequency
     # ==========================================================================
-    operator_data = (
-        AircraftInfo.objects.filter(icao_hex__in=recent_icaos, operator__isnull=False)
-        .exclude(operator="")
-        .values("operator", "operator_icao")
-        .annotate(
-            count=Count("id"),
-        )
-        .order_by("-count")[:20]
-    )
+    operator_counts: dict = {}
+    for row in info_rows:
+        operator = row.get("operator")
+        if not operator:
+            continue
+        key = (operator, row.get("operator_icao"))
+        operator_counts[key] = operator_counts.get(key, 0) + 1
 
     operators_frequency = [
-        {
-            "operator": row["operator"],
-            "operator_icao": row["operator_icao"],
-            "aircraft_count": row["count"],
-        }
-        for row in operator_data
+        {"operator": operator, "operator_icao": operator_icao, "aircraft_count": count}
+        for (operator, operator_icao), count in sorted(operator_counts.items(), key=lambda x: x[1], reverse=True)[:20]
     ]
 
     # ==========================================================================
     # Most connected cities/regions (from AircraftInfo city/state fields)
     # ==========================================================================
-    city_data = (
-        AircraftInfo.objects.filter(icao_hex__in=recent_icaos, city__isnull=False)
-        .exclude(city="")
-        .values("city", "state", "country")
-        .annotate(count=Count("id"))
-        .order_by("-count")[:15]
-    )
+    city_counts: dict = {}
+    for row in info_rows:
+        city = row.get("city")
+        if not city:
+            continue
+        key = (city, row.get("state"), row.get("country"))
+        city_counts[key] = city_counts.get(key, 0) + 1
 
     connected_locations = [
-        {
-            "city": row["city"],
-            "state": row["state"],
-            "country": row["country"],
-            "aircraft_count": row["count"],
-        }
-        for row in city_data
+        {"city": city, "state": state, "country": country, "aircraft_count": count}
+        for (city, state, country), count in sorted(city_counts.items(), key=lambda x: x[1], reverse=True)[:15]
     ]
 
     # ==========================================================================
@@ -1139,11 +1150,43 @@ def get_top_aircraft() -> dict | None:
     return cache.get(CACHE_KEY_TOP_AIRCRAFT)
 
 
+def _refresh_under_lock(lock_key: str, refresh_fn, *, wait: float = 5.0) -> None:
+    """Run an expensive cache refresh once across concurrent callers.
+
+    On a cache miss, many WebSocket subscribers / requests can hit the same
+    None in one window and each run the full multi-query refresh (a stampede).
+    ``cache.add`` is atomic, so only the first caller acquires the lock and
+    refreshes; the others wait briefly for the lock to clear and then re-read the
+    value the winner published. Falls back to running the refresh directly if the
+    cache backend is unavailable.
+    """
+    try:
+        acquired = cache.add(lock_key, 1, max(1, int(wait) + 1))
+    except (ConnectionError, OSError):
+        refresh_fn()
+        return
+
+    if acquired:
+        try:
+            refresh_fn()
+        finally:
+            with contextlib.suppress(ConnectionError, OSError):
+                cache.delete(lock_key)
+        return
+
+    # Another caller is refreshing — wait briefly for it to finish.
+    deadline = time.monotonic() + wait
+    while time.monotonic() < deadline:
+        if cache.get(lock_key) is None:
+            break
+        time.sleep(0.05)
+
+
 def get_history_stats() -> dict | None:
     """Get cached history stats."""
     stats = cache.get(CACHE_KEY_HISTORY_STATS)
     if stats is None:
-        refresh_history_cache()
+        _refresh_under_lock("stats:refresh_lock:history", refresh_history_cache)
         stats = cache.get(CACHE_KEY_HISTORY_STATS)
     return stats
 
@@ -1152,7 +1195,7 @@ def get_history_trends() -> dict | None:
     """Get cached history trends."""
     trends = cache.get(CACHE_KEY_HISTORY_TRENDS)
     if trends is None:
-        refresh_history_cache()
+        _refresh_under_lock("stats:refresh_lock:history", refresh_history_cache)
         trends = cache.get(CACHE_KEY_HISTORY_TRENDS)
     return trends
 
@@ -1161,7 +1204,7 @@ def get_history_top() -> dict | None:
     """Get cached history top performers."""
     top = cache.get(CACHE_KEY_HISTORY_TOP)
     if top is None:
-        refresh_history_cache()
+        _refresh_under_lock("stats:refresh_lock:history", refresh_history_cache)
         top = cache.get(CACHE_KEY_HISTORY_TOP)
     return top
 
@@ -1170,7 +1213,7 @@ def get_safety_stats() -> dict | None:
     """Get cached safety stats."""
     stats = cache.get(CACHE_KEY_SAFETY_STATS)
     if stats is None:
-        refresh_safety_cache()
+        _refresh_under_lock("stats:refresh_lock:safety", refresh_safety_cache)
         stats = cache.get(CACHE_KEY_SAFETY_STATS)
     return stats
 
@@ -1179,7 +1222,9 @@ def get_flight_patterns_stats() -> dict | None:
     """Get cached flight patterns stats."""
     stats = cache.get(CACHE_KEY_FLIGHT_PATTERNS)
     if stats is None:
-        refresh_flight_patterns_cache(broadcast=False)
+        _refresh_under_lock(
+            "stats:refresh_lock:flight_patterns", lambda: refresh_flight_patterns_cache(broadcast=False)
+        )
         stats = cache.get(CACHE_KEY_FLIGHT_PATTERNS)
     return stats
 
@@ -1188,7 +1233,7 @@ def get_geographic_stats() -> dict | None:
     """Get cached geographic stats."""
     stats = cache.get(CACHE_KEY_GEOGRAPHIC_STATS)
     if stats is None:
-        refresh_geographic_cache(broadcast=False)
+        _refresh_under_lock("stats:refresh_lock:geographic", lambda: refresh_geographic_cache(broadcast=False))
         stats = cache.get(CACHE_KEY_GEOGRAPHIC_STATS)
     return stats
 
@@ -1651,7 +1696,9 @@ def get_tracking_quality_stats() -> dict | None:
     """Get cached tracking quality stats."""
     stats = cache.get(CACHE_KEY_TRACKING_QUALITY)
     if stats is None:
-        refresh_tracking_quality_cache(broadcast=False)
+        _refresh_under_lock(
+            "stats:refresh_lock:tracking_quality", lambda: refresh_tracking_quality_cache(broadcast=False)
+        )
         stats = cache.get(CACHE_KEY_TRACKING_QUALITY)
     return stats
 
@@ -1660,7 +1707,7 @@ def get_engagement_stats() -> dict | None:
     """Get cached engagement stats."""
     stats = cache.get(CACHE_KEY_ENGAGEMENT)
     if stats is None:
-        refresh_engagement_cache(broadcast=False)
+        _refresh_under_lock("stats:refresh_lock:engagement", lambda: refresh_engagement_cache(broadcast=False))
         stats = cache.get(CACHE_KEY_ENGAGEMENT)
     return stats
 

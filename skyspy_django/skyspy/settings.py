@@ -120,6 +120,10 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    # PostGIS spatial ORM (geom fields, GIST indexes, spatial lookups). Requires
+    # the postgis extension on the DB (see docker/postgres/Dockerfile) and
+    # GDAL/GEOS in the app image. No-op under the sqlite build/test fallback.
+    "django.contrib.gis",
     # Third-party apps
     "rest_framework",
     "rest_framework_simplejwt",
@@ -184,7 +188,11 @@ def parse_database_url(url):
     match = re.match(pattern, url)
     if match:
         return {
-            "ENGINE": "django.db.backends.postgresql",
+            # GeoDjango PostGIS backend (spatial lookups + geom fields). The DB
+            # must have the postgis extension (docker/postgres/Dockerfile); a
+            # migration installs it. Falls through to sqlite when the URL isn't
+            # postgresql:// (BUILD_MODE / local sqlite — non-spatial).
+            "ENGINE": "django.contrib.gis.db.backends.postgis",
             "NAME": match.group("name"),
             "USER": match.group("user"),
             "PASSWORD": match.group("password"),
@@ -614,6 +622,19 @@ FEEDER_LON = get_env("FEEDER_LON", "-121.9687", float)
 POLLING_INTERVAL = get_env("POLLING_INTERVAL", "1", int)
 DB_STORE_INTERVAL = get_env("DB_STORE_INTERVAL", "5", int)
 
+# Map server-side clustering (conditional). The Live Map requests aircraft-clusters
+# with its viewport bbox + zoom; at/above MAP_CLUSTER_ZOOM_THRESHOLD the server
+# returns raw points, below it returns ST_ClusterDBSCAN groups over the
+# LiveAircraftPosition table. MAP_CLUSTER_EPS_BASE is the DBSCAN eps in DEGREES,
+# scaled down as zoom rises. MAP_CLUSTER_MAX_POINTS caps the raw-points branch.
+# LIVE_POSITION_TTL prunes live_aircraft_positions rows older than N seconds so
+# clusters reflect only current traffic. The frontend mirrors the threshold via
+# the auth/config endpoint so client + server agree on when to flip modes.
+MAP_CLUSTER_ZOOM_THRESHOLD = get_env("MAP_CLUSTER_ZOOM_THRESHOLD", "8", int)
+MAP_CLUSTER_EPS_BASE = get_env("MAP_CLUSTER_EPS_BASE", "0.4", float)
+MAP_CLUSTER_MAX_POINTS = get_env("MAP_CLUSTER_MAX_POINTS", "2000", int)
+LIVE_POSITION_TTL = get_env("LIVE_POSITION_TTL", "90", int)
+
 # Aircraft Streaming (replaces polling when enabled)
 # Supports two modes: SSE (preferred) and TCP (legacy)
 AIRCRAFT_STREAM_ENABLED = get_env("AIRCRAFT_STREAM_ENABLED", "False", bool)
@@ -770,7 +791,7 @@ ASSISTANT_MODEL = get_env("ASSISTANT_MODEL", "") or LLM_MODEL
 # context window: more steps mean more sequential model+tool round-trips, so raise
 # the timeout alongside it. COMPACT caps the budget on small windows where deep
 # tool chains would overflow the context (see ASSISTANT_CONTEXT_WINDOW).
-ASSISTANT_MAX_STEPS = get_env("ASSISTANT_MAX_STEPS", "15", int)
+ASSISTANT_MAX_STEPS = get_env("ASSISTANT_MAX_STEPS", "20", int)
 ASSISTANT_MAX_STEPS_COMPACT = get_env("ASSISTANT_MAX_STEPS_COMPACT", "8", int)
 ASSISTANT_TIMEOUT = get_env("ASSISTANT_TIMEOUT", "120", int)
 # Context-window budget knobs. Raise for large-context models to let tools return
@@ -786,6 +807,17 @@ ASSISTANT_MAX_HISTORY_CHARS = get_env("ASSISTANT_MAX_HISTORY_CHARS", "3000", int
 # stop overflowing the window on the very first model call. 0 (default) = assume a
 # large context, no compaction.
 ASSISTANT_CONTEXT_WINDOW = get_env("ASSISTANT_CONTEXT_WINDOW", "0", int)
+# When ASSISTANT_CONTEXT_WINDOW is 0/unset, probe the OpenAI-compatible endpoint
+# (GET /models) for the model's real window — vLLM reports max_model_len — so
+# compact mode engages automatically for small local models without manual
+# config. An explicit ASSISTANT_CONTEXT_WINDOW always wins; endpoints that don't
+# report a window (OpenAI/Ollama) fall back to assume-large. Cached ~10 min.
+ASSISTANT_CONTEXT_WINDOW_AUTO = get_env("ASSISTANT_CONTEXT_WINDOW_AUTO", "True", bool)
+# Give the assistant a live web_search tool (services/web_search.py). ANDed with
+# WEB_SEARCH_ENABLED — that flag alone only powers internal card-gen grounding;
+# this one deliberately opts the CHAT MODEL into reaching the internet. Off by
+# default.
+ASSISTANT_WEB_SEARCH_ENABLED = get_env("ASSISTANT_WEB_SEARCH_ENABLED", "False", bool)
 # Inject a compact live-situation snapshot into each assistant query so answers
 # are grounded in current traffic without spending a tool call. Disable on tiny
 # models / RPi if the extra context hurts.

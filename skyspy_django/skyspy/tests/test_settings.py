@@ -17,6 +17,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "django.contrib.gis",
     "rest_framework",
     "rest_framework_simplejwt",
     "rest_framework_simplejwt.token_blacklist",
@@ -139,7 +140,9 @@ def parse_database_url(url):
         raise ValueError(f"Invalid DATABASE_URL format: {url}")
 
     return {
-        "ENGINE": "django.db.backends.postgresql",
+        # PostGIS backend — CI runs the combined postgis+pgvector image, so
+        # spatial geom fields/lookups are exercised under test.
+        "ENGINE": "django.contrib.gis.db.backends.postgis",
         "NAME": match.group("name"),
         "USER": match.group("user"),
         "PASSWORD": match.group("password"),
@@ -263,6 +266,12 @@ TURB_LEVEL_SEVERE = 70
 # Polling - faster for tests
 POLLING_INTERVAL = 1
 DB_STORE_INTERVAL = 1
+
+# Map server-side clustering
+MAP_CLUSTER_ZOOM_THRESHOLD = 8
+MAP_CLUSTER_EPS_BASE = 0.4
+MAP_CLUSTER_MAX_POINTS = 2000
+LIVE_POSITION_TTL = 90
 
 # Aircraft Streaming - disabled by default for tests
 AIRCRAFT_STREAM_ENABLED = False
@@ -392,6 +401,10 @@ ASSISTANT_MAX_RESULT_CHARS = 6000
 ASSISTANT_MAX_HISTORY_MSGS = 16
 ASSISTANT_MAX_HISTORY_CHARS = 3000
 ASSISTANT_CONTEXT_WINDOW = 0
+# Off in tests: no probing a (nonexistent) endpoint for the model window.
+ASSISTANT_CONTEXT_WINDOW_AUTO = False
+# The assistant's web_search tool stays off in tests (gating asserted explicitly).
+ASSISTANT_WEB_SEARCH_ENABLED = False
 # Off in tests so tool-selection assertions see a clean query (no live snapshot).
 ASSISTANT_BRIEFING_ENABLED = False
 ASSISTANT_PHOTO_BASE_URL = ""

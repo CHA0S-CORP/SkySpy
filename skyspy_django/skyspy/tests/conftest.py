@@ -675,6 +675,135 @@ def recent_safety_events(db):
 
 
 # =============================================================================
+# Seeded world — a small deterministic dataset with KNOWN facts, so tool tests
+# can assert the seeded values appear verbatim in tool output (catches
+# serializer/field drift that empty-DB shape tests can't see).
+# =============================================================================
+
+
+@pytest.fixture
+def seeded_world(db):
+    """Seed DB + cache with a deterministic aviation picture; returns the facts.
+
+    - SEED01/N801SW ("SEEDER1"): 8-point LINEAR track over the last 2h
+    - SEED02/N802SW ("SEEDER2"): 12-point ORBIT (closed circle ~1.2nm radius —
+      long path, tiny net displacement → _track_pattern flags orbit_or_loiter)
+    - One TCAS RA + one 7700 safety event with known hexes
+    - 3 ACARS messages carrying the token "SEEDTOKEN"
+    - 2 PIREPs + 2 active NOTAMs at KSEA (one "RWY 16L/34R CLSD")
+    - current_aircraft cache holds both seeded aircraft (SEED02 squawking 1200)
+    """
+    import math
+
+    from skyspy.tests.factories import (
+        AcarsMessageFactory,
+        AircraftSightingFactory,
+        CachedNotamFactory,
+        CachedPirepFactory,
+        SafetyEventFactory,
+    )
+
+    now = timezone.now()
+    facts = {
+        "linear_hex": "5EED01",
+        "linear_reg": "N801SW",
+        "linear_callsign": "SEEDER1",
+        "orbit_hex": "5EED02",
+        "orbit_callsign": "SEEDER2",
+        "tcas_hex": "5EED03",
+        "emergency_hex": "5EED04",
+        "acars_token": "SEEDTOKEN",
+        "notam_text": "RWY 16L/34R CLSD",
+        "airport": "KSEA",
+    }
+
+    # AircraftSighting.timestamp is auto_now_add — creation order IS the
+    # chronological order, so create oldest→newest and don't pass timestamps.
+    # Linear track: heading steadily northeast.
+    for i in range(8):
+        AircraftSightingFactory(
+            icao_hex=facts["linear_hex"],
+            callsign=facts["linear_callsign"],
+            latitude=47.0 + i * 0.05,
+            longitude=-122.5 + i * 0.05,
+            altitude_baro=10000 + i * 500,
+            vertical_rate=500,
+            squawk="2345",
+            is_emergency=False,
+            is_military=False,
+        )
+
+    # Orbit: a closed circle (radius ~0.02° ≈ 1.2 nm) — path ≈ 7.5 nm, net ≈ 0.
+    for i in range(12):
+        angle = 2 * math.pi * i / 11  # last point ≈ first point (closed loop)
+        AircraftSightingFactory(
+            icao_hex=facts["orbit_hex"],
+            callsign=facts["orbit_callsign"],
+            latitude=47.5 + 0.02 * math.sin(angle),
+            longitude=-122.3 + 0.02 * math.cos(angle),
+            altitude_baro=3000,
+            vertical_rate=0,
+            squawk="1200",
+            is_emergency=False,
+            is_military=False,
+        )
+
+    SafetyEventFactory(tcas=True, icao_hex=facts["tcas_hex"], timestamp=now - timedelta(minutes=30))
+    SafetyEventFactory(emergency=True, icao_hex=facts["emergency_hex"], timestamp=now - timedelta(minutes=20))
+
+    # Distinct free-text per message (the notable scorer dedupes on text prefix)
+    # with anomaly keywords so at least one clears its min_score threshold.
+    for i in range(3):
+        AcarsMessageFactory(
+            timestamp=now - timedelta(minutes=10 + i),
+            text=f"SEQ{i} MEDICAL EMERGENCY DIVERT TO KSEA {facts['acars_token']} REQUEST PRIORITY HANDLING",
+            label="H1",
+        )
+
+    CachedPirepFactory(observation_time=now - timedelta(hours=1))
+    CachedPirepFactory(severe=True, observation_time=now - timedelta(minutes=30))
+    CachedNotamFactory(text=facts["notam_text"])
+    CachedNotamFactory(tfr=True, text="FIREFIGHTING TFR")
+
+    # Live cache mirrors the two seeded aircraft so live/cache-backed tools
+    # (decode_squawk, airspace_near, live_aircraft_map...) resolve them.
+    cache.set(
+        "current_aircraft",
+        [
+            {
+                "hex": facts["linear_hex"],
+                "flight": facts["linear_callsign"],
+                "r": facts["linear_reg"],
+                "alt_baro": 13500,
+                "gs": 240,
+                "track": 45,
+                "squawk": "2345",
+                "lat": 47.35,
+                "lon": -122.15,
+                "category": "A1",
+                "t": "C172",
+                "distance_nm": 12.0,
+            },
+            {
+                "hex": facts["orbit_hex"],
+                "flight": facts["orbit_callsign"],
+                "alt_baro": 3000,
+                "gs": 95,
+                "track": 180,
+                "squawk": "1200",
+                "lat": 47.5,
+                "lon": -122.3,
+                "category": "A1",
+                "t": "C182",
+                "distance_nm": 25.0,
+            },
+        ],
+        timeout=30,
+    )
+    return facts
+
+
+# =============================================================================
 # Note: Async WebSocket helpers removed after Socket.IO migration
 # Socket.IO testing uses different patterns - see test_socketio_*.py files
 # =============================================================================

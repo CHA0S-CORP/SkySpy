@@ -15,7 +15,7 @@ from datetime import timedelta
 from typing import Any
 
 import apprise
-from celery import shared_task
+from celery import group, shared_task
 from django.utils import timezone
 
 from skyspy.tasks.locks import singleton_task
@@ -87,6 +87,17 @@ def send_notification_task(
         )
 
     try:
+        # SSRF gate at the delivery choke point: an http(s) webhook (e.g. a rule
+        # webhook routed here with no other validation) targeting an internal IP
+        # is blocked; native apprise schemes pass through.
+        from skyspy.services.notifications import webhook_delivery_allowed
+
+        if not webhook_delivery_allowed(channel_url):
+            logger.warning("Blocked notification delivery to unsafe webhook URL")
+            if log_entry:
+                log_entry.mark_failed("Blocked unsafe webhook URL (SSRF)")
+            return {"status": "blocked", "error": "unsafe webhook URL"}
+
         apobj = apprise.Apprise()
         apobj.add(channel_url)
 
@@ -181,7 +192,9 @@ def process_notification_queue():
         ).values_list("id", flat=True)[:50]  # Process up to 50 at a time
     )
 
-    processed = 0
+    # Build the re-queue signatures, then dispatch them in a single Celery
+    # group() instead of up to 50 individual .delay() broker round-trips.
+    signatures = []
     for log_id in pending_ids:
         # Atomically claim the row by pushing next_retry_at forward so
         # overlapping/subsequent beat runs don't re-enqueue the same
@@ -199,9 +212,8 @@ def process_notification_queue():
 
         log_entry = NotificationLog.objects.select_related("channel").get(id=log_id)
 
-        try:
-            # Re-queue for delivery
-            send_notification_task.delay(
+        signatures.append(
+            send_notification_task.s(
                 channel_url=log_entry.channel_url,
                 # Preserve the original title/priority so a retried critical alert
                 # isn't downgraded to a generic "warning" titled "SkysPy Notification".
@@ -214,9 +226,17 @@ def process_notification_queue():
                 context=log_entry.details,
                 notification_log_id=log_entry.id,
             )
-            processed += 1
-        except Exception as e:  # broad: background loop must keep processing remaining items on per-item failure
-            logger.error(f"Failed to re-queue notification {log_entry.id}: {e}")
+        )
+
+    processed = 0
+    if signatures:
+        try:
+            group(signatures).apply_async()
+            processed = len(signatures)
+        except (
+            Exception
+        ) as e:  # broad: broker enqueue must not crash the beat task; claimed rows retry after the window
+            logger.error(f"Failed to dispatch {len(signatures)} notification retries: {e}")
 
     return {"processed": processed}
 

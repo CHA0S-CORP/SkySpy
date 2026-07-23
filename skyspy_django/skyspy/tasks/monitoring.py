@@ -77,10 +77,30 @@ def update_queue_metrics():
 
         logger.debug(f"Queue metrics updated: total depth {total_depth}")
 
+        # DB write-buffer depth (stream cold path). The buffer silently drops the
+        # oldest positions once it hits maxlen, so surface a gauge + an 80% warning
+        # to give backpressure visibility before data is actually lost.
+        db_buffer_depth = None
+        try:
+            from skyspy.tasks.aircraft_stream import get_db_buffer_stats
+
+            db_buffer_depth, db_buffer_cap = get_db_buffer_stats()
+            task_metrics.update_queue_depth("db_write_buffer", db_buffer_depth)
+            if db_buffer_cap and db_buffer_depth >= db_buffer_cap * 0.8:
+                logger.warning(
+                    "DB write buffer at %d/%d (%d%%) — flush lagging; oldest positions drop at maxlen",
+                    db_buffer_depth,
+                    db_buffer_cap,
+                    db_buffer_depth * 100 // db_buffer_cap,
+                )
+        except Exception as e:  # broad: metric augmentation must never fail the queue-metrics task
+            logger.debug(f"DB write buffer metric unavailable: {e}")
+
         return {
             "status": "ok",
             "queues": queue_depths,
             "total_depth": total_depth,
+            "db_write_buffer": db_buffer_depth,
         }
 
     except _REDIS_OP_ERRORS as e:

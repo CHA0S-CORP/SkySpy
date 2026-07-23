@@ -84,57 +84,36 @@ class MakeRequestTests(TestCase):
 
         self.assertIsNone(result)
 
-    @patch("httpx.Client")
+    # _make_request delegates to http_client.get_json (shared pooled client +
+    # retry/breaker), so mock that boundary rather than httpx internals.
+    @patch("skyspy.services.aviationstack.http_client.get_json")
     @patch("skyspy.services.aviationstack._get_api_key")
-    def test_make_request_success(self, mock_get_key, mock_client_class):
+    def test_make_request_success(self, mock_get_key, mock_get_json):
         """Test successful API request."""
         mock_get_key.return_value = "test-key"
-        mock_response = MagicMock()
-        mock_response.json.return_value = {"data": []}
-        mock_response.raise_for_status = MagicMock()
-
-        mock_client = MagicMock()
-        mock_client.get.return_value = mock_response
-        mock_client.__enter__ = MagicMock(return_value=mock_client)
-        mock_client.__exit__ = MagicMock(return_value=False)
-        mock_client_class.return_value = mock_client
+        mock_get_json.return_value = {"data": []}
 
         result = aviationstack._make_request("flights")
 
         self.assertEqual(result, {"data": []})
 
-    @patch("httpx.Client")
+    @patch("skyspy.services.aviationstack.http_client.get_json")
     @patch("skyspy.services.aviationstack._get_api_key")
-    def test_make_request_api_error(self, mock_get_key, mock_client_class):
+    def test_make_request_api_error(self, mock_get_key, mock_get_json):
         """Test API error response handling."""
         mock_get_key.return_value = "test-key"
-        mock_response = MagicMock()
-        mock_response.json.return_value = {"error": {"message": "Invalid API key"}}
-        mock_response.raise_for_status = MagicMock()
-
-        mock_client = MagicMock()
-        mock_client.get.return_value = mock_response
-        mock_client.__enter__ = MagicMock(return_value=mock_client)
-        mock_client.__exit__ = MagicMock(return_value=False)
-        mock_client_class.return_value = mock_client
+        mock_get_json.return_value = {"error": {"message": "Invalid API key"}}
 
         result = aviationstack._make_request("flights")
 
         self.assertIsNone(result)
 
-    @patch("httpx.Client")
+    @patch("skyspy.services.aviationstack.http_client.get_json")
     @patch("skyspy.services.aviationstack._get_api_key")
-    def test_make_request_http_error(self, mock_get_key, mock_client_class):
-        """Test HTTP error handling."""
+    def test_make_request_http_error(self, mock_get_key, mock_get_json):
+        """Test HTTP error handling (http_client swallows transport errors to None)."""
         mock_get_key.return_value = "test-key"
-        mock_response = MagicMock()
-        mock_response.status_code = 500
-
-        mock_client = MagicMock()
-        mock_client.get.side_effect = httpx.HTTPStatusError("Server error", request=MagicMock(), response=mock_response)
-        mock_client.__enter__ = MagicMock(return_value=mock_client)
-        mock_client.__exit__ = MagicMock(return_value=False)
-        mock_client_class.return_value = mock_client
+        mock_get_json.return_value = None
 
         result = aviationstack._make_request("flights")
 

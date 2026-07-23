@@ -6,6 +6,7 @@ Provides Redis caching for METAR data and database storage for PIREPs.
 
 import hashlib
 import logging
+import threading
 from datetime import UTC, datetime, timedelta
 from math import atan2, cos, radians, sin, sqrt
 
@@ -429,6 +430,27 @@ def get_metar_stats() -> dict:
 
 AWC_BASE = "https://aviationweather.gov/api/data"
 
+# Process-scoped pooled client (was httpx.Client() per request — once per retry
+# attempt — which discarded the connection pool every call). Reused across the
+# viewport-driven AWC and Mesonet fetches; timeout is passed per request.
+_HTTP_LOCK = threading.Lock()
+_http_singleton: httpx.Client | None = None
+
+
+def _http() -> httpx.Client:
+    """Return the module's pooled httpx client, creating it on first use."""
+    global _http_singleton
+    client = _http_singleton
+    if client is None or client.is_closed:
+        with _HTTP_LOCK:
+            if _http_singleton is None or _http_singleton.is_closed:
+                _http_singleton = httpx.Client(
+                    follow_redirects=True,
+                    limits=httpx.Limits(max_connections=20, max_keepalive_connections=10),
+                )
+            client = _http_singleton
+    return client
+
 
 @retry(
     stop=stop_after_attempt(3),
@@ -437,17 +459,17 @@ AWC_BASE = "https://aviationweather.gov/api/data"
 )
 def _http_get_awc(url: str, params: dict, timeout: float = 15.0) -> httpx.Response:
     """HTTP GET with retry logic for AWC API."""
-    with httpx.Client(timeout=timeout) as client:
-        response = client.get(
-            url,
-            params=params,
-            headers={
-                "User-Agent": "SkySpyAPI/2.6 (aircraft-tracker)",
-                "Accept": "application/json",
-            },
-        )
-        response.raise_for_status()
-        return response
+    response = _http().get(
+        url,
+        params=params,
+        headers={
+            "User-Agent": "SkySpyAPI/2.6 (aircraft-tracker)",
+            "Accept": "application/json",
+        },
+        timeout=timeout,
+    )
+    response.raise_for_status()
+    return response
 
 
 def _fetch_awc_data(endpoint: str, params: dict) -> dict | list:
@@ -514,33 +536,46 @@ def fetch_and_cache_metars(bbox: str = "24,-130,50,-60", hours: int = 2, ttl: in
     if cached is not None:
         return cached
 
-    logger.info(f"Fetching METARs from AWC (bbox={bbox}, hours={hours})")
+    from skyspy.services.http_client import single_flight
 
-    data = _fetch_awc_data(
-        "metar",
-        {
-            "bbox": bbox,
-            "format": "json",
-            "hours": hours,
-        },
-    )
+    def _produce() -> list[dict]:
+        # Re-check under the single-flight lock: a concurrent caller may have
+        # just populated the cache while we were waiting to produce.
+        inner = get_cached_metars_bbox(bbox, hours)
+        if inner is not None:
+            return inner
 
-    if isinstance(data, dict) and "error" in data:
-        logger.warning(f"Failed to fetch METARs: {data.get('error')}")
-        record_metar_api_request(success=False)
-        return []
+        logger.info(f"Fetching METARs from AWC (bbox={bbox}, hours={hours})")
 
-    record_metar_api_request(success=True)
+        data = _fetch_awc_data(
+            "metar",
+            {
+                "bbox": bbox,
+                "format": "json",
+                "hours": hours,
+            },
+        )
 
-    if not isinstance(data, list):
-        logger.warning(f"Unexpected METAR data format: {type(data)}")
-        return []
+        if isinstance(data, dict) and "error" in data:
+            logger.warning(f"Failed to fetch METARs: {data.get('error')}")
+            record_metar_api_request(success=False)
+            return []
 
-    # Cache the results
-    cache_metars_bbox(bbox, data, hours, ttl)
-    logger.info(f"Fetched and cached {len(data)} METARs")
+        record_metar_api_request(success=True)
 
-    return data
+        if not isinstance(data, list):
+            logger.warning(f"Unexpected METAR data format: {type(data)}")
+            return []
+
+        # Cache the results
+        cache_metars_bbox(bbox, data, hours, ttl)
+        logger.info(f"Fetched and cached {len(data)} METARs")
+
+        return data
+
+    # Coalesce concurrent viewport-change misses for the same bbox so a burst of
+    # subscribers triggers a single upstream fetch (was N parallel ~15s calls).
+    return single_flight(f"metar:{bbox}:{hours}", _produce, result_ttl=min(ttl, 60))
 
 
 def fetch_metar_by_station(station: str, hours: int = 2, ttl: int = 300) -> list[dict]:
@@ -717,17 +752,17 @@ def _fetch_nexrad_image(bbox: str, width: int = 1024, height: int = 1024) -> byt
         "BBOX": bbox,
     }
 
-    with httpx.Client(timeout=30.0) as client:
-        response = client.get(
-            MESONET_WMS_URL,
-            params=params,
-            headers={"User-Agent": "SkySpyAPI/2.6 (weather-proxy)"},
-        )
-        response.raise_for_status()
+    response = _http().get(
+        MESONET_WMS_URL,
+        params=params,
+        headers={"User-Agent": "SkySpyAPI/2.6 (weather-proxy)"},
+        timeout=30.0,
+    )
+    response.raise_for_status()
 
-        if response.headers.get("content-type", "").startswith("image/"):
-            return response.content
-        return None
+    if response.headers.get("content-type", "").startswith("image/"):
+        return response.content
+    return None
 
 
 def fetch_nexrad_radar(bbox: str, width: int = 1024, height: int = 1024, ttl: int = 300) -> bytes | None:
@@ -768,17 +803,17 @@ def fetch_radar_timestamp() -> str | None:
         return cached
 
     try:
-        with httpx.Client(timeout=10.0) as client:
-            response = client.get(
-                MESONET_TIMESTAMP_URL,
-                headers={"User-Agent": "SkySpyAPI/2.6 (weather-proxy)"},
-            )
-            response.raise_for_status()
-            data = response.json()
-            ts = data.get("utc_valid")
-            if ts:
-                cache.set(cache_key, ts, 120)  # Cache for 2 min
-            return ts
+        response = _http().get(
+            MESONET_TIMESTAMP_URL,
+            headers={"User-Agent": "SkySpyAPI/2.6 (weather-proxy)"},
+            timeout=10.0,
+        )
+        response.raise_for_status()
+        data = response.json()
+        ts = data.get("utc_valid")
+        if ts:
+            cache.set(cache_key, ts, 120)  # Cache for 2 min
+        return ts
     except (httpx.HTTPError, ValueError, KeyError, TypeError, ConnectionError, OSError) as e:
         logger.warning(f"Failed to fetch radar timestamp: {e}")
         return None

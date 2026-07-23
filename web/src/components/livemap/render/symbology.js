@@ -139,6 +139,44 @@ export function drawDart(ctx, x, y, trackDeg, color, alpha = 1) {
 }
 
 /**
+ * Draw a cluster bubble (low-zoom aggregate): a filled circle sized by log(count)
+ * with a white count label. Returns the drawn radius (px) for click hit-testing.
+ * Color ramps green→amber→red as the cluster grows.
+ */
+export function drawCluster(ctx, x, y, count, frame = 0) {
+  const n = Math.max(1, count | 0);
+  const r = Math.min(30, 11 + Math.log2(n + 1) * 3.5);
+  const color = n >= 100 ? '#f4525b' : n >= 25 ? '#f4a742' : '#4cc9a8';
+  const pulse = 1 + Math.sin(frame / 18) * 0.04;
+
+  ctx.save();
+  ctx.translate(x, y);
+  // soft halo
+  ctx.globalAlpha = 0.22;
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(0, 0, r * 1.5 * pulse, 0, Math.PI * 2);
+  ctx.fill();
+  // body
+  ctx.globalAlpha = 0.9;
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = 'rgba(5,7,10,0.85)';
+  ctx.stroke();
+  // count label
+  ctx.fillStyle = '#ffffff';
+  ctx.font = `bold ${n >= 1000 ? 10 : 11}px system-ui, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n), 0, 0.5);
+  ctx.restore();
+  return r;
+}
+
+/**
  * Curved velocity predictor: a dotted line that fades toward the horizon.
  * `pts` are pre-projected screen points [{x,y}] dead-reckoned in lat/lon by the
  * caller from ground speed + heading + turn rate — so straight flight → straight
@@ -609,7 +647,8 @@ export function airmetRgb(hazard) {
 /** Short screen label for an AIRMET hazard. */
 export function airmetLabel(hazard) {
   const key = (hazard || '').toUpperCase();
-  if (key.startsWith('TURB')) return key === 'TURB-HI' ? 'TURB HI' : key === 'TURB-LO' ? 'TURB LO' : 'TURB';
+  if (key.startsWith('TURB'))
+    return key === 'TURB-HI' ? 'TURB HI' : key === 'TURB-LO' ? 'TURB LO' : 'TURB';
   if (key === 'MT_OBSC' || key === 'MTN_OBSCN') return 'MT OBSC';
   if (key === 'SFC_WND') return 'SFC WND';
   return key || 'AIRMET';

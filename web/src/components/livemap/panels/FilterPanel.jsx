@@ -2,9 +2,27 @@ import React from 'react';
 import { Switch } from '../../v2/primitives';
 
 const TOGGLES = [
-  ['Aircraft type', [['showMilitary', 'Military'], ['showCivil', 'Civil']]],
-  ['Status', [['showAirborne', 'Airborne'], ['showGround', 'On ground']]],
-  ['Transponder', [['showWithSquawk', 'With squawk'], ['showWithoutSquawk', 'Without squawk']]],
+  [
+    'Aircraft type',
+    [
+      ['showMilitary', 'Military'],
+      ['showCivil', 'Civil'],
+    ],
+  ],
+  [
+    'Status',
+    [
+      ['showAirborne', 'Airborne'],
+      ['showGround', 'On ground'],
+    ],
+  ],
+  [
+    'Transponder',
+    [
+      ['showWithSquawk', 'With squawk'],
+      ['showWithoutSquawk', 'Without squawk'],
+    ],
+  ],
 ];
 
 /**
@@ -31,7 +49,11 @@ export function FilterPanel({ filters, onChange, onReset }) {
           {rows.map(([key, label]) => (
             <label key={key} className="lm-panel-pop__row">
               <span>{label}</span>
-              <Switch checked={filters[key]} onCheckedChange={(v) => onChange({ [key]: v })} label={label} />
+              <Switch
+                checked={filters[key]}
+                onCheckedChange={(v) => onChange({ [key]: v })}
+                label={label}
+              />
             </label>
           ))}
         </div>

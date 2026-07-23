@@ -373,8 +373,13 @@ describe('DetailScreen', () => {
 
   it('renders the Radio Activity card from matched_radio_calls', async () => {
     renderScreen();
-    await waitFor(() => expect(screen.getByText('Radio Activity')).toBeInTheDocument());
-    expect(screen.getByText(/Southwest 3838 descend/)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('Radio Calls')).toBeInTheDocument());
+    // Transcript is wrapped in decorative quotes (“…”), which splits the text
+    // across nodes — read the radio-text element's full content directly.
+    await waitFor(() => expect(document.querySelector('.v2-det__radio-text')).not.toBeNull());
+    expect(document.querySelector('.v2-det__radio-text').textContent).toMatch(
+      /Southwest 3838 descend/
+    );
     expect(screen.getByText('124.350 MHz')).toBeInTheDocument();
     expect(screen.getByText('91% match')).toBeInTheDocument();
   });

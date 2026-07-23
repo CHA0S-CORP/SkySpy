@@ -75,9 +75,9 @@ class MakeRequestTests(TestCase):
 
         self.assertIsNone(result)
 
-    @patch("httpx.Client")
+    @patch("skyspy.services.avwx.http_client.get_shared_client")
     @patch("skyspy.services.avwx._is_enabled")
-    def test_make_request_success_without_key(self, mock_enabled, mock_client_class):
+    def test_make_request_success_without_key(self, mock_enabled, mock_get_client):
         """Test successful request without API key."""
         mock_enabled.return_value = True
         mock_response = MagicMock()
@@ -86,18 +86,16 @@ class MakeRequestTests(TestCase):
 
         mock_client = MagicMock()
         mock_client.get.return_value = mock_response
-        mock_client.__enter__ = MagicMock(return_value=mock_client)
-        mock_client.__exit__ = MagicMock(return_value=False)
-        mock_client_class.return_value = mock_client
+        mock_get_client.return_value = mock_client
 
         result = avwx._make_request("metar/KSEA")
 
         self.assertEqual(result, {"station": "KSEA"})
 
-    @patch("httpx.Client")
+    @patch("skyspy.services.avwx.http_client.get_shared_client")
     @patch("skyspy.services.avwx._get_api_key")
     @patch("skyspy.services.avwx._is_enabled")
-    def test_make_request_with_api_key(self, mock_enabled, mock_get_key, mock_client_class):
+    def test_make_request_with_api_key(self, mock_enabled, mock_get_key, mock_get_client):
         """Test request includes Authorization header when API key is set."""
         mock_enabled.return_value = True
         mock_get_key.return_value = "test-key"
@@ -107,9 +105,7 @@ class MakeRequestTests(TestCase):
 
         mock_client = MagicMock()
         mock_client.get.return_value = mock_response
-        mock_client.__enter__ = MagicMock(return_value=mock_client)
-        mock_client.__exit__ = MagicMock(return_value=False)
-        mock_client_class.return_value = mock_client
+        mock_get_client.return_value = mock_client
 
         avwx._make_request("metar/KSEA")
 
@@ -118,9 +114,9 @@ class MakeRequestTests(TestCase):
         self.assertIn("headers", call_args.kwargs)
         self.assertEqual(call_args.kwargs["headers"]["Authorization"], "Bearer test-key")
 
-    @patch("httpx.Client")
+    @patch("skyspy.services.avwx.http_client.get_shared_client")
     @patch("skyspy.services.avwx._is_enabled")
-    def test_make_request_rate_limit(self, mock_enabled, mock_client_class):
+    def test_make_request_rate_limit(self, mock_enabled, mock_get_client):
         """Test rate limit error handling."""
         mock_enabled.return_value = True
         mock_response = MagicMock()
@@ -128,17 +124,15 @@ class MakeRequestTests(TestCase):
 
         mock_client = MagicMock()
         mock_client.get.side_effect = httpx.HTTPStatusError("Rate limited", request=MagicMock(), response=mock_response)
-        mock_client.__enter__ = MagicMock(return_value=mock_client)
-        mock_client.__exit__ = MagicMock(return_value=False)
-        mock_client_class.return_value = mock_client
+        mock_get_client.return_value = mock_client
 
         result = avwx._make_request("metar/KSEA")
 
         self.assertIsNone(result)
 
-    @patch("httpx.Client")
+    @patch("skyspy.services.avwx.http_client.get_shared_client")
     @patch("skyspy.services.avwx._is_enabled")
-    def test_make_request_auth_error(self, mock_enabled, mock_client_class):
+    def test_make_request_auth_error(self, mock_enabled, mock_get_client):
         """Test authentication error handling."""
         mock_enabled.return_value = True
         mock_response = MagicMock()
@@ -146,9 +140,7 @@ class MakeRequestTests(TestCase):
 
         mock_client = MagicMock()
         mock_client.get.side_effect = httpx.HTTPStatusError("Unauthorized", request=MagicMock(), response=mock_response)
-        mock_client.__enter__ = MagicMock(return_value=mock_client)
-        mock_client.__exit__ = MagicMock(return_value=False)
-        mock_client_class.return_value = mock_client
+        mock_get_client.return_value = mock_client
 
         result = avwx._make_request("metar/KSEA")
 

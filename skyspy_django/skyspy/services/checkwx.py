@@ -15,6 +15,8 @@ import httpx
 from django.conf import settings
 from django.core.cache import cache
 
+from skyspy.services import http_client
+
 logger = logging.getLogger(__name__)
 
 # API configuration
@@ -60,17 +62,17 @@ def _make_request(endpoint: str, params: dict | None = None) -> dict[str, Any] |
         return None
 
     try:
-        with httpx.Client(timeout=15) as client:
-            response = client.get(
-                f"{CHECKWX_API_BASE}/{endpoint}",
-                params=params,
-                headers={
-                    "X-API-Key": api_key,
-                    "Accept": "application/json",
-                },
-            )
-            response.raise_for_status()
-            return response.json()
+        response = http_client.get_shared_client().get(
+            f"{CHECKWX_API_BASE}/{endpoint}",
+            params=params,
+            headers={
+                "X-API-Key": api_key,
+                "Accept": "application/json",
+            },
+            timeout=15,
+        )
+        response.raise_for_status()
+        return response.json()
 
     except httpx.HTTPStatusError as e:
         if e.response.status_code == 429:

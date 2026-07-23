@@ -92,7 +92,11 @@ export function useLiveLeafletMap({ containerRef, feeder, active }) {
       iconSize: [12, 12],
       iconAnchor: [6, 6],
     });
-    sensorRef.current = L.marker(center, { icon: sensor, interactive: false, pane: 'lm-rings' }).addTo(map);
+    sensorRef.current = L.marker(center, {
+      icon: sensor,
+      interactive: false,
+      pane: 'lm-rings',
+    }).addTo(map);
     // a restored view already positions the map — don't let the async feeder
     // resolve yank it back to the antenna
     centeredOnFeederRef.current = saved != null || feeder?.lat != null;

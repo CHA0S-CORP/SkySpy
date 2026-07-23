@@ -72,6 +72,17 @@ def _point_in_polygon(lon: float, lat: float, polygon) -> bool:
     if not rings:
         return False
     ring = rings[0]  # exterior ring; G-AIRMET areas are simple polygons
+    # Guard against a non-Polygon geometry (e.g. a LineString stored with a flat
+    # [[lon,lat], ...] coordinate list): rings[0] would then be a single [lon,lat]
+    # pair of floats, and ring[i][0] below would raise TypeError — and since
+    # _score_gairmet has no per-advisory try/except, one malformed advisory would
+    # kill the whole turbulence assessment. Require a ring of coordinate pairs.
+    if (
+        not isinstance(ring, (list, tuple))
+        or len(ring) < 3
+        or not all(isinstance(pt, (list, tuple)) and len(pt) >= 2 for pt in ring)
+    ):
+        return False
     inside = False
     n = len(ring)
     j = n - 1

@@ -150,7 +150,12 @@ class LLMClient:
                             logger.error(f"LLM rate limited {rl_waits}x, giving up")
                             _stats["failures"] += 1
                             return None
-                        retry_after = int(response.headers.get("Retry-After", 2 ** (rl_waits + 1)))
+                        # Retry-After may be an HTTP-date, not delta-seconds;
+                        # _parse_retry_after returns None on a date/garbage rather
+                        # than raising ValueError (which previously aborted retries).
+                        from skyspy.services.http_client import _parse_retry_after
+
+                        retry_after = _parse_retry_after(response.headers.get("Retry-After")) or 2 ** (rl_waits + 1)
                         logger.warning(f"LLM rate limited, waiting {retry_after}s")
                         time.sleep(min(retry_after, 60))
                         _stats["retries"] += 1
@@ -265,7 +270,11 @@ class LLMClient:
                         if rl_waits >= _MAX_RATE_LIMIT_WAITS:
                             logger.error(f"Embeddings rate limited {rl_waits}x, giving up")
                             return None
-                        time.sleep(min(int(response.headers.get("Retry-After", 2 ** (rl_waits + 1))), 60))
+                        # HTTP-date-safe Retry-After parse (see complete()).
+                        from skyspy.services.http_client import _parse_retry_after
+
+                        retry_after = _parse_retry_after(response.headers.get("Retry-After")) or 2 ** (rl_waits + 1)
+                        time.sleep(min(retry_after, 60))
                         rl_waits += 1
                         continue
                     response.raise_for_status()

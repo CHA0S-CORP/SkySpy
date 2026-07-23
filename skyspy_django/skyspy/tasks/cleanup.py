@@ -18,6 +18,7 @@ Retention periods are configurable via environment variables:
 
 import logging
 import os
+import time
 from datetime import timedelta
 
 from celery import shared_task
@@ -80,8 +81,10 @@ def cleanup_old_sightings():
             logger.debug(f"No sightings older than {retention_days} days to delete")
             return {"deleted": 0, "retention_days": retention_days}
 
-        # Delete in batches to avoid long-running transactions
-        batch_size = 10000
+        # Delete in batches to avoid long-running transactions. Smaller batches
+        # (was 10000) plus a brief pause bound WAL growth and lock/metadata
+        # contention so concurrent inserts on the hot table aren't starved.
+        batch_size = 2000
         total_deleted = 0
 
         while True:
@@ -98,6 +101,9 @@ def cleanup_old_sightings():
             total_deleted += deleted
 
             logger.debug(f"Deleted batch of {deleted} sightings, total: {total_deleted}")
+
+            # Yield briefly between batches so foreground inserts make progress.
+            time.sleep(0.1)
 
         logger.info(f"Sighting cleanup: deleted {total_deleted} records older than {retention_days} days")
 
@@ -205,6 +211,59 @@ def cleanup_old_notification_logs():
 
     except DatabaseError as e:
         logger.error(f"Error cleaning up old notification logs: {e}")
+        raise
+
+
+@shared_task
+def cleanup_old_task_results():
+    """
+    Prune django_celery_results TaskResult rows past the result-expiry window.
+
+    CELERY_RESULT_EXPIRES governs when a result is considered stale, but nothing
+    schedules the actual DB prune — so the django_celery_results_taskresult table
+    can grow unbounded if the backend's own cleanup lags under load. Batched
+    delete on the indexed date_done column, consistent with the other cleanups.
+    """
+    try:
+        from django_celery_results.models import TaskResult
+    except ImportError:  # pragma: no cover - backend is optional
+        logger.debug("django_celery_results not installed; skipping task result cleanup")
+        return {"error": "django_celery_results_not_installed"}
+
+    expires = getattr(settings, "CELERY_RESULT_EXPIRES", None)
+    if isinstance(expires, timedelta):
+        retention = expires
+    elif expires is not None:
+        try:
+            retention = timedelta(seconds=int(expires))
+        except (TypeError, ValueError):
+            retention = timedelta(days=7)
+    else:
+        retention = timedelta(days=7)
+    cutoff = timezone.now() - retention
+
+    try:
+        batch_size = 2000
+        total_deleted = 0
+
+        while True:
+            ids_to_delete = list(
+                TaskResult.objects.filter(date_done__lt=cutoff).values_list("id", flat=True)[:batch_size]
+            )
+            if not ids_to_delete:
+                break
+
+            deleted, _ = TaskResult.objects.filter(id__in=ids_to_delete).delete()
+            total_deleted += deleted
+            time.sleep(0.1)
+
+        if total_deleted:
+            logger.info(f"Task result cleanup: deleted {total_deleted} rows older than {cutoff.isoformat()}")
+
+        return {"deleted": total_deleted, "cutoff": cutoff.isoformat()}
+
+    except DatabaseError as e:
+        logger.error(f"Error cleaning up old task results: {e}")
         raise
 
 
@@ -404,6 +463,11 @@ def run_all_cleanup_tasks():
         results["acars_messages"] = cleanup_old_acars_messages()
     except Exception as e:  # broad: isolate sub-task failure so remaining cleanups still run
         results["acars_messages"] = {"error": str(e)}
+
+    try:
+        results["task_results"] = cleanup_old_task_results()
+    except Exception as e:  # broad: isolate sub-task failure so remaining cleanups still run
+        results["task_results"] = {"error": str(e)}
 
     try:
         results["audio_transmissions"] = cleanup_old_audio_transmissions()

@@ -80,6 +80,19 @@ class TestToolShapes:
         assert mixed["count"] == 1
         assert mixed["no_track"] == ["AAAAAA"] and mixed["unresolved"] == ["ZZZZZZ"]
 
+    def test_aviation_reference_tools_return_json(self, db):
+        # New aviation-context tools: valid JSON and clean gating on an empty DB.
+        assert json.loads(tools.decode_squawk("7700"))["category"] == "emergency"
+        assert json.loads(tools.military_reference()) is not None
+        assert "error" in json.loads(tools.identify_military("ZZZZZZ"))
+        assert json.loads(tools.nearby_navaids()) is not None
+        assert "error" in json.loads(tools.airspace_near())  # OpenAIP unconfigured in tests
+        assert "error" in json.loads(tools.web_search("anything"))  # gated off by default
+        assert (
+            json.loads(tools.decode_aviation_text("metar", "KSEA 010153Z 18005KT 10SM FEW250 15/09 A3002")) is not None
+        )
+        assert json.loads(tools.elevation_at(47.0, -122.0)) is not None
+
     def test_dev_reference_tools_return_json(self, db):
         # REST index is generated from the live OpenAPI schema; filtering narrows it.
         full = json.loads(tools.rest_api_reference())
@@ -369,7 +382,10 @@ class TestCompactMode:
         from langgraph.errors import GraphRecursionError
 
         fake = MagicMock()
-        fake.invoke.side_effect = GraphRecursionError("Recursion limit of 22 reached")
+        # ask() iterates graph.stream() — raise from there (invoke is never
+        # called; a plain MagicMock.stream silently iterates as empty, which
+        # made this test assert the wrong path).
+        fake.stream.side_effect = GraphRecursionError("Recursion limit of 22 reached")
         with override_settings(**self._LOCAL_LLM), patch.object(agent, "_build_agent", return_value=fake):
             result = agent.ask("keep chaining tools forever")
         # Not a hard error: a usable message with a distinct non-503 status.
@@ -412,6 +428,13 @@ class TestGoldenCoverage:
             ("route", "lookup_route"),
             ("incident", "find_incidents"),
             ("acars", "acars_summary"),
+            ("squawk", "decode_squawk"),
+            ("airspace", "airspace_near"),
+            ("VOR", "nearby_navaids"),
+            ("callsign", "military_reference"),
+            ("web", "web_search"),
+            ("terrain", "elevation_at"),
+            ("teletype", "decode_aviation_text"),
         ],
     )
     def test_intent_has_a_tool(self, keyword, expected_tool):

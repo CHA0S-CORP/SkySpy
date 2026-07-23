@@ -405,7 +405,10 @@ services:
 
   # PostgreSQL for integration tests
   postgres:
-    image: pgvector/pgvector:pg16
+    # Combined PostGIS + pgvector image (docker/postgres/Dockerfile).
+    build:
+      context: ./docker/postgres
+    image: skyspy-postgres:pg16-postgis
     profiles: ["dev","test"]
     container_name: skyspy_postgres_test
     # Docker's default /dev/shm is 64M; parallel VACUUM/ANALYZE + hash ops need
@@ -450,6 +453,11 @@ services:
       dockerfile: Dockerfile
     image: ghcr.io/cha0s-corp/1090-mock:latest
     profiles: ["dev","test"]
+    # Auto-recover if the Flask dev server crashes/hangs after hours of uptime
+    # (previously ran with no restart policy, so a crash stayed dead — the
+    # "mock stopped after 4h" symptom). mem_limit caps runaway state growth.
+    restart: unless-stopped
+    mem_limit: 512m
     command: ["python3", "mock_server.py"]
     environment:
       - MOCK_TYPE=ultrafeeder
@@ -495,6 +503,8 @@ services:
       dockerfile: Dockerfile
     image: ghcr.io/cha0s-corp/1090-mock:latest
     profiles: ["dev","test"]
+    restart: unless-stopped
+    mem_limit: 512m
     command: ["python3", "mock_1090.py"]
     environment:
       - MOCK_TYPE=dump978
@@ -566,6 +576,7 @@ services:
     image: ghcr.io/cha0s-corp/rtl-airband-mock:latest
     profiles: ["dev"]
     container_name: mock-airband-uploader
+    restart: unless-stopped
     environment:
       - SKYSPY_API_URL=http://api:8000
       - METRICS_PORT=9091

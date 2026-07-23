@@ -176,14 +176,15 @@ describe('AircraftListScreen', () => {
     expect(screen.queryByTestId('v2-list-type-full-ad10e9')).toBeNull();
   });
 
-  it('filters via chips and search', () => {
+  it('filters via chips and search', async () => {
     render(<AircraftListScreen aircraft={FLEET} onSelectAircraft={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: /Military 1/ }));
     expect(screen.getByText('1 of 4')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Military 1/ })); // toggle off
     fireEvent.change(screen.getByLabelText('Search aircraft'), { target: { value: 'ASA' } });
+    // The search query write is debounced (300ms), so filtering settles async.
+    await waitFor(() => expect(screen.queryByText('DAL709')).toBeNull());
     expect(screen.getByText('ASA1548')).toBeInTheDocument();
-    expect(screen.queryByText('DAL709')).toBeNull();
   });
 
   it('sorts when a column header is clicked', () => {
@@ -203,10 +204,13 @@ describe('AircraftListScreen', () => {
     expect(onSelect).toHaveBeenCalledWith('a7e198');
   });
 
-  it('shows empty state when nothing matches', () => {
+  it('shows empty state when nothing matches', async () => {
     render(<AircraftListScreen aircraft={FLEET} onSelectAircraft={vi.fn()} />);
     fireEvent.change(screen.getByLabelText('Search aircraft'), { target: { value: 'zzzz' } });
-    expect(screen.getByText('No aircraft match the current filters')).toBeInTheDocument();
+    // Search filtering is debounced (300ms).
+    await waitFor(() =>
+      expect(screen.getByText('No aircraft match the current filters')).toBeInTheDocument()
+    );
   });
 });
 

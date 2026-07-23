@@ -10,9 +10,23 @@ import threading
 import time
 from collections import OrderedDict
 from datetime import UTC, datetime, timedelta
+from typing import NamedTuple
 
 from django.conf import settings
 from django.utils import timezone
+
+
+class _CooldownEntry(NamedTuple):
+    """A fallback cooldown record: when it last triggered + its window length.
+
+    Storing cooldown_seconds alongside the timestamp lets get_remaining_cooldown
+    compute the remaining time in the in-memory fallback (Redis down), instead of
+    always reporting "no cooldown".
+    """
+
+    last_trigger: datetime
+    cooldown_seconds: int
+
 
 try:
     from redis.exceptions import RedisError
@@ -67,7 +81,7 @@ class LRUCooldownCache:
         self._max_size = max_size
         self._last_cleanup = 0.0
 
-    def get(self, key: tuple) -> datetime | None:
+    def get(self, key: tuple) -> "_CooldownEntry | None":
         """Get a cooldown entry, returning None if not found."""
         with self._lock:
             if key in self._cache:
@@ -76,7 +90,7 @@ class LRUCooldownCache:
                 return self._cache[key]
             return None
 
-    def set(self, key: tuple, value: datetime):
+    def set(self, key: tuple, value: "_CooldownEntry"):
         """Set a cooldown entry with LRU eviction if needed."""
         with self._lock:
             self._maybe_cleanup()
@@ -128,7 +142,7 @@ class LRUCooldownCache:
         cutoff = timezone.now() - timedelta(minutes=30)  # Keep for 30 min max
 
         # Remove expired entries (iterate over copy of keys)
-        keys_to_remove = [k for k, v in self._cache.items() if v < cutoff]
+        keys_to_remove = [k for k, v in self._cache.items() if v.last_trigger < cutoff]
         for key in keys_to_remove:
             del self._cache[key]
 
@@ -227,14 +241,15 @@ class DistributedCooldownManager:
         key = (rule_id, icao_hex.upper())
         now = timezone.now()
 
-        last_trigger = self._fallback_cooldowns.get(key)
+        entry = self._fallback_cooldowns.get(key)
+        last_trigger = entry.last_trigger if entry else None
 
         if last_trigger:
             elapsed = (now - last_trigger).total_seconds()
             if elapsed < cooldown_seconds:
                 return False, last_trigger
 
-        self._fallback_cooldowns.set(key, now)
+        self._fallback_cooldowns.set(key, _CooldownEntry(now, cooldown_seconds))
         return True, last_trigger
 
     def get_remaining_cooldown(self, rule_id: int, icao_hex: str) -> int | None:
@@ -252,8 +267,21 @@ class DistributedCooldownManager:
                 return ttl if ttl > 0 else None
             except _REDIS_OP_ERRORS as e:
                 logger.warning(f"Redis TTL check failed: {e}")
-                return None
-        return None
+                return self._remaining_fallback(rule_id, icao_hex)
+        return self._remaining_fallback(rule_id, icao_hex)
+
+    def _remaining_fallback(self, rule_id: int, icao_hex: str) -> int | None:
+        """Remaining cooldown from the in-memory LRU fallback (Redis down).
+
+        Mirrors the other query/mutation methods, which all consult the fallback
+        when Redis is unavailable; without this get_remaining_cooldown always
+        reported "no cooldown" in fallback mode even with an active cooldown.
+        """
+        entry = self._fallback_cooldowns.get((rule_id, icao_hex.upper()))
+        if not entry:
+            return None
+        remaining = entry.cooldown_seconds - (timezone.now() - entry.last_trigger).total_seconds()
+        return int(remaining) if remaining > 0 else None
 
     def clear_one(self, rule_id: int, icao_hex: str) -> bool:
         """

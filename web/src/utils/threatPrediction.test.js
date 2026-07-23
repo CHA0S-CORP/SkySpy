@@ -119,7 +119,13 @@ describe('calculateETA', () => {
 
   it('should compute a true CPA from track geometry (head-on intercept)', () => {
     // Aircraft due north 5nm, flying due south at 100kt: CPA 0nm at 180s
-    const threat = { distance_nm: 5, bearing: 0, track: 180, ground_speed: 100, trend: 'approaching' };
+    const threat = {
+      distance_nm: 5,
+      bearing: 0,
+      track: 180,
+      ground_speed: 100,
+      trend: 'approaching',
+    };
     const result = calculateETA(threat, 100);
     expect(result.eta).toBe(180);
     expect(result.cpaDistance).toBe(0);
@@ -129,7 +135,13 @@ describe('calculateETA', () => {
   it('should not flag a flyby as an intercept', () => {
     // Aircraft due north 5nm flying due east at 300kt: closing radially at
     // first but CPA stays 5nm abeam
-    const threat = { distance_nm: 5, bearing: 0, track: 90, ground_speed: 300, trend: 'approaching' };
+    const threat = {
+      distance_nm: 5,
+      bearing: 0,
+      track: 90,
+      ground_speed: 300,
+      trend: 'approaching',
+    };
     const result = calculateETA(threat, 50);
     expect(result.cpaDistance).toBe(5);
     expect(result.willIntercept).toBe(false);
@@ -143,7 +155,13 @@ describe('calculateETA', () => {
   });
 
   it('should detect intercept when CPA is under 1nm', () => {
-    const threat = { distance_nm: 2, bearing: 90, track: 270, ground_speed: 200, trend: 'approaching' };
+    const threat = {
+      distance_nm: 2,
+      bearing: 90,
+      track: 270,
+      ground_speed: 200,
+      trend: 'approaching',
+    };
     const result = calculateETA(threat, 200); // Fast head-on closure
     expect(result.willIntercept).toBe(true);
   });

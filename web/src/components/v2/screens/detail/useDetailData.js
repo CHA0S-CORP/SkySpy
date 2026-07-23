@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { withAuth } from '../../../../lib/authHeader';
 
 async function getJson(url) {
   try {
@@ -6,7 +7,9 @@ async function getJson(url) {
     // HTTP cache — and it stops the browser replaying a cached redirect (e.g. a
     // 301 served by a momentarily misconfigured backend) that would otherwise
     // poison every detail fetch and blank out the page.
-    const res = await fetch(url, { cache: 'no-store' });
+    // withAuth(): /lookup/* require auth (no public bypass), so omitting the JWT
+    // 401s a signed-in user in hybrid mode.
+    const res = await fetch(url, { cache: 'no-store', headers: withAuth() });
     if (!res.ok) return null;
     const ct = res.headers.get('content-type');
     if (!ct || !ct.includes('application/json')) return null;

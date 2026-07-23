@@ -1513,7 +1513,13 @@ class SafetyMonitor:
                 if cpa is not None and 0 <= cpa["cpa_time_seconds"] <= self.CPA_TIME_HORIZON_SEC:
                     horiz_cpa = cpa["cpa_distance_nm"]
                     vert_cpa = self._vertical_sep_at(pos1, pos2, cpa["cpa_time_seconds"])
-                    if horiz_cpa <= dist_nm:  # actually getting closer horizontally
+                    # cpa_time_seconds == 0 is the degenerate matched-velocity case
+                    # (_calculate_cpa returns t=0, cpa_distance==current dist for
+                    # near-zero relative velocity) — the pair is NOT closing, it is
+                    # station-keeping. Requiring t > 0 keeps such a formation pair
+                    # out of `converging` so the station_keeping suppression below
+                    # can catch it instead of reporting a false critical conflict.
+                    if horiz_cpa <= dist_nm and cpa["cpa_time_seconds"] > 0:  # actually getting closer horizontally
                         converging = True
                         t_conflict = cpa["cpa_time_seconds"]
 
@@ -1591,10 +1597,16 @@ class SafetyMonitor:
                 ):
                     display1 = pos1["callsign"] or icao1
                     display2 = pos2["callsign"] or icao2
+                    # Leading clause is CURRENT geometry; when converging the alert
+                    # actually fired on the PREDICTED closest approach (assess_dist/
+                    # assess_alt = horiz_cpa/vert_cpa), so label the current values as
+                    # "now" and append the predicted CPA that triggered it. The
+                    # predicted values are also persisted under details.predicted.
+                    now_suffix = " now" if converging else ""
                     msg = (
                         f"Proximity conflict: {display1} and "
                         f"{display2} within {dist_nm:.2f}nm, "
-                        f"{alt_diff}ft altitude separation"
+                        f"{alt_diff}ft altitude separation{now_suffix}"
                     )
 
                     if converging:

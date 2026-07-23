@@ -338,8 +338,9 @@ describe('HistoryScreen', () => {
     await waitFor(() =>
       expect(screen.getByText('Moderate turbulence FL350 near SEA')).toBeInTheDocument()
     );
-    expect(screen.getByText('UUA')).toBeInTheDocument();
-    expect(screen.getByText('moderate')).toBeInTheDocument();
+    expect(screen.getByText('URGENT')).toBeInTheDocument();
+    // Severity is surfaced as the decoded turbulence hazard badge (TURB·<intensity>).
+    expect(screen.getByText(/TURB/)).toBeInTheDocument();
   });
 
   it('sightings tab renders speed @ track and guards absent track', async () => {

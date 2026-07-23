@@ -68,6 +68,34 @@ def _advisory_covers_point(advisory: dict, lat: float, lon: float) -> bool:
     return min_lat <= lat <= max_lat and min_lon <= lon <= max_lon
 
 
+# Candidate prefilter margin (nm) for get_boundaries — half-span of a large
+# ARTCC, so an airspace whose CENTER is far from the query point but whose
+# extent still reaches it survives the cheap DB center-box prefilter and is then
+# refined against its real polygon bbox.
+_BOUNDARY_PREFILTER_MARGIN_NM = 300
+
+
+def _boundary_matches_location(polygon, center_lat, center_lon, lat: float, lon: float, radius_nm: float) -> bool:
+    """True if an airspace covers or lies within radius of the point.
+
+    Tests the airspace's polygon bounding box (expanded by radius_nm) so a large
+    airspace whose CENTER is far away but whose extent still reaches the point is
+    kept — the previous center-only test dropped exactly those. Falls back to the
+    stored center when there is no usable geometry (e.g. circular airspaces).
+    """
+    lat_margin = radius_nm / 60.0
+    lon_margin = radius_nm / (60.0 * (abs(cos(radians(lat))) or 1.0))
+    bounds = _polygon_bounds(polygon)
+    if bounds is None:
+        if center_lat is None or center_lon is None:
+            return True
+        return abs(center_lat - lat) <= lat_margin and abs(center_lon - lon) <= lon_margin
+    min_lon, min_lat, max_lon, max_lat = bounds
+    return (min_lat - lat_margin) <= lat <= (max_lat + lat_margin) and (min_lon - lon_margin) <= lon <= (
+        max_lon + lon_margin
+    )
+
+
 def get_advisories(
     lat: float | None = None,
     lon: float | None = None,
@@ -149,8 +177,12 @@ def get_boundaries(
         nm_per_deg_lat = 60
         nm_per_deg_lon = 60 * abs(cos(radians(lat))) if lat is not None else 60
 
-        lat_range = radius_nm / nm_per_deg_lat
-        lon_range = radius_nm / nm_per_deg_lon
+        # Widen the cheap DB prefilter by the max-airspace-span margin so large
+        # airspaces become candidates; the polygon-bbox refine below removes any
+        # that don't actually reach the point.
+        margin_deg = _BOUNDARY_PREFILTER_MARGIN_NM / 60.0
+        lat_range = radius_nm / nm_per_deg_lat + margin_deg
+        lon_range = radius_nm / nm_per_deg_lon + margin_deg
 
         queryset = queryset.filter(
             center_lat__gte=lat - lat_range,
@@ -160,8 +192,18 @@ def get_boundaries(
         )
 
     boundaries = []
-    for boundary in queryset.order_by("airspace_class", "name")[:200]:
+    for boundary in queryset.order_by("airspace_class", "name"):
+        if (
+            lat is not None
+            and lon is not None
+            and not _boundary_matches_location(
+                boundary.polygon, boundary.center_lat, boundary.center_lon, lat, lon, radius_nm
+            )
+        ):
+            continue
         boundaries.append(_serialize_boundary(boundary))
+        if len(boundaries) >= 200:
+            break
 
     # If no results, try cache
     if not boundaries:
@@ -174,15 +216,12 @@ def get_boundaries(
                 boundaries = [b for b in boundaries if b.get("airspace_class") == airspace_class]
 
             if lat is not None and lon is not None:
-                nm_per_deg_lat = 60
-                nm_per_deg_lon = 60 * abs(cos(radians(lat))) if lat is not None else 60
-                lat_range = radius_nm / nm_per_deg_lat
-                lon_range = radius_nm / nm_per_deg_lon
-
                 boundaries = [
                     b
                     for b in boundaries
-                    if abs(b.get("center_lat", 0) - lat) <= lat_range and abs(b.get("center_lon", 0) - lon) <= lon_range
+                    if _boundary_matches_location(
+                        b.get("polygon"), b.get("center_lat"), b.get("center_lon"), lat, lon, radius_nm
+                    )
                 ]
 
     return boundaries

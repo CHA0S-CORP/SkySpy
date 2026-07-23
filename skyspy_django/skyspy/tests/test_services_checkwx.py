@@ -76,9 +76,9 @@ class MakeRequestTests(TestCase):
 
         self.assertIsNone(result)
 
-    @patch("httpx.Client")
+    @patch("skyspy.services.checkwx.http_client.get_shared_client")
     @patch("skyspy.services.checkwx._get_api_key")
-    def test_make_request_success(self, mock_get_key, mock_client_class):
+    def test_make_request_success(self, mock_get_key, mock_get_client):
         """Test successful API request."""
         mock_get_key.return_value = "test-key"
         mock_response = MagicMock()
@@ -87,17 +87,15 @@ class MakeRequestTests(TestCase):
 
         mock_client = MagicMock()
         mock_client.get.return_value = mock_response
-        mock_client.__enter__ = MagicMock(return_value=mock_client)
-        mock_client.__exit__ = MagicMock(return_value=False)
-        mock_client_class.return_value = mock_client
+        mock_get_client.return_value = mock_client
 
         result = checkwx._make_request("metar/KSEA")
 
         self.assertEqual(result, {"results": 1, "data": [{"icao": "KSEA"}]})
 
-    @patch("httpx.Client")
+    @patch("skyspy.services.checkwx.http_client.get_shared_client")
     @patch("skyspy.services.checkwx._get_api_key")
-    def test_make_request_rate_limit(self, mock_get_key, mock_client_class):
+    def test_make_request_rate_limit(self, mock_get_key, mock_get_client):
         """Test rate limit error handling."""
         mock_get_key.return_value = "test-key"
         mock_response = MagicMock()
@@ -105,9 +103,7 @@ class MakeRequestTests(TestCase):
 
         mock_client = MagicMock()
         mock_client.get.side_effect = httpx.HTTPStatusError("Rate limited", request=MagicMock(), response=mock_response)
-        mock_client.__enter__ = MagicMock(return_value=mock_client)
-        mock_client.__exit__ = MagicMock(return_value=False)
-        mock_client_class.return_value = mock_client
+        mock_get_client.return_value = mock_client
 
         result = checkwx._make_request("metar/KSEA")
 

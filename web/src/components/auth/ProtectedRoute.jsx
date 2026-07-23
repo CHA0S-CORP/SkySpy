@@ -22,7 +22,8 @@ export default function ProtectedRoute({ children, requiredPermissions = [], req
   const nothingPublic =
     config.authEnabled &&
     !Object.values(config.features || {}).some((f) => f?.is_enabled && f?.read_access === 'public');
-  const globalLoginRequired = config.authEnabled && (config.authMode === 'private' || nothingPublic);
+  const globalLoginRequired =
+    config.authEnabled && (config.authMode === 'private' || nothingPublic);
   if (!globalLoginRequired) {
     return children;
   }

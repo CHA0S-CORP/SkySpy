@@ -315,7 +315,11 @@
 
 .v2-list__rows {
   flex: 1;
-  overflow-y: auto;
+  min-height: 0;
+  position: relative;
+  /* Sizing viewport for the VirtualList inside, which owns the scroll and
+     measures this element's height (height="auto"). */
+  overflow: hidden;
 }
 .v2-list__row {
   width: 100%;

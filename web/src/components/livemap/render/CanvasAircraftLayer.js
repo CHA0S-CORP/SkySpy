@@ -11,6 +11,7 @@ import {
   drawAirport,
   drawAirspaceDisc,
   drawAirspacePoly,
+  drawCluster,
   drawCoast,
   drawDart,
   drawLabel,
@@ -82,6 +83,7 @@ export class CanvasAircraftLayer {
       onAirmetHover,
       onWildfireSelect,
       onAirmetSelect,
+      onClusterSelect,
     } = {}
   ) {
     this.map = map;
@@ -94,6 +96,7 @@ export class CanvasAircraftLayer {
     this.onAirmetHover = onAirmetHover;
     this.onWildfireSelect = onWildfireSelect;
     this.onAirmetSelect = onAirmetSelect;
+    this.onClusterSelect = onClusterSelect;
 
     this.canvas = document.createElement('canvas');
     this.canvas.className = 'lm-canvas';
@@ -145,6 +148,12 @@ export class CanvasAircraftLayer {
     this._track = new Map(); // hex → { track, t } last sample
     this._lastSeen = new Map(); // hex → last time a fresh position was present
 
+    // Server-side clusters (low zoom). When non-null the frame draws cluster
+    // bubbles instead of individual darts. clusterIndex is rebuilt each frame
+    // for click hit-testing (click → zoom into the cluster bbox).
+    this.clusters = null; // [{lat, lon, count, bbox:[s,w,n,e]}] or null
+    this.clusterIndex = []; // [{x, y, r, bbox}]
+
     this.frame = 0;
     this.screenIndex = []; // [{hex, x, y}] rebuilt each frame for hit-test
     this.pirepIndex = []; // [{x, y, pr}] rebuilt each frame for pirep hit-test
@@ -177,6 +186,34 @@ export class CanvasAircraftLayer {
     this.aircraft = aircraft || [];
     if (positionsRef) this.positionsRef = positionsRef;
     this._updateKinematics();
+  }
+
+  /** Set server-side clusters (or null to render individual darts). */
+  setClusters(clusters) {
+    this.clusters = Array.isArray(clusters) ? clusters : null;
+  }
+
+  /** Draw cluster bubbles + rebuild the click hit-test index (cluster mode). */
+  _drawClusters(project, contains) {
+    const ctx = this.ctx;
+    this.clusterIndex = [];
+    for (const c of this.clusters) {
+      if (typeof c.lat !== 'number' || typeof c.lon !== 'number') continue;
+      if (!contains(c.lat, c.lon)) continue;
+      const pt = project(c.lat, c.lon);
+      const r = drawCluster(ctx, pt.x, pt.y, c.count, this.frame);
+      this.clusterIndex.push({ x: pt.x, y: pt.y, r, bbox: c.bbox });
+    }
+  }
+
+  /** Hit-test a click against drawn cluster bubbles; returns {bbox} or null. */
+  hitTestCluster(pt) {
+    for (const c of this.clusterIndex) {
+      const dx = pt.x - c.x;
+      const dy = pt.y - c.y;
+      if (dx * dx + dy * dy <= (c.r + 4) * (c.r + 4)) return c;
+    }
+    return null;
   }
 
   /**
@@ -366,6 +403,15 @@ export class CanvasAircraftLayer {
 
     // aviation overlays (drawn under aircraft, gated by toggles)
     this._drawOverlays(bounds, project, contains, wrapLon);
+
+    // Cluster mode (low zoom): draw server-computed bubbles instead of darts and
+    // skip the per-aircraft passes. clusterIndex feeds click→zoom hit-testing.
+    if (this.clusters) {
+      this.screenIndex = [];
+      this._drawClusters(project, contains);
+      return;
+    }
+    this.clusterIndex = [];
 
     // project + cull + filter
     const visible = [];
@@ -887,6 +933,15 @@ export class CanvasAircraftLayer {
   }
 
   _onClick(e) {
+    // Cluster mode: a click on a bubble zooms into its bbox (there are no darts).
+    if (this.clusters) {
+      const cl = this.hitTestCluster(e.containerPoint);
+      if (cl?.bbox) {
+        L.DomEvent.stop(e);
+        this.onClusterSelect?.(cl.bbox);
+      }
+      return;
+    }
     const hex = this.hitTest(e.containerPoint);
     if (hex) {
       L.DomEvent.stop(e);

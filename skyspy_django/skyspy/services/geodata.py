@@ -15,11 +15,25 @@ from math import atan2, cos, radians, sin, sqrt
 
 import httpx
 from django.conf import settings
+from django.contrib.gis.geos import Point
+from django.contrib.gis.measure import D
 from django.db import transaction
 from django.db.models import Max
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from skyspy.models import CachedAirport, CachedGeoJSON, CachedNavaid
+from skyspy.models.aviation import point_from_latlon
+from skyspy.services import http_client
+
+
+def _stamp_geom(objs):
+    """Populate `geom` from latitude/longitude before bulk_create (which bypasses
+    Model.save(), where the geom sync normally happens)."""
+    rows = list(objs)
+    for obj in rows:
+        obj.geom = point_from_latlon(obj.latitude, obj.longitude)
+    return rows
+
 
 logger = logging.getLogger(__name__)
 
@@ -109,17 +123,17 @@ def haversine_nm(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
 )
 def _http_get_awc(url: str, params: dict, timeout: float = 15.0) -> httpx.Response:
     """HTTP GET with retry logic for AWC API."""
-    with httpx.Client(timeout=timeout) as client:
-        response = client.get(
-            url,
-            params=params,
-            headers={
-                "User-Agent": "SkySpyAPI/2.6 (aircraft-tracker)",
-                "Accept": "application/json",
-            },
-        )
-        response.raise_for_status()
-        return response
+    response = http_client.get_shared_client().get(
+        url,
+        params=params,
+        headers={
+            "User-Agent": "SkySpyAPI/2.6 (aircraft-tracker)",
+            "Accept": "application/json",
+        },
+        timeout=timeout,
+    )
+    response.raise_for_status()
+    return response
 
 
 @retry(
@@ -129,10 +143,11 @@ def _http_get_awc(url: str, params: dict, timeout: float = 15.0) -> httpx.Respon
 )
 def _http_get_geojson(url: str, timeout: float = 15.0) -> httpx.Response:
     """HTTP GET with retry logic for GeoJSON fetches."""
-    with httpx.Client(timeout=timeout) as client:
-        response = client.get(url, headers={"User-Agent": "SkySpyAPI/2.6 (aircraft-tracker)"})
-        response.raise_for_status()
-        return response
+    response = http_client.get_shared_client().get(
+        url, headers={"User-Agent": "SkySpyAPI/2.6 (aircraft-tracker)"}, timeout=timeout
+    )
+    response.raise_for_status()
+    return response
 
 
 @retry(
@@ -142,10 +157,11 @@ def _http_get_geojson(url: str, timeout: float = 15.0) -> httpx.Response:
 )
 def _http_get_faa(url: str, params: dict, timeout: float = 20.0) -> httpx.Response:
     """HTTP GET with retry logic for FAA ArcGIS FeatureServer queries."""
-    with httpx.Client(timeout=timeout) as client:
-        response = client.get(url, params=params, headers={"User-Agent": "SkySpyAPI/2.6 (aircraft-tracker)"})
-        response.raise_for_status()
-        return response
+    response = http_client.get_shared_client().get(
+        url, params=params, headers={"User-Agent": "SkySpyAPI/2.6 (aircraft-tracker)"}, timeout=timeout
+    )
+    response.raise_for_status()
+    return response
 
 
 def fetch_awc_data(endpoint: str, params: dict) -> dict | list:
@@ -306,7 +322,7 @@ def refresh_airports() -> int:
     if unique_airports:
         with transaction.atomic():
             CachedAirport.objects.all().delete()
-            CachedAirport.objects.bulk_create(unique_airports.values())
+            CachedAirport.objects.bulk_create(_stamp_geom(unique_airports.values()))
         logger.info(f"Cached {len(unique_airports)} airports (openaip)")
         return len(unique_airports)
 
@@ -360,7 +376,7 @@ def refresh_airports() -> int:
     # never holds a DB transaction open across slow HTTP calls (PgBouncer).
     with transaction.atomic():
         CachedAirport.objects.all().delete()
-        CachedAirport.objects.bulk_create(unique_airports.values())
+        CachedAirport.objects.bulk_create(_stamp_geom(unique_airports.values()))
     logger.info(f"Cached {len(unique_airports)} airports")
 
     return len(unique_airports)
@@ -409,7 +425,7 @@ def refresh_navaids() -> int:
     if unique_navaids:
         with transaction.atomic():
             CachedNavaid.objects.all().delete()
-            CachedNavaid.objects.bulk_create(unique_navaids.values())
+            CachedNavaid.objects.bulk_create(_stamp_geom(unique_navaids.values()))
         logger.info(f"Cached {len(unique_navaids)} navaids (openaip)")
         return len(unique_navaids)
 
@@ -458,7 +474,7 @@ def refresh_navaids() -> int:
 
     with transaction.atomic():
         CachedNavaid.objects.all().delete()
-        CachedNavaid.objects.bulk_create(unique_navaids.values())
+        CachedNavaid.objects.bulk_create(_stamp_geom(unique_navaids.values()))
     logger.info(f"Cached {len(unique_navaids)} navaids")
 
     return len(unique_navaids)
@@ -619,10 +635,19 @@ def fetch_faa_layer(url: str, envelope: str, out_fields: str, page: int, max_fea
         batch = data.get("features") if isinstance(data, dict) else None
         if not batch:
             break
+        got = len(batch)
         features.extend(batch)
-        if len(batch) < page:
+        # ArcGIS caps each response at the server's maxRecordCount (often 1000),
+        # which can be < the requested `page` (2000 for airways), and signals
+        # truncation with exceededTransferLimit — NOT by returning exactly `page`
+        # rows. Trust that flag and advance by the ACTUAL count returned, so we
+        # neither stop a page early nor loop with a mismatched offset.
+        truncated = bool(
+            data.get("exceededTransferLimit") or (data.get("properties") or {}).get("exceededTransferLimit")
+        )
+        if not truncated and got < page:
             break
-        offset += page
+        offset += got
     return features[:max_features]
 
 
@@ -722,19 +747,12 @@ def get_cached_airports(
     queryset = CachedAirport.objects.all()
 
     if lat is not None and lon is not None:
-        # Approximate degrees per NM
-        nm_per_deg_lat = 60
-        nm_per_deg_lon = 60 * abs(cos(radians(lat))) if lat else 60
+        # True great-circle radius over the geography(Point) geom, GiST-indexed
+        # (replaces the cos(lat) bbox + haversine post-filter below is kept only
+        # for the distance_nm output/ordering).
+        queryset = queryset.filter(geom__dwithin=(Point(lon, lat, srid=4326), D(nm=radius_nm)))
 
-        lat_range = radius_nm / nm_per_deg_lat
-        lon_range = radius_nm / nm_per_deg_lon
-
-        queryset = queryset.filter(
-            latitude__range=(lat - lat_range, lat + lat_range),
-            longitude__range=(lon - lon_range, lon + lon_range),
-        )
-
-    # When filtering by location, the bounding-box filter already limits the row count;
+    # When filtering by location, the radius filter already limits the row count;
     # slicing an unordered queryset here would drop nearby airports nondeterministically.
     airports = list(queryset) if lat is not None and lon is not None else list(queryset[:limit])
 
@@ -774,18 +792,10 @@ def get_cached_navaids(
         queryset = queryset.filter(navaid_type=navaid_type.upper())
 
     if lat is not None and lon is not None:
-        nm_per_deg_lat = 60
-        nm_per_deg_lon = 60 * abs(cos(radians(lat))) if lat else 60
+        # True great-circle radius over the geography(Point) geom, GiST-indexed.
+        queryset = queryset.filter(geom__dwithin=(Point(lon, lat, srid=4326), D(nm=radius_nm)))
 
-        lat_range = radius_nm / nm_per_deg_lat
-        lon_range = radius_nm / nm_per_deg_lon
-
-        queryset = queryset.filter(
-            latitude__range=(lat - lat_range, lat + lat_range),
-            longitude__range=(lon - lon_range, lon + lon_range),
-        )
-
-    # When filtering by location, the bounding-box filter already limits the row count;
+    # When filtering by location, the radius filter already limits the row count;
     # slicing an unordered queryset here would drop nearby navaids nondeterministically.
     navaids = list(queryset) if lat is not None and lon is not None else list(queryset[:limit])
 

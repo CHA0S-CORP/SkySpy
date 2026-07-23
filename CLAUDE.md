@@ -356,10 +356,30 @@ NOTIFICATION_WEBHOOK_ALLOWED_PRIVATE_CIDRS=
 # (RPi celery profile overrides to 30)
 STATS_TICK_INTERVAL=10
 
+# Map server-side conditional clustering. The Live Map sends its viewport bbox +
+# zoom via the Socket.IO `aircraft-clusters` request (mixins/aircraft.py::
+# _get_aircraft_clusters). At/above MAP_CLUSTER_ZOOM_THRESHOLD the server returns
+# raw points within the bbox; below it, PostGIS ST_ClusterDBSCAN groups (centroid
+# + count + bbox) over the live_aircraft_positions table. That table
+# (LiveAircraftPosition, geometry(Point,4326) — PLANAR, since ST_ClusterDBSCAN
+# needs geometry and eps is in the SRID's degrees) is upserted off the cold path
+# in tasks/aircraft_stream.flush_stream_to_database and pruned to rows updated
+# within LIVE_POSITION_TTL. MAP_CLUSTER_EPS_BASE is the DBSCAN eps in degrees,
+# scaled down as zoom rises; MAP_CLUSTER_MAX_POINTS caps the raw-points branch.
+# The frontend (web/src/components/livemap) mirrors the threshold to flip between
+# cluster-bubble and dart rendering on the canvas. See docs/23-postgis-clustering-design.md.
+MAP_CLUSTER_ZOOM_THRESHOLD=8
+MAP_CLUSTER_EPS_BASE=0.4
+MAP_CLUSTER_MAX_POINTS=2000
+LIVE_POSITION_TTL=90
+
 # Airframe RAG embeddings (each falls back to the matching LLM_* value).
-# Requires the Postgres image to be pgvector/pgvector:pg16 (already set in the
-# compose files) — the AirframeDocument embedding column + similarity search
-# depend on the pgvector extension. EMBEDDING_DIM must match the model.
+# Requires the Postgres image to carry pgvector — the AirframeDocument embedding
+# column + similarity search depend on the pgvector extension. The compose files
+# build the combined PostGIS + pgvector image (docker/postgres/Dockerfile, tag
+# skyspy-postgres:pg16-postgis; CI/release pull it from
+# ghcr.io/cha0s-corp/skyspy-postgres:pg16-postgis) so BOTH pgvector (RAG) and
+# postgis (spatial geom queries) load on one DB. EMBEDDING_DIM must match the model.
 EMBEDDING_API_URL=       # defaults to LLM_API_URL
 EMBEDDING_API_KEY=       # defaults to LLM_API_KEY
 EMBEDDING_MODEL=text-embedding-3-small
@@ -397,6 +417,39 @@ ASSISTANT_MAX_HISTORY_CHARS=3000  # per-message cap
 # ("prompt contains at least 8193 input tokens"). 0 (default) = assume large, no
 # compaction.
 ASSISTANT_CONTEXT_WINDOW=0
+# When ASSISTANT_CONTEXT_WINDOW=0, probe the OpenAI-compatible endpoint (GET
+# /models) for the model's real window — vLLM reports max_model_len — so compact
+# mode engages automatically for small local models (agent.py::
+# _detect_context_window, cached ~10 min). Explicit ASSISTANT_CONTEXT_WINDOW wins;
+# endpoints that don't report a window (OpenAI/Ollama) fall back to assume-large.
+ASSISTANT_CONTEXT_WINDOW_AUTO=True
+# Give the chat model a live web_search tool (services/web_search.py — news,
+# operator background, unfamiliar terms; results carry source URLs). ANDed with
+# WEB_SEARCH_ENABLED — deliberately separate, so enabling card-gen grounding does
+# NOT silently give the assistant internet access. Off by default.
+ASSISTANT_WEB_SEARCH_ENABLED=False
+# Assistant toolset (services/assistant/tools.py, ~53 read-only tools) is grouped
+# by category in TOOL_GROUPS; get_tools() prefixes each description with its
+# [category] tag as a selection hint for small models and converts bad tool args
+# into corrective observations (handle_validation_error) so the agent self-corrects
+# instead of crashing the loop. Aviation-reference tools added for context the
+# platform had but the LLM couldn't reach: decode_squawk (+ services/
+# squawk_codes.py static table), airspace_near (OpenAIP class/SUA + point-in-
+# polygon), nearby_navaids (CachedNavaid), identify_military + military_reference
+# (military_db patterns), decode_aviation_text (raw METAR/NOTAM/PIREP/ACARS →
+# deterministic decode + aviation_llm explanation), elevation_at (terrain/AGL),
+# web_search (gated above). ask()/astream() now report per-request token usage
+# ("usage" key / final SSE event) when the endpoint returns usage_metadata.
+#
+# ASSISTANT EVALS (real LLM, never CI): golden question suite in
+# skyspy_django/skyspy/tests/evals/ (16 cases: tool selection, groundedness vs
+# the seeded_world fixture, hallucination canaries, chart/photo format). Run
+# `make eval-assistant ASSISTANT_EVAL_URL=http://<spark>:8000/v1` (optional
+# ASSISTANT_EVAL_MODEL/_API_KEY/_TIMEOUT); pytest -m eval, auto-skips when the
+# env var is unset. Per-run JSON reports land in test-results/assistant-evals/
+# for drift diffs. Mocked agent-loop E2E tests (scripted fake LLM, run in CI):
+# tests/assistant_fakes.py + test_services_assistant_agent_loop.py +
+# test_services_assistant_tools_seeded.py (seeded_world fixture in conftest).
 # Airframe photos in assistant answers are rendered from the fetch_airframe_photo
 # tool call with a server-templated <img> src (NOT LLM markdown — the model was
 # hallucinating photo URLs). Empty (default) auto-infers: a signed S3 URL when

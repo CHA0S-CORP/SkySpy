@@ -44,12 +44,9 @@ export default defineConfig({
     ? [
         ['html', { outputFolder: 'playwright-report' }],
         ['junit', { outputFile: 'test-results/junit.xml' }],
-        ['list']
+        ['list'],
       ]
-    : [
-        ['html', { outputFolder: 'playwright-report', open: 'never' }],
-        ['list']
-      ],
+    : [['html', { outputFolder: 'playwright-report', open: 'never' }], ['list']],
 
   // Shared settings for all projects
   use: {
@@ -152,7 +149,11 @@ export default defineConfig({
   webServer: {
     command: 'npm run dev',
     url: 'http://localhost:3000',
-    reuseExistingServer: !process.env.CI,
+    // In CI the docker test stack already serves the app on :3000
+    // (skyspy-dashboard-dev); reuse it instead of starting a second Vite that
+    // collides on the port. Locally this reuses a running dev server or starts
+    // one if the port is free.
+    reuseExistingServer: true,
     timeout: 120000,
   },
 });

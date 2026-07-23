@@ -12,6 +12,7 @@ Uses LangChain 1.x ``create_agent`` (a LangGraph graph). All LangChain imports
 are local to this module so the rest of the codebase stays LangChain-free.
 """
 
+import asyncio
 import json
 import logging
 import re
@@ -21,7 +22,10 @@ from langgraph.errors import GraphRecursionError
 
 logger = logging.getLogger(__name__)
 
-SYSTEM_PROMPT = (
+# --- Full system prompt, assembled from named blocks (joined at the bottom into
+# SYSTEM_PROMPT — the public name tests and _build_agent use). Compact mode
+# (small-context models) uses its own COMPACT_SYSTEM_PROMPT below instead.
+_CORE_RULES = (
     "You are SkySpy's analytics assistant. You answer questions about tracked "
     "aircraft and platform activity by calling the provided tools and reasoning "
     "over their results. Rules:\n"
@@ -52,7 +56,9 @@ SYSTEM_PROMPT = (
     "without explaining it. (e.g. ACARS label 'H1' is an HF datalink/position "
     "message, NOT a 'heartbeat'.)\n"
     "- Be concise: a direct answer first, then brief supporting detail.\n"
-    "\n"
+)
+
+_INSIGHT = (
     "INSIGHT: Don't just report a single number — surface what's INTERESTING. When "
     "it helps, chain tools and synthesize across them: compare the current window "
     "to a baseline (time_comparison, or platform_activity over a longer span) and "
@@ -80,7 +86,69 @@ SYSTEM_PROMPT = (
     "time_comparison (vs baseline), find_safety_events (emergencies), and "
     "metric_correlations (odd telemetry); then lead with the one or two genuinely "
     "notable findings, each with its number.\n"
-    "\n"
+)
+
+_AVIATION_CONTEXT = (
+    "AVIATION DOMAIN CONTEXT (use to judge what is NORMAL vs genuinely noteworthy — "
+    "always weigh behavior against the aircraft's CLASS):\n"
+    "- General aviation (GA): light piston/turboprop singles & twins, helicopters, "
+    "gliders. Usually VFR, ~80-200 kt, 1,500-12,000 ft. Orbits, figure-8s, holding, "
+    "and repeated circuits near an airport or practice area are typically NORMAL — "
+    "flight training, aerial photography, pipeline/traffic watch, banner tow — not a "
+    "threat. ADS-B emitter categories A1 (light <15,500 lb) and A7 (rotorcraft) are "
+    "almost always GA. Do NOT flag routine GA training/pattern work as suspicious.\n"
+    "- Commercial air transport: airliners & cargo (categories A3/A4/A5, heavy jets). "
+    "IFR, cruise ~FL280-FL410, 400-500 kt, on filed airways between airports. Steady "
+    "high-altitude cruise is EXPECTED. An airliner squawking 7500/7600/7700, holding, "
+    "or diverting IS notable.\n"
+    "- Military: fighters/transports/tankers/ISR — special-use airspace (MOAs), "
+    "refueling tracks, low-level routes, or persistent orbits over an area (ISR/"
+    "tanker). Often the genuinely interesting traffic.\n"
+    "- Law enforcement / surveillance: Cessnas, PC-12s, helicopters flying tight "
+    "repeated orbits or grid lines over a town at ~1,500-5,000 ft AGL. Confirm with "
+    "identify_law_enforcement before calling something surveillance.\n"
+    "- Medevac/HEMS: helicopters or light aircraft on LIFEGUARD/MEDEVAC-style "
+    "callsigns flying direct hospital-to-hospital or to a scene, sometimes landing "
+    "off-airport. Urgent but NORMAL — not an emergency unless squawking one.\n"
+    "- Search and rescue (SAR): expanding-square or parallel creeping-line search "
+    "patterns, callsigns like RESCUE/CGNR (Coast Guard), often low over water or "
+    "terrain. Squawk 1277 is SAR in the US.\n"
+    "- Firefighting: tankers and spotters flying low passes and tight orbits near an "
+    "active fire, often squawking 1255 (US) — cross-check nearby_wildfires before "
+    "calling fire-area orbits suspicious.\n"
+    "- Aerial work: pipeline/powerline patrol flies long straight low-level lines; "
+    "agricultural aircraft fly very low, tight back-and-forth swaths over fields; "
+    "banner tow is slow (<80 kt), low, racetracks near beaches/stadiums; survey/"
+    "mapping flies precise parallel grid lines at constant altitude.\n"
+    "- Flight training: repeated circuits AT an airport are pattern work; a nearby "
+    "block of erratic-looking maneuvering is a practice area. Both routine.\n"
+    "- Business jets: GA-style registrations but jet altitudes (FL350-FL510) and "
+    "speeds, direct routings, small airports. A bizjet diverting or descending "
+    "off-plan is worth a look; the rest is normal.\n"
+    "- Same geometry, different meaning: a light GA aircraft orbiting a practice area "
+    "is routine; the same orbit by an airliner, or over a sensitive site, is not.\n"
+)
+
+_AVIATION_REFERENCE = (
+    "AVIATION REFERENCE (baseline facts; when unsure call the matching tool — the "
+    "tool is authoritative):\n"
+    "- Squawk codes: 1200 VFR (US), 7000 VFR (Europe), 1202 gliders, 1255 "
+    "firefighting, 1277 search-and-rescue, 4000 military in a MOA, 7400 UAS "
+    "lost-link, 7500 HIJACK, 7600 RADIO FAILURE, 7700 EMERGENCY. Any other 4-digit "
+    "code is a discrete ATC assignment with no fixed meaning — decode with "
+    "decode_squawk, never guess.\n"
+    "- ADS-B emitter categories: A1 light (<15,500 lb), A2 small, A3 large "
+    "(airliner), A4 high-vortex (B757), A5 heavy (widebody), A7 rotorcraft. Wake "
+    "turbulence classes L(ight)/M(edium)/H(eavy)/J(super, A380); 'heavy'/'super' "
+    "appended to a radio callsign refers to wake class.\n"
+    "- Authoritative tool per topic: squawks → decode_squawk; military callsigns/"
+    "hex ranges/types → military_reference; airspace class/MOA/restricted → "
+    "airspace_near; VOR/NDB/ILS → nearby_navaids; airways/named fixes → "
+    "enroute_structure; raw METAR/TAF/NOTAM/PIREP/ACARS text → decode_aviation_text; "
+    "terrain elevation/AGL → elevation_at.\n"
+)
+
+_FORMATTING_BLOCKS = (
     "FORMATTING: Write your answer in GitHub-flavored Markdown. Use **bold** for "
     "key figures, bullet lists for multiple items, and Markdown tables when "
     "comparing rows of data. Keep it clean and scannable.\n"
@@ -151,7 +219,9 @@ SYSTEM_PROMPT = (
     "short procedure use a `callout`. Emit the block AND a one-line prose lead-in. "
     "Aim to include at least one chart or breakdown block whenever the answer is "
     "more than a single figure — but never wrap a lone number in one.\n"
-    "\n"
+)
+
+_MAPS_LINKS = (
     "MAPS: When the question is about WHERE aircraft (or PIREPs) are, call "
     "live_aircraft_map (or recent_pireps) — the app renders the map from the tool "
     "call using the exact coordinates. To map specific aircraft, call "
@@ -234,7 +304,42 @@ SYSTEM_PROMPT = (
     "#history?data=sessions&q=N123&mil=1); analytics axes "
     "(#analytics?x=distance_nm&y=rssi). Booleans are `=1`. For a LIVE category "
     "view still call radar_filter (it also filters the on-screen radar); use these "
-    "links when you're pointing the user at a screen to explore themselves."
+    "links when you're pointing the user at a screen to explore themselves.\n"
+)
+
+_EXAMPLES = (
+    "WORKED EXAMPLES (the pattern to follow — chain a few tools, then answer with "
+    "the numbers the tools returned):\n"
+    "1) 'Is N425SC circling my neighborhood?' → aircraft_track('N425SC') shows "
+    "orbit_or_loiter → identify_law_enforcement('N425SC') → "
+    "airspace_near(aircraft='N425SC') → answer: who it is, orbit count/altitude "
+    "from the track, LE classification + confidence, what airspace it's in.\n"
+    "2) 'Anything unusual tonight?' → platform_activity(6) + time_comparison() "
+    "(vs baseline) + find_safety_events(6) + detect_unusual_patterns(6) → lead "
+    "with the 1-2 genuinely notable findings, each with its number; skip what's "
+    "normal.\n"
+    "3) 'What's that military plane overhead?' → radar_filter(military=true, "
+    "dist_max=20) → identify_military(the closest hex) → military_reference(its "
+    "callsign prefix) → answer: type/service/mission, with a photo only if asked.\n"
+    "4) Chart, after acars_timeline(24) — one-line prose lead, then exactly:\n"
+    "```chart\n"
+    '{"type":"line","title":"ACARS messages/hour","xKey":"hour",'
+    '"series":[{"name":"Messages","key":"count"}],'
+    '"data":[{"hour":"14:00","count":112},{"hour":"15:00","count":98}]}\n'
+    "```\n"
+    "(every number from the tool result, never invented)."
+)
+
+SYSTEM_PROMPT = "\n".join(
+    [
+        _CORE_RULES,
+        _INSIGHT,
+        _AVIATION_CONTEXT,
+        _AVIATION_REFERENCE,
+        _FORMATTING_BLOCKS,
+        _MAPS_LINKS,
+        _EXAMPLES,
+    ]
 )
 
 
@@ -258,6 +363,8 @@ COMPACT_SYSTEM_PROMPT = (
     "hex. Never call a tail number an 'ICAO hex'.\n"
     "- Never invent the meaning of a code (ACARS label, squawk, category); use the "
     "name/description the tool returns, or report the raw code.\n"
+    "- Squawks: 1200 VFR, 7500 hijack, 7600 radio failure, 7700 emergency; for any "
+    "other code call decode_squawk.\n"
     "- Photos: to show a plane ('show me', 'picture', 'photo', 'what does it look "
     "like') ALWAYS call fetch_airframe_photo with the hex/tail/callsign — it's the "
     "only way to display an image. The app renders it, so do NOT write an image URL "
@@ -283,9 +390,56 @@ COMPACT_SYSTEM_PROMPT = (
 # Models at/below this context window (tokens) run in compact mode.
 _COMPACT_WINDOW_THRESHOLD = 16000
 
+# Auto-detected model window (vLLM /models max_model_len), cached so we don't
+# probe the endpoint on every request. Cache both hits and misses.
+_CTX_DETECT_CACHE_KEY = "assistant:detected_context_window"
+_CTX_DETECT_TTL = 600
+
+
+def _detect_context_window() -> int:
+    """Probe the OpenAI-compatible endpoint for the model's context window.
+
+    vLLM reports ``max_model_len`` per model on GET /models; OpenAI/Ollama don't,
+    in which case (or on any failure) this returns 0 = unknown/assume large.
+    Never raises."""
+    try:
+        from django.core.cache import cache
+
+        cached = cache.get(_CTX_DETECT_CACHE_KEY)
+        if cached is not None:
+            return int(cached)
+        from skyspy.services import http_client
+
+        base = (getattr(settings, "LLM_API_URL", "") or "").rstrip("/")
+        window = 0
+        if base:
+            api_key = getattr(settings, "LLM_API_KEY", "") or ""
+            headers = {"Authorization": f"Bearer {api_key}"} if api_key else None
+            data = (
+                http_client.get_json(f"{base}/models", source="assistant_ctx_probe", headers=headers, timeout=5) or {}
+            )
+            models = data.get("data") or []
+            wanted = getattr(settings, "ASSISTANT_MODEL", None) or getattr(settings, "LLM_MODEL", None)
+            row = next((m for m in models if m.get("id") == wanted), models[0] if models else {})
+            window = int(row.get("max_model_len") or 0)
+        cache.set(_CTX_DETECT_CACHE_KEY, window, _CTX_DETECT_TTL)
+        return window
+    except Exception as e:  # broad: detection is best-effort; unknown = assume large
+        logger.debug(f"context-window autodetect failed: {type(e).__name__}: {e}")
+        return 0
+
 
 def _context_window() -> int:
-    return int(getattr(settings, "ASSISTANT_CONTEXT_WINDOW", 0) or 0)
+    """The model's context window (tokens). An explicit ASSISTANT_CONTEXT_WINDOW
+    always wins (RPi deploys force compact mode this way); otherwise, when
+    ASSISTANT_CONTEXT_WINDOW_AUTO is on, ask the endpoint (vLLM reports it).
+    0 = unknown → assume large."""
+    configured = int(getattr(settings, "ASSISTANT_CONTEXT_WINDOW", 0) or 0)
+    if configured:
+        return configured
+    if getattr(settings, "ASSISTANT_CONTEXT_WINDOW_AUTO", True):
+        return _detect_context_window()
+    return 0
 
 
 def compact_mode() -> bool:
@@ -310,7 +464,7 @@ def _max_steps() -> int:
     """The tool-call budget for this request. Capped harder in compact mode: a
     small window can't afford many accumulating tool results, so deep chains would
     overflow it before settling on an answer."""
-    steps = int(getattr(settings, "ASSISTANT_MAX_STEPS", 15))
+    steps = int(getattr(settings, "ASSISTANT_MAX_STEPS", 20))
     if compact_mode():
         steps = min(steps, int(getattr(settings, "ASSISTANT_MAX_STEPS_COMPACT", 8)))
     return max(1, steps)
@@ -537,6 +691,49 @@ def _wants_photo(query: str) -> bool:
     return bool(query and _PHOTO_INTENT_RE.search(query))
 
 
+# Intent → tool routing hints for topics a small model reliably fumbles (it
+# answers from its own priors instead of calling the authoritative tool). When a
+# pattern matches, a one-line "[Consider tool X]" note is folded into the user
+# turn. Deliberately narrow patterns — a wrong hint is worse than no hint.
+# Capped at _MAX_QUERY_HINTS per query so hints never crowd the question.
+_QUERY_HINTS: list[tuple[re.Pattern, str]] = [
+    (
+        re.compile(r"\bsquawk(?:ing|ed)?\b|\b7[567]00\b", re.IGNORECASE),
+        "decode_squawk decodes transponder codes authoritatively — don't interpret a squawk from memory.",
+    ),
+    (
+        re.compile(
+            r"\bairspace\b|\bclass\s+[b-g]\b|\bMOA\b|\brestricted (?:area|airspace)\b|\bprohibited area\b",
+            re.IGNORECASE,
+        ),
+        "airspace_near returns the actual controlled/special-use airspace at a point or around an aircraft.",
+    ),
+    (
+        re.compile(r"\bVOR(?:TAC)?\b|\bnavaids?\b|\bNDB\b|\bILS\b|\bDME\b", re.IGNORECASE),
+        "nearby_navaids lists the real navaids (VOR/NDB/ILS...) near a point.",
+    ),
+    (
+        re.compile(
+            r"\bcallsign\s+[A-Z]{3,8}\b.{0,30}\b(?:mean|stand|what is|who)\b|\bmilitary callsign\b", re.IGNORECASE
+        ),
+        "military_reference explains military callsign patterns; identify_military classifies a specific aircraft.",
+    ),
+    (
+        re.compile(
+            r"\b(?:search|look\s*(?:it\s*)?up)\b.{0,20}\b(?:web|online|internet|news)\b|\bin the news\b", re.IGNORECASE
+        ),
+        "web_search searches the live web when platform data can't answer.",
+    ),
+]
+_MAX_QUERY_HINTS = 2
+
+
+def _query_hints(query: str) -> list[str]:
+    if not query:
+        return []
+    return [hint for pattern, hint in _QUERY_HINTS if pattern.search(query)][:_MAX_QUERY_HINTS]
+
+
 # Always-on station/time grounding: the fixed frame of reference the model
 # otherwise has to guess. The LLM has no clock and no idea where the antenna is,
 # which every "now" / "today" / "near me" / "how far" question depends on. Kept
@@ -552,7 +749,11 @@ def _enabled_features() -> list[str]:
     flags = {
         "acars": bool(getattr(settings, "ACARS_ENABLED", False) or getattr(settings, "AIRFRAMES_ACARS_ENABLED", False)),
         "safety_monitoring": bool(getattr(settings, "SAFETY_MONITORING_ENABLED", False)),
-        "assistant_web_search": bool(getattr(settings, "WEB_SEARCH_ENABLED", False)),
+        # Only advertise web search when the assistant's own tool gate is open
+        # (WEB_SEARCH_ENABLED alone just powers internal card-gen grounding).
+        "assistant_web_search": bool(
+            getattr(settings, "WEB_SEARCH_ENABLED", False) and getattr(settings, "ASSISTANT_WEB_SEARCH_ENABLED", False)
+        ),
     }
     return sorted(k for k, v in flags.items() if v)
 
@@ -639,6 +840,8 @@ def _compose_query(query: str, context: str | None) -> str:
             "plane's appearance instead. If they just want a list or data, ignore "
             "this note.]"
         )
+    for hint in _query_hints(query):
+        parts.append(f"[Tool hint: {hint} Ignore if not what the user is asking.]")
     briefing = _situation_briefing()
     if briefing:
         parts.append(
@@ -983,6 +1186,78 @@ def _summarize_steps(messages) -> list[dict]:
     return [{"tool": name, "args": args, "result_preview": obs[:200]} for name, obs, args in _tool_messages(messages)]
 
 
+def _extract_usage(messages) -> dict | None:
+    """Sum token usage across the model turns of a finished run.
+
+    langchain-openai stamps ``usage_metadata`` on each AIMessage when the
+    endpoint reports usage (vLLM/OpenAI do). Returns None when nothing was
+    reported so callers can omit the key rather than show zeros."""
+    input_tokens = output_tokens = 0
+    seen = False
+    for m in messages or []:
+        usage = getattr(m, "usage_metadata", None)
+        if isinstance(usage, dict) and usage:
+            seen = True
+            input_tokens += int(usage.get("input_tokens") or 0)
+            output_tokens += int(usage.get("output_tokens") or 0)
+    if not seen:
+        return None
+    return {
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "total_tokens": input_tokens + output_tokens,
+        "model": getattr(settings, "ASSISTANT_MODEL", None) or getattr(settings, "LLM_MODEL", None),
+    }
+
+
+def _force_final_answer(query: str, context: str | None, history, gathered: list[str]) -> str:
+    """Last-resort synthesis when the tool-call budget is exhausted.
+
+    The react agent hit the recursion limit mid-chain, so its last turn was a
+    tool call, not an answer — returning a bare "I couldn't settle" apology
+    throws away everything it already gathered. Instead make ONE more model call
+    with NO tools bound, feeding the accumulated tool outputs, and ask it to
+    answer directly from that data. Returns "" on any failure so the caller can
+    fall back to the apology string.
+    """
+    if not gathered:
+        return ""
+    try:
+        from langchain_openai import ChatOpenAI
+
+        llm = ChatOpenAI(
+            base_url=getattr(settings, "LLM_API_URL", None),
+            api_key=getattr(settings, "LLM_API_KEY", "") or "sk-noauth",
+            model=getattr(settings, "ASSISTANT_MODEL", None) or settings.LLM_MODEL,
+            temperature=0,
+            timeout=getattr(settings, "ASSISTANT_TIMEOUT", 60),
+            max_retries=1,
+        )
+        # Cap total gathered data so the synthesis call can't itself overflow the
+        # context window (esp. compact/RPi models).
+        cap = int(getattr(settings, "ASSISTANT_MAX_RESULT_CHARS", 6000))
+        blob = "\n\n".join(g for g in gathered if g)[: cap * 3]
+        messages = _normalize_history(history)
+        messages.append(
+            {
+                "role": "system",
+                "content": (
+                    "You have run out of tool budget. Using ONLY the data already gathered "
+                    "below, give the best possible direct answer to the user's question. Be "
+                    "concise and specific. Do NOT mention tools, budgets, or that you were "
+                    "interrupted — just answer."
+                ),
+            }
+        )
+        messages.append({"role": "user", "content": _compose_query(query, context)})
+        messages.append({"role": "user", "content": f"Data gathered so far:\n{blob}"})
+        out = llm.invoke(messages)
+        return _as_str(getattr(out, "content", "")) or ""
+    except Exception as e:  # broad: best-effort fallback; must never raise
+        logger.warning("assistant force-final synthesis failed: %s: %s", type(e).__name__, e)
+        return ""
+
+
 def ask(query: str, context: str | None = None, history=None, user=None) -> dict:
     """
     Answer a question with the tool-calling agent (synchronous).
@@ -1004,22 +1279,35 @@ def ask(query: str, context: str | None = None, history=None, user=None) -> dict
     token = set_current_user(user)
     try:
         graph = _build_agent()
-        result = graph.invoke(
+        # Stream state snapshots (not just the final return) so that if the agent
+        # hits the recursion limit we still hold the last full message state — and
+        # can synthesize a final answer from the tool data it already gathered
+        # instead of discarding everything.
+        last_state = None
+        for last_state in graph.stream(  # noqa: B007 — used after the loop (recursion fallback)
             {"messages": _build_messages(query, context, history)},
+            stream_mode="values",
             config={"recursion_limit": _recursion_limit()},
-        )
+        ):
+            pass
+        result = last_state or {}
     except GraphRecursionError:
         # The agent chained more tool calls than ASSISTANT_MAX_STEPS allows without
-        # settling on an answer. Degrade gracefully instead of erroring out.
+        # settling on an answer. Force a final tool-less synthesis from the data
+        # gathered so far rather than erroring out with a bare apology.
         logger.warning("assistant.ask hit recursion limit (%s steps)", _recursion_limit())
+        partial_messages = (last_state or {}).get("messages", []) if isinstance(last_state, dict) else []
+        gathered = [obs for _name, obs, _args in _tool_messages(partial_messages)]
+        answer = _force_final_answer(query, context, history, gathered)
         return {
-            "answer": (
+            "answer": answer
+            or (
                 "I gathered a lot of data but couldn't settle on a final answer within my "
                 "step budget. Try narrowing the question, or raise ASSISTANT_MAX_STEPS."
             ),
             "steps": [],
             "sources": [],
-            "status": "incomplete",
+            "status": "incomplete" if not answer else "ok",
         }
     except Exception as e:  # broad: agent/LLM/endpoint failure modes are unknowable
         logger.warning(f"assistant.ask failed: {type(e).__name__}: {e}")
@@ -1029,7 +1317,15 @@ def ask(query: str, context: str | None = None, history=None, user=None) -> dict
 
     messages = result.get("messages", [])
     answer = _strip_photo_urls(_as_str(getattr(messages[-1], "content", ""))) if messages else None
-    return {
+    usage = _extract_usage(messages)
+    if usage:
+        logger.info(
+            "assistant.ask usage: %s in / %s out tokens (%s)",
+            usage["input_tokens"],
+            usage["output_tokens"],
+            usage["model"],
+        )
+    out = {
         "answer": answer,
         "steps": _summarize_steps(messages),
         "sources": _extract_sources(messages),
@@ -1037,6 +1333,9 @@ def ask(query: str, context: str | None = None, history=None, user=None) -> dict
         "maps": _extract_maps(messages),
         "status": "ok",
     }
+    if usage:
+        out["usage"] = usage
+    return out
 
 
 async def astream(query: str, context: str | None = None, history=None, user=None):
@@ -1071,6 +1370,11 @@ async def astream(query: str, context: str | None = None, history=None, user=Non
         return
 
     final_text, seen_sources, sources, photos, maps = [], set(), [], [], []
+    # Model turns seen at on_chat_model_end, kept for token-usage accounting.
+    model_turns: list = []
+    # Raw tool outputs, kept so a recursion-limit hit can synthesize a final answer
+    # from the data already gathered instead of apologizing (see except below).
+    gathered: list[str] = []
     # Fallback for backends that don't emit per-token deltas: the content of the
     # last model turn, captured at on_chat_model_end. Without it final.answer would
     # be "" on non-streaming endpoints even though sync ask() returns text.
@@ -1091,6 +1395,8 @@ async def astream(query: str, context: str | None = None, history=None, user=Non
                 yield {"type": "tool", "tool": event.get("name"), "args": event.get("data", {}).get("input")}
             elif kind == "on_tool_end":
                 obs = _as_str(_obs_output(event))
+                if obs:
+                    gathered.append(obs)
                 # Render airframe photos from the tool call itself (deterministic,
                 # server-templated src) instead of trusting a model-emitted URL.
                 tool_name = event.get("name")
@@ -1133,15 +1439,23 @@ async def astream(query: str, context: str | None = None, history=None, user=Non
                 # (no on_chat_model_stream deltas). Reset per turn like final_text.
                 out = event.get("data", {}).get("output")
                 last_model_text = _as_str(getattr(out, "content", "")) if out is not None else last_model_text
+                if out is not None:
+                    model_turns.append(out)
     except GraphRecursionError:
         # The agent chained more tool calls than ASSISTANT_MAX_STEPS allows without
         # settling on an answer. Don't discard what already streamed — fall through
         # and finalize with whatever tokens/sources/photos/maps we accumulated.
         logger.warning("assistant.astream hit recursion limit (%s steps)", _recursion_limit())
         if not final_text:
+            # Synthesize a final answer from the gathered tool data (blocking LLM
+            # call, so off-thread to avoid stalling the event loop).
+            synthesized = await asyncio.to_thread(_force_final_answer, query, context, history, gathered)
             final_text.append(
-                "I gathered a lot of data but couldn't settle on a final answer within my "
-                "step budget. Try narrowing the question, or raise ASSISTANT_MAX_STEPS."
+                synthesized
+                or (
+                    "I gathered a lot of data but couldn't settle on a final answer within my "
+                    "step budget. Try narrowing the question, or raise ASSISTANT_MAX_STEPS."
+                )
             )
     except Exception as e:  # broad: streaming loop must end cleanly
         logger.warning(f"assistant.astream failed: {type(e).__name__}: {e}")
@@ -1150,13 +1464,23 @@ async def astream(query: str, context: str | None = None, history=None, user=Non
     finally:
         reset_current_user(token)
 
-    yield {
+    final_event = {
         "type": "final",
         "answer": _strip_photo_urls("".join(final_text) or last_model_text),
         "sources": sources,
         "photos": photos,
         "maps": maps,
     }
+    usage = _extract_usage(model_turns)
+    if usage:
+        logger.info(
+            "assistant.astream usage: %s in / %s out tokens (%s)",
+            usage["input_tokens"],
+            usage["output_tokens"],
+            usage["model"],
+        )
+        final_event["usage"] = usage
+    yield final_event
 
 
 def _obs_output(event):

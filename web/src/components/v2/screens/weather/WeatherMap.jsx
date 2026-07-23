@@ -68,7 +68,6 @@ export function WeatherMap({
       layerRef.current = null;
     };
     // feeder coords only seed the initial view; redraw effect reframes.
-    // eslint-disable-next-line
   }, []);
 
   // Redraw all layers when data changes. Guarded end-to-end: fast tab-nav can

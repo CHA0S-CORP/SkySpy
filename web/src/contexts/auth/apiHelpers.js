@@ -61,6 +61,7 @@ export function createDefaultConfig(authEnabled = true) {
     localAuthEnabled: authEnabled,
     apiKeyEnabled: false,
     devMode: false,
+    mapClusterZoomThreshold: 8,
     features: {},
   };
 }

@@ -21,6 +21,8 @@ services:
     env_file: [.env]
   celery-worker:
     env_file: [.env]
+  celery-worker-realtime:
+    env_file: [.env]
   celery-beat:
     env_file: [.env]
   acars-listener:

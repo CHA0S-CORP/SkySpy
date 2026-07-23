@@ -59,7 +59,6 @@ export function AssistantMap({ spec }) {
       mapRef.current = null;
     };
     // Init once — subsequent point changes handled by the effect below.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {

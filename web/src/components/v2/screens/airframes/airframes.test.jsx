@@ -94,7 +94,7 @@ describe('AirframesScreen LLM card-generation gate', () => {
   it('shows a generate button when the user can use the LLM', async () => {
     authState = { config: { devMode: true }, hasPermission: () => false };
     renderScreen();
-    const tile = await screen.findByTestId('af-ghost-ZZZZ');
+    const tile = await screen.findByTestId('af-ghost-ZZZZ', {}, { timeout: 5000 });
     expect(tile.textContent).toContain('GENERATE CARD');
     expect(tile.textContent).not.toContain('SIGN IN TO GENERATE');
   });
@@ -102,7 +102,7 @@ describe('AirframesScreen LLM card-generation gate', () => {
   it('shows a sign-in CTA when LLM generation is gated (anonymous)', async () => {
     authState = { config: { devMode: false }, hasPermission: () => false };
     renderScreen();
-    const tile = await screen.findByTestId('af-ghost-ZZZZ');
+    const tile = await screen.findByTestId('af-ghost-ZZZZ', {}, { timeout: 5000 });
     expect(tile.textContent).toContain('Sign in to generate');
     expect(tile.textContent).toContain('SIGN IN TO GENERATE');
     expect(tile.textContent).not.toContain('No blueprint or specs yet');

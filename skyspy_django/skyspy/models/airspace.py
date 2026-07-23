@@ -2,11 +2,46 @@
 Airspace models for advisories (G-AIRMETs, SIGMETs) and static boundaries (Class B/C/D).
 """
 
+import json
+
+from django.contrib.gis.db import models as gis_models
+from django.contrib.gis.geos import GEOSGeometry, MultiPolygon
+from django.contrib.gis.geos.error import GEOSException
 from django.core.exceptions import ValidationError
 from django.db import models
 
+# Airspace `geom` is stored as geometry(MultiPolygon, 4326) — planar, NOT
+# geography — so standard containment predicates (`geom__contains=point`,
+# `geom__intersects`) work; those are unsupported on geography columns. The
+# legacy `polygon` JSONField is kept for serialization/back-compat.
 
-class AirspaceAdvisory(models.Model):
+
+def multipolygon_from_geojson(poly):
+    """Coerce a stored GeoJSON geometry dict (Polygon/MultiPolygon) to a 4326
+    MultiPolygon, or None if absent/unparseable. The writers store a full
+    geometry dict ({"type","coordinates"})."""
+    if not isinstance(poly, dict) or not poly.get("coordinates"):
+        return None
+    try:
+        geom = GEOSGeometry(json.dumps(poly), srid=4326)
+    except (GEOSException, ValueError, TypeError):
+        return None
+    if geom.geom_type == "Polygon":
+        return MultiPolygon(geom, srid=4326)
+    if geom.geom_type == "MultiPolygon":
+        return geom
+    return None
+
+
+class _PolygonGeomMixin:
+    """Sync `geom` from the GeoJSON `polygon` field on every save()."""
+
+    def save(self, *args, **kwargs):
+        self.geom = multipolygon_from_geojson(self.polygon)
+        super().save(*args, **kwargs)
+
+
+class AirspaceAdvisory(_PolygonGeomMixin, models.Model):
     """Active airspace advisories (G-AIRMETs, SIGMETs) from Aviation Weather Center."""
 
     ADVISORY_TYPES = [
@@ -50,6 +85,7 @@ class AirspaceAdvisory(models.Model):
     # Geographic info
     region = models.CharField(max_length=20, blank=True, null=True)
     polygon = models.JSONField(blank=True, null=True)  # GeoJSON polygon coordinates
+    geom = gis_models.MultiPolygonField(srid=4326, null=True, blank=True, spatial_index=True)
 
     # Raw data
     raw_text = models.TextField(blank=True, null=True)
@@ -71,7 +107,7 @@ class AirspaceAdvisory(models.Model):
             raise ValidationError({"upper_alt_ft": "Upper altitude must be greater than or equal to lower altitude"})
 
 
-class AirspaceBoundary(models.Model):
+class AirspaceBoundary(_PolygonGeomMixin, models.Model):
     """Static airspace boundary data (Class B/C/D, MOAs, Restricted)."""
 
     AIRSPACE_CLASSES = [
@@ -109,6 +145,7 @@ class AirspaceBoundary(models.Model):
     center_lon = models.FloatField(db_index=True)
     radius_nm = models.FloatField(blank=True, null=True)  # For circular airspaces (Class D)
     polygon = models.JSONField(blank=True, null=True)  # GeoJSON polygon coordinates
+    geom = gis_models.MultiPolygonField(srid=4326, null=True, blank=True, spatial_index=True)
 
     # Additional info
     controlling_agency = models.CharField(max_length=100, blank=True, null=True)

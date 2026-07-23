@@ -411,7 +411,9 @@
   background: var(--accent2);
   border: 1px solid var(--accent2);
   cursor: pointer;
-  transition: filter 0.15s ease, transform 0.12s ease;
+  transition:
+    filter 0.15s ease,
+    transform 0.12s ease;
 }
 .v2-usermenu__signin:hover {
   filter: brightness(1.08);
@@ -429,7 +431,9 @@
   border: 1px solid var(--bord2);
   color: var(--txt);
   cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
 }
 .v2-usermenu__trigger:hover,
 .v2-usermenu__trigger.is-open {
@@ -478,13 +482,21 @@
   border-radius: 12px;
   background: color-mix(in srgb, var(--bg1) 96%, transparent);
   border: 1px solid var(--bord2);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(0, 0, 0, 0.2);
+  box-shadow:
+    0 16px 40px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(0, 0, 0, 0.2);
   backdrop-filter: blur(12px);
   animation: v2-usermenu-in 0.14s ease;
 }
 @keyframes v2-usermenu-in {
-  from { opacity: 0; transform: translateY(-4px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .v2-usermenu__id {
@@ -525,7 +537,9 @@
   background: transparent;
   border: none;
   cursor: pointer;
-  transition: background 0.12s ease, color 0.12s ease;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
 }
 .v2-usermenu__item:hover {
   background: var(--bg2);

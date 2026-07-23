@@ -28,6 +28,7 @@ you get plain retry.
 
 import contextlib
 import logging
+import threading
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -41,6 +42,42 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_TIMEOUT = 15.0
 DEFAULT_RETRIES = 3
+
+# Process-scoped pooled client. Creating httpx.Client() per request (as this
+# module used to, once per retry attempt even) discards the 100-conn/20-keepalive
+# pool immediately, so every call paid a fresh TCP+TLS handshake and leaked
+# TIME_WAIT sockets under concurrency. One shared client per process reuses the
+# pool; httpx.Client is thread-safe, and timeout is overridden per request.
+_CLIENT_LOCK = threading.Lock()
+_shared_client: httpx.Client | None = None
+
+
+def _get_client() -> httpx.Client:
+    """Return the process-wide pooled httpx client, creating it on first use."""
+    global _shared_client
+    client = _shared_client
+    if client is None or client.is_closed:
+        with _CLIENT_LOCK:
+            if _shared_client is None or _shared_client.is_closed:
+                _shared_client = httpx.Client(
+                    follow_redirects=True,
+                    timeout=DEFAULT_TIMEOUT,
+                    limits=httpx.Limits(max_connections=100, max_keepalive_connections=20),
+                )
+            client = _shared_client
+    return client
+
+
+def get_shared_client() -> httpx.Client:
+    """Public accessor for the process-wide pooled client.
+
+    For service modules that build their own request/headers (so they can't go
+    through get_json/post_json) but still want pooled, keep-alive connections
+    instead of a fresh httpx.Client() — and its discarded TCP+TLS pool — per call.
+    Pass ``timeout`` per request to ``.get()``/``.post()``.
+    """
+    return _get_client()
+
 
 # Circuit breaker defaults
 _CB_FAIL_THRESHOLD = 5
@@ -186,8 +223,9 @@ def _request(
         reraise=True,
     )
     def _do() -> httpx.Response:
-        with httpx.Client(timeout=timeout, follow_redirects=True) as client:
-            resp = client.request(method, url, params=params, headers=headers, auth=auth, json=json_body)
+        resp = _get_client().request(
+            method, url, params=params, headers=headers, auth=auth, json=json_body, timeout=timeout
+        )
         if resp.status_code == 429:
             # Honor Retry-After once, then let the caller decide.
             retry_after = _parse_retry_after(resp.headers.get("Retry-After"))
@@ -379,7 +417,7 @@ def download(
     )
     def _do() -> Path:
         target_path.parent.mkdir(parents=True, exist_ok=True)
-        with httpx.Client(timeout=timeout, follow_redirects=True) as client, client.stream("GET", url) as resp:
+        with _get_client().stream("GET", url, timeout=timeout) as resp:
             if resp.status_code in _RETRYABLE_STATUS:
                 raise _RetryableHTTP(f"{resp.status_code} from {url}")
             resp.raise_for_status()
@@ -427,8 +465,14 @@ def single_flight(key: str, producer: Callable[[], Any], *, result_ttl: int = 30
     if acquired:
         try:
             result = producer()
-            with contextlib.suppress(ConnectionError, OSError):  # pragma: no cover
+            # Publishing the result for concurrent waiters is best-effort: a cache
+            # outage OR an unpicklable result must never break the primary caller,
+            # which already holds the value. Waiters just fall back to their own
+            # producer run.
+            try:
                 cache.set(result_key, {"v": result}, result_ttl)
+            except Exception:  # broad: result publish is an optimization, not correctness
+                logger.debug("single_flight: could not publish result for %s", key)
             return result
         finally:
             with contextlib.suppress(ConnectionError, OSError):  # pragma: no cover

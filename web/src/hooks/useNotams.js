@@ -87,82 +87,85 @@ export function useNotams(wsRequest, wsConnected, options = {}) {
   }, [persistAcknowledged]);
 
   // Fetch NOTAMs
-  const fetchNotams = useCallback(async (opts = {}) => {
-    if (!enabled) return;
-    if (!wsRequest || !wsConnected) {
-      setError('Socket not connected');
-      setLoading(false);
-      return;
-    }
-
-    // Debounce - don't fetch more than once per 10 seconds (a manual
-    // refresh() bypasses this so the button is never a silent no-op)
-    const now = Date.now();
-    if (!opts.force && now - lastFetchRef.current < 10000) return;
-    lastFetchRef.current = now;
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      const params = {};
-      if (lat && lon) {
-        params.lat = lat;
-        params.lon = lon;
-      }
-      if (radius) {
-        params.radius = radius;
-      }
-      if (typeFilter) {
-        params.type = typeFilter;
-      }
-
-      const response = await wsRequest('notam-snapshot', params, 30000);
-
-      if (!mountedRef.current) return;
-
-      // Handle response format - could be { notams, tfrs } or just array
-      let notamsData = [];
-      let tfrsData = [];
-
-      if (response?.notams) {
-        notamsData = response.notams;
-        tfrsData = response.tfrs || [];
-      } else if (Array.isArray(response)) {
-        notamsData = response;
-      } else if (response?.data) {
-        notamsData = response.data;
-      }
-
-      // Filter out expired NOTAMs
-      const now = new Date();
-      const activeNotams = notamsData.filter((notam) => {
-        if (!notam.effective_end || notam.is_permanent) return true;
-        const effectiveEnd = new Date(notam.effective_end);
-        return effectiveEnd > now;
-      });
-
-      setNotams(activeNotams);
-      setTfrs(tfrsData);
-      setError(null);
-    } catch (err) {
-      if (!mountedRef.current) return;
-      if (/disconnected/i.test(err?.message || '')) {
-        // Socket dropped mid-request (StrictMode remount / WS upgrade flap).
-        // Clear the debounce or the on-reconnect fetch is silently swallowed
-        // and the NOTAM layer stays empty until the 5-minute refresh.
-        lastFetchRef.current = 0;
-        console.warn('NOTAMs fetch skipped, socket disconnected');
-      } else {
-        console.error('NOTAMs fetch error:', err);
-      }
-      setError(err.message || 'Failed to fetch NOTAMs');
-    } finally {
-      if (mountedRef.current) {
+  const fetchNotams = useCallback(
+    async (opts = {}) => {
+      if (!enabled) return;
+      if (!wsRequest || !wsConnected) {
+        setError('Socket not connected');
         setLoading(false);
+        return;
       }
-    }
-  }, [wsRequest, wsConnected, typeFilter, lat, lon, radius, enabled]);
+
+      // Debounce - don't fetch more than once per 10 seconds (a manual
+      // refresh() bypasses this so the button is never a silent no-op)
+      const now = Date.now();
+      if (!opts.force && now - lastFetchRef.current < 10000) return;
+      lastFetchRef.current = now;
+
+      setLoading(true);
+      setError(null);
+
+      try {
+        const params = {};
+        if (lat && lon) {
+          params.lat = lat;
+          params.lon = lon;
+        }
+        if (radius) {
+          params.radius = radius;
+        }
+        if (typeFilter) {
+          params.type = typeFilter;
+        }
+
+        const response = await wsRequest('notam-snapshot', params, 30000);
+
+        if (!mountedRef.current) return;
+
+        // Handle response format - could be { notams, tfrs } or just array
+        let notamsData = [];
+        let tfrsData = [];
+
+        if (response?.notams) {
+          notamsData = response.notams;
+          tfrsData = response.tfrs || [];
+        } else if (Array.isArray(response)) {
+          notamsData = response;
+        } else if (response?.data) {
+          notamsData = response.data;
+        }
+
+        // Filter out expired NOTAMs
+        const now = new Date();
+        const activeNotams = notamsData.filter((notam) => {
+          if (!notam.effective_end || notam.is_permanent) return true;
+          const effectiveEnd = new Date(notam.effective_end);
+          return effectiveEnd > now;
+        });
+
+        setNotams(activeNotams);
+        setTfrs(tfrsData);
+        setError(null);
+      } catch (err) {
+        if (!mountedRef.current) return;
+        if (/disconnected/i.test(err?.message || '')) {
+          // Socket dropped mid-request (StrictMode remount / WS upgrade flap).
+          // Clear the debounce or the on-reconnect fetch is silently swallowed
+          // and the NOTAM layer stays empty until the 5-minute refresh.
+          lastFetchRef.current = 0;
+          console.warn('NOTAMs fetch skipped, socket disconnected');
+        } else {
+          console.error('NOTAMs fetch error:', err);
+        }
+        setError(err.message || 'Failed to fetch NOTAMs');
+      } finally {
+        if (mountedRef.current) {
+          setLoading(false);
+        }
+      }
+    },
+    [wsRequest, wsConnected, typeFilter, lat, lon, radius, enabled]
+  );
 
   // Track true mount state separately so a filter/location change (which
   // recreates fetchNotams and re-runs the effect below) doesn't flip mountedRef

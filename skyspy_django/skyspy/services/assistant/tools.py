@@ -1727,58 +1727,442 @@ def flight_schedule(callsign: str) -> str:
 
 
 # =============================================================================
+# Aviation reference tools
+# =============================================================================
+
+
+def _default_center(lat: float, lon: float) -> tuple[float | None, float | None]:
+    """Fall back to the receiver location when no point was given."""
+    if not lat and not lon:
+        from django.conf import settings
+
+        lat = getattr(settings, "FEEDER_LAT", None)
+        lon = getattr(settings, "FEEDER_LON", None)
+    if lat is None or lon is None:
+        return None, None
+    return float(lat), float(lon)
+
+
+@_guarded
+def nearby_navaids(lat: float = 0.0, lon: float = 0.0, radius_nm: int = 50, navaid_type: str = "") -> str:
+    """Radio navigation aids (VOR, VORTAC, DME, NDB, ILS...) near a point,
+    defaulting to the receiver: ident, name, type, frequency and distance,
+    nearest first. Use for 'what VORs are near me', 'what navaid is X', or to
+    explain what a flight is navigating by. navaid_type optionally filters
+    (e.g. 'VOR', 'NDB', 'ILS'); anything unrecognized means no filter."""
+    from skyspy.services import geodata
+
+    lat, lon = _default_center(lat, lon)
+    if lat is None:
+        return _json({"error": "receiver location (FEEDER_LAT/LON) not configured"})
+    r = max(1, min(250, int(radius_nm or 50)))
+    ntype = (navaid_type or "").strip().upper().replace("-", "").replace("_", "")
+    # Lenient: only pass through types the cache actually stores; junk = no filter.
+    ntype = ntype if ntype in {"VOR", "VORTAC", "VORDME", "DME", "NDB", "ILS", "TACAN"} else None
+    rows = geodata.get_cached_navaids(lat=lat, lon=lon, radius_nm=r, navaid_type=ntype, limit=25)
+    return _json(
+        {
+            "center": {"lat": round(lat, 4), "lon": round(lon, 4)},
+            "radius_nm": r,
+            "count": len(rows),
+            "navaids": [
+                {
+                    "ident": n.get("id"),
+                    "name": n.get("name"),
+                    "type": n.get("type"),
+                    "frequency": n.get("freq"),
+                    "channel": n.get("channel"),
+                    "lat": n.get("lat"),
+                    "lon": n.get("lon"),
+                    "distance_nm": n.get("distance_nm"),
+                }
+                for n in rows
+            ],
+        }
+    )
+
+
+@_guarded
+def airspace_near(lat: float = 0.0, lon: float = 0.0, radius_nm: int = 30, aircraft: str = "") -> str:
+    """Controlled/special-use airspace at and near a point — Class B/C/D/E,
+    MOAs, restricted/prohibited/danger areas, CTR/TMA — with floor and ceiling
+    altitudes. Pass an aircraft (hex/tail/callsign) to check the airspace around
+    ITS live position instead, including whether it's inside each volume at its
+    altitude. Use for 'what airspace is that plane in', 'am I under a Class B
+    shelf', 'is there a MOA/restricted area near me'."""
+    from django.contrib.gis.geos import GEOSGeometry, Point
+
+    from skyspy.services import openaip
+
+    alt_ft = None
+    label = None
+    if (aircraft or "").strip():
+        from django.core.cache import cache
+
+        hex_code = _resolve_to_hex(aircraft)
+        if not hex_code:
+            return _json({"error": f"could not resolve '{aircraft}' to an aircraft", "aircraft": aircraft})
+        live = next(
+            (a for a in (cache.get("current_aircraft") or []) if (a.get("hex") or "").upper() == hex_code), None
+        )
+        if not live or live.get("lat") is None:
+            return _json({"error": f"'{aircraft}' has no live position right now", "icao_hex": hex_code})
+        lat, lon = float(live["lat"]), float(live["lon"])
+        alt_ft = live.get("alt_baro") if isinstance(live.get("alt_baro"), (int, float)) else None
+        label = (live.get("flight") or "").strip() or hex_code
+    else:
+        lat, lon = _default_center(lat, lon)
+        if lat is None:
+            return _json({"error": "receiver location (FEEDER_LAT/LON) not configured"})
+
+    r = max(1, min(150, int(radius_nm or 30)))
+    spaces = openaip.get_airspaces(lat, lon, radius_nm=r)
+    if not spaces:
+        if not openaip._is_enabled():
+            # Explicit error, never an empty success — an empty list here reads
+            # as "no airspace exists", which the model would repeat as fact.
+            return _json({"error": "airspace data not configured (OPENAIP_API_KEY)"})
+        return _json({"point": {"lat": round(lat, 4), "lon": round(lon, 4)}, "at_point": [], "nearby": []})
+
+    point = Point(lon, lat)
+    at_point, nearby = [], []
+    for sp in spaces:
+        row = {
+            "name": sp.get("name"),
+            "class": sp.get("icao_class") or sp.get("type"),
+            "type": sp.get("type"),
+            "floor_ft": sp.get("floor_ft"),
+            "ceiling_ft": sp.get("ceiling_ft"),
+            "floor_ref": sp.get("floor_ref"),
+            "ceiling_ref": sp.get("ceiling_ref"),
+            "country": sp.get("country") or None,
+        }
+        contains = False
+        try:
+            geom = GEOSGeometry(json.dumps(sp.get("geometry")))
+            contains = geom.contains(point)
+        except (
+            Exception
+        ):  # broad: GEOS raises library-specific errors on malformed geometry — treat as "not containing"
+            pass
+        if contains:
+            if alt_ft is not None and row["floor_ft"] is not None and row["ceiling_ft"] is not None:
+                row["aircraft_inside_vertically"] = bool(row["floor_ft"] <= alt_ft <= row["ceiling_ft"])
+            at_point.append(row)
+        else:
+            nearby.append(row)
+
+    out = {
+        "point": {"lat": round(lat, 4), "lon": round(lon, 4)},
+        "radius_nm": r,
+        "at_point": at_point[:15],
+        "nearby": nearby[:15],
+    }
+    if label:
+        out["aircraft"] = {"label": label, "altitude_ft": alt_ft}
+    return _json(out)
+
+
+@_guarded
+def decode_squawk(code: str = "", identifier: str = "") -> str:
+    """Decode a 4-digit transponder squawk code (e.g. 1200 VFR, 7500 hijack,
+    7600 radio failure, 7700 emergency, 1277 search-and-rescue). Pass either the
+    code itself OR an aircraft (hex/tail/callsign) to decode what IT is currently
+    squawking. Also lists live aircraft squawking that code right now. Use for
+    'what does squawk X mean' or 'why is that plane squawking X'."""
+    from django.core.cache import cache
+
+    from skyspy.services import squawk_codes
+
+    code = (code or "").strip()
+    resolved = None
+    if not code and (identifier or "").strip():
+        hex_code = _resolve_to_hex(identifier)
+        if not hex_code:
+            return _json({"error": f"could not resolve '{identifier}' to an aircraft", "identifier": identifier})
+        live = next(
+            (a for a in (cache.get("current_aircraft") or []) if (a.get("hex") or "").upper() == hex_code), None
+        )
+        code = (live or {}).get("squawk") or ""
+        resolved = {"icao_hex": hex_code, "callsign": ((live or {}).get("flight") or "").strip() or None}
+        if not code:
+            return _json({"error": "aircraft is not currently broadcasting a squawk", **resolved})
+
+    result = squawk_codes.decode(code)
+    live_matches = [
+        {"hex": (a.get("hex") or "").upper(), "callsign": (a.get("flight") or "").strip() or None}
+        for a in (cache.get("current_aircraft") or [])
+        if (a.get("squawk") or "") == result.get("code")
+    ]
+    out = {**result, "live_aircraft_squawking": live_matches[:15]}
+    if resolved:
+        out["aircraft"] = resolved
+    return _json(out)
+
+
+@_guarded
+def identify_military(identifier: str) -> str:
+    """Classify an aircraft (by ICAO hex, live callsign, or tail number) as
+    military: branch/service, country, mission type inferred from the callsign
+    (tanker, ISR, airlift...), airframe name/role for military types, and a
+    confidence level. Use for 'is that a military plane', 'whose air force is
+    that', or 'what kind of military flight is X'. For police/government
+    surveillance use identify_law_enforcement instead."""
+    from skyspy.services import aircraft_info, military_db
+
+    hex_code = _resolve_to_hex(identifier)
+    if not hex_code:
+        return _json({"error": f"could not resolve '{identifier}' to an aircraft", "identifier": identifier})
+    info = aircraft_info.get_aircraft_info(hex_code) or {}
+    type_code = info.get("type_code") or info.get("type")
+    result = military_db.identify_aircraft(
+        icao_hex=hex_code,
+        callsign=info.get("callsign") or info.get("flight"),
+        type_code=type_code,
+    )
+    result["interesting_category"] = military_db.get_interesting_category(type_code)
+    return _json({"identifier": identifier, "icao_hex": hex_code, **result})
+
+
+@_guarded
+def military_reference(query: str = "") -> str:
+    """Search the military identification reference: callsign patterns (e.g.
+    'RCH' = USAF airlift, 'STEEL' = tanker), military ICAO hex ranges by
+    country/service, and military airframe type codes with name/role. Pass a
+    keyword to filter (callsign prefix, service, mission, type or aircraft
+    name — e.g. 'tanker', 'RCH', 'navy', 'C17'); empty returns just category
+    counts. Use for 'what does callsign X mean' or 'which callsigns are
+    tankers'."""
+    from skyspy.services import military_db
+
+    patterns = military_db.get_all_military_patterns()
+    q = (query or "").strip().upper()
+    if not q:
+        return _json(
+            {
+                "hex_range_count": len(patterns["hex_ranges"]),
+                "callsign_pattern_count": len(patterns["callsign_patterns"]),
+                "aircraft_type_count": len(patterns["aircraft_types"]),
+                "interesting_categories": sorted(patterns["interesting_categories"].keys()),
+                "note": "pass a query keyword to see matching entries",
+            }
+        )
+
+    def _hit(*vals) -> bool:
+        return any(q in str(v).upper() for v in vals if v)
+
+    callsigns = [p for p in patterns["callsign_patterns"] if _hit(p["pattern"], p["service"], p["mission"])]
+    hex_ranges = [h for h in patterns["hex_ranges"] if _hit(h["country"], h["service"])]
+    types = [
+        {"type_code": code, **meta}
+        for code, meta in patterns["aircraft_types"].items()
+        if _hit(code, meta.get("name"), meta.get("role"))
+    ]
+    return _json(
+        {
+            "query": query,
+            "callsign_patterns": callsigns[:20],
+            "hex_ranges": hex_ranges[:15],
+            "aircraft_types": types[:20],
+        }
+    )
+
+
+@_guarded
+def web_search(query: str, max_results: int = 5) -> str:
+    """Search the live web for information not in the station's own data —
+    aviation news, an operator's background, an incident in the news, unfamiliar
+    terminology. Returns result titles, URLs and snippets; cite the source URL
+    when you use one. Prefer the station's own tools for anything about local
+    traffic, sightings or airframes — use this only when platform data can't
+    answer."""
+    from django.conf import settings
+
+    from skyspy.services import web_search as web_search_service
+
+    if not (
+        getattr(settings, "WEB_SEARCH_ENABLED", False) and getattr(settings, "ASSISTANT_WEB_SEARCH_ENABLED", False)
+    ):
+        return _json({"error": "web search not enabled for the assistant"})
+    q = (query or "").strip()
+    if not q:
+        return _json({"error": "query required"})
+    results = web_search_service.search(q, max_results=max(1, min(10, int(max_results or 5))))
+    return _json(
+        {
+            "query": q,
+            "provider": web_search_service._provider(),
+            "count": len(results),
+            "results": results,
+        }
+    )
+
+
+@_guarded
+def decode_aviation_text(kind: str, text: str) -> str:
+    """Decode/explain a raw aviation teletype message: kind is one of acars,
+    pirep, notam, metar, taf, sigmet. Returns deterministic decoded fields where
+    available (e.g. NOTAM abbreviation expansion and category) plus a
+    plain-English explanation. Use when the user pastes or asks about a raw
+    coded message instead of interpreting the code yourself."""
+    from skyspy.services import aviation_llm
+
+    kind = (kind or "").strip().lower()
+    text = (text or "").strip()
+    if not text:
+        return _json({"error": "text required"})
+
+    decoded: dict[str, Any] = {}
+    if kind == "notam":
+        from skyspy.services import notam_decoder
+
+        decoded["expanded"] = notam_decoder.expand_abbreviations(text)[:1500]
+        decoded["category"] = notam_decoder.detect_category(text)
+    elif kind == "acars":
+        from skyspy.services import acars_decoder
+
+        m = re.match(r"^[A-Z0-9]{1,2}$", text.split()[0]) if text.split() else None
+        if m:
+            decoded["label"] = acars_decoder.decode_label(m.group(0))
+
+    explanation = aviation_llm.explain(kind, text) if aviation_llm.available() else None
+    return _json({"kind": kind, "decoded": decoded or None, "explanation": explanation})
+
+
+@_guarded
+def elevation_at(lat: float = 0.0, lon: float = 0.0, aircraft: str = "") -> str:
+    """Terrain elevation (feet MSL) at a point, defaulting to the receiver — or
+    pass an aircraft (hex/tail/callsign) to get the terrain under ITS live
+    position plus its approximate height above ground (AGL). Use for 'how high
+    is that helicopter above the ground' or 'what's the terrain elevation
+    there'."""
+    from skyspy.services import terrain_elevation
+
+    ac_out = None
+    if (aircraft or "").strip():
+        from django.core.cache import cache
+
+        hex_code = _resolve_to_hex(aircraft)
+        if not hex_code:
+            return _json({"error": f"could not resolve '{aircraft}' to an aircraft", "aircraft": aircraft})
+        live = next(
+            (a for a in (cache.get("current_aircraft") or []) if (a.get("hex") or "").upper() == hex_code), None
+        )
+        if not live or live.get("lat") is None:
+            return _json({"error": f"'{aircraft}' has no live position right now", "icao_hex": hex_code})
+        lat, lon = float(live["lat"]), float(live["lon"])
+        alt = live.get("alt_baro")
+        ac_out = {
+            "icao_hex": hex_code,
+            "callsign": (live.get("flight") or "").strip() or None,
+            "alt_baro_ft": alt if isinstance(alt, (int, float)) else None,
+        }
+    else:
+        lat, lon = _default_center(lat, lon)
+        if lat is None:
+            return _json({"error": "receiver location (FEEDER_LAT/LON) not configured"})
+
+    elev = terrain_elevation.get_elevation_ft(lat, lon)
+    out = {"lat": round(lat, 4), "lon": round(lon, 4), "elevation_ft": elev}
+    if ac_out:
+        if ac_out["alt_baro_ft"] is not None and elev is not None:
+            # alt_baro is pressure altitude, not true MSL — call the result approximate.
+            ac_out["approx_agl_ft"] = int(ac_out["alt_baro_ft"] - elev)
+        out["aircraft"] = ac_out
+    return _json(out)
+
+
+# =============================================================================
 # Registry
 # =============================================================================
 
-# The plain functions, in the order the model sees them. Kept curated (~15) so
-# tool selection stays reliable.
-TOOL_FUNCS = [
-    platform_activity,
-    safety_summary,
-    flight_patterns,
-    geographic_breakdown,
-    time_comparison,
-    antenna_coverage,
-    acars_summary,
-    acars_timeline,
-    collection_stats,
-    live_traffic_summary,
-    live_aircraft_map,
-    radar_filter,
-    airport_weather,
-    recent_pireps,
-    nearby_wildfires,
-    airport_notams,
-    lookup_airframe,
-    fetch_airframe_photo,
-    lookup_route,
-    find_sightings,
-    find_safety_events,
-    find_incidents,
-    semantic_airframe_search,
-    notable_acars_messages,
-    semantic_acars_search,
-    semantic_notam_search,
-    semantic_pirep_search,
-    semantic_event_search,
-    metric_correlations,
-    aircraft_track,
-    plot_tracks,
-    busiest_tails,
-    detect_unusual_patterns,
-    identify_law_enforcement,
-    threat_assessment,
-    rest_api_reference,
-    socketio_reference,
-    weather_nearby,
-    aircraft_dossier,
-    nearby_advisories,
-    turbulence_forecast,
-    enroute_structure,
-    watched_aircraft,
-    my_alert_rules,
-    flight_schedule,
+# The plain functions grouped by category, in the order the model sees them.
+# Grouping related tools adjacently in the schema list — and tagging each
+# description with its category in get_tools() — gives a small model a selection
+# signal: nearby schemas read as alternatives to each other.
+TOOL_GROUPS: list[tuple[str, list]] = [
+    (
+        "live traffic",
+        [live_traffic_summary, live_aircraft_map, radar_filter, threat_assessment],
+    ),
+    (
+        "analytics",
+        [
+            platform_activity,
+            safety_summary,
+            flight_patterns,
+            geographic_breakdown,
+            time_comparison,
+            antenna_coverage,
+            collection_stats,
+            metric_correlations,
+            busiest_tails,
+        ],
+    ),
+    (
+        "one aircraft",
+        [
+            lookup_airframe,
+            aircraft_dossier,
+            fetch_airframe_photo,
+            lookup_route,
+            flight_schedule,
+            find_sightings,
+            aircraft_track,
+            plot_tracks,
+            detect_unusual_patterns,
+            identify_law_enforcement,
+            identify_military,
+        ],
+    ),
+    (
+        "weather & hazards",
+        [
+            airport_weather,
+            weather_nearby,
+            recent_pireps,
+            turbulence_forecast,
+            nearby_advisories,
+            nearby_wildfires,
+            airport_notams,
+        ],
+    ),
+    (
+        "aviation reference",
+        [
+            decode_squawk,
+            decode_aviation_text,
+            military_reference,
+            airspace_near,
+            nearby_navaids,
+            enroute_structure,
+            elevation_at,
+        ],
+    ),
+    (
+        "search & records",
+        [
+            find_safety_events,
+            find_incidents,
+            semantic_airframe_search,
+            notable_acars_messages,
+            semantic_acars_search,
+            semantic_notam_search,
+            semantic_pirep_search,
+            semantic_event_search,
+            acars_summary,
+            acars_timeline,
+            web_search,
+        ],
+    ),
+    ("user & station", [watched_aircraft, my_alert_rules]),
+    ("developer API", [rest_api_reference, socketio_reference]),
 ]
+
+# Flat registry (public name kept — tests and get_tools iterate this).
+TOOL_FUNCS = [fn for _cat, fns in TOOL_GROUPS for fn in fns]
+
+_TOOL_CATEGORY = {fn.__name__: cat for cat, fns in TOOL_GROUPS for fn in fns}
 
 
 def _short_description(doc: str | None) -> str:
@@ -1790,18 +2174,55 @@ def _short_description(doc: str | None) -> str:
     return first[:200]
 
 
+def _validation_handler(fn):
+    """Turn a pydantic arg-validation failure into a corrective observation the
+    model can act on (retry with fixed args) instead of an exception that kills
+    the agent loop — small models mistype tool args routinely."""
+    import inspect
+
+    params = ", ".join(
+        f"{p.name}"
+        + (
+            f" ({p.annotation.__name__})"
+            if p.annotation is not inspect.Parameter.empty and hasattr(p.annotation, "__name__")
+            else ""
+        )
+        for p in inspect.signature(fn).parameters.values()
+    )
+
+    def _handler(error) -> str:
+        return json.dumps(
+            {
+                "error": f"invalid arguments for {fn.__name__}: {str(error)[:300]}",
+                "expected_arguments": params,
+                "hint": "retry the tool call with corrected argument names/types",
+            }
+        )
+
+    return _handler
+
+
 def get_tools(compact: bool = False) -> list:
     """Wrap the plain functions as LangChain StructuredTools (lazy import so this
     module stays importable/testable without LangChain installed).
 
-    In ``compact`` mode each tool's description is trimmed to its first sentence so
-    the combined tool schemas don't overflow a small-context model."""
+    Each description is prefixed with its ``[category]`` tag as a selection hint.
+    In ``compact`` mode descriptions are trimmed to the first sentence so the
+    combined tool schemas fit a small context window. Validation errors are
+    converted to corrective observations (see _validation_handler) so a bad arg
+    from the model self-corrects instead of breaking the loop."""
     from langchain_core.tools import StructuredTool
 
     tools = []
     for fn in TOOL_FUNCS:
-        if compact:
-            tools.append(StructuredTool.from_function(fn, description=_short_description(fn.__doc__)))
-        else:
-            tools.append(StructuredTool.from_function(fn))
+        doc = _short_description(fn.__doc__) if compact else " ".join((fn.__doc__ or "").split())
+        cat = _TOOL_CATEGORY.get(fn.__name__)
+        tools.append(
+            StructuredTool.from_function(
+                fn,
+                description=f"[{cat}] {doc}" if cat else doc,
+                handle_tool_error=True,
+                handle_validation_error=_validation_handler(fn),
+            )
+        )
     return tools

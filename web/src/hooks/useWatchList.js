@@ -71,6 +71,11 @@ export function useWatchList({ enableAudio = true } = {}) {
   // Watch list state - array of { hex, callsign, addedAt }
   const [watchList, setWatchList] = useState(loadWatchList);
 
+  // Mirror of the latest watchList so mount-only effects can read the current
+  // value without a stale closure (used by the backend sync below).
+  const watchListRef = useRef(watchList);
+  watchListRef.current = watchList;
+
   // Panel visibility state
   const [panelVisible, setPanelVisible] = useState(loadPanelVisible);
 
@@ -164,14 +169,23 @@ export function useWatchList({ enableAudio = true } = {}) {
               notes: item.notes || '',
               addedAt: new Date(item.added_at).getTime(),
             }));
-            setWatchList(backendList);
-          } else if (watchList.length > 0) {
-            // Backend is empty but we have local data - push to backend
+            // Merge (backend wins on collision) rather than overwrite, so any
+            // aircraft the user added during this async window isn't clobbered.
+            setWatchList((prev) => {
+              const byHex = new Map(backendList.map((item) => [item.hex.toUpperCase(), item]));
+              for (const item of prev) {
+                if (!byHex.has(item.hex.toUpperCase())) byHex.set(item.hex.toUpperCase(), item);
+              }
+              return Array.from(byHex.values());
+            });
+          } else if (watchListRef.current.length > 0) {
+            // Backend is empty but we have local data - push to backend. Read the
+            // current list via the ref (not the mount-time closure).
             await fetch('/api/v1/watchlist/import/', {
               method: 'POST',
               headers: withAuth({ 'Content-Type': 'application/json' }),
               body: JSON.stringify({
-                watchList: watchList.map((item) => ({
+                watchList: watchListRef.current.map((item) => ({
                   hex: item.hex,
                   callsign: item.callsign || '',
                   type_code: item.type || '',
@@ -356,32 +370,48 @@ export function useWatchList({ enableAudio = true } = {}) {
         const items = data.watchList || data;
         if (!Array.isArray(items)) throw new Error('Invalid format');
 
-        let added = 0;
-        const newItems = [];
-        items.forEach((item) => {
-          if (item.hex && !isWatched(item.hex)) {
-            newItems.push(item);
-            addToWatchList({ hex: item.hex, callsign: item.callsign, flight: item.callsign });
-            added++;
-          }
-        });
+        // Dedupe against the current list AND within this import (accumulating
+        // set), using the fresh ref rather than the stale closure. Build the new
+        // entries once, then do a SINGLE state update + SINGLE bulk POST — the
+        // old code called addToWatchList per item (a POST each) AND a bulk POST,
+        // double-writing every aircraft.
+        const seen = new Set(watchListRef.current.map((it) => it.hex?.toUpperCase()));
+        const newEntries = [];
+        for (const item of items) {
+          const hex = item.hex?.toUpperCase();
+          if (!hex || seen.has(hex)) continue;
+          seen.add(hex);
+          newEntries.push({
+            hex,
+            callsign: item.callsign?.trim?.() || item.callsign || null,
+            type: item.type || item.type_code || null,
+            addedAt: Date.now(),
+          });
+        }
 
-        // Bulk import to backend
-        if (newItems.length > 0) {
+        if (newEntries.length > 0) {
+          setWatchList((prev) => [...prev, ...newEntries]);
+          playAddSound();
           fetch('/api/v1/watchlist/import/', {
             method: 'POST',
             headers: withAuth({ 'Content-Type': 'application/json' }),
-            body: JSON.stringify({ watchList: newItems }),
+            body: JSON.stringify({
+              watchList: newEntries.map((it) => ({
+                hex: it.hex,
+                callsign: it.callsign || '',
+                type_code: it.type || '',
+              })),
+            }),
           }).catch(() => {});
         }
 
-        return { success: true, added };
+        return { success: true, added: newEntries.length };
       } catch (e) {
         console.error('Failed to import watch list:', e);
         return { success: false, error: e.message };
       }
     },
-    [isWatched, addToWatchList]
+    [playAddSound]
   );
 
   // Get watch list with live aircraft data merged in

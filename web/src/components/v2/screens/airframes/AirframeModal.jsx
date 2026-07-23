@@ -186,7 +186,10 @@ export function AirframeModal({
           <TypePhoto frame={frame} color={color} />
           <div className="v2-afm__ident">
             {neverSeen && (
-              <div className="v2-afm__unseen v2-mono" title="Reference data only — no local sightings">
+              <div
+                className="v2-afm__unseen v2-mono"
+                title="Reference data only — no local sightings"
+              >
                 <Icon name="eye-off" size={12} strokeWidth={1.9} />
                 NEVER SEEN AT THIS STATION
               </div>

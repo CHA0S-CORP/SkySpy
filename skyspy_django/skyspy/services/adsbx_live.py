@@ -16,6 +16,8 @@ from django.conf import settings
 from django.core.cache import cache
 from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
+from skyspy.services import http_client
+
 logger = logging.getLogger(__name__)
 
 # API configuration (RapidAPI)
@@ -51,18 +53,18 @@ def _is_retryable_http_error(exc: BaseException) -> bool:
 )
 def _http_get_adsbx(url: str, params: dict | None, api_key: str, timeout: float = 15.0) -> httpx.Response:
     """HTTP GET with retry logic for ADS-B Exchange API."""
-    with httpx.Client(timeout=timeout) as client:
-        response = client.get(
-            url,
-            params=params,
-            headers={
-                "X-RapidAPI-Key": api_key,
-                "X-RapidAPI-Host": ADSBX_RAPIDAPI_HOST,
-                "Accept": "application/json",
-            },
-        )
-        response.raise_for_status()
-        return response
+    response = http_client.get_shared_client().get(
+        url,
+        params=params,
+        headers={
+            "X-RapidAPI-Key": api_key,
+            "X-RapidAPI-Host": ADSBX_RAPIDAPI_HOST,
+            "Accept": "application/json",
+        },
+        timeout=timeout,
+    )
+    response.raise_for_status()
+    return response
 
 
 def _make_request(endpoint: str, params: dict | None = None, timeout: int = 15) -> dict[str, Any] | None:
@@ -224,6 +226,9 @@ def get_aircraft_by_squawk(squawk: str) -> list[dict[str, Any]]:
     if not _is_enabled():
         return []
 
+    # Normalize before keying/URL-building like the sibling getters, so ' 7700'
+    # and '7700' don't create two cache entries + two upstream RapidAPI calls.
+    squawk = squawk.strip()
     cache_key = f"adsbx_squawk_{squawk}"
 
     cached = cache.get(cache_key)

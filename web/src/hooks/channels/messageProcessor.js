@@ -320,9 +320,14 @@ export function processSafetyEventUpdated(data, setSafetyEvents) {
     setSafetyEvents((prev) => {
       const eventId = data.data.id || data.data.event_id;
       if (!eventId) return prev;
-      return prev.map((event) =>
-        event.id === eventId || event.event_id === eventId ? { ...event, ...data.data } : event
-      );
+      // findIndex + copy-replace instead of map(): when the event isn't in the
+      // list (common), return the SAME array reference so React skips the
+      // re-render that map()'s always-new array would force.
+      const idx = prev.findIndex((event) => event.id === eventId || event.event_id === eventId);
+      if (idx === -1) return prev;
+      const next = prev.slice();
+      next[idx] = { ...next[idx], ...data.data };
+      return next;
     });
     window.dispatchEvent(
       new CustomEvent('skyspy:safety:event_updated', {
@@ -339,13 +344,14 @@ export function processSafetyEventResolved(data, setSafetyEvents) {
   if (data?.data && typeof data.data === 'object') {
     const eventId = data.data.id || data.data.event_id;
     if (eventId) {
-      setSafetyEvents((prev) =>
-        prev.map((event) =>
-          event.id === eventId || event.event_id === eventId
-            ? { ...event, ...data.data, resolved: true }
-            : event
-        )
-      );
+      setSafetyEvents((prev) => {
+        // findIndex + copy-replace: keep the same array ref on no-match (no re-render).
+        const idx = prev.findIndex((event) => event.id === eventId || event.event_id === eventId);
+        if (idx === -1) return prev;
+        const next = prev.slice();
+        next[idx] = { ...next[idx], ...data.data, resolved: true };
+        return next;
+      });
       window.dispatchEvent(
         new CustomEvent('skyspy:safety:event_resolved', {
           detail: { ...data.data, resolved: true },

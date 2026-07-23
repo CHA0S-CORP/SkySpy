@@ -15,6 +15,7 @@ from skyspy.models.aircraft import (
     AirframeDocument,
     AirframeSourceData,
     AirframeTypeCard,
+    LiveAircraftPosition,
 )
 from skyspy.models.airspace import AirspaceAdvisory, AirspaceBoundary
 from skyspy.models.alerts import AlertAggregate, AlertHistory, AlertRule, AlertSubscription
@@ -75,6 +76,7 @@ __all__ = [
     # Aircraft
     "AircraftSighting",
     "AircraftSession",
+    "LiveAircraftPosition",
     "AircraftIncident",
     "AircraftInfo",
     "AirframeDocument",

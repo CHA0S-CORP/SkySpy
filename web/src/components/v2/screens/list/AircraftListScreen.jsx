@@ -1,8 +1,134 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Icon, Switch } from '../../primitives';
 import { useBulkAircraftInfo } from '../../../../hooks/useBulkAircraftInfo';
 import { useHashParamState, boolParam } from '../../../../hooks/useHashParamState';
 import { CHIP_DEFS, COLUMNS, FILTER_TESTS, selectAircraft, toRow } from './listModel';
+import { VirtualList } from '../../../common/VirtualList';
+
+/**
+ * One aircraft row. Memoized so that virtualization + a stable per-hex
+ * enrichment value keep re-renders to only the rows whose data actually changed.
+ */
+const ListRow = React.memo(function ListRow({ r, info, onSelect }) {
+  const thumb = info?.photo_thumbnail_url || null;
+  const flags = info || {};
+  return (
+    <button
+      type="button"
+      className={`v2-list__row${r.isEmergency ? ' v2-list__row--alert' : ''}`}
+      style={{ borderLeftColor: r.accent }}
+      onClick={() => onSelect(r.hex)}
+      data-testid={`v2-list-row-${r.hex}`}
+    >
+      <div className="v2-list__cell v2-list__cell--icao">
+        {thumb && (
+          <img
+            className="v2-list__photo"
+            src={thumb}
+            alt=""
+            loading="lazy"
+            data-testid={`v2-list-photo-${r.hex}`}
+          />
+        )}
+        {r.isMil && (
+          <Icon name="shield" size={12} strokeWidth={1.8} style={{ color: 'var(--mil)' }} />
+        )}
+        <span style={{ color: r.icaoColor }}>{r.icao}</span>
+        {(flags.isPia || flags.isLadd || flags.isInteresting) && (
+          <span className="v2-list__flags">
+            {flags.isPia && (
+              <span
+                className="v2-list__flag v2-list__flag--pia"
+                title="Privacy ICAO Address"
+                data-testid={`v2-list-flag-pia-${r.hex}`}
+              >
+                PIA
+              </span>
+            )}
+            {flags.isLadd && (
+              <span
+                className="v2-list__flag v2-list__flag--ladd"
+                title="FAA Limiting Aircraft Data Displayed"
+                data-testid={`v2-list-flag-ladd-${r.hex}`}
+              >
+                LADD
+              </span>
+            )}
+            {flags.isInteresting && (
+              <span
+                className="v2-list__flag v2-list__flag--interesting"
+                title="Flagged as interesting"
+                data-testid={`v2-list-flag-interest-${r.hex}`}
+              >
+                INT
+              </span>
+            )}
+          </span>
+        )}
+      </div>
+      <div className="v2-list__cell v2-list__cell--cs">
+        <span style={{ color: r.csColor }}>{r.cs}</span>
+        {r.tail && <span className="v2-list__tail">{r.tail}</span>}
+        {r.operator && (
+          <span
+            className="v2-list__operator"
+            title={r.operator}
+            data-testid={`v2-list-operator-${r.hex}`}
+          >
+            {r.operator}
+          </span>
+        )}
+      </div>
+      <div
+        className="v2-list__cell v2-list__cell--type"
+        title={r.typeFull || undefined}
+        data-testid={`v2-list-type-${r.hex}`}
+      >
+        <span>{r.type}</span>
+        {r.typeFull && (
+          <span className="v2-list__type-full" data-testid={`v2-list-type-full-${r.hex}`}>
+            {r.typeFull}
+            {r.year && (
+              <span className="v2-list__year" data-testid={`v2-list-year-${r.hex}`}>
+                {' · '}
+                {r.year}
+              </span>
+            )}
+          </span>
+        )}
+        {!r.typeFull && r.year && (
+          <span className="v2-list__year" data-testid={`v2-list-year-${r.hex}`}>
+            {r.year}
+          </span>
+        )}
+      </div>
+      <div className="v2-list__cell v2-list__cell--alt">
+        <span style={{ color: r.altColor }}>{r.altDisp}</span>
+        {r.altUnit && <span className="v2-list__unit">{r.altUnit}</span>}
+      </div>
+      <span className="v2-list__cell" style={{ color: r.spdColor }}>
+        {r.spd}
+      </span>
+      <span className="v2-list__cell v2-list__cell--vs" style={{ color: r.vsColor }}>
+        {r.vsDisp}
+      </span>
+      <div className="v2-list__cell v2-list__cell--hdg">
+        <span>{r.hdgDisp}</span>
+        <span className="v2-list__hdg-dir">{r.hdgDir}</span>
+      </div>
+      <span className="v2-list__cell">{r.dist}</span>
+      <div className="v2-list__cell v2-list__cell--sig">
+        <Icon name="signal" size={12} strokeWidth={2} style={{ color: r.sigColor }} />
+        {r.bars.map((b, i) => (
+          <span key={i} className="v2-list__bar" style={{ height: b.h, background: b.color }} />
+        ))}
+      </div>
+      <span className="v2-list__cell" style={{ color: r.sqkColor }}>
+        {r.sqk}
+      </span>
+    </button>
+  );
+});
 
 /**
  * v2 Aircraft List (design: Aircraft List.dc.html) — search, filter chips with
@@ -17,7 +143,15 @@ import { CHIP_DEFS, COLUMNS, FILTER_TESTS, selectAircraft, toRow } from './listM
  */
 export function AircraftListScreen({ aircraft, onSelectAircraft, apiBase }) {
   // Deep-linked view state (#aircraft?q=&filter=&sort=&sortDir=&ghosts=)
-  const [query, setQuery] = useHashParamState('q', '');
+  // The search query write to the URL is debounced, so the expensive filter+sort
+  // (rows useMemo) runs at most ~3x/sec instead of on every keystroke. A local
+  // input state keeps the field itself responsive; it re-syncs if `query` changes
+  // externally (back/forward, deep link).
+  const [query, setQuery] = useHashParamState('q', '', { debounceMs: 300 });
+  const [queryInput, setQueryInput] = useState(query);
+  useEffect(() => {
+    setQueryInput(query);
+  }, [query]);
   const [filter, setFilter] = useHashParamState('filter', null);
   const [sortBy, setSortBy] = useHashParamState('sort', 'dist');
   const [sortDir, setSortDir] = useHashParamState('sortDir', 'asc');
@@ -102,8 +236,11 @@ export function AircraftListScreen({ aircraft, onSelectAircraft, apiBase }) {
         <div className="v2-list__search">
           <Icon name="search" size={16} strokeWidth={1.8} />
           <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            value={queryInput}
+            onChange={(e) => {
+              setQueryInput(e.target.value);
+              setQuery(e.target.value);
+            }}
             placeholder="Search ICAO, callsign, type, squawk…"
             aria-label="Search aircraft"
           />
@@ -165,143 +302,29 @@ export function AircraftListScreen({ aircraft, onSelectAircraft, apiBase }) {
           })}
         </div>
 
+        {/* Virtualized rows: only the visible window (~viewport/48px) mounts,
+            instead of all 300+ filtered rows. The header above stays fixed. */}
         <div className="v2-list__rows">
-          {rows.map((r) => {
-            const info = enrichment[(r.hex || '').toUpperCase()] || null;
-            const thumb = info?.photo_thumbnail_url || null;
-            const flags = info || {};
-            return (
-              <button
-                key={r.hex}
-                type="button"
-                className={`v2-list__row${r.isEmergency ? ' v2-list__row--alert' : ''}`}
-                style={{ borderLeftColor: r.accent }}
-                onClick={() => onSelectAircraft(r.hex)}
-                data-testid={`v2-list-row-${r.hex}`}
-              >
-                <div className="v2-list__cell v2-list__cell--icao">
-                  {thumb && (
-                    <img
-                      className="v2-list__photo"
-                      src={thumb}
-                      alt=""
-                      loading="lazy"
-                      data-testid={`v2-list-photo-${r.hex}`}
-                    />
-                  )}
-                  {r.isMil && (
-                    <Icon
-                      name="shield"
-                      size={12}
-                      strokeWidth={1.8}
-                      style={{ color: 'var(--mil)' }}
-                    />
-                  )}
-                  <span style={{ color: r.icaoColor }}>{r.icao}</span>
-                  {(flags.isPia || flags.isLadd || flags.isInteresting) && (
-                    <span className="v2-list__flags">
-                      {flags.isPia && (
-                        <span
-                          className="v2-list__flag v2-list__flag--pia"
-                          title="Privacy ICAO Address"
-                          data-testid={`v2-list-flag-pia-${r.hex}`}
-                        >
-                          PIA
-                        </span>
-                      )}
-                      {flags.isLadd && (
-                        <span
-                          className="v2-list__flag v2-list__flag--ladd"
-                          title="FAA Limiting Aircraft Data Displayed"
-                          data-testid={`v2-list-flag-ladd-${r.hex}`}
-                        >
-                          LADD
-                        </span>
-                      )}
-                      {flags.isInteresting && (
-                        <span
-                          className="v2-list__flag v2-list__flag--interesting"
-                          title="Flagged as interesting"
-                          data-testid={`v2-list-flag-interest-${r.hex}`}
-                        >
-                          INT
-                        </span>
-                      )}
-                    </span>
-                  )}
-                </div>
-                <div className="v2-list__cell v2-list__cell--cs">
-                  <span style={{ color: r.csColor }}>{r.cs}</span>
-                  {r.tail && <span className="v2-list__tail">{r.tail}</span>}
-                  {r.operator && (
-                    <span
-                      className="v2-list__operator"
-                      title={r.operator}
-                      data-testid={`v2-list-operator-${r.hex}`}
-                    >
-                      {r.operator}
-                    </span>
-                  )}
-                </div>
-                <div
-                  className="v2-list__cell v2-list__cell--type"
-                  title={r.typeFull || undefined}
-                  data-testid={`v2-list-type-${r.hex}`}
-                >
-                  <span>{r.type}</span>
-                  {r.typeFull && (
-                    <span className="v2-list__type-full" data-testid={`v2-list-type-full-${r.hex}`}>
-                      {r.typeFull}
-                      {r.year && (
-                        <span className="v2-list__year" data-testid={`v2-list-year-${r.hex}`}>
-                          {' · '}
-                          {r.year}
-                        </span>
-                      )}
-                    </span>
-                  )}
-                  {!r.typeFull && r.year && (
-                    <span className="v2-list__year" data-testid={`v2-list-year-${r.hex}`}>
-                      {r.year}
-                    </span>
-                  )}
-                </div>
-                <div className="v2-list__cell v2-list__cell--alt">
-                  <span style={{ color: r.altColor }}>{r.altDisp}</span>
-                  {r.altUnit && <span className="v2-list__unit">{r.altUnit}</span>}
-                </div>
-                <span className="v2-list__cell" style={{ color: r.spdColor }}>
-                  {r.spd}
-                </span>
-                <span className="v2-list__cell v2-list__cell--vs" style={{ color: r.vsColor }}>
-                  {r.vsDisp}
-                </span>
-                <div className="v2-list__cell v2-list__cell--hdg">
-                  <span>{r.hdgDisp}</span>
-                  <span className="v2-list__hdg-dir">{r.hdgDir}</span>
-                </div>
-                <span className="v2-list__cell">{r.dist}</span>
-                <div className="v2-list__cell v2-list__cell--sig">
-                  <Icon name="signal" size={12} strokeWidth={2} style={{ color: r.sigColor }} />
-                  {r.bars.map((b, i) => (
-                    <span
-                      key={i}
-                      className="v2-list__bar"
-                      style={{ height: b.h, background: b.color }}
-                    />
-                  ))}
-                </div>
-                <span className="v2-list__cell" style={{ color: r.sqkColor }}>
-                  {r.sqk}
-                </span>
-              </button>
-            );
-          })}
-          {rows.length === 0 && (
+          {rows.length === 0 ? (
             <div className="v2-list__empty">
               <Icon name="radar" size={30} />
               <span>No aircraft match the current filters</span>
             </div>
+          ) : (
+            <VirtualList
+              items={rows}
+              itemHeight={48}
+              height="auto"
+              overscan={8}
+              getItemKey={(r) => r.hex}
+              renderItem={(r) => (
+                <ListRow
+                  r={r}
+                  info={enrichment[(r.hex || '').toUpperCase()] || null}
+                  onSelect={onSelectAircraft}
+                />
+              )}
+            />
           )}
         </div>
 

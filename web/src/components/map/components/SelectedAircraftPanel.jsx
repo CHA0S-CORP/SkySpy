@@ -1,5 +1,15 @@
 import React from 'react';
-import { Plane, X, Shield, AlertTriangle, ExternalLink, Crosshair, Bell, Zap, Wind } from 'lucide-react';
+import {
+  Plane,
+  X,
+  Shield,
+  AlertTriangle,
+  ExternalLink,
+  Crosshair,
+  Bell,
+  Zap,
+  Wind,
+} from 'lucide-react';
 import { getTailInfo } from '../../../utils';
 
 /**

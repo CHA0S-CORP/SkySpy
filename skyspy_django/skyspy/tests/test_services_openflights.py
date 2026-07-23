@@ -22,31 +22,22 @@ from skyspy.services import openflights
 class FetchCsvDataTests(TestCase):
     """Tests for CSV data fetching."""
 
-    @patch("httpx.Client")
-    def test_fetch_csv_data_success(self, mock_client_class):
+    # _fetch_csv_data delegates to http_client.get_text (shared pooled client +
+    # retry/breaker); mock that boundary rather than httpx.
+    @patch("skyspy.services.openflights.http_client.get_text")
+    def test_fetch_csv_data_success(self, mock_get_text):
         """Test successful CSV data fetch."""
-        mock_response = MagicMock()
-        mock_response.text = '"AAL","American Airlines","AA","AMERICAN","United States","Y"\n'
-        mock_response.raise_for_status = MagicMock()
-        mock_client = MagicMock()
-        mock_client.get.return_value = mock_response
-        mock_client.__enter__ = MagicMock(return_value=mock_client)
-        mock_client.__exit__ = MagicMock(return_value=False)
-        mock_client_class.return_value = mock_client
+        mock_get_text.return_value = '"AAL","American Airlines","AA","AMERICAN","United States","Y"\n'
 
         result = openflights._fetch_csv_data("https://example.com/data.csv")
 
         self.assertIsNotNone(result)
         self.assertEqual(len(result), 1)
 
-    @patch("httpx.Client")
-    def test_fetch_csv_data_failure_returns_none(self, mock_client_class):
-        """Test that fetch failure returns None."""
-        mock_client = MagicMock()
-        mock_client.get.side_effect = Exception("Network error")
-        mock_client.__enter__ = MagicMock(return_value=mock_client)
-        mock_client.__exit__ = MagicMock(return_value=False)
-        mock_client_class.return_value = mock_client
+    @patch("skyspy.services.openflights.http_client.get_text")
+    def test_fetch_csv_data_failure_returns_none(self, mock_get_text):
+        """A failed fetch comes back as None from http_client."""
+        mock_get_text.return_value = None
 
         result = openflights._fetch_csv_data("https://example.com/data.csv")
 

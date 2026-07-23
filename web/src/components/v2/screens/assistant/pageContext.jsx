@@ -64,7 +64,6 @@ export function usePublishPageContext(builder, deps = []) {
       store.setRegistered(null);
     }
     return () => store.setRegistered(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
 }
 
@@ -97,7 +96,9 @@ export function composePageContext(store) {
 
   const registered = read?.registered;
   if (registered) {
-    lines.push(typeof registered === 'string' ? registered : `Page data: ${JSON.stringify(registered)}`);
+    lines.push(
+      typeof registered === 'string' ? registered : `Page data: ${JSON.stringify(registered)}`
+    );
   }
 
   const snap = snapshotVisibleText();

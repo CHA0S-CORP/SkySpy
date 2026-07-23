@@ -75,44 +75,31 @@ class MakeRequestTests(TestCase):
 
     @override_settings(OPENSKY_LIVE_ENABLED=True)
     def test_make_request_rate_limited(self):
-        """Test rate limit handling."""
-        # Set rate limit counter to max
-        cache.set("opensky_rate_limit", opensky_live.MAX_REQUESTS_PER_MINUTE)
+        """Rate limiting is delegated to http_client's per-source window; when it
+        is exhausted the request returns None."""
+        # Exhaust the shared http_client rate window for this source.
+        cache.set("http:rate:opensky_live", opensky_live.MAX_REQUESTS_PER_MINUTE)
 
         result = opensky_live._make_request("states/all")
 
         self.assertIsNone(result)
 
-    @patch("httpx.Client")
+    # _make_request delegates to http_client.get_json; mock that boundary.
+    @patch("skyspy.services.opensky_live.http_client.get_json")
     @override_settings(OPENSKY_LIVE_ENABLED=True)
-    def test_make_request_success(self, mock_client_class):
+    def test_make_request_success(self, mock_get_json):
         """Test successful API request."""
-        mock_response = MagicMock()
-        mock_response.json.return_value = {"states": []}
-        mock_response.raise_for_status = MagicMock()
-
-        mock_client = MagicMock()
-        mock_client.get.return_value = mock_response
-        mock_client.__enter__ = MagicMock(return_value=mock_client)
-        mock_client.__exit__ = MagicMock(return_value=False)
-        mock_client_class.return_value = mock_client
+        mock_get_json.return_value = {"states": []}
 
         result = opensky_live._make_request("states/all")
 
         self.assertEqual(result, {"states": []})
 
-    @patch("httpx.Client")
+    @patch("skyspy.services.opensky_live.http_client.get_json")
     @override_settings(OPENSKY_LIVE_ENABLED=True)
-    def test_make_request_rate_limit_error(self, mock_client_class):
-        """Test HTTP 429 rate limit error handling."""
-        mock_response = MagicMock()
-        mock_response.status_code = 429
-
-        mock_client = MagicMock()
-        mock_client.get.side_effect = httpx.HTTPStatusError("Rate limited", request=MagicMock(), response=mock_response)
-        mock_client.__enter__ = MagicMock(return_value=mock_client)
-        mock_client.__exit__ = MagicMock(return_value=False)
-        mock_client_class.return_value = mock_client
+    def test_make_request_rate_limit_error(self, mock_get_json):
+        """A 429/failed upstream comes back as None from http_client."""
+        mock_get_json.return_value = None
 
         result = opensky_live._make_request("states/all")
 

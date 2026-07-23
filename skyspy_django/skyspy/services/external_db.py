@@ -1044,6 +1044,11 @@ def fetch_route(callsign: str) -> dict | None:
             _route_cache_ttl[callsign] = now + 3600
         return route_data
 
+    # All three sources (adsb.im, adsbdb, hexdb) returned nothing. Usually a
+    # genuinely unknown callsign, but on the VM it is also what an OPEN circuit
+    # breaker looks like from here — log at debug so route outages are
+    # distinguishable from "no match" without spamming for every unknown flight.
+    logger.debug("fetch_route: no route for %s (adsb.im payload=%s)", callsign, "present" if payload else "empty")
     return None
 
 
@@ -1319,12 +1324,23 @@ def update_databases_if_stale():
     updated_any = False
 
     for db_name, meta in _db_metadata.items():
-        if meta["updated"] is None:
-            continue
+        # A DB with updated=None never loaded successfully — almost always its
+        # INITIAL download failed (e.g. a transient registry.faa.gov 403/timeout at
+        # the daily 4 AM sync). Previously we `continue`d here, so the only retry was
+        # the next 4 AM run: one bad night left FAA (owner/registration data →
+        # ownership analysis) empty for up to 24h. Treat never-loaded as stale so
+        # this 6-hourly task self-heals the gap.
+        never_loaded = meta["updated"] is None
+        if never_loaded:
+            stale = True
+            age_desc = "never loaded"
+        else:
+            age = now - meta["updated"]
+            stale = age > timedelta(hours=UPDATE_INTERVAL_HOURS)
+            age_desc = f"{age.total_seconds() / 3600:.1f}h old"
 
-        age = now - meta["updated"]
-        if age > timedelta(hours=UPDATE_INTERVAL_HOURS):
-            logger.info(f"{db_name} database is {age.total_seconds() / 3600:.1f}h old, updating...")
+        if stale:
+            logger.info(f"{db_name} database is {age_desc}, updating...")
             if db_name == "adsbx":
                 download_adsbx_database()
                 load_adsbx_database(auto_download=False)

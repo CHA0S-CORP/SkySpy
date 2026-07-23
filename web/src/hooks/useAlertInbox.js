@@ -97,10 +97,12 @@ export function useAlertInbox({ realtimeAlerts = [], enabled = true }) {
   const unreadCount = useMemo(() => items.filter((a) => a.__unread).length, [items]);
 
   const markLocalRead = useCallback((keys) => {
+    // Keep the updater pure — the effect below persists on every readSet change,
+    // so persisting inside the updater was redundant AND double-wrote in
+    // StrictMode (updaters run twice in dev).
     setReadSet((prev) => {
       const next = new Set(prev);
       keys.forEach((k) => next.add(k));
-      persistReadSet(next);
       return next;
     });
   }, []);
@@ -140,7 +142,7 @@ export function useAlertInbox({ realtimeAlerts = [], enabled = true }) {
       // best-effort
     }
     setReadSet(new Set());
-    persistReadSet(new Set());
+    // The readSet effect persists this change; no explicit write needed here.
     queryClient.invalidateQueries({ queryKey: ['alert-inbox', 'history'] });
     refetch();
   }, [queryClient, refetch]);

@@ -247,6 +247,14 @@ class NotificationDispatcher:
         try:
             import apprise
 
+            from skyspy.services.notifications import webhook_delivery_allowed
+
+            # SSRF gate: block http(s) webhook targets that resolve to internal
+            # IPs; native apprise schemes pass through.
+            if not webhook_delivery_allowed(payload.apprise_url):
+                logger.warning("Blocked sync notification delivery to unsafe webhook URL")
+                return False
+
             apobj = apprise.Apprise()
             apobj.add(payload.apprise_url)
 
