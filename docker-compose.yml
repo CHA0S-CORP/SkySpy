@@ -399,6 +399,17 @@ services:
     command: >
       celery -A skyspy beat
       --loglevel=info
+    # Beat serves no HTTP, so the image's inherited curl :8000/health/ check
+    # always fails ("unhealthy"). Verify the beat scheduler is PID 1 (the
+    # container's main process — if beat crashes, PID 1 exits and the container
+    # restarts). Reads PID 1's cmdline directly (python is always present; no
+    # self-match since the check process isn't PID 1).
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys;sys.exit(0 if b'beat' in open('/proc/1/cmdline','rb').read() else 1)"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   # ---------------------------------------------------------------------------
   # ACARS UDP Listener (optional)
@@ -430,6 +441,15 @@ services:
     networks:
       - skyspy-network
     command: python manage.py run_acars
+    # run_acars serves no HTTP (inherited curl check always fails) and has no
+    # heartbeat metric — verify the poller is PID 1 (crash → PID 1 exits →
+    # container restarts). Reads PID 1's cmdline (no self-match; python present).
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys;sys.exit(0 if b'run_acars' in open('/proc/1/cmdline','rb').read() else 1)"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   # ---------------------------------------------------------------------------
   # vLLM — self-hosted OpenAI-compatible model server (GPU only)
