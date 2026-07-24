@@ -103,9 +103,34 @@ models:
     quantization: null
     ctx_max: 131072
     min_gpu_gb: 48
-    enabled: true
+    enabled: false
     extra_args: "--tokenizer-mode mistral --config-format mistral --load-format mistral"
     notes: Dense 24B, strong/robust tool calling. Quality play between 14B and 32B-AWQ.
+
+  - id: inclusionAI/Ling-2.6-flash-FP8
+    family: ling
+    tool_parser: qwen25        # Ling uses the Qwen2.5-style tool format (per model card)
+    quantization: null         # FP8 checkpoint, auto-detected (~100 GB — fits 128 GB unified)
+    ctx_max: 131072
+    min_gpu_gb: 100
+    enabled: true
+    notes: >-
+      Newest OPEN Ant Ling flash: BailingMoe V2.5, 256 experts / 8 active (MoE, fast
+      on the bandwidth-bound GB10), 128K context. Runnable stand-in for the API-only
+      Ling-3.0-flash. Hybrid-reasoning — if tool calls fail the eval, try
+      extra_args: --reasoning-parser inkling (or disable thinking).
+
+  - id: inclusionAI/Ling-3.0-flash
+    family: ling
+    tool_parser: qwen25
+    quantization: null
+    ctx_max: 262144
+    min_gpu_gb: 100
+    enabled: false             # API-ONLY at release — no open weights on HF (checked 2026-07-24)
+    notes: >-
+      124B total / 5.1B active, 256K native context, agent-tuned (~Sonnet-4.6 class).
+      Weights NOT released (OpenRouter API only). Flip enabled:true once inclusionAI
+      publishes the open checkpoint.
 
   - id: zai-org/GLM-4.5-Air-FP8
     family: glm
