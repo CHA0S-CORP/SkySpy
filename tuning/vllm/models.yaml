@@ -23,14 +23,14 @@ models:
     quantization: null
     ctx_max: 32768
     min_gpu_gb: 16
-    enabled: true
+    enabled: false
     notes: Current default. Dense 7B, fast baseline.
 
   - id: Qwen/Qwen3-30B-A3B-Instruct-2507-FP8
     family: qwen
     tool_parser: hermes
     quantization: null            # FP8 checkpoint, auto-detected
-    ctx_max: 32768
+    ctx_max: 262144
     min_gpu_gb: 32
     enabled: true
     notes: MoE ~3B active params. Bandwidth-friendly on the Spark; strong quality.
@@ -50,7 +50,7 @@ models:
     quantization: awq
     ctx_max: 32768
     min_gpu_gb: 20
-    enabled: false
+    enabled: true
     notes: AWQ-quantized 32B. Larger quantized candidate the user asked for.
 
   - id: meta-llama/Llama-3.1-8B-Instruct
@@ -91,7 +91,7 @@ models:
     quantization: null         # MXFP4 native, auto-detected (~16 GB)
     ctx_max: 131072
     min_gpu_gb: 16
-    enabled: true
+    enabled: false
     notes: >-
       MoE 21B total / 3.6B active — TOP GB10 pick (very fast on bandwidth-bound HW).
       Needs the harmony response format; if the openai parser errors, check the vLLM
@@ -103,7 +103,7 @@ models:
     quantization: null
     ctx_max: 131072
     min_gpu_gb: 48
-    enabled: false
+    enabled: true
     extra_args: "--tokenizer-mode mistral --config-format mistral --load-format mistral"
     notes: Dense 24B, strong/robust tool calling. Quality play between 14B and 32B-AWQ.
 

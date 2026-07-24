@@ -79,10 +79,14 @@ def get_model(model_id: str) -> Model:
 # Knob ranges (conditional on the model)
 # --------------------------------------------------------------------------- #
 def _max_model_len_choices(model: Model) -> list[int]:
-    # The assistant prompt + ~53 tool schemas need well over 8k, so 8192 is the
-    # floor. Cap at the model's native ctx_max.
-    candidates = [8192, 16384, 32768, 65536, 131072]
-    return [c for c in candidates if c <= model.ctx_max] or [min(8192, model.ctx_max)]
+    # Only USABLE, full-mode contexts. The floor (config.MIN_MODEL_LEN, 49152)
+    # sits above both the ~47k full-mode prompt peak and the compact-mode
+    # threshold (16000) — so the tuner can't win by shrinking context into the
+    # degraded compact mode (it did: 8192 gamed the short golden evals). Models
+    # whose native ctx_max is below the floor use their max (still full mode).
+    candidates = [49152, 65536, 98304, 131072, 262144]
+    choices = [c for c in candidates if config.MIN_MODEL_LEN <= c <= model.ctx_max]
+    return choices or [model.ctx_max]
 
 
 def suggest(trial, model: Model) -> TrialConfig:
@@ -111,7 +115,7 @@ def baseline(model: Model) -> TrialConfig:
     defaults so the screen reflects out-of-the-box behavior."""
     return TrialConfig(
         model=model,
-        max_model_len=min(32768, model.ctx_max),
+        max_model_len=_max_model_len_choices(model)[0],
         gpu_memory_utilization=0.80,
         max_num_seqs=64,
         max_num_batched_tokens=8192,

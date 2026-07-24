@@ -112,6 +112,15 @@ REWARD = RewardConfig()
 STUDY_NAME = os.environ.get("TUNE_STUDY_NAME", "skyspy-vllm")
 DEFAULT_N_TRIALS = int(os.environ.get("TUNE_N_TRIALS", "40"))
 
+# HARD floor on --max-model-len the tuner may pick. The assistant's full-mode
+# prompt peaks near ~47k tokens (system ~3k + ~53 tool schemas ~8.5k + briefing +
+# up to 15 tool results @6k chars + 16 history msgs @3k chars), and any window
+# <= 16000 silently drops it into COMPACT MODE (truncated prompt + terse tool
+# descriptions — degraded for real multi-tool/long-history use). So NEVER tune
+# below a real, usable context. Prod runs 49152. Models whose native ctx_max is
+# below this floor fall back to their native max (still full mode, > 16000).
+MIN_MODEL_LEN = int(os.environ.get("TUNE_MIN_MODEL_LEN", "49152"))
+
 
 def ensure_dirs() -> None:
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
