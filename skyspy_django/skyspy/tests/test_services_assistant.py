@@ -301,6 +301,50 @@ class TestSelectToolFuncs:
     def test_disabled_returns_full_set(self):
         assert tools.select_tool_funcs("what's the METAR at KLAX?") == list(tools.TOOL_FUNCS)
 
+    @override_settings(ASSISTANT_TOOL_RETRIEVAL=True)
+    def test_adjacency_analytics_pulls_one_aircraft(self):
+        # Pure analytics query (no aircraft-specific word) still carries the
+        # one-aircraft tools via adjacency, for the drill-into-a-tail chain.
+        names = {fn.__name__ for fn in tools.select_tool_funcs("what's the busiest this week?")}
+        assert "platform_activity" in names  # analytics matched
+        assert "aircraft_track" in names  # pulled by adjacency, not a query keyword
+
+    @override_settings(ASSISTANT_TOOL_RETRIEVAL=True)
+    def test_word_boundary_blocks_substring_false_positive(self):
+        # "country" must NOT trip the analytics "count" keyword (naive substring bug).
+        names = {fn.__name__ for fn in tools.select_tool_funcs("what aircraft by country?")}
+        assert "lookup_airframe" in names  # one-aircraft matched via "aircraft"
+        assert "platform_activity" not in names  # analytics NOT falsely pulled
+        assert len(names) < len(tools.TOOL_FUNCS)
+
+    @override_settings(ASSISTANT_TOOL_RETRIEVAL=False)
+    def test_would_route_names_ignores_enable_flag(self):
+        # Shadow uses this to compute the hypothetical prune even when disabled.
+        would = tools.would_route_names("what's the METAR at KLAX?")
+        assert "airport_weather" in would and "my_alert_rules" not in would
+        assert len(would) < len(tools.TOOL_FUNCS)
+
+
+class TestRoutingShadow:
+    @override_settings(ASSISTANT_TOOL_RETRIEVAL_SHADOW=True, ASSISTANT_TOOL_RETRIEVAL=True)
+    def test_logs_missed_tools(self, caplog):
+        import logging
+
+        # A weather query would prune away my_alert_rules; if the agent called it,
+        # shadow flags it as missed.
+        with caplog.at_level(logging.INFO, logger="skyspy.services.assistant.agent"):
+            agent._log_routing_shadow("what's the METAR at KLAX?", {"airport_weather", "my_alert_rules"})
+        rec = [r.message for r in caplog.records if "routing_shadow" in r.message]
+        assert rec and "my_alert_rules" in rec[0]
+
+    @override_settings(ASSISTANT_TOOL_RETRIEVAL_SHADOW=False)
+    def test_noop_when_shadow_disabled(self, caplog):
+        import logging
+
+        with caplog.at_level(logging.INFO, logger="skyspy.services.assistant.agent"):
+            agent._log_routing_shadow("anything", {"airport_weather"})
+        assert not [r for r in caplog.records if "routing_shadow" in r.message]
+
 
 class TestCompactMode:
     @override_settings(FEEDER_LAT=47.9377, FEEDER_LON=-121.9687, ACARS_ENABLED=True, SAFETY_MONITORING_ENABLED=False)

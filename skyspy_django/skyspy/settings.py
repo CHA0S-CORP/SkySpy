@@ -801,6 +801,12 @@ ASSISTANT_MAX_STEPS_COMPACT = get_env("ASSISTANT_MAX_STEPS_COMPACT", "8", int)
 # questions and never drops a tool a plain query needs. See
 # services/assistant/tools.py::select_tool_funcs.
 ASSISTANT_TOOL_RETRIEVAL = get_env("ASSISTANT_TOOL_RETRIEVAL", "True", bool)
+# Shadow mode: bind the FULL toolset (answer quality untouched) but log, per
+# query, which tools the agent actually called that a live prune WOULD have
+# withheld ("missed"). Aggregate the assistant.routing_shadow logs over real
+# traffic to measure routing recall before trusting the prune. Overrides
+# ASSISTANT_TOOL_RETRIEVAL for the bound set (nothing is pruned while shadowing).
+ASSISTANT_TOOL_RETRIEVAL_SHADOW = get_env("ASSISTANT_TOOL_RETRIEVAL_SHADOW", "False", bool)
 ASSISTANT_TIMEOUT = get_env("ASSISTANT_TIMEOUT", "120", int)
 # Context-window budget knobs. Raise for large-context models to let tools return
 # more and conversations run longer; keep low on RPi/small models. Defaults match

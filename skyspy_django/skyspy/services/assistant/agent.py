@@ -495,6 +495,12 @@ def _build_agent(query: str | None = None):
         max_retries=1,
     )
     compact = compact_mode()
+    # Shadow mode: bind the FULL toolset (answer quality untouched) but still let
+    # _log_routing_shadow record what a live prune WOULD have withheld vs what the
+    # agent actually called — measures routing recall on real traffic with zero
+    # risk. So when shadow is on, don't pass the query (=> no pruning here).
+    if getattr(settings, "ASSISTANT_TOOL_RETRIEVAL_SHADOW", False):
+        query = None
     prompt = COMPACT_SYSTEM_PROMPT if compact else SYSTEM_PROMPT
     # Tell the model its tool-call budget so it self-paces: prioritize the most
     # informative tools first and stop chaining once it can answer, rather than
@@ -1262,6 +1268,32 @@ def _force_final_answer(query: str, context: str | None, history, gathered: list
         return ""
 
 
+def _log_routing_shadow(query: str, called) -> None:
+    """Shadow mode: the full toolset was bound, so the agent could call anything.
+    Log which of the tools it ACTUALLY called a live prune would have withheld —
+    ``missed`` is the routing-recall miss for this query. Aggregate these over
+    real traffic to decide whether pruning is safe to switch on. Never raises."""
+    if not getattr(settings, "ASSISTANT_TOOL_RETRIEVAL_SHADOW", False):
+        return
+    try:
+        from skyspy.services.assistant.tools import would_route_names
+
+        called = {c for c in called if c}
+        if not called:
+            return
+        would = would_route_names(query)
+        missed = sorted(called - would)
+        logger.info(
+            "assistant.routing_shadow: called=%d would_bind=%d missed=%s query=%r",
+            len(called),
+            len(would),
+            missed or "none",
+            (query or "")[:120],
+        )
+    except Exception as e:  # broad: telemetry must never break a response
+        logger.debug("routing_shadow log failed: %s", e)
+
+
 def ask(query: str, context: str | None = None, history=None, user=None) -> dict:
     """
     Answer a question with the tool-calling agent (synchronous).
@@ -1320,6 +1352,7 @@ def ask(query: str, context: str | None = None, history=None, user=None) -> dict
         reset_current_user(token)
 
     messages = result.get("messages", [])
+    _log_routing_shadow(query, {n for n, _o, _a in _tool_messages(messages)})
     answer = _strip_photo_urls(_as_str(getattr(messages[-1], "content", ""))) if messages else None
     usage = _extract_usage(messages)
     if usage:
@@ -1379,6 +1412,8 @@ async def astream(query: str, context: str | None = None, history=None, user=Non
     # Raw tool outputs, kept so a recursion-limit hit can synthesize a final answer
     # from the data already gathered instead of apologizing (see except below).
     gathered: list[str] = []
+    # Tool names actually called this run — for shadow-mode routing-recall logging.
+    called_tools: set = set()
     # Fallback for backends that don't emit per-token deltas: the content of the
     # last model turn, captured at on_chat_model_end. Without it final.answer would
     # be "" on non-streaming endpoints even though sync ask() returns text.
@@ -1396,6 +1431,7 @@ async def astream(query: str, context: str | None = None, history=None, user=Non
                 # last model turn's text (matches sync ask()'s last-message behavior).
                 final_text.clear()
                 last_model_text = ""
+                called_tools.add(event.get("name"))
                 yield {"type": "tool", "tool": event.get("name"), "args": event.get("data", {}).get("input")}
             elif kind == "on_tool_end":
                 obs = _as_str(_obs_output(event))
@@ -1484,6 +1520,7 @@ async def astream(query: str, context: str | None = None, history=None, user=Non
             usage["model"],
         )
         final_event["usage"] = usage
+    _log_routing_shadow(query, called_tools)
     yield final_event
 
 

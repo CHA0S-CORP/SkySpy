@@ -2177,83 +2177,118 @@ _TOOL_CATEGORY = {fn.__name__: cat for cat, fns in TOOL_GROUPS for fn in fns}
 # clear, specific intent — it never drops a tool a plain query obviously needs.
 
 # Always bound regardless of routing: cheap identity/grounding tools nearly every
-# question benefits from (resolve a hex/tail, ground answers in the live picture).
-_ALWAYS_ON_TOOLS = ("live_traffic_summary", "lookup_airframe")
+# question benefits from (resolve a hex/tail, ground answers in the live picture,
+# describe a specific airframe).
+_ALWAYS_ON_TOOLS = ("live_traffic_summary", "lookup_airframe", "aircraft_dossier")
 
-# Substring keywords per category. Matched case-insensitively against the query.
-# A keyword may sensibly appear in more than one category (matches union).
+# Cross-category chain adjacency: a matched category also pulls in the categories
+# it commonly chains into at runtime, which the question's surface words don't
+# name. Almost every mis-prune is "the answer drilled into a specific aircraft
+# and the one-aircraft tools weren't bound" — so analytics/search/live-traffic
+# questions all carry "one aircraft" along.
+_CATEGORY_ADJACENCY: dict[str, set[str]] = {
+    "live traffic": {"one aircraft"},
+    "analytics": {"one aircraft"},
+    "search & records": {"one aircraft"},
+}
+
+# Per-category trigger keywords, matched case-insensitively on WORD BOUNDARIES
+# (with an optional plural) — not naive substring, which mis-fired on
+# country→"count", oregon→"reg", misfire→"fire", window→"wind", brainstorm→
+# "storm", interest→"rest". A keyword may sensibly appear in more than one
+# category (matches union). Include the -ly/-ing/-ed variants explicitly, since
+# the plural suffix alone won't catch them.
 _CATEGORY_KEYWORDS: dict[str, tuple[str, ...]] = {
     "live traffic": (
-        "live", "now", "current", "nearby", "near me", "overhead", "airborne",
-        "in the air", "flying", "traffic", "radar", "closest", "nearest",
-        "approaching", "inbound", "threat", "right now",
+        "live", "now", "current", "currently", "nearby", "near me", "overhead",
+        "airborne", "in the air", "flying", "traffic", "radar", "closest",
+        "nearest", "approaching", "inbound", "threat", "right now",
     ),
     "analytics": (
-        "how many", "busiest", "stat", "trend", "pattern", "coverage",
-        "activity", "compare", "comparison", "correlat", "breakdown",
-        "geographic", "distribution", "count", "total", "volume", "hourly",
-        "daily", "weekly", "antenna", "rssi", "most ", "average", "peak",
+        "how many", "how much", "busiest", "busy", "stat", "stats", "statistic",
+        "trend", "pattern", "coverage", "activity", "compare", "comparison",
+        "correlation", "breakdown", "geographic", "distribution", "count",
+        "total", "volume", "hourly", "daily", "weekly", "antenna", "rssi",
+        "average", "peak",
     ),
     "one aircraft": (
-        "tail", "registration", " reg", "hex", "callsign", "aircraft", "plane",
-        "airframe", "photo", "picture", "image", "route", "schedule", "flight",
-        "track", "path", "trajectory", "owner", "operator", "dossier",
-        "law enforcement", "police", "military", "who owns", "n-number", "sighting",
+        "tail", "registration", "reg", "hex", "callsign", "aircraft", "plane",
+        "airplane", "jet", "helicopter", "airframe", "photo", "picture", "image",
+        "route", "schedule", "flight", "track", "tracking", "path", "trajectory",
+        "owner", "owns", "operator", "operates", "dossier", "law enforcement",
+        "police", "military", "n-number", "sighting", "spotted",
     ),
     "weather & hazards": (
-        "weather", "metar", "taf", "wind", "turbulence", "pirep", "wildfire",
-        "fire", "hazard", "advisory", "sigmet", "airmet", "notam", "condition",
-        "forecast", "icing", "storm",
+        "weather", "metar", "taf", "wind", "turbulence", "turbulent", "pirep",
+        "wildfire", "fire", "hazard", "advisory", "sigmet", "airmet", "notam",
+        "condition", "forecast", "icing", "storm", "temperature", "visibility",
     ),
     "aviation reference": (
         "squawk", "decode", "transponder", "airspace", "class b", "class c",
-        "class d", "navaid", " vor", " ndb", "waypoint", "airway", "enroute",
-        "elevation", "terrain", "altitude", " agl", "fix ",
+        "class d", "navaid", "vor", "ndb", "waypoint", "airway", "enroute",
+        "elevation", "terrain", "altitude", "agl", "fix",
     ),
     "search & records": (
         "find", "search", "incident", "accident", "ntsb", "safety event",
         "emergency", "semantic", "acars", "message", "datalink", "history",
-        "before", "ever seen", "notable", "similar", "past ",
+        "before", "ever seen", "notable", "similar", "past", "record",
     ),
     "user & station": (
-        " my ", "watched", "watchlist", "favorite", "alert rule", "my alert",
-        "subscribed", "i track", "i watch",
+        "my", "watched", "watchlist", "watching", "favorite", "alert rule",
+        "my alert", "subscribed", "i track", "i watch",
     ),
     "developer API": (
-        " api", "endpoint", "rest ", "socket", "websocket", "developer",
-        "integrate", "programmatic",
+        "api", "endpoint", "rest", "socket", "websocket", "developer",
+        "integrate", "programmatic", "curl",
     ),
+}
+
+# Precompiled boundary patterns: \b<kw>(optional plural)\b, case-insensitive.
+_CATEGORY_PATTERNS: dict[str, tuple[re.Pattern, ...]] = {
+    cat: tuple(re.compile(rf"\b{re.escape(kw)}(?:s|es)?\b", re.IGNORECASE) for kw in kws)
+    for cat, kws in _CATEGORY_KEYWORDS.items()
 }
 
 
 def _match_categories(query: str) -> set[str]:
-    """Categories whose keywords appear in the (lowercased) query."""
-    q = f" {(query or '').lower()} "
-    return {cat for cat, kws in _CATEGORY_KEYWORDS.items() if any(k in q for k in kws)}
+    """Categories whose keywords match the query on word boundaries."""
+    q = query or ""
+    return {cat for cat, pats in _CATEGORY_PATTERNS.items() if any(p.search(q) for p in pats)}
+
+
+def _route(query: str | None) -> list:
+    """Pure routing (ignores the enable flag): the tool functions a live prune
+    WOULD bind for ``query`` — matched categories + their chain adjacency + the
+    always-on core, in registry order. Falls back to the full registry when the
+    query matches no category or spans nearly all of them (never prune a broad
+    or unspecific question)."""
+    matched = _match_categories(query or "")
+    if not matched or len(matched) >= len(TOOL_GROUPS) - 1:
+        return list(TOOL_FUNCS)
+    keep = set(matched)
+    for cat in matched:
+        keep |= _CATEGORY_ADJACENCY.get(cat, set())
+    selected = [fn for cat, fns in TOOL_GROUPS for fn in fns if cat in keep or fn.__name__ in _ALWAYS_ON_TOOLS]
+    logger.debug("assistant tool retrieval: %d/%d tools (%s)", len(selected), len(TOOL_FUNCS), ", ".join(sorted(keep)))
+    return selected
 
 
 def select_tool_funcs(query: str | None) -> list:
-    """The tool functions to bind for ``query``.
+    """The tool functions to bind for ``query`` (honors ASSISTANT_TOOL_RETRIEVAL).
 
-    Returns the full registry (no pruning) when retrieval is disabled, the query
-    is empty, it matches no category, or it spans nearly every category — so
-    routing only ever prunes a clearly-scoped question. Otherwise returns the
-    always-on core plus the matched categories' tools, in registry order.
+    Returns the full registry when retrieval is disabled; otherwise delegates to
+    ``_route`` (which itself falls back to full on an unspecific query).
     """
     if not getattr(settings, "ASSISTANT_TOOL_RETRIEVAL", True):
         return list(TOOL_FUNCS)
-    matched = _match_categories(query or "")
-    # No signal, or the query touches almost everything: don't prune.
-    if not matched or len(matched) >= len(TOOL_GROUPS) - 1:
-        return list(TOOL_FUNCS)
-    selected = [
-        fn
-        for cat, fns in TOOL_GROUPS
-        for fn in fns
-        if cat in matched or fn.__name__ in _ALWAYS_ON_TOOLS
-    ]
-    logger.debug("assistant tool retrieval: %d/%d tools (%s)", len(selected), len(TOOL_FUNCS), ", ".join(sorted(matched)))
-    return selected
+    return _route(query)
+
+
+def would_route_names(query: str | None) -> set[str]:
+    """Names a live prune WOULD bind for ``query``, regardless of the enable
+    flag — used by shadow mode (agent.py) to measure routing recall against the
+    tools actually called on real traffic."""
+    return {fn.__name__ for fn in _route(query)}
 
 
 def _short_description(doc: str | None) -> str:

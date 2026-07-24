@@ -399,6 +399,7 @@ ASSISTANT_MAX_STEPS_COMPACT = 4
 # Off in tests: scripted-fake-LLM agent-loop tests bind the full toolset so a
 # scripted tool call is never routed away. select_tool_funcs has its own unit tests.
 ASSISTANT_TOOL_RETRIEVAL = False
+ASSISTANT_TOOL_RETRIEVAL_SHADOW = False
 ASSISTANT_TIMEOUT = 60
 ASSISTANT_MAX_RESULT_CHARS = 6000
 ASSISTANT_MAX_HISTORY_MSGS = 16

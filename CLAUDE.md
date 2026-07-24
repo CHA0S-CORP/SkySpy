@@ -418,6 +418,18 @@ ASSISTANT_MAX_STEPS=15
 # applies it; _build_agent(query) threads the query through. Off in tests
 # (scripted-fake-LLM loops bind everything). See services/assistant/tools.py.
 ASSISTANT_TOOL_RETRIEVAL=True
+# Routing keywords match on WORD BOUNDARIES (\b<kw>(?:s|es)?\b, precompiled) — not
+# naive substring (which mis-fired country->"count", oregon->"reg", misfire->
+# "fire"). A matched category also pulls its chain adjacency (_CATEGORY_ADJACENCY:
+# analytics/search/live-traffic all carry "one aircraft", since most mis-prunes are
+# an answer drilling into a specific tail); always-on core = live_traffic_summary,
+# lookup_airframe, aircraft_dossier.
+# SHADOW MODE: bind the FULL toolset (answers unaffected) but log per query which
+# CALLED tools a live prune would have withheld ("missed") — assistant.routing_shadow
+# logs. Aggregate over real traffic to measure routing recall before trusting the
+# prune; overrides ASSISTANT_TOOL_RETRIEVAL for the bound set. would_route_names()
+# computes the hypothetical prune flag-independently.
+ASSISTANT_TOOL_RETRIEVAL_SHADOW=False
 # Budget cap applied in COMPACT MODE (small context window, see
 # ASSISTANT_CONTEXT_WINDOW): deep tool chains would overflow an 8k window, so the
 # effective budget is min(MAX_STEPS, MAX_STEPS_COMPACT) there.
