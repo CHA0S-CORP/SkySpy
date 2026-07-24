@@ -158,6 +158,12 @@ def run_study(n_trials: int, survivors: list[Model], refs: tuple[float, float]) 
         sampler=optuna.samplers.TPESampler(seed=0, multivariate=True, group=True),
         load_if_exists=True,
     )
+    # Seed the study with each survivor's baseline config so the known-good screen
+    # points are actually evaluated in-study — otherwise emit_best can miss the
+    # true best (the screen baselines never enter the study) and TPE wastes early
+    # trials rediscovering them. skip_if_exists avoids re-queueing on resume.
+    for m in survivors:
+        study.enqueue_trial(baseline(m).as_params(), skip_if_exists=True)
     study.optimize(make_objective(survivors, refs), n_trials=n_trials)
     return study
 

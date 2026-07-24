@@ -41,7 +41,7 @@ models:
     quantization: null
     ctx_max: 32768
     min_gpu_gb: 30
-    enabled: true
+    enabled: false
     notes: Dense 14B. Higher quality ceiling, slower decode (bandwidth bound).
 
   - id: Qwen/Qwen2.5-32B-Instruct-AWQ
@@ -50,7 +50,7 @@ models:
     quantization: awq
     ctx_max: 32768
     min_gpu_gb: 20
-    enabled: true
+    enabled: false
     notes: AWQ-quantized 32B. Larger quantized candidate the user asked for.
 
   - id: meta-llama/Llama-3.1-8B-Instruct
@@ -91,7 +91,7 @@ models:
     quantization: null         # MXFP4 native, auto-detected (~16 GB)
     ctx_max: 131072
     min_gpu_gb: 16
-    enabled: false
+    enabled: true
     notes: >-
       MoE 21B total / 3.6B active — TOP GB10 pick (very fast on bandwidth-bound HW).
       Needs the harmony response format; if the openai parser errors, check the vLLM

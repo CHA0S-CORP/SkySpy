@@ -71,7 +71,11 @@ SETTLE_S = int(os.environ.get("TUNE_SETTLE_S", "15"))
 # --------------------------------------------------------------------------- #
 # make eval-assistant runs in the repo's test compose stack; results land here.
 EVAL_REPORT_DIR = REPO_ROOT / "test-results" / "assistant-evals"
-EVAL_TIMEOUT_S = int(os.environ.get("TUNE_EVAL_TIMEOUT_S", "180"))
+EVAL_TIMEOUT_S = int(os.environ.get("TUNE_EVAL_TIMEOUT_S", "180"))  # per-request cap passed to pytest
+# Wall-clock cap for the whole `make eval-assistant` run. A hung pytest (stuck in
+# fixture/DB setup, never hitting the model) must fail the trial fast, not block
+# the sweep. Normal eval is ~3-8 min; 15 min catches genuine hangs.
+EVAL_WALL_TIMEOUT_S = int(os.environ.get("TUNE_EVAL_WALL_TIMEOUT_S", "900"))
 
 # vllm bench serve concurrency levels: 1 = single-stream latency, N = throughput.
 BENCH_CONCURRENCIES = (1, int(os.environ.get("TUNE_BENCH_CONCURRENCY", "8")))
