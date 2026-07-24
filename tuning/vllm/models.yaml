@@ -113,12 +113,14 @@ models:
     quantization: null         # FP8 checkpoint, auto-detected (~100 GB — fits 128 GB unified)
     ctx_max: 131072
     min_gpu_gb: 100
-    enabled: true
+    enabled: false
     notes: >-
       Newest OPEN Ant Ling flash: BailingMoe V2.5, 256 experts / 8 active (MoE, fast
       on the bandwidth-bound GB10), 128K context. Runnable stand-in for the API-only
       Ling-3.0-flash. Hybrid-reasoning — if tool calls fail the eval, try
       extra_args: --reasoning-parser inkling (or disable thinking).
+      TOO BIG for the 128GB GB10: 98GB weights leave ~6GB for KV, OOMs at
+      engine init even at 32768 + fp8 KV. Needs Int4 (none published) or multi-GPU.
 
   - id: inclusionAI/Ling-3.0-flash
     family: ling
