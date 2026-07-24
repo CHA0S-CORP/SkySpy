@@ -109,7 +109,7 @@ models:
 
   - id: inclusionAI/Ling-2.6-flash-FP8
     family: ling
-    tool_parser: qwen25        # Ling uses the Qwen2.5-style tool format (per model card)
+    tool_parser: hermes        # Ling uses Qwen2.5-style tool format; qwen25 is not a valid vLLM parser (use hermes)
     quantization: null         # FP8 checkpoint, auto-detected (~100 GB — fits 128 GB unified)
     ctx_max: 131072
     min_gpu_gb: 100
@@ -122,7 +122,7 @@ models:
 
   - id: inclusionAI/Ling-3.0-flash
     family: ling
-    tool_parser: qwen25
+    tool_parser: hermes        # Ling uses Qwen2.5-style tool format; qwen25 is not a valid vLLM parser (use hermes)
     quantization: null
     ctx_max: 262144
     min_gpu_gb: 100

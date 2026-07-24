@@ -78,15 +78,11 @@ def get_model(model_id: str) -> Model:
 # --------------------------------------------------------------------------- #
 # Knob ranges (conditional on the model)
 # --------------------------------------------------------------------------- #
-def _max_model_len_choices(model: Model) -> list[int]:
-    # Only USABLE, full-mode contexts. The floor (config.MIN_MODEL_LEN, 49152)
-    # sits above both the ~47k full-mode prompt peak and the compact-mode
-    # threshold (16000) — so the tuner can't win by shrinking context into the
-    # degraded compact mode (it did: 8192 gamed the short golden evals). Models
-    # whose native ctx_max is below the floor use their max (still full mode).
-    candidates = [49152, 65536, 98304, 131072, 262144]
-    choices = [c for c in candidates if config.MIN_MODEL_LEN <= c <= model.ctx_max]
-    return choices or [model.ctx_max]
+def fixed_model_len(model: Model) -> int:
+    """--max-model-len is pinned (not tuned) at a big, full-mode context: the
+    target, capped by the model's native ctx_max. Guarantees usable context and
+    keeps the categorical space stable (per-model choices crash Optuna)."""
+    return min(config.TARGET_MODEL_LEN, model.ctx_max)
 
 
 def suggest(trial, model: Model) -> TrialConfig:
@@ -97,7 +93,7 @@ def suggest(trial, model: Model) -> TrialConfig:
     """
     return TrialConfig(
         model=model,
-        max_model_len=trial.suggest_categorical("max_model_len", _max_model_len_choices(model)),
+        max_model_len=fixed_model_len(model),  # pinned big context, not a search dim (see config)
         # Ceiling capped for the DGX Spark: its 128 GB is UNIFIED (GPU+system), so
         # ~12 GiB is always held by the OS/other containers and >0.88 fails to
         # allocate at startup. Raise the top on a dedicated discrete-GPU box.
@@ -115,7 +111,7 @@ def baseline(model: Model) -> TrialConfig:
     defaults so the screen reflects out-of-the-box behavior."""
     return TrialConfig(
         model=model,
-        max_model_len=_max_model_len_choices(model)[0],
+        max_model_len=fixed_model_len(model),
         gpu_memory_utilization=0.80,
         max_num_seqs=64,
         max_num_batched_tokens=8192,

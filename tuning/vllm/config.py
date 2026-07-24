@@ -112,14 +112,14 @@ REWARD = RewardConfig()
 STUDY_NAME = os.environ.get("TUNE_STUDY_NAME", "skyspy-vllm")
 DEFAULT_N_TRIALS = int(os.environ.get("TUNE_N_TRIALS", "40"))
 
-# HARD floor on --max-model-len the tuner may pick. The assistant's full-mode
-# prompt peaks near ~47k tokens (system ~3k + ~53 tool schemas ~8.5k + briefing +
-# up to 15 tool results @6k chars + 16 history msgs @3k chars), and any window
-# <= 16000 silently drops it into COMPACT MODE (truncated prompt + terse tool
-# descriptions — degraded for real multi-tool/long-history use). So NEVER tune
-# below a real, usable context. Prod runs 49152. Models whose native ctx_max is
-# below this floor fall back to their native max (still full mode, > 16000).
-MIN_MODEL_LEN = int(os.environ.get("TUNE_MIN_MODEL_LEN", "49152"))
+# --max-model-len is FIXED (not tuned): the assistant's full-mode prompt peaks
+# near ~47k tokens (system ~3k + ~53 tool schemas ~8.5k + briefing + up to 15 tool
+# results @6k chars + 16 history msgs @3k chars), and any window <= 16000 drops it
+# into degraded COMPACT MODE. We want big context, not a knob that games the short
+# evals by shrinking it — so pin it at min(model ctx_max, TARGET). 65536 gives
+# headroom over the ~47k peak and prod's 49152. (Tuning it also broke Optuna:
+# per-model categorical choices = "dynamic value space" crash.)
+TARGET_MODEL_LEN = int(os.environ.get("TUNE_MODEL_LEN", "65536"))
 
 
 def ensure_dirs() -> None:
