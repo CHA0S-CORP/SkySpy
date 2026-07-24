@@ -1,0 +1,82 @@
+# Candidate model registry for the vLLM tuner.
+#
+# Drop in a novel or quantized model = add one entry. Fields:
+#   id            HF repo id passed to --model / --served-model-name
+#   family        qwen | llama | ... (informational)
+#   tool_parser   vLLM --tool-call-parser value; MUST match the model family
+#                 (hermes for Qwen2.5/3, llama3_json for Llama-3.x)
+#   quantization  null | fp8 | awq | gptq — passed as --quantization when set.
+#                 Leave null when the checkpoint is already quantized and vLLM
+#                 auto-detects (e.g. *-FP8, *-AWQ repos).
+#   ctx_max       upper bound for --max-model-len (<= native max_position_embeddings)
+#   min_gpu_gb    rough weight footprint; all fit the Spark's 128 GB unified mem,
+#                 kept only as a sanity note
+#   enabled       false => skipped by the model screen (flip on to include)
+#   notes         why it's a candidate
+#
+# The GB10 is a SINGLE GPU, so no tensor-parallel entries here.
+
+models:
+  - id: Qwen/Qwen2.5-7B-Instruct
+    family: qwen
+    tool_parser: hermes
+    quantization: null
+    ctx_max: 32768
+    min_gpu_gb: 16
+    enabled: true
+    notes: Current default. Dense 7B, fast baseline.
+
+  - id: Qwen/Qwen3-30B-A3B-Instruct-2507-FP8
+    family: qwen
+    tool_parser: hermes
+    quantization: null            # FP8 checkpoint, auto-detected
+    ctx_max: 32768
+    min_gpu_gb: 32
+    enabled: true
+    notes: MoE ~3B active params. Bandwidth-friendly on the Spark; strong quality.
+
+  - id: Qwen/Qwen2.5-14B-Instruct
+    family: qwen
+    tool_parser: hermes
+    quantization: null
+    ctx_max: 32768
+    min_gpu_gb: 30
+    enabled: true
+    notes: Dense 14B. Higher quality ceiling, slower decode (bandwidth bound).
+
+  - id: Qwen/Qwen2.5-32B-Instruct-AWQ
+    family: qwen
+    tool_parser: hermes
+    quantization: awq
+    ctx_max: 32768
+    min_gpu_gb: 20
+    enabled: true
+    notes: AWQ-quantized 32B. Larger quantized candidate the user asked for.
+
+  - id: meta-llama/Llama-3.1-8B-Instruct
+    family: llama
+    tool_parser: llama3_json
+    quantization: null
+    ctx_max: 131072
+    min_gpu_gb: 16
+    enabled: false      # gated repo — needs HUGGING_FACE_HUB_TOKEN; flip on when set
+    notes: Different family for tool-calling diversity. Gated repo (needs HF token).
+
+  # --- room for novel / bigger quantized models — flip enabled:true to include ---
+  - id: meta-llama/Llama-3.3-70B-Instruct
+    family: llama
+    tool_parser: llama3_json
+    quantization: fp8
+    ctx_max: 131072
+    min_gpu_gb: 70
+    enabled: false
+    notes: Big dense 70B @ FP8. Fits 128 GB but bandwidth-heavy — screen before committing.
+
+  - id: Qwen/Qwen3-32B
+    family: qwen
+    tool_parser: hermes
+    quantization: null
+    ctx_max: 32768
+    min_gpu_gb: 65
+    enabled: false
+    notes: Dense 32B Qwen3. Enable to compare against the AWQ 32B / MoE 30B.

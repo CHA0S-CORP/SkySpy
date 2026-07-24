@@ -385,6 +385,17 @@ EMBEDDING_API_KEY=       # defaults to LLM_API_KEY
 EMBEDDING_MODEL=text-embedding-3-small
 EMBEDDING_DIM=1536
 
+# Self-hosted vLLM server (docker-compose `vllm` service, `gpu` profile). These
+# are container-only knobs (consumed by the compose command, NOT Django settings)
+# and are what the Bayesian tuner in tuning/vllm/ sweeps on a GPU box (DGX Spark):
+# VLLM_MODEL, VLLM_TOOL_PARSER (hermes=Qwen / llama3_json=Llama), VLLM_MAX_MODEL_LEN,
+# VLLM_GPU_MEMORY_UTILIZATION, VLLM_MAX_NUM_SEQS, VLLM_MAX_NUM_BATCHED_TOKENS,
+# VLLM_KV_CACHE_DTYPE (auto|fp8), VLLM_EXTRA_ARGS (flag-style extras: prefix
+# caching / chunked prefill / --quantization), VLLM_PORT. The tuner runs the
+# golden evals (quality) + `vllm bench serve` @1/@N (speed) per trial, maximizes a
+# blended reward via Optuna TPE, and writes tuning/vllm/results/best.env — paste
+# those into .env and `docker compose --profile gpu up -d vllm`. See tuning/vllm/README.md.
+#
 # LLM assistant (LangChain tool-calling agent over analytics/search services,
 # served by an OpenAI-compatible endpoint — vLLM in prod behind the compose
 # `gpu` profile, OpenAI/Ollama in dev). Requires LLM_ENABLED + a tool-calling

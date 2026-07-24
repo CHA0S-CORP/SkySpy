@@ -1,0 +1,4 @@
+# Tuner run outputs — not source.
+results/
+.venv/
+__pycache__/

@@ -473,13 +473,21 @@ services:
       - gpu
     environment:
       HUGGING_FACE_HUB_TOKEN: ${HUGGING_FACE_HUB_TOKEN:-}
+    # The extra serving knobs below are what the tuner (tuning/vllm/) sweeps.
+    # Paste the winning tuning/vllm/results/best.env values into .env to reproduce
+    # the best config found on the box. Defaults mirror vLLM's own defaults so the
+    # server behaves identically when they're unset.
     command: >
       --model ${VLLM_MODEL:-Qwen/Qwen2.5-7B-Instruct}
       --served-model-name ${ASSISTANT_MODEL:-Qwen/Qwen2.5-7B-Instruct}
       --max-model-len ${VLLM_MAX_MODEL_LEN:-32768}
       --gpu-memory-utilization ${VLLM_GPU_MEMORY_UTILIZATION:-0.90}
+      --max-num-seqs ${VLLM_MAX_NUM_SEQS:-256}
+      --max-num-batched-tokens ${VLLM_MAX_NUM_BATCHED_TOKENS:-8192}
+      --kv-cache-dtype ${VLLM_KV_CACHE_DTYPE:-auto}
       --enable-auto-tool-choice
       --tool-call-parser ${VLLM_TOOL_PARSER:-hermes}
+      ${VLLM_EXTRA_ARGS:---enable-prefix-caching}
       --port 8000
     ports:
       - "${VLLM_PORT:-8000}:8000"
