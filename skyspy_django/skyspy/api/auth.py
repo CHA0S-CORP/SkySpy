@@ -16,11 +16,12 @@ from django.contrib.auth.models import User
 from django.db import DatabaseError, transaction
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from skyspy.api.throttles import AuthRateThrottle
-from skyspy.auth.permissions import HasPermission, IsAdminUser, IsSuperAdmin
+from skyspy.auth.permissions import HasPermission, HasSystemManagePermission, IsSuperAdmin
 from skyspy.auth.serializers import (
     APIKeyCreateSerializer,
     APIKeySerializer,
@@ -33,6 +34,7 @@ from skyspy.auth.serializers import (
     UserUpdateSerializer,
 )
 from skyspy.models.auth import (
+    ALL_PERMISSIONS,
     DEFAULT_ROLES,
     FEATURE_PERMISSIONS,
     APIKey,
@@ -44,6 +46,31 @@ from skyspy.models.auth import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _user_permissions(user) -> set:
+    """Permissions the user actually holds (superuser => everything)."""
+    if user.is_superuser:
+        return set(ALL_PERMISSIONS)
+    try:
+        return set(user.skyspy_profile.get_all_permissions())
+    except (SkyspyUser.DoesNotExist, AttributeError):
+        return set()
+
+
+def _can_grant_role(request_user, role) -> bool:
+    """Whether ``request_user`` may assign ``role`` to someone.
+
+    Blocks privilege escalation: a non-superuser can never assign ``superadmin``,
+    and can only assign a role whose permission set is a SUBSET of the perms they
+    already hold (so an admin cannot mint a role granting ``users.delete`` /
+    ``roles.create`` etc. that they lack themselves).
+    """
+    if request_user.is_superuser:
+        return True
+    if role.name == "superadmin":
+        return False
+    return set(role.permissions or []).issubset(_user_permissions(request_user))
 
 # Methods that mutate — only these share the strict login (AuthRateThrottle,
 # 5/min) budget. Reads must NOT: the RBAC console fans out several GETs
@@ -78,6 +105,9 @@ class UserViewSet(viewsets.ModelViewSet):
             return [IsAuthenticated(), HasPermission.with_perms("users.edit")()]
         elif self.action in ["destroy"]:
             return [IsAuthenticated(), HasPermission.with_perms("users.delete")()]
+        elif self.action in ["assign_role", "remove_role"]:
+            # These mutate role assignments — gate on edit, not the read default.
+            return [IsAuthenticated(), HasPermission.with_perms("users.edit")()]
         return super().get_permissions()
 
     def get_serializer_class(self):
@@ -240,6 +270,23 @@ class RoleViewSet(viewsets.ModelViewSet):
             return [IsAuthenticated(), HasPermission.with_perms("roles.delete")()]
         return super().get_permissions()
 
+    def _guard_grantable_permissions(self, permissions):
+        """Reject a role write that grants permissions the caller doesn't hold.
+
+        Without this, anyone with ``roles.edit``/``roles.create`` could author a
+        role carrying ``users.delete`` / ``roles.create`` / etc. and assign it —
+        escalating past their own permission set. Superusers are unrestricted.
+        """
+        if permissions is None or self.request.user.is_superuser:
+            return
+        excess = [p for p in permissions if p not in _user_permissions(self.request.user)]
+        if excess:
+            raise PermissionDenied(f"Cannot grant permissions you do not hold: {', '.join(excess)}")
+
+    def perform_create(self, serializer):
+        self._guard_grantable_permissions(serializer.validated_data.get("permissions"))
+        serializer.save()
+
     def list(self, request, *args, **kwargs):
         """List all roles with count."""
         queryset = self.filter_queryset(self.get_queryset())
@@ -266,6 +313,7 @@ class RoleViewSet(viewsets.ModelViewSet):
 
         serializer = self.get_serializer(instance, data=data, partial=partial)
         serializer.is_valid(raise_exception=True)
+        self._guard_grantable_permissions(serializer.validated_data.get("permissions"))
         self.perform_update(serializer)
 
         return Response(serializer.data)
@@ -367,6 +415,15 @@ class UserRoleViewSet(viewsets.ModelViewSet):
         return Response({"assignments": serializer.data, "count": len(serializer.data)})
 
     def perform_create(self, serializer):
+        role = serializer.validated_data.get("role")
+        if role and not _can_grant_role(self.request.user, role):
+            raise PermissionDenied("You cannot assign a role with permissions you do not hold")
+        serializer.save(assigned_by=self.request.user)
+
+    def perform_update(self, serializer):
+        role = serializer.validated_data.get("role") or serializer.instance.role
+        if role and not _can_grant_role(self.request.user, role):
+            raise PermissionDenied("You cannot assign a role with permissions you do not hold")
         serializer.save(assigned_by=self.request.user)
 
 
@@ -467,7 +524,10 @@ class FeatureAccessViewSet(viewsets.ModelViewSet):
 
     queryset = FeatureAccess.objects.all()
     serializer_class = FeatureAccessSerializer
-    permission_classes = [IsAuthenticated, IsAdminUser]
+    # Feature-access config gates public/private visibility of EVERY feature, so
+    # require system.manage (admin/superadmin) — not the looser IsAdminUser, which
+    # also let a roles.view-only user rewrite it.
+    permission_classes = [IsAuthenticated, HasSystemManagePermission]
     lookup_field = "feature"
 
     def list(self, request, *args, **kwargs):

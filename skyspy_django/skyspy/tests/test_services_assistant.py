@@ -263,6 +263,44 @@ class TestGetTools:
         assert all(len(compact[n]) <= len(full[n]) for n in full)
         assert sum(len(d) for d in compact.values()) < sum(len(d) for d in full.values())
 
+    @override_settings(ASSISTANT_TOOL_RETRIEVAL=True)
+    def test_query_prunes_to_relevant_categories(self):
+        pytest.importorskip("langchain_core")
+        names = {t.name for t in tools.get_tools(query="what's the METAR at KLAX?")}
+        # Weather category tools present; unrelated categories pruned.
+        assert "airport_weather" in names
+        assert "my_alert_rules" not in names and "socketio_reference" not in names
+        # Always-on core survives routing.
+        assert {"live_traffic_summary", "lookup_airframe"} <= names
+        assert len(names) < len(tools.TOOL_FUNCS)
+
+
+class TestSelectToolFuncs:
+    @override_settings(ASSISTANT_TOOL_RETRIEVAL=True)
+    def test_weather_query_selects_weather_category(self):
+        names = {fn.__name__ for fn in tools.select_tool_funcs("turbulence and winds near KJFK?")}
+        assert "turbulence_forecast" in names and "weather_nearby" in names
+        assert "decode_squawk" not in names
+
+    @override_settings(ASSISTANT_TOOL_RETRIEVAL=True)
+    def test_always_on_core_always_included(self):
+        names = {fn.__name__ for fn in tools.select_tool_funcs("decode squawk 7500")}
+        assert set(tools._ALWAYS_ON_TOOLS) <= names
+
+    @override_settings(ASSISTANT_TOOL_RETRIEVAL=True)
+    def test_unspecific_query_falls_back_to_full_set(self):
+        # No category keyword hit → never prune (full recall).
+        assert tools.select_tool_funcs("hello there") == list(tools.TOOL_FUNCS)
+
+    @override_settings(ASSISTANT_TOOL_RETRIEVAL=True)
+    def test_empty_query_returns_full_set(self):
+        assert tools.select_tool_funcs("") == list(tools.TOOL_FUNCS)
+        assert tools.select_tool_funcs(None) == list(tools.TOOL_FUNCS)
+
+    @override_settings(ASSISTANT_TOOL_RETRIEVAL=False)
+    def test_disabled_returns_full_set(self):
+        assert tools.select_tool_funcs("what's the METAR at KLAX?") == list(tools.TOOL_FUNCS)
+
 
 class TestCompactMode:
     @override_settings(FEEDER_LAT=47.9377, FEEDER_LON=-121.9687, ACARS_ENABLED=True, SAFETY_MONITORING_ENABLED=False)

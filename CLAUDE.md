@@ -407,6 +407,17 @@ ASSISTANT_MODEL=         # defaults to LLM_MODEL
 # (128k) — the binding constraint is ASSISTANT_TIMEOUT, not context, since each
 # step is a sequential model+tool round-trip. Raise the timeout alongside it.
 ASSISTANT_MAX_STEPS=15
+# Query-time tool retrieval (category routing). The ~53 tools are grouped into 8
+# categories (TOOL_GROUPS); each category has keyword triggers. Instead of binding
+# every tool schema on every request (the schemas dominate input tokens, worst on
+# small compact-mode windows), select_tool_funcs(query) binds only the categories
+# whose keywords hit the query, plus an always-on core (live_traffic_summary,
+# lookup_airframe). It falls back to the FULL toolset when the query matches no
+# category or spans nearly all of them — so routing only ever prunes a clearly-
+# scoped question, never drops a tool a plain query needs. get_tools(query=...)
+# applies it; _build_agent(query) threads the query through. Off in tests
+# (scripted-fake-LLM loops bind everything). See services/assistant/tools.py.
+ASSISTANT_TOOL_RETRIEVAL=True
 # Budget cap applied in COMPACT MODE (small context window, see
 # ASSISTANT_CONTEXT_WINDOW): deep tool chains would overflow an 8k window, so the
 # effective budget is min(MAX_STEPS, MAX_STEPS_COMPACT) there.

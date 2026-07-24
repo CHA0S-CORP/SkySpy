@@ -5,6 +5,7 @@ Serializers for authentication and user management.
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
+from rest_framework.exceptions import PermissionDenied
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 from skyspy.models.auth import (
@@ -450,9 +451,30 @@ class APIKeyCreateSerializer(serializers.Serializer):
         return value
 
     def create(self, validated_data):
+        requesting_user = self.context["request"].user
+
         # Use provided user_id or fall back to request user
         user_id = validated_data.pop("user_id", None)
-        user = User.objects.get(id=user_id) if user_id else self.context["request"].user
+        user = User.objects.get(id=user_id) if user_id else requesting_user
+
+        # A key authenticates AS its owning user (inheriting that user's perms,
+        # incl. superuser bypass). Only a superuser may mint a key bound to
+        # another account — otherwise `users.view` alone would let an admin issue
+        # itself a superuser-scoped key.
+        if user != requesting_user and not requesting_user.is_superuser:
+            raise PermissionDenied("Cannot create an API key for another user")
+
+        # Clamp scopes to the OWNING user's actual permissions so a key can never
+        # exceed them (empty scopes = all of the owner's perms, already bounded).
+        scopes = validated_data.get("scopes", [])
+        if scopes and not user.is_superuser:
+            try:
+                allowed = set(user.skyspy_profile.get_all_permissions())
+            except (SkyspyUser.DoesNotExist, AttributeError):
+                allowed = set()
+            excess = [s for s in scopes if s not in allowed]
+            if excess:
+                raise PermissionDenied(f"Scopes exceed the user's permissions: {', '.join(excess)}")
 
         # Generate key
         key, key_hash, key_prefix = APIKey.generate_key()

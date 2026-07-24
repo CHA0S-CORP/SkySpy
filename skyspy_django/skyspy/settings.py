@@ -793,6 +793,14 @@ ASSISTANT_MODEL = get_env("ASSISTANT_MODEL", "") or LLM_MODEL
 # tool chains would overflow the context (see ASSISTANT_CONTEXT_WINDOW).
 ASSISTANT_MAX_STEPS = get_env("ASSISTANT_MAX_STEPS", "20", int)
 ASSISTANT_MAX_STEPS_COMPACT = get_env("ASSISTANT_MAX_STEPS_COMPACT", "8", int)
+# Query-time tool retrieval (category routing). Binds only the tools whose
+# category keywords match the query (plus an always-on core), instead of all ~53
+# every request — the tool schemas otherwise dominate input tokens, worst on
+# small compact-mode windows. Falls back to the FULL toolset when the query is
+# unspecific (no/near-all category match), so it only prunes clearly-scoped
+# questions and never drops a tool a plain query needs. See
+# services/assistant/tools.py::select_tool_funcs.
+ASSISTANT_TOOL_RETRIEVAL = get_env("ASSISTANT_TOOL_RETRIEVAL", "True", bool)
 ASSISTANT_TIMEOUT = get_env("ASSISTANT_TIMEOUT", "120", int)
 # Context-window budget knobs. Raise for large-context models to let tools return
 # more and conversations run longer; keep low on RPi/small models. Defaults match

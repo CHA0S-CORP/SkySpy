@@ -243,7 +243,35 @@ class FeatureBasedPermission(permissions.BasePermission):
         if request.method not in permissions.SAFE_METHODS:
             return self._check_ownership(request, view, obj)
 
-        return True
+        # Reads: defense-in-depth ownership check. Queryset scoping is the primary
+        # guard, but this stops an owned object from leaking via a direct detail
+        # lookup on any viewset that forgets to scope get_queryset().
+        return self._check_read_access(request, view, obj)
+
+    def _check_read_access(self, request, view, obj):
+        """Object-level read gate: owner, shared/global, or manage_all only."""
+        # System/global objects (no owner concept, or explicitly owner-less) are
+        # readable — many FEATURE_MAP viewsets serve station-wide data.
+        if not hasattr(obj, "owner"):
+            return True
+        owner = getattr(obj, "owner", None)
+        if owner is None:
+            return True
+
+        user = request.user
+        if not (user and user.is_authenticated):
+            return False
+        if user.is_superuser or owner == user:
+            return True
+
+        # Shared/public objects stay readable.
+        if getattr(obj, "is_shared", False) or getattr(obj, "is_global", False):
+            return True
+        if getattr(obj, "visibility", None) in ("public", "shared"):
+            return True
+
+        feature = self._get_feature(view)
+        return bool(feature and self._has_permission(user, f"{feature}.manage_all"))
 
     def _get_feature(self, view):
         """Get feature name from view."""

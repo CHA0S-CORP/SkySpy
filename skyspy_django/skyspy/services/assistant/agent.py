@@ -475,8 +475,12 @@ def _recursion_limit() -> int:
     return _max_steps() * 2 + 2
 
 
-def _build_agent():
-    """Construct the LangGraph tool-calling agent (raises on bad config)."""
+def _build_agent(query: str | None = None):
+    """Construct the LangGraph tool-calling agent (raises on bad config).
+
+    ``query`` enables category-based tool retrieval: only the tools relevant to
+    the question are bound (with a full-registry fallback for unspecific queries),
+    cutting the tool-schema token cost. Omit it to bind the full toolset."""
     from langchain.agents import create_agent
     from langchain_openai import ChatOpenAI
 
@@ -502,7 +506,7 @@ def _build_agent():
         "with the same arguments, and once you have enough to answer, stop and write "
         "the answer."
     )
-    return create_agent(llm, get_tools(compact=compact), system_prompt=prompt)
+    return create_agent(llm, get_tools(compact=compact, query=query), system_prompt=prompt)
 
 
 # Cap injected page context so a huge DOM snapshot can't blow the context window.
@@ -1278,7 +1282,7 @@ def ask(query: str, context: str | None = None, history=None, user=None) -> dict
 
     token = set_current_user(user)
     try:
-        graph = _build_agent()
+        graph = _build_agent(query)
         # Stream state snapshots (not just the final return) so that if the agent
         # hits the recursion limit we still hold the last full message state — and
         # can synthesize a final answer from the tool data it already gathered
@@ -1362,7 +1366,7 @@ async def astream(query: str, context: str | None = None, history=None, user=Non
 
     token = set_current_user(user)
     try:
-        graph = _build_agent()
+        graph = _build_agent(query)
     except Exception as e:  # broad: construction can fail on bad config
         logger.warning(f"assistant.astream build failed: {type(e).__name__}: {e}")
         reset_current_user(token)

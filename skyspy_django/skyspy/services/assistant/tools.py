@@ -17,6 +17,8 @@ import logging
 import re
 from typing import Any
 
+from django.conf import settings
+
 logger = logging.getLogger(__name__)
 
 # The authenticated user driving the current request, set by the agent before it
@@ -2165,6 +2167,95 @@ TOOL_FUNCS = [fn for _cat, fns in TOOL_GROUPS for fn in fns]
 _TOOL_CATEGORY = {fn.__name__: cat for cat, fns in TOOL_GROUPS for fn in fns}
 
 
+# --- Query-time tool retrieval (category routing) ------------------------------
+# Binding all ~53 tool schemas on every request dominates the assistant's input-
+# token cost — worst on small (compact-mode) context windows where the schemas
+# alone can crowd out the question. When ASSISTANT_TOOL_RETRIEVAL is on, we bind
+# only the tools whose category keywords hit the query (plus a small always-on
+# core), and fall back to the FULL toolset whenever the query matches nothing or
+# spans nearly everything. Routing therefore only ever NARROWS a query with a
+# clear, specific intent — it never drops a tool a plain query obviously needs.
+
+# Always bound regardless of routing: cheap identity/grounding tools nearly every
+# question benefits from (resolve a hex/tail, ground answers in the live picture).
+_ALWAYS_ON_TOOLS = ("live_traffic_summary", "lookup_airframe")
+
+# Substring keywords per category. Matched case-insensitively against the query.
+# A keyword may sensibly appear in more than one category (matches union).
+_CATEGORY_KEYWORDS: dict[str, tuple[str, ...]] = {
+    "live traffic": (
+        "live", "now", "current", "nearby", "near me", "overhead", "airborne",
+        "in the air", "flying", "traffic", "radar", "closest", "nearest",
+        "approaching", "inbound", "threat", "right now",
+    ),
+    "analytics": (
+        "how many", "busiest", "stat", "trend", "pattern", "coverage",
+        "activity", "compare", "comparison", "correlat", "breakdown",
+        "geographic", "distribution", "count", "total", "volume", "hourly",
+        "daily", "weekly", "antenna", "rssi", "most ", "average", "peak",
+    ),
+    "one aircraft": (
+        "tail", "registration", " reg", "hex", "callsign", "aircraft", "plane",
+        "airframe", "photo", "picture", "image", "route", "schedule", "flight",
+        "track", "path", "trajectory", "owner", "operator", "dossier",
+        "law enforcement", "police", "military", "who owns", "n-number", "sighting",
+    ),
+    "weather & hazards": (
+        "weather", "metar", "taf", "wind", "turbulence", "pirep", "wildfire",
+        "fire", "hazard", "advisory", "sigmet", "airmet", "notam", "condition",
+        "forecast", "icing", "storm",
+    ),
+    "aviation reference": (
+        "squawk", "decode", "transponder", "airspace", "class b", "class c",
+        "class d", "navaid", " vor", " ndb", "waypoint", "airway", "enroute",
+        "elevation", "terrain", "altitude", " agl", "fix ",
+    ),
+    "search & records": (
+        "find", "search", "incident", "accident", "ntsb", "safety event",
+        "emergency", "semantic", "acars", "message", "datalink", "history",
+        "before", "ever seen", "notable", "similar", "past ",
+    ),
+    "user & station": (
+        " my ", "watched", "watchlist", "favorite", "alert rule", "my alert",
+        "subscribed", "i track", "i watch",
+    ),
+    "developer API": (
+        " api", "endpoint", "rest ", "socket", "websocket", "developer",
+        "integrate", "programmatic",
+    ),
+}
+
+
+def _match_categories(query: str) -> set[str]:
+    """Categories whose keywords appear in the (lowercased) query."""
+    q = f" {(query or '').lower()} "
+    return {cat for cat, kws in _CATEGORY_KEYWORDS.items() if any(k in q for k in kws)}
+
+
+def select_tool_funcs(query: str | None) -> list:
+    """The tool functions to bind for ``query``.
+
+    Returns the full registry (no pruning) when retrieval is disabled, the query
+    is empty, it matches no category, or it spans nearly every category — so
+    routing only ever prunes a clearly-scoped question. Otherwise returns the
+    always-on core plus the matched categories' tools, in registry order.
+    """
+    if not getattr(settings, "ASSISTANT_TOOL_RETRIEVAL", True):
+        return list(TOOL_FUNCS)
+    matched = _match_categories(query or "")
+    # No signal, or the query touches almost everything: don't prune.
+    if not matched or len(matched) >= len(TOOL_GROUPS) - 1:
+        return list(TOOL_FUNCS)
+    selected = [
+        fn
+        for cat, fns in TOOL_GROUPS
+        for fn in fns
+        if cat in matched or fn.__name__ in _ALWAYS_ON_TOOLS
+    ]
+    logger.debug("assistant tool retrieval: %d/%d tools (%s)", len(selected), len(TOOL_FUNCS), ", ".join(sorted(matched)))
+    return selected
+
+
 def _short_description(doc: str | None) -> str:
     """First sentence of a tool docstring, whitespace-collapsed and length-capped —
     the compact-mode tool description, so all tool schemas fit a small window."""
@@ -2202,9 +2293,14 @@ def _validation_handler(fn):
     return _handler
 
 
-def get_tools(compact: bool = False) -> list:
+def get_tools(compact: bool = False, query: str | None = None) -> list:
     """Wrap the plain functions as LangChain StructuredTools (lazy import so this
     module stays importable/testable without LangChain installed).
+
+    When ``query`` is given, category routing (``select_tool_funcs``) binds only
+    the relevant subset — cutting tool-schema tokens — falling back to the full
+    registry when the query is unspecific. With no ``query`` the full registry is
+    wrapped (back-compat for tests/callers).
 
     Each description is prefixed with its ``[category]`` tag as a selection hint.
     In ``compact`` mode descriptions are trimmed to the first sentence so the
@@ -2213,8 +2309,9 @@ def get_tools(compact: bool = False) -> list:
     from the model self-corrects instead of breaking the loop."""
     from langchain_core.tools import StructuredTool
 
+    funcs = select_tool_funcs(query) if query else TOOL_FUNCS
     tools = []
-    for fn in TOOL_FUNCS:
+    for fn in funcs:
         doc = _short_description(fn.__doc__) if compact else " ".join((fn.__doc__ or "").split())
         cat = _TOOL_CATEGORY.get(fn.__name__)
         tools.append(
