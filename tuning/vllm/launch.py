@@ -7,6 +7,7 @@ it down afterwards. A launch that OOMs / crashes / never turns healthy raises
 
 from __future__ import annotations
 
+import shlex
 import subprocess
 import time
 
@@ -53,6 +54,8 @@ def _vllm_args(cfg: TrialConfig) -> list[str]:
         args.append("--no-enable-prefix-caching")
     if cfg.enable_chunked_prefill:
         args.append("--enable-chunked-prefill")
+    if m.extra_args:
+        args += shlex.split(m.extra_args)
     return args
 
 

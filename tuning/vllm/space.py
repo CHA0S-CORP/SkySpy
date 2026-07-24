@@ -26,6 +26,9 @@ class Model:
     min_gpu_gb: int
     enabled: bool
     notes: str = ""
+    # Optional extra vLLM launch flags for models that need them (e.g. mistral
+    # tokenizer mode, gpt-oss harmony). Appended verbatim to the serve args.
+    extra_args: str = ""
 
 
 @dataclass

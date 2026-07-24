@@ -80,3 +80,40 @@ models:
     min_gpu_gb: 65
     enabled: false
     notes: Dense 32B Qwen3. Enable to compare against the AWQ 32B / MoE 30B.
+
+  # --- other good tool-callers found 2026-07-24 (verified on HF). MoE ones fit
+  # the GB10's bandwidth profile best (low active params = fast decode). Flip
+  # enabled:true for the next sweep. Some need per-model extra_args below. ---
+
+  - id: openai/gpt-oss-20b
+    family: gpt-oss
+    tool_parser: openai        # harmony format; verify parser name on the box's vLLM
+    quantization: null         # MXFP4 native, auto-detected (~16 GB)
+    ctx_max: 131072
+    min_gpu_gb: 16
+    enabled: false
+    notes: >-
+      MoE 21B total / 3.6B active — TOP GB10 pick (very fast on bandwidth-bound HW).
+      Needs the harmony response format; if the openai parser errors, check the vLLM
+      gpt-oss docs for the current flag.
+
+  - id: mistralai/Mistral-Small-3.2-24B-Instruct-2506
+    family: mistral
+    tool_parser: mistral
+    quantization: null
+    ctx_max: 131072
+    min_gpu_gb: 48
+    enabled: false
+    extra_args: "--tokenizer-mode mistral --config-format mistral --load-format mistral"
+    notes: Dense 24B, strong/robust tool calling. Quality play between 14B and 32B-AWQ.
+
+  - id: zai-org/GLM-4.5-Air-FP8
+    family: glm
+    tool_parser: glm45
+    quantization: null         # FP8 checkpoint (~106 GB — TIGHT on 128 GB unified)
+    ctx_max: 131072
+    min_gpu_gb: 106
+    enabled: false
+    notes: >-
+      MoE 106B total / 12B active, agent-optimized. FP8 to fit 128 GB unified (leave
+      prod stopped; keep gpu-util modest). Big but efficient per-token.
