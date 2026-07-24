@@ -245,6 +245,12 @@ def main() -> None:
     ap.add_argument("--dry-run", action="store_true", help="one baseline trial for --model, print reward, exit")
     ap.add_argument("--model", type=str, default="", help="model id for --dry-run")
     ap.add_argument("--skip-screen", action="store_true", help="skip Stage A; use all enabled models as survivors")
+    ap.add_argument(
+        "--resume",
+        action="store_true",
+        help="skip Stage A; reuse survivors + speed refs from a prior stage_a_screen.json and "
+        "continue the checkpointed Optuna study",
+    )
     args = ap.parse_args()
     config.ensure_dirs()
 
@@ -256,7 +262,12 @@ def main() -> None:
         print(json.dumps({k: v for k, v in result.items() if k not in ("summary", "perf")}, indent=2))
         return
 
-    if args.skip_screen:
+    if args.resume:
+        rep = json.loads((config.RESULTS_DIR / "stage_a_screen.json").read_text())
+        survivors = [get_model(mid) for mid in rep["survivors"]]
+        refs = (rep["refs"]["throughput_tok_s"], rep["refs"]["latency_tok_s"])
+        log.info("resume: survivors=%s refs=(%.1f, %.1f)", [m.id for m in survivors], *refs)
+    elif args.skip_screen:
         survivors = load_models()
         refs = (config.REWARD.ref_throughput_tok_s or 1.0, config.REWARD.ref_latency_tok_s or 1.0)
     else:
