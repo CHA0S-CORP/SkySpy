@@ -69,7 +69,15 @@ def _bench_once(model_id: str, concurrency: int) -> dict:
         "--result-filename",
         os.path.basename(result_path),
     ]
-    proc = subprocess.run(cmd, capture_output=True, text=True, check=False, timeout=1800)
+    try:
+        proc = subprocess.run(
+            cmd, capture_output=True, text=True, check=False, timeout=config.BENCH_TIMEOUT_S
+        )
+    except subprocess.TimeoutExpired as exc:
+        # A bench that hangs (server stalls under concurrency / KV pressure) must
+        # fail THIS trial, not crash the whole study — TimeoutExpired isn't a
+        # PerfError, so wrap it. Kill the stuck bench exec's server so teardown is clean.
+        raise PerfError(f"bench c={concurrency} hung past {config.BENCH_TIMEOUT_S}s") from exc
     if proc.returncode != 0:
         raise PerfError(f"bench c={concurrency} failed:\n{proc.stdout[-1500:]}\n{proc.stderr[-1000:]}")
 

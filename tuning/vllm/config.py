@@ -80,6 +80,10 @@ EVAL_WALL_TIMEOUT_S = int(os.environ.get("TUNE_EVAL_WALL_TIMEOUT_S", "900"))
 # vllm bench serve concurrency levels: 1 = single-stream latency, N = throughput.
 BENCH_CONCURRENCIES = (1, int(os.environ.get("TUNE_BENCH_CONCURRENCY", "8")))
 BENCH_NUM_PROMPTS = int(os.environ.get("TUNE_BENCH_PROMPTS", "64"))
+# Wall cap per `vllm bench serve` invocation. A bench of a dozen prompts finishes
+# in ~1-2 min; 600s catches a stalled server (KV pressure/preemption) so it fails
+# the trial instead of hanging (and crashing) the study.
+BENCH_TIMEOUT_S = int(os.environ.get("TUNE_BENCH_TIMEOUT_S", "600"))
 
 
 # --------------------------------------------------------------------------- #
