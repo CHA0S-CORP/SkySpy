@@ -32,9 +32,9 @@ class AircraftSighting(models.Model):
 
     class Meta:
         db_table = "aircraft_sightings"
-        indexes = [
-            models.Index(fields=["icao_hex", "timestamp"], name="idx_sightings_icao_time"),
-        ]
+        # idx_sightings_icao_time (icao_hex, timestamp ASC) dropped as redundant:
+        # idx_sighting_icao_timestamp (icao_hex, timestamp DESC) covers icao+time
+        # lookups in either scan direction. See migration 0050.
         ordering = ["-timestamp"]
 
     def __str__(self):
