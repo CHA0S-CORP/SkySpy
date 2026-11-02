@@ -80,6 +80,7 @@ services:
       DEBUG: ${DEBUG:-False}
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-your-secret-key-change-in-production}
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-*}
+      SECURE_SSL_REDIRECT: ${SECURE_SSL_REDIRECT:-True}
 
       # Database
       DATABASE_URL: postgresql://${POSTGRES_USER:-adsb}:${POSTGRES_PASSWORD:-adsb}@postgres:5432/${POSTGRES_DB:-adsb}
