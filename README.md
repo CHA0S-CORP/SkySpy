@@ -524,3 +524,23 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [OpenSky Network](https://opensky-network.org/) for aircraft database
 - [Aviation Weather Center](https://aviationweather.gov/) for weather data
 
+### Live radio listening
+
+The Radio screen includes a generic audio stream mixer alongside recorded
+transmissions. No streams are configured by default. Add a direct HTTP or HTTPS
+stream URL and an optional label. Each radio has independent Play/Stop and volume
+controls, and several feeds can play simultaneously. Volume zero mutes a feed.
+
+Use streams you own or are authorized to access through a third-party player.
+The URL must deliver a browser-supported audio format; website pages and playlist
+resolution are not supported. Use HTTPS streams when serving SkySpy over HTTPS.
+URLs are used as supplied, including query parameters, without provider-specific
+rewriting. Playback connects directly from the browser only after pressing Play.
+
+Selections and volumes are saved in browser storage, including any URL query
+parameters; avoid URLs containing secrets. Embedded username/password credentials
+are rejected. Open the live radio controls from the speaker button in the app
+header, including while viewing the live tracking map. Playback continues across views and when
+controls are closed. Stop a feed or remove it to disconnect; closing the app also
+stops playback. Playback is never restored automatically. Live audio is not recorded
+or transcribed.

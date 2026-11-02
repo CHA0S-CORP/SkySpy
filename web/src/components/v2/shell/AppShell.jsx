@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { AppHeader } from './AppHeader';
 import { NavRail } from './NavRail';
+import { LiveRadioPanel } from '../screens/radio/LiveRadioPanel';
 import { Icon, ToastHost } from '../primitives';
 
 // Views that own their full pane (no 24px content padding, no scroll chrome).
@@ -41,6 +42,10 @@ export function AppShell({
   children,
 }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [radioOpen, setRadioOpen] = useState(activeTab === 'audio');
+  useEffect(() => {
+    if (activeTab === 'audio') setRadioOpen(true);
+  }, [activeTab]);
   const flush = FLUSH_TABS.has(activeTab);
 
   const navigate = (tab) => {
@@ -58,15 +63,28 @@ export function AppShell({
         onOpenSettings={onOpenSettings}
         onOpenNotifications={() => navigate('alerts')}
         menuButton={
-          <button
-            type="button"
-            className="v2-header__iconbtn v2-shell__menubtn"
-            aria-label="Toggle navigation"
-            aria-expanded={mobileNavOpen}
-            onClick={() => setMobileNavOpen(!mobileNavOpen)}
-          >
-            <Icon name={mobileNavOpen ? 'x' : 'menu'} size={18} />
-          </button>
+          <>
+            <button
+              type="button"
+              className="v2-header__iconbtn v2-shell__menubtn"
+              aria-label="Toggle navigation"
+              aria-expanded={mobileNavOpen}
+              onClick={() => setMobileNavOpen(!mobileNavOpen)}
+            >
+              <Icon name={mobileNavOpen ? 'x' : 'menu'} size={18} />
+            </button>
+            <button
+              type="button"
+              className="v2-header__iconbtn"
+              aria-label="Live radio controls"
+              aria-expanded={radioOpen}
+              aria-controls="live-radio-controls"
+              title="Live radio controls"
+              onClick={() => setRadioOpen((open) => !open)}
+            >
+              <Icon name="volume" size={18} />
+            </button>
+          </>
         }
       />
       <div className="v2-body">
@@ -85,6 +103,17 @@ export function AppShell({
           />
         )}
         <main className="v2-main">
+          <div id="live-radio-controls" className="v2-radio-dock" hidden={!radioOpen}>
+            <button
+              type="button"
+              className="v2-header__iconbtn v2-radio-dock__close"
+              aria-label="Close radio controls"
+              onClick={() => setRadioOpen(false)}
+            >
+              <Icon name="x" size={18} />
+            </button>
+            <LiveRadioPanel />
+          </div>
           <div
             className={[
               'v2-content',

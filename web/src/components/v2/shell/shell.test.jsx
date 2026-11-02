@@ -57,6 +57,54 @@ describe('AppShell', () => {
     localStorage.getItem.mockReset().mockReturnValue(null);
   });
 
+  it('keeps the same playing stream across navigation and closing controls', () => {
+    localStorage.getItem.mockImplementation((key) =>
+      key === 'skyspy-live-radios-v1'
+        ? JSON.stringify([{ url: 'https://radio.example.org/stream', label: 'Tower', volume: 0.4 }])
+        : null
+    );
+    const play = vi.spyOn(HTMLMediaElement.prototype, 'play').mockImplementation(function () {
+      fireEvent.playing(this);
+      return Promise.resolve();
+    });
+    const pause = vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
+    const load = vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {});
+    const shell = (activeTab) => (
+      <ThemeProvider>
+        <AppShell
+          activeTab={activeTab}
+          onNavigate={vi.fn()}
+          connected
+          aircraftCount={1}
+          onOpenSettings={vi.fn()}
+        >
+          <div>{activeTab}</div>
+        </AppShell>
+      </ThemeProvider>
+    );
+    const view = render(shell('audio'));
+    fireEvent.click(screen.getByRole('button', { name: 'Play Tower' }));
+    const audio = document.querySelector('audio');
+    pause.mockClear();
+    view.rerender(shell('map'));
+    expect(document.querySelector('audio')).toBe(audio);
+    expect(screen.getByRole('button', { name: 'Stop Tower' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Close radio controls' }));
+    expect(document.getElementById('live-radio-controls')).not.toBeVisible();
+    expect(audio.src).toBe('https://radio.example.org/stream');
+    expect(pause).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Live radio controls' }));
+    fireEvent.change(screen.getByLabelText('Tower volume'), { target: { value: '25' } });
+    expect(audio.volume).toBe(0.25);
+    fireEvent.click(screen.getByRole('button', { name: 'Stop Tower' }));
+    expect(audio.hasAttribute('src')).toBe(false);
+    expect(play).toHaveBeenCalledTimes(1);
+    view.unmount();
+    play.mockRestore();
+    pause.mockRestore();
+    load.mockRestore();
+  });
+
   it('renders header stats, nav, and routed content', () => {
     renderShell();
     expect(screen.getByTestId('v2-aircraft-count')).toHaveTextContent('204');
