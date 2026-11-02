@@ -12,7 +12,8 @@ COPY ./web/public/ ./public/
 
 COPY ./web/src/ ./src/
 
-RUN npm run build
+ARG VITE_CARTO_API_KEY=
+RUN VITE_CARTO_API_KEY="$VITE_CARTO_API_KEY" npm run build
 
 # Build libacars in a separate stage
 FROM debian:bookworm-slim AS libacars-builder

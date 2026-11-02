@@ -1,3 +1,4 @@
+import { cartoTileUrl } from '../../../utils/basemap.js';
 import React, { useRef, useCallback, useEffect } from 'react';
 import L from 'leaflet';
 import { MiniGraph, useGraphInteraction } from '../components/MiniGraph';
@@ -111,7 +112,7 @@ export function TrackSection({
         attributionControl: false,
       });
 
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      L.tileLayer(cartoTileUrl('dark_all'), {
         maxZoom: 19,
       }).addTo(map);
 

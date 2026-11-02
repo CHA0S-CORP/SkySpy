@@ -1,9 +1,10 @@
+import { cartoTileUrl } from '../../../../utils/basemap.js';
 import { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { aircraftArrowIcon, cssColor } from '../../../../utils/mapMarkerIcon';
 
-const CARTO_DARK = 'https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png';
+const CARTO_DARK = cartoTileUrl('dark_nolabels');
 const CARTO_ATTR = '© OpenStreetMap contributors © CARTO';
 
 // Per-role marker styling. Origin/destination read as airports, waypoints as
