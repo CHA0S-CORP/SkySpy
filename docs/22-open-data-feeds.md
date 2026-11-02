@@ -55,6 +55,7 @@ FEEDER_LAT=33.9416
 FEEDER_LON=-118.4085
 
 # Pull positions from the keyless community feed instead of a local receiver
+AIRCRAFT_STREAM_ENABLED=True
 AIRCRAFT_STREAM_MODE=adsblol
 ```
 
@@ -81,7 +82,7 @@ and aircraft appear on the map within seconds.
 curl http://localhost:8000/api/v1/aircraft/ | head
 
 # Watch the poller
-docker compose logs -f api | grep -i adsblol
+docker compose logs -f celery-worker-realtime | grep -i adsblol
 ```
 
 ---
