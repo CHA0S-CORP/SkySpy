@@ -1,3 +1,4 @@
+import { cartoTileUrl } from '../../../../utils/basemap.js';
 import { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -5,7 +6,7 @@ import { aircraftArrowIcon, cssColor } from '../../../../utils/mapMarkerIcon';
 import { parseAdvisoryCoords, getTurbulenceSeverity } from '../../../../hooks/useTurbulenceOverlay';
 import { getFlightCategory, FLIGHT_CATEGORIES } from '../../../../utils/metarUtils';
 
-const CARTO_DARK = 'https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png';
+const CARTO_DARK = cartoTileUrl('dark_nolabels');
 const CARTO_ATTR = '© OpenStreetMap contributors © CARTO';
 
 const PIREP_COLOR = (level) => {

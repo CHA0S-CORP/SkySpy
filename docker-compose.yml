@@ -71,6 +71,8 @@ services:
     build:
       context: ./
       dockerfile: Dockerfile
+      args:
+        VITE_CARTO_API_KEY: ${VITE_CARTO_API_KEY:-}
     container_name: skyspy-api
     restart: unless-stopped
     ports:

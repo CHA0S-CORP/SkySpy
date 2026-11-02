@@ -1,3 +1,4 @@
+import { cartoTileUrl } from '../../utils/basemap.js';
 import React, { useRef, useEffect, useCallback, useState } from 'react';
 import L from 'leaflet';
 import { Target } from 'lucide-react';
@@ -124,7 +125,7 @@ export function EventMapVisualization({ event, trackData, replayPosition, onMapR
       zoomControl: true,
       attributionControl: false,
     });
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    L.tileLayer(cartoTileUrl('dark_all'), {
       maxZoom: 19,
     }).addTo(map);
     mapRef.current = map;

@@ -250,6 +250,25 @@ docker compose up -d
 # API available at http://localhost:5000
 ```
 
+### CARTO basemap key
+
+Get a basemap key at https://www.carto.com/basemaps/apikey/index.html and add it
+to the root `.env` file:
+
+```dotenv
+VITE_CARTO_API_KEY=your_key_here
+```
+
+Rebuild and restart the API, which serves the bundled dashboard:
+
+```bash
+docker compose up -d --build api
+```
+
+The key is embedded in the browser bundle at build time. Restarting without a
+rebuild does not update it. For local Vite development, put the same setting in
+`web/.env.local` and restart Vite. All CARTO maps share this setting.
+
 ### Development Environment
 
 ```bash
@@ -504,3 +523,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [Ultrafeeder](https://github.com/sdr-enthusiasts/docker-adsb-ultrafeeder) for ADS-B reception
 - [OpenSky Network](https://opensky-network.org/) for aircraft database
 - [Aviation Weather Center](https://aviationweather.gov/) for weather data
+

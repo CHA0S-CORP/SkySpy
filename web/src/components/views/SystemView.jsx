@@ -1,3 +1,4 @@
+import { cartoTileUrl } from '../../utils/basemap.js';
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -456,7 +457,7 @@ export function SystemView({ apiBase, wsRequest, wsConnected }) {
       attributionControl: false,
     });
 
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    L.tileLayer(cartoTileUrl('dark_all'), {
       maxZoom: 19,
     }).addTo(map);
 

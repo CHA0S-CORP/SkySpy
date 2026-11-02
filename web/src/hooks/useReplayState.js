@@ -1,3 +1,4 @@
+import { cartoTileUrl } from '../utils/basemap.js';
 import { useState, useRef, useCallback, useEffect } from 'react';
 import L from 'leaflet';
 import { safeJson } from '../components/history/historyConstants';
@@ -449,7 +450,7 @@ export function useReplayState({ apiBase, wsRequest, wsConnected }) {
         attributionControl: false,
       });
 
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      L.tileLayer(cartoTileUrl('dark_all'), {
         maxZoom: 19,
       }).addTo(map);
 
