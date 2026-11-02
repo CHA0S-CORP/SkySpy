@@ -1,3 +1,4 @@
+import { cartoTileUrl } from '../../../../utils/basemap.js';
 import { useMemo, useRef, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import { MapContainer, TileLayer, Polyline, CircleMarker, Marker, useMap } from 'react-leaflet';
@@ -243,7 +244,7 @@ export function EnhancedFlightMap({
         zoomControl={false}
       >
         <TileLayer
-          url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+          url={cartoTileUrl('dark_all')}
           attribution='&copy; <a href="https://carto.com/">CARTO</a>'
         />
 

@@ -1,3 +1,4 @@
+import { cartoTileUrl } from '../../../utils/basemap.js';
 import React, { useRef, useCallback, useEffect, useState } from 'react';
 import { History, Map as MapIcon, ChevronDown, ChevronUp, Download } from 'lucide-react';
 import L from 'leaflet';
@@ -120,7 +121,7 @@ export function HistoryTab({
         attributionControl: false,
       });
 
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      L.tileLayer(cartoTileUrl('dark_all'), {
         maxZoom: 19,
       }).addTo(map);
 

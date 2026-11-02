@@ -1,7 +1,8 @@
+import { cartoTileUrl } from '../../../utils/basemap.js';
 import { useEffect, useRef } from 'react';
 import L from 'leaflet';
 
-const CARTO_DARK = 'https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png';
+const CARTO_DARK = cartoTileUrl('dark_nolabels');
 const CARTO_ATTR = '© OpenStreetMap contributors © CARTO';
 const RING_NM = [25, 50, 100];
 const NM_TO_M = 1852;
