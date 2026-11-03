@@ -29,6 +29,7 @@ from django.conf import settings
 from django.core.cache import cache
 from django.utils import timezone
 
+from skyspy.services.position_buffer import CAPACITY, PositionBuffer
 from skyspy.socketio.utils import sync_emit
 
 logger = logging.getLogger(__name__)
@@ -37,25 +38,16 @@ logger = logging.getLogger(__name__)
 # In-memory buffers (for low-latency operation)
 # ============================================================================
 #
-# IMPORTANT DEPLOYMENT CONSTRAINT: these module-level buffers are shared
-# between the producer (stream_aircraft on the `polling` queue) and the
-# consumers (flush_stream_to_database / process_new_aircraft_lookups on the
-# `database` queue, cleanup_stale_aircraft on `default`). This only works
-# because a single gevent worker process consumes all queues. If the queues
-# are ever split across multiple worker processes, the cold-path tasks will
-# see empty buffers and DB persistence/lookups will silently stop - move the
-# buffers to Redis before splitting workers.
+# Only the stream owner uses local state. Position reports cross the worker
+# boundary through Redis; the local deque is a bounded retry buffer for brief
+# Redis outages. Other stateful stream tasks still require the polling worker.
 
 # Current aircraft state (hot path - updated on every message)
 _aircraft_state: dict[str, dict] = {}  # icao -> aircraft data
 _aircraft_state_lock = Lock()
 
-# Buffer for database writes (cold path - flushed periodically). deque(maxlen)
-# silently discards the OLDEST row on overflow, so a lagging flush or a feed
-# burst would drop positions with no trace. _db_buffer_dropped counts those
-# discards so flush_stream_to_database can surface them instead of losing data
-# silently; the flush also re-queues failed batches, so overflow is the sole
-# remaining loss path. Sized for ~10s of a dense feed at the 5s flush cadence.
+# Bounded producer-side retry staging for Redis outages. Reports are removed
+# only after Redis accepts them; prolonged outages can overflow this deque.
 _db_write_buffer: deque[dict] = deque(maxlen=50000)
 _db_buffer_dropped = 0
 
@@ -799,6 +791,7 @@ def update_state_and_broadcast(batch: list[dict], full_snapshot: bool = True):
                 # (annotate_ghosts) writes only ghost/ghost_of, which the flush
                 # never reads. Avoids ~250-500 dict copies/sec on the hot path.
                 _db_write_buffer.append(ac)
+    _publish_position_buffer()
 
 
 def _bump_messages_total():
@@ -806,14 +799,31 @@ def _bump_messages_total():
     _messages_total += 1
 
 
-def get_db_buffer_stats() -> tuple[int, int]:
-    """Return (current_depth, capacity) of the cold-path DB write buffer.
+def _position_buffer():
+    return PositionBuffer(settings.REDIS_URL)
 
-    Exposed for queue-depth monitoring so the buffer filling toward maxlen
-    (silent oldest-drop) is visible before positions are actually lost.
-    """
+
+def _publish_position_buffer():
+    """Retain reports locally until Redis accepts them; never fall back silently."""
+    global _db_buffer_dropped
+
     with _db_buffer_lock:
-        return len(_db_write_buffer), (_db_write_buffer.maxlen or 0)
+        if _db_buffer_dropped:
+            logger.warning("Dropped %d positions after local Redis retry buffer overflow", _db_buffer_dropped)
+            _db_buffer_dropped = 0
+        if not _db_write_buffer:
+            return
+        try:
+            _position_buffer().append(list(_db_write_buffer))
+        except Exception:
+            logger.exception("Could not hand aircraft positions to Redis; retaining local retry buffer")
+            return
+        _db_write_buffer.clear()
+
+
+def get_db_buffer_stats() -> tuple[int, int]:
+    """Shared unacknowledged reports plus this process's local retry buffer."""
+    return _position_buffer().depth() + len(_db_write_buffer), CAPACITY
 
 
 def sync_cache_state():
@@ -966,27 +976,12 @@ def flush_stream_to_database(self):
 
     from skyspy.models import AircraftSighting
 
-    global _db_buffer_dropped
-
-    # Grab all buffered data
-    with _db_buffer_lock:
-        if not _db_write_buffer:
-            return
-        # Take a snapshot and clear buffer
-        to_write = list(_db_write_buffer)
-        _db_write_buffer.clear()
-        dropped = _db_buffer_dropped
-        _db_buffer_dropped = 0
-
-    if dropped:
-        logger.warning(
-            "Dropped %d buffered aircraft positions on overflow (DB write buffer hit maxlen — "
-            "flush lagging or feed burst); consider raising the deque maxlen or flush cadence",
-            dropped,
-        )
-
-    if not to_write:
+    buffer = _position_buffer()
+    consumer, entries = buffer.claim()
+    if not entries:
+        buffer.acknowledge(consumer, [])
         return
+    to_write = [position for _, position in entries]
 
     # Batch insert to database
     try:
@@ -1029,13 +1024,11 @@ def flush_stream_to_database(self):
             # Own savepoint so a geom/DB error here can't poison the sighting insert.
             _upsert_live_positions(to_write)
 
-    except Exception as e:  # broad: flush must requeue the batch on ANY failure (no data loss)
-        logger.error(f"Failed to flush stream data to database: {e}")
-        # Re-queue the whole failed batch ahead of newly buffered rows so
-        # nothing is silently dropped; the deque's maxlen=10000 is the sole
-        # loss bound. extendleft(reversed(...)) preserves chronological order.
-        with _db_buffer_lock:
-            _db_write_buffer.extendleft(reversed(to_write))
+        # Also respect callers with an outer transaction: never acknowledge a
+        # batch whose database transaction can still roll back.
+        transaction.on_commit(lambda: buffer.acknowledge(consumer, [entry_id for entry_id, _ in entries]))
+    except Exception:  # A failed batch stays pending for recovery by another worker.
+        logger.exception("Failed to flush stream positions; batch retained in Redis for retry")
 
 
 @shared_task(bind=True, max_retries=1, ignore_result=True)

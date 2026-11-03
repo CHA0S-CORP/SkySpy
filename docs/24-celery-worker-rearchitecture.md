@@ -86,3 +86,28 @@ is ample and halves the churn (and the entry name now matches its cadence).
 The historical backlog is drained by restarting the worker (already done). If a
 large stale backlog exists again, `redis-cli -n 0 LTRIM polling -1 0` (or
 `DEL polling`) is safe — `poll_aircraft` is idempotent and re-queued every 2 s.
+
+## Position history across workers
+
+Position reports cross from `celery-worker-realtime` to `celery-worker` through
+Redis stream `skyspy:positions:v1` (consumer group `database`, using `REDIS_URL`).
+An in-process deque cannot serve as the handoff between these containers: the
+saving worker would see an empty buffer and silently skip position history.
+
+The producer atomically enqueues reports; the database task claims up to 5,000
+at a time and acknowledges/deletes them only after its transaction commits.
+Failed or interrupted batches can be reclaimed after 60 seconds. Delivery is at
+least once: a crash after the database commit but before acknowledgement can
+produce duplicate sightings. Redis retains at most 50,000 reports; backpressure
+keeps new reports in a bounded producer retry deque. A prolonged Redis/database
+outage can overflow that deque, which logs the dropped count.
+
+Lookup dispatch and stale-aircraft cleanup still use process-local stream state,
+so they run on `polling`; the dispatched lookup requests run on the I/O worker.
+Only one realtime worker process should own the feed.
+
+Deploy the updated application image to the API, both Celery workers, and Beat.
+No database migration or additional Redis service is required. Verify that
+`aircraft_sightings` timestamps advance and the per-aircraft `/api/v1/sightings/`
+response contains `lat`/`lon` points. Historical reports lost before this change
+cannot be reconstructed by the buffer.
