@@ -176,6 +176,7 @@ export function AuthProvider({ children }) {
         localAuthEnabled: data.local_auth_enabled,
         apiKeyEnabled: data.api_key_enabled,
         devMode: data.dev_mode || false,
+        assistantEnabled: data.assistant_enabled ?? true,
         mapClusterZoomThreshold: data.map_cluster_zoom_threshold ?? 8,
         features: data.features || {},
       });
@@ -585,6 +586,10 @@ export function AuthProvider({ children }) {
 /**
  * Hook to use auth context
  */
+export function useOptionalAuth() {
+  return useContext(AuthContext);
+}
+
 export function useAuth() {
   const context = useContext(AuthContext);
   if (!context) {

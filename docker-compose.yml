@@ -240,17 +240,17 @@ services:
     networks:
       - skyspy-network
     command: >
-      sh -c "
+      sh -ec "
         echo 'Running database migrations...' &&
         python manage.py migrate --noinput &&
         echo 'Syncing Celery tasks to database...' &&
         python manage.py sync_celery_tasks &&
         echo 'Creating superuser if not exists...' &&
-        python manage.py createsuperuser --noinput || true &&
+        python manage.py ensure_superuser &&
         echo 'Populating initial aviation data...' &&
-        python manage.py populate_data --skip-openaip || true &&
+        { timeout 60s python manage.py populate_data --skip-openaip || echo 'Optional aviation data population incomplete; periodic tasks will refresh it.'; } &&
         echo 'Starting Daphne ASGI server...' &&
-        daphne -b 0.0.0.0 -p 8000 --application-close-timeout 30 skyspy.asgi:application
+        exec daphne -b 0.0.0.0 -p 8000 --application-close-timeout 30 skyspy.asgi:application
       "
 
   # ---------------------------------------------------------------------------

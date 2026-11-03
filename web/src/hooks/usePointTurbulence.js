@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 
-import { useApi } from './useApi';
+import { useFeatureQuery } from './queries/useFeatureQuery';
 
 /**
  * Poll the backend turbulence assessment for a single point (lat/lon/alt).
@@ -33,12 +33,26 @@ export function usePointTurbulence({
   // assesses the receiver location (handy when the frontend feeder coords are
   // stripped, e.g. anonymous sessions).
   const endpoint = hasPoint
-    ? `/api/v1/aviation/turbulence?lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}` +
+    ? `/api/v1/aviation/turbulence/?lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}` +
       (altitudeFt != null ? `&alt=${Math.round(altitudeFt)}` : '')
-    : '/api/v1/aviation/turbulence';
+    : '/api/v1/aviation/turbulence/';
 
   const shouldPoll = enabled && (hasPoint || feederDefault);
-  const { data, loading, error } = useApi(endpoint, shouldPoll ? interval : null, apiBase);
+  const {
+    data,
+    isLoading: loading,
+    error,
+  } = useFeatureQuery('aircraft', {
+    queryKey: ['point-turbulence', apiBase, endpoint],
+    enabled: shouldPoll,
+    refetchInterval: interval,
+    retry: false,
+    queryFn: async ({ fetch, signal }) => {
+      const response = await fetch(`${apiBase}${endpoint}`, { signal });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return response.json();
+    },
+  });
 
   return useMemo(() => {
     const assessment = data && typeof data.score === 'number' ? data : null;

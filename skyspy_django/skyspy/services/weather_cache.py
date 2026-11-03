@@ -14,7 +14,7 @@ import httpx
 from django.core.cache import cache
 from django.db import DatabaseError, transaction
 from django.db.models import Max
-from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
+from tenacity import retry, retry_if_exception, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from skyspy.models import CachedPirep
 
@@ -188,7 +188,7 @@ def store_pirep(pirep: dict) -> int | None:
             source_data=pirep,
         )
         _pirep_stats["stored"] += 1
-        _pirep_stats["last_store"] = datetime.utcnow().isoformat()
+        _pirep_stats["last_store"] = datetime.now(UTC).isoformat()
         return cached_pirep.id
     except (DatabaseError, ValueError, TypeError) as e:
         logger.error(f"Failed to store PIREP: {e}")
@@ -224,7 +224,7 @@ def get_cached_pireps(
 
     _pirep_stats["queries"] += 1
 
-    cutoff = datetime.utcnow() - timedelta(hours=hours)
+    cutoff = datetime.now(UTC) - timedelta(hours=hours)
 
     queryset = CachedPirep.objects.filter(observation_time__gte=cutoff)
 
@@ -286,7 +286,7 @@ def get_cached_pireps(
 
 def cleanup_old_pireps(retention_hours: int = 24) -> int:
     """Remove PIREPs older than retention period."""
-    cutoff = datetime.utcnow() - timedelta(hours=retention_hours)
+    cutoff = datetime.now(UTC) - timedelta(hours=retention_hours)
 
     deleted, _ = CachedPirep.objects.filter(observation_time__lt=cutoff).delete()
 
@@ -376,7 +376,7 @@ def get_historical_pireps(
 
 def get_pirep_stats() -> dict:
     """Get statistics about cached PIREPs."""
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
 
     # Total count
     total = CachedPirep.objects.count()
@@ -452,10 +452,28 @@ def _http() -> httpx.Client:
     return client
 
 
+def _retryable_awc_error(exc: BaseException) -> bool:
+    return isinstance(exc, httpx.TransportError) or (
+        isinstance(exc, httpx.HTTPStatusError) and (exc.response.status_code == 429 or exc.response.status_code >= 500)
+    )
+
+
+def _awc_retry_wait(state) -> float:
+    error = state.outcome.exception()
+    if isinstance(error, httpx.HTTPStatusError) and error.response.status_code == 429:
+        from skyspy.services.http_client import _parse_retry_after
+
+        delay = _parse_retry_after(error.response.headers.get("Retry-After"))
+        if delay is not None:
+            return max(0, delay)
+    return wait_exponential(multiplier=1, min=1, max=10)(state)
+
+
 @retry(
     stop=stop_after_attempt(3),
-    wait=wait_exponential(multiplier=1, min=1, max=10),
-    retry=retry_if_exception_type((httpx.HTTPError, httpx.TimeoutException)),
+    wait=_awc_retry_wait,
+    retry=retry_if_exception(_retryable_awc_error),
+    reraise=True,
 )
 def _http_get_awc(url: str, params: dict, timeout: float = 15.0) -> httpx.Response:
     """HTTP GET with retry logic for AWC API."""
@@ -475,11 +493,23 @@ def _http_get_awc(url: str, params: dict, timeout: float = 15.0) -> httpx.Respon
 def _fetch_awc_data(endpoint: str, params: dict) -> dict | list:
     """Fetch data from Aviation Weather Center API with retry logic."""
     try:
+        params = dict(params)
+        if params.get("bbox"):
+            params["bbox"] = ",".join(f"{float(v):.5f}" for v in params["bbox"].split(","))
         response = _http_get_awc(f"{AWC_BASE}/{endpoint}", params, timeout=15.0)
+        if response.status_code == 204:
+            return []
         return response.json() if response.text else []
     except (httpx.HTTPError, ValueError, KeyError, TypeError) as e:
-        logger.error(f"AWC API request failed for {endpoint}: {e}")
-        return {"error": str(e)}
+        detail = str(e)[:300]
+        if isinstance(e, httpx.HTTPStatusError):
+            try:
+                detail = str(e.response.json().get("error", e.response.reason_phrase))[:300]
+            except (ValueError, AttributeError):
+                detail = e.response.reason_phrase
+            detail = f"HTTP {e.response.status_code}: {detail}"
+        logger.error("AWC API request failed for %s: %s", endpoint, detail)
+        return {"error": detail}
 
 
 def fetch_and_store_pireps(bbox: str = "24,-130,50,-60", hours: int = 6) -> int:
@@ -667,7 +697,7 @@ def record_metar_api_request(success: bool = True):
     """Record a METAR API request for stats tracking."""
     global _metar_stats
     _metar_stats["api_requests"] += 1
-    _metar_stats["last_api_call"] = datetime.utcnow().isoformat()
+    _metar_stats["last_api_call"] = datetime.now(UTC).isoformat()
     if not success:
         _metar_stats["api_errors"] += 1
 

@@ -1,8 +1,8 @@
-import { useQuery } from '@tanstack/react-query';
+import { useFeatureQuery } from '../../../../hooks/queries/useFeatureQuery';
 
 export const RANGE_HOURS = { '1h': 1, '6h': 6, '24h': 24, '48h': 48, '7d': 168 };
 
-async function getJson(url, fallback) {
+async function getJson(url, fallback, fetch) {
   try {
     const res = await fetch(url);
     if (!res.ok) return fallback;
@@ -31,71 +31,78 @@ function milParam(military) {
 export function useAnalyticsData(apiBase, { hours, xField, yField, military }) {
   const mil = milParam(military);
 
-  const fields = useQuery({
+  const fields = useFeatureQuery('system', {
     queryKey: ['v2-analytics-fields', apiBase],
-    queryFn: async () => (await getJson(`${apiBase}/api/v1/analytics/`, {})).fields || [],
+    queryFn: async ({ fetch }) =>
+      (await getJson(`${apiBase}/api/v1/analytics/`, {}, fetch)).fields || [],
   });
 
-  const scatter = useQuery({
+  const scatter = useFeatureQuery('system', {
     queryKey: ['v2-analytics-scatter', apiBase, hours, xField, yField, military],
-    queryFn: async () =>
+    queryFn: async ({ fetch }) =>
       getJson(
         `${apiBase}/api/v1/analytics/scatter/?x_field=${xField}&y_field=${yField}&hours=${hours}${mil}`,
-        {}
+        {},
+        fetch
       ),
   });
 
-  const matrix = useQuery({
+  const matrix = useFeatureQuery('system', {
     queryKey: ['v2-analytics-matrix', apiBase, hours, military],
-    queryFn: async () => getJson(`${apiBase}/api/v1/analytics/matrix/?hours=${hours}${mil}`, {}),
+    queryFn: async ({ fetch }) =>
+      getJson(`${apiBase}/api/v1/analytics/matrix/?hours=${hours}${mil}`, {}, fetch),
   });
 
-  const crossDomain = useQuery({
+  const crossDomain = useFeatureQuery('system', {
     queryKey: ['v2-analytics-cross', apiBase, hours],
-    queryFn: async () =>
-      getJson(`${apiBase}/api/v1/analytics/cross-domain/?hours=${hours}&limit=20`, {}),
+    queryFn: async ({ fetch }) =>
+      getJson(`${apiBase}/api/v1/analytics/cross-domain/?hours=${hours}&limit=20`, {}, fetch),
   });
 
-  const correlation = useQuery({
+  const correlation = useFeatureQuery('history', {
     queryKey: ['v2-analytics-corr', apiBase, hours],
-    queryFn: async () =>
-      getJson(`${apiBase}/api/v1/history/analytics/correlation/?hours=${hours}`, {}),
+    queryFn: async ({ fetch }) =>
+      getJson(`${apiBase}/api/v1/history/analytics/correlation/?hours=${hours}`, {}, fetch),
   });
 
-  const geography = useQuery({
+  const geography = useFeatureQuery('system', {
     queryKey: ['v2-analytics-geo', apiBase, hours],
-    queryFn: async () =>
-      getJson(`${apiBase}/api/v1/stats/geographic/countries/?hours=${hours}&limit=8`, {}),
+    queryFn: async ({ fetch }) =>
+      getJson(`${apiBase}/api/v1/stats/geographic/countries/?hours=${hours}&limit=8`, {}, fetch),
   });
 
-  const operators = useQuery({
+  const operators = useFeatureQuery('system', {
     queryKey: ['v2-analytics-ops', apiBase, hours],
-    queryFn: async () =>
-      getJson(`${apiBase}/api/v1/stats/geographic/operators/?hours=${hours}&limit=8`, {}),
+    queryFn: async ({ fetch }) =>
+      getJson(`${apiBase}/api/v1/stats/geographic/operators/?hours=${hours}&limit=8`, {}, fetch),
   });
 
-  const busiestHours = useQuery({
+  const busiestHours = useFeatureQuery('system', {
     queryKey: ['v2-analytics-hours', apiBase, hours],
-    queryFn: async () =>
-      getJson(`${apiBase}/api/v1/stats/flight-patterns/busiest-hours/?hours=${hours}`, {}),
+    queryFn: async ({ fetch }) =>
+      getJson(`${apiBase}/api/v1/stats/flight-patterns/busiest-hours/?hours=${hours}`, {}, fetch),
   });
 
-  const routes = useQuery({
+  const routes = useFeatureQuery('system', {
     queryKey: ['v2-analytics-routes', apiBase, hours],
-    queryFn: async () =>
-      getJson(`${apiBase}/api/v1/stats/flight-patterns/routes/?hours=${hours}&limit=8`, {}),
+    queryFn: async ({ fetch }) =>
+      getJson(`${apiBase}/api/v1/stats/flight-patterns/routes/?hours=${hours}&limit=8`, {}, fetch),
   });
 
-  const aircraftTypes = useQuery({
+  const aircraftTypes = useFeatureQuery('system', {
     queryKey: ['v2-analytics-types', apiBase, hours],
-    queryFn: async () =>
-      getJson(`${apiBase}/api/v1/stats/flight-patterns/aircraft-types/?hours=${hours}&limit=8`, {}),
+    queryFn: async ({ fetch }) =>
+      getJson(
+        `${apiBase}/api/v1/stats/flight-patterns/aircraft-types/?hours=${hours}&limit=8`,
+        {},
+        fetch
+      ),
   });
 
-  const militaryBreakdown = useQuery({
+  const militaryBreakdown = useFeatureQuery('system', {
     queryKey: ['v2-analytics-mil', apiBase, hours],
-    queryFn: async () =>
-      getJson(`${apiBase}/api/v1/stats/geographic/military-breakdown/?hours=${hours}`, {}),
+    queryFn: async ({ fetch }) =>
+      getJson(`${apiBase}/api/v1/stats/geographic/military-breakdown/?hours=${hours}`, {}, fetch),
   });
 
   return {

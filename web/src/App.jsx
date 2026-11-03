@@ -93,6 +93,10 @@ export default function App() {
     status: authStatus,
     isAuthenticated,
     config: authConfig,
+    canAccessFeature,
+    hasPermission,
+    user,
+    authFetch,
     getAccessToken: _getAccessToken,
   } = useAuth();
 
@@ -133,6 +137,28 @@ export default function App() {
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
+  // Socket.IO uses granular permissions for signed-in users, even when a
+  // feature's REST read access is configured as "authenticated".
+  const canUseSocket = (feature, permission) => {
+    if (authStatus === 'loading') return false;
+    if (authConfig.publicMode) return true;
+    if (isAuthenticated) return user?.isSuperuser || hasPermission(permission);
+    return canAccessFeature(feature);
+  };
+  const canReadStatus = canUseSocket('system', 'system.view_status');
+  const socketTopics = [
+    ['aircraft', 'aircraft', 'aircraft.view'],
+    ['safety', 'safety', 'safety.view'],
+    ['stats', 'stats', 'stats.view'],
+    ['alerts', 'alerts', 'alerts.view'],
+    ['acars', 'acars', 'acars.view'],
+    ['airspace', 'weather', 'weather.view'],
+    ['notams', 'notams', 'notams.view'],
+  ]
+    .filter(([, feature, permission]) => canUseSocket(feature, permission))
+    .map(([topic]) => topic)
+    .join(',');
+
   const {
     aircraft,
     connected,
@@ -145,12 +171,12 @@ export default function App() {
     request: wsRequest,
     getAirframeError,
     clearAirframeError,
-  } = useSocketIOData(true, config.apiBaseUrl, 'all');
+  } = useSocketIOData(authStatus !== 'loading' && !!socketTopics, config.apiBaseUrl, socketTopics);
 
   // High-frequency position updates for smooth map rendering
   // Uses refs instead of state to avoid 60Hz re-renders
   const { positionsRef, connected: positionSocketConnected } = useSocketIOPositions(
-    activeTab === 'map',
+    canUseSocket('aircraft', 'aircraft.view') && activeTab === 'map',
     config.apiBaseUrl,
     true,
     1000
@@ -174,6 +200,7 @@ export default function App() {
 
   // Fetch status via WebSocket or fallback to HTTP
   useEffect(() => {
+    if (!canReadStatus) return;
     const fetchStatus = async () => {
       if (wsRequest && connected) {
         try {
@@ -184,7 +211,7 @@ export default function App() {
         }
       } else {
         try {
-          const res = await fetch(`${config.apiBaseUrl}/api/v1/system/status`);
+          const res = await authFetch(`${config.apiBaseUrl}/api/v1/system/status/`);
           const data = await safeJson(res);
           if (data) setStatus(normalizeStatus(data));
         } catch (err) {
@@ -196,10 +223,11 @@ export default function App() {
     fetchStatus();
     const interval = setInterval(fetchStatus, 30000);
     return () => clearInterval(interval);
-  }, [wsRequest, connected, config.apiBaseUrl]);
+  }, [wsRequest, connected, config.apiBaseUrl, canReadStatus, authFetch]);
 
   // Fetch online users count via WebSocket (with HTTP fallback)
   useEffect(() => {
+    if (!canReadStatus) return;
     const fetchOnlineUsers = async () => {
       // Try WebSocket first if connected
       if (wsRequest && connected) {
@@ -216,7 +244,7 @@ export default function App() {
 
       // HTTP fallback - use system status endpoint
       try {
-        const res = await fetch(`${config.apiBaseUrl}/api/v1/system/status`);
+        const res = await authFetch(`${config.apiBaseUrl}/api/v1/system/status/`);
         const data = await safeJson(res);
         if (data) setOnlineUsers(data.websocket_connections || data.subscribers || 0);
       } catch (err) {
@@ -227,7 +255,7 @@ export default function App() {
     fetchOnlineUsers();
     const interval = setInterval(fetchOnlineUsers, 30000); // Reduced from 5s - online count doesn't need frequent updates
     return () => clearInterval(interval);
-  }, [config.apiBaseUrl, wsRequest, connected]);
+  }, [config.apiBaseUrl, wsRequest, connected, canReadStatus, authFetch]);
 
   // Keep ref in sync for tail lookup to avoid stale closures
   useEffect(() => {

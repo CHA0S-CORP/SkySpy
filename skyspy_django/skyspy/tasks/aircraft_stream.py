@@ -1544,6 +1544,9 @@ def stream_adsblol(feeder_lat: float, feeder_lon: float, poll_interval: float, r
             poll_interval * len(sources) seconds)
         radius_nm: Search radius in nautical miles (max 250)
     """
+    from skyspy.services.http_client import _parse_retry_after
+    from skyspy.services.provider_health import cooldown_remaining, pause_provider, provider_recovered
+
     radius_nm = min(int(radius_nm), 250)
     sources = _resolve_free_sources()
 
@@ -1567,22 +1570,26 @@ def stream_adsblol(feeder_lat: float, feeder_lon: float, poll_interval: float, r
 
     while True:
         poll_start = time.time()
-        name, template = sources[idx % len(sources)]
+        available = [(name, template) for name, template in sources if not cooldown_remaining(name)]
+        if not available:
+            # Keep the process heartbeat alive without hammering blocked sources.
+            cache.set(CACHE_KEY_STREAM_ACTIVE, True, timeout=30)
+            time.sleep(min(10, max(0.1, min(cooldown_remaining(name) for name, _ in sources))))
+            continue
+        name, template = available[idx % len(available)]
         idx += 1
         url = template.format(lat=feeder_lat, lon=feeder_lon, radius=radius_nm)
 
         try:
             resp = requests.get(url, timeout=15, headers={"Accept": "application/json"})
-            if resp.status_code == 429:
-                # Rate limited on this source: rotate to the next one immediately.
-                logger.warning(f"{name} rate limit (429), rotating to next source")
-                consecutive_errors += 1
-                if consecutive_errors >= max_consecutive_errors:
-                    raise RuntimeError("all community sources rate-limited")
-                time.sleep(min(poll_interval, 1.0))
+            if resp.status_code in (403, 429):
+                delay = 900 if resp.status_code == 403 else (_parse_retry_after(resp.headers.get("Retry-After")) or 60)
+                pause_provider(name, delay, f"HTTP {resp.status_code}")
+                time.sleep(poll_interval)
                 continue
             resp.raise_for_status()
             aircraft_list = resp.json().get("ac", []) or []
+            provider_recovered(name)
             consecutive_errors = 0
 
             batch = []

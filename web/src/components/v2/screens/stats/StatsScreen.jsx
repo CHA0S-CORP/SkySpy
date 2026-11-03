@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useFeatureQuery } from '../../../../hooks/queries/useFeatureQuery';
 import { Icon } from '../../primitives';
 import { useHashParamState, boolParam } from '../../../../hooks/useHashParamState';
 import {
@@ -77,11 +77,11 @@ export function StatsScreen({
 
   const hours = RANGE_HOURS[range] ?? 24;
 
-  const { data: sessions = [] } = useQuery({
+  const { data: sessions = [] } = useFeatureQuery('history', {
     queryKey: ['v2-stats-sessions', apiBase, hours],
-    queryFn: async () => {
+    queryFn: async ({ fetch }) => {
       try {
-        const res = await fetch(`${apiBase}/api/v1/sessions?hours=${hours}&limit=500`);
+        const res = await fetch(`${apiBase}/api/v1/sessions/?hours=${hours}&limit=500`);
         if (!res.ok) return [];
         const data = await res.json();
         return data.sessions || data.results || (Array.isArray(data) ? data : []);
@@ -91,10 +91,10 @@ export function StatsScreen({
     },
   });
 
-  const { data: safetyEvents = [] } = useQuery({
+  const { data: safetyEvents = [] } = useFeatureQuery('safety', {
     queryKey: ['v2-stats-safety', apiBase, hours],
     refetchInterval: 60000,
-    queryFn: async () => {
+    queryFn: async ({ fetch }) => {
       try {
         const res = await fetch(`${apiBase}/api/v1/safety/events/?hours=${hours}&limit=500`);
         if (!res.ok) return [];
@@ -107,9 +107,9 @@ export function StatsScreen({
   });
 
   // Tracking-quality grade distribution (stats/tracking-quality/).
-  const { data: trackingQuality = null } = useQuery({
+  const { data: trackingQuality = null } = useFeatureQuery('system', {
     queryKey: ['v2-stats-tracking-quality', apiBase, hours],
-    queryFn: async () => {
+    queryFn: async ({ fetch }) => {
       try {
         const res = await fetch(`${apiBase}/api/v1/stats/tracking-quality/?hours=${hours}`);
         if (!res.ok) return null;
@@ -121,9 +121,9 @@ export function StatsScreen({
   });
 
   // Coverage-gap analysis (stats/tracking-quality/gaps/).
-  const { data: coverageGaps = null } = useQuery({
+  const { data: coverageGaps = null } = useFeatureQuery('system', {
     queryKey: ['v2-stats-coverage-gaps', apiBase, hours],
-    queryFn: async () => {
+    queryFn: async ({ fetch }) => {
       try {
         const res = await fetch(`${apiBase}/api/v1/stats/tracking-quality/gaps/?hours=${hours}`);
         if (!res.ok) return null;
@@ -135,9 +135,9 @@ export function StatsScreen({
   });
 
   // Common aircraft types (stats/flight-patterns/aircraft-types/).
-  const { data: aircraftTypes = [] } = useQuery({
+  const { data: aircraftTypes = [] } = useFeatureQuery('system', {
     queryKey: ['v2-stats-aircraft-types', apiBase, hours],
-    queryFn: async () => {
+    queryFn: async ({ fetch }) => {
       try {
         const res = await fetch(
           `${apiBase}/api/v1/stats/flight-patterns/aircraft-types/?hours=${hours}`

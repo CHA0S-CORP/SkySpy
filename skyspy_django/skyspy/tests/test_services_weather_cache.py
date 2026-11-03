@@ -6,7 +6,7 @@ and cache expiration functionality.
 """
 
 import hashlib
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 import httpx
@@ -340,7 +340,7 @@ class GetCachedPirepsTests(TestCase):
         """Set up test fixtures."""
         CachedPirep.objects.all().delete()
         # Create test PIREPs
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         CachedPirep.objects.create(
             pirep_id="test1",
             latitude=47.5,
@@ -394,7 +394,7 @@ class CleanupOldPirepsTests(TestCase):
 
     def test_cleanup_old_pireps_removes_old(self):
         """Test that old PIREPs are removed."""
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         # Create old PIREP
         CachedPirep.objects.create(
             pirep_id="old",

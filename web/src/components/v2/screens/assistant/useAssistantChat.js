@@ -4,6 +4,7 @@ import api from '../../../../lib/api';
 import { getClientId } from '../../../../lib/clientId';
 import { ACCESS_TOKEN_KEY } from '../../../../contexts/auth/tokenStorage';
 import { chatSessionKeys } from '../../../../hooks/queries/useChatSessionQueries';
+import { useOptionalAuth } from '../../../../contexts/AuthContext';
 
 /** JSON headers + client id + the JWT bearer (when signed in). The assistant
  *  endpoints authorize via the Authorization header (preferred) OR the
@@ -93,6 +94,12 @@ export function useAssistantChat({
   onRadarTracks,
 } = {}) {
   const queryClient = useQueryClient();
+  const auth = useOptionalAuth();
+  const authReady = !auth || !auth.isLoading;
+  const assistantAvailable =
+    !auth ||
+    (auth.config.assistantEnabled !== false &&
+      (auth.config.devMode || (auth.isAuthenticated && auth.canAccessFeature('assistant'))));
   // Latest onRadarCommand in a ref so send()'s stable closure always calls the
   // current one without being re-created.
   const onRadarCommandRef = useRef(onRadarCommand);
@@ -137,6 +144,10 @@ export function useAssistantChat({
   // One-shot auth probe on mount — flips `locked` for anonymous users so the UI
   // can show the sign-in gate before the first send.
   useEffect(() => {
+    if (!authReady || !assistantAvailable) {
+      setLocked(true);
+      return;
+    }
     let alive = true;
     fetch('/api/v1/assistant/suggest/', {
       method: 'POST',
@@ -152,7 +163,7 @@ export function useAssistantChat({
     return () => {
       alive = false;
     };
-  }, []);
+  }, [authReady, assistantAvailable]);
 
   const stop = useCallback(() => {
     abortRef.current?.abort();
@@ -255,7 +266,7 @@ export function useAssistantChat({
   const send = useCallback(
     async (text) => {
       const query = (text || '').trim();
-      if (!query || busy) return;
+      if (!query || busy || !authReady || !assistantAvailable) return;
       setBusy(true);
       // Drop stale follow-up chips while this turn runs.
       suggestSeqRef.current++;
@@ -395,7 +406,7 @@ export function useAssistantChat({
         }
       }
     },
-    [busy, getContext, persistTurn, refreshSuggestions]
+    [busy, getContext, persistTurn, refreshSuggestions, authReady, assistantAvailable]
   );
 
   return {

@@ -3,6 +3,17 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
+vi.mock('../../../../contexts/AuthContext', () => ({
+  useAuth: () => ({
+    status: 'authenticated',
+    isLoading: false,
+    user: { id: 1 },
+    canAccessFeature: () => true,
+    authFetch: (...args) => fetch(...args),
+  }),
+  useOptionalAuth: () => null,
+}));
+
 // DetailTrackMap renders a real Leaflet map, which crashes in jsdom (no layout).
 // Mock vanilla leaflet with chainable no-ops for this file only (a global alias
 // would break livemap.test.jsx, which exercises real Leaflet).
