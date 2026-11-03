@@ -42,7 +42,7 @@ export function usePointTurbulence({
     data,
     isLoading: loading,
     error,
-  } = useFeatureQuery('aircraft', {
+  } = useFeatureQuery('weather', {
     queryKey: ['point-turbulence', apiBase, endpoint],
     enabled: shouldPoll,
     refetchInterval: interval,

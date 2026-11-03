@@ -22,7 +22,7 @@ export function useAircraftTurbulence({ enabled = true, interval = 60000, apiBas
     data,
     isLoading: loading,
     error,
-  } = useFeatureQuery('aircraft', {
+  } = useFeatureQuery('weather', {
     queryKey: ['aircraft-turbulence', apiBase],
     enabled,
     refetchInterval: interval,

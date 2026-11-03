@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useFeatureQuery } from './useFeatureQuery';
 import { useAnalyticsData } from '../../components/v2/screens/analytics/useAnalyticsData';
 import { usePointTurbulence } from '../usePointTurbulence';
+import { useAircraftTurbulence } from '../useAircraftTurbulence';
 import { useAssistantChat } from '../../components/v2/screens/assistant/useAssistantChat';
 
 const state = vi.hoisted(() => ({ auth: null }));
@@ -72,7 +73,72 @@ describe('permission-aware dashboard queries', () => {
     state.auth.isAuthenticated = false;
     renderHook(() => usePointTurbulence({ lat: 30, lon: -97 }), { wrapper });
     await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
-    expect(state.auth.canAccessFeature).toHaveBeenCalledWith('aircraft');
+    expect(state.auth.canAccessFeature).toHaveBeenCalledWith('weather');
+  });
+
+  it('fetches both turbulence endpoints when only weather access is allowed', async () => {
+    state.auth.canAccessFeature = vi.fn((feature) => feature === 'weather');
+    renderHook(
+      () => {
+        usePointTurbulence({ lat: 30, lon: -97 });
+        return useAircraftTurbulence();
+      },
+      { wrapper }
+    );
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+    expect(fetch.mock.calls.map(([url]) => url)).toEqual(
+      expect.arrayContaining([
+        '/api/v1/aviation/turbulence/?lat=30.0000&lon=-97.0000',
+        '/api/v1/aviation/turbulence/aircraft/',
+      ])
+    );
+    expect(state.auth.canAccessFeature).not.toHaveBeenCalledWith('aircraft');
+  });
+
+  it('does not request turbulence with aircraft access alone', async () => {
+    state.auth.canAccessFeature = (feature) => feature === 'aircraft';
+    renderHook(
+      () => {
+        usePointTurbulence({ lat: 30, lon: -97 });
+        return useAircraftTurbulence();
+      },
+      { wrapper }
+    );
+    await Promise.resolve();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('allows superuser system queries without a synthetic system.view permission', async () => {
+    state.auth.user.isSuperuser = true;
+    state.auth.canAccessFeature = () => false;
+    state.auth.config.features = { system: { is_enabled: true, read_access: 'permission' } };
+    const { result } = renderHook(
+      () =>
+        useFeatureQuery('system', {
+          queryKey: ['superuser-system'],
+          queryFn: async () => 'system-data',
+        }),
+      { wrapper }
+    );
+    await waitFor(() => expect(result.current.data).toBe('system-data'));
+  });
+
+  it.each(['loading', 'disabled'])('still blocks superuser queries while %s', async (mode) => {
+    state.auth.user.isSuperuser = true;
+    state.auth.isLoading = mode === 'loading';
+    state.auth.config.features = { system: { is_enabled: mode !== 'disabled' } };
+    const queryFn = vi.fn();
+    const { result } = renderHook(
+      () =>
+        useFeatureQuery('system', {
+          queryKey: ['blocked-superuser'],
+          queryFn,
+        }),
+      { wrapper }
+    );
+    await Promise.resolve();
+    expect(queryFn).not.toHaveBeenCalled();
+    expect(result.current.data).toBeUndefined();
   });
 
   it('does not request turbulence when explicitly disabled', async () => {
