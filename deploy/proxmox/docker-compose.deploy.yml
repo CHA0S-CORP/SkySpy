@@ -25,7 +25,10 @@ services:
   # Reverse proxy. MUST be named `skyspy` — the tunnel ingress points at
   # http://skyspy:80 and resolves it via docker DNS on skyspy-network.
   skyspy:
-    image: nginx:alpine
+    build:
+      context: ./deploy/proxmox
+      dockerfile: Dockerfile.nginx
+    pull_policy: build
     container_name: skyspy-nginx
     restart: unless-stopped
     depends_on:
@@ -34,8 +37,6 @@ services:
     ports:
       # Set NGINX_PORT in Portainer when host port 80 is already in use.
       - "${NGINX_PORT:-80}:80"  # Cloudflare still reaches container port 80.
-    volumes:
-      - ./deploy/proxmox/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     networks:
       - skyspy-network
 
