@@ -149,7 +149,9 @@ def poll_aircraft(self):
     to avoid duplicate updates.
     """
     # Skip polling if streaming is enabled and active
-    if settings.AIRCRAFT_STREAM_ENABLED and cache.get("aircraft_stream_active"):
+    if settings.AIRCRAFT_STREAM_ENABLED and (
+        getattr(settings, "AIRCRAFT_STREAM_MODE", "sse") == "adsblol" or cache.get("aircraft_stream_active")
+    ):
         logger.debug("Skipping poll - aircraft stream is active")
         return
 

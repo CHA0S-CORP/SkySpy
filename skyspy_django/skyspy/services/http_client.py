@@ -31,6 +31,8 @@ import logging
 import threading
 import time
 from collections.abc import Callable
+from datetime import UTC, datetime
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Any
 
@@ -254,7 +256,10 @@ def _parse_retry_after(value: str | None) -> float | None:
     try:
         return float(value)
     except (TypeError, ValueError):
-        return None
+        try:
+            return max(0, (parsedate_to_datetime(value) - datetime.now(UTC)).total_seconds())
+        except (TypeError, ValueError, OverflowError):
+            return None
 
 
 # =============================================================================

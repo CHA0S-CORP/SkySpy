@@ -28,6 +28,14 @@ from skyspy.tests.performance.conftest import (
 )
 
 
+@pytest.fixture(autouse=True)
+def disable_external_aircraft_lookups():
+    # Synthetic aircraft can miss the local identity cache. Keep provider
+    # latency and retries out of the alert evaluation measurements.
+    with patch("skyspy.services.aircraft_info._fetch_from_external_apis", return_value=None):
+        yield
+
+
 def create_compiled_rule(rule: AlertRule) -> CompiledRule:
     """Create a CompiledRule from an AlertRule model instance."""
     return CompiledRule(

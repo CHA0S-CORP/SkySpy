@@ -139,7 +139,9 @@ def check_task_health():
         "skyspy.tasks.analytics.update_antenna_analytics": 360,
     }
 
-    stale_tasks = task_metrics.get_stale_tasks(critical_task_intervals)
+    from skyspy.task_health import stale_tasks as shared_stale_tasks
+
+    stale_tasks = shared_stale_tasks(critical_task_intervals)
     failing_tasks = task_metrics.get_failing_tasks(min_failure_rate=0.5, min_executions=5)
 
     issues = []

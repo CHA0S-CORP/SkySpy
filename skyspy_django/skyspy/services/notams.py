@@ -21,6 +21,7 @@ from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_ex
 from skyspy.models.notams import CachedNotam
 from skyspy.services import http_client
 from skyspy.services.cache import cached_with_ttl
+from skyspy.services.provider_health import cooldown_remaining, pause_provider, provider_recovered
 
 logger = logging.getLogger(__name__)
 
@@ -123,11 +124,14 @@ def fetch_notams_from_api(
         "Referer": "https://notams.aim.faa.gov/notamSearch/",
     }
 
+    if cooldown_remaining("faa-airport-notams"):
+        return []
+
     try:
         response = _http_post_with_retry(FAA_NOTAM_API_URL, search_params, headers, timeout=30)
 
         if response.status_code == 404:
-            logger.warning("FAA NOTAM API returned 404 - endpoint may have changed")
+            pause_provider("faa-airport-notams", 900, "HTTP 404; endpoint may have changed")
             return []
 
         response.raise_for_status()
@@ -135,15 +139,16 @@ def fetch_notams_from_api(
         # Check if response is JSON before parsing
         content_type = response.headers.get("content-type", "")
         if "json" not in content_type and "javascript" not in content_type:
-            logger.warning(f"NOTAM API returned non-JSON content-type: {content_type}")
+            pause_provider("faa-airport-notams", 900, "non-JSON response")
             return []
 
         try:
             data = response.json() if response.text else {}
-        except json.JSONDecodeError as e:
-            logger.warning(f"NOTAM API returned invalid JSON: {e}")
+        except json.JSONDecodeError:
+            pause_provider("faa-airport-notams", 900, "invalid JSON")
             return []
 
+        provider_recovered("faa-airport-notams")
         # Parse the FAA NOTAM Search response format
         notams = []
         if isinstance(data, dict):
@@ -170,10 +175,10 @@ def fetch_notams_from_api(
         return []
 
     except httpx.HTTPStatusError as e:
-        logger.error(f"NOTAM API HTTP error: {e.response.status_code}")
+        pause_provider("faa-airport-notams", 900, f"HTTP {e.response.status_code}")
         return []
     except (httpx.HTTPError, ConnectionError, OSError, TimeoutError, ValueError, KeyError, TypeError) as e:
-        logger.error(f"NOTAM API request failed: {e}")
+        pause_provider("faa-airport-notams", 900, type(e).__name__)
         return []
 
 

@@ -3,6 +3,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StatsScreen } from './StatsScreen';
+vi.mock('../../../../contexts/AuthContext', () => ({
+  useAuth: () => ({
+    status: 'authenticated',
+    isLoading: false,
+    user: { id: 1 },
+    canAccessFeature: () => true,
+    authFetch: (...args) => fetch(...args),
+  }),
+}));
 import {
   activityByHour,
   altitudeDistribution,

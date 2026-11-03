@@ -31,13 +31,8 @@ _use_gevent = (
 )
 
 if _use_gevent:
-    # Gevent monkey patching must happen before any other imports
-    # This patches standard library modules for cooperative multitasking
-    from gevent import monkey
-
-    # Patch all except ssl and subprocess to avoid issues with Django ORM
-    monkey.patch_all(ssl=False)
-
+    # Celery's CLI patches gevent before importing this module. Repatching with
+    # different options cannot undo that patch and produces MonkeyPatchWarning.
     # Tell Django we're in a sync context even with gevent
     os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] = "true"
 
@@ -71,6 +66,10 @@ def debug_task(self):
 
 
 from celery.signals import worker_ready  # noqa: E402
+
+from skyspy.task_health import register_task_health_signals  # noqa: E402
+
+register_task_health_signals()
 
 
 @worker_ready.connect

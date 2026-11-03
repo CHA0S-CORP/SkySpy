@@ -16,6 +16,15 @@ import {
   scatterGeometry,
 } from './analyticsModel';
 
+vi.mock('../../../../contexts/AuthContext', () => ({
+  useAuth: () => ({
+    status: 'authenticated',
+    user: { id: 1 },
+    canAccessFeature: () => true,
+    authFetch: (...args) => global.fetch(...args),
+  }),
+}));
+
 describe('analyticsModel', () => {
   it('scatterGeometry maps points into the plot rect', () => {
     const geo = scatterGeometry({

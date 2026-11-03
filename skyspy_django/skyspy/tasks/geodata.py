@@ -277,7 +277,9 @@ def _feeder_weather_bbox() -> str:
         return _CONUS_BBOX
     radius_nm = getattr(settings, "GEODATA_FETCH_RADIUS_NM", 250) or 250
     deg = radius_nm / 60.0
-    return f"{feeder_lat - deg},{feeder_lon - deg},{feeder_lat + deg},{feeder_lon + deg}"
+    return ",".join(
+        f"{coordinate:.5f}" for coordinate in (feeder_lat - deg, feeder_lon - deg, feeder_lat + deg, feeder_lon + deg)
+    )
 
 
 @shared_task(bind=True, max_retries=3)

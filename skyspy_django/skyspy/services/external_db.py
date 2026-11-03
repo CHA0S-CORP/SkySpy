@@ -910,7 +910,7 @@ def load_opensky_database(auto_download: bool = True) -> bool:
                 if path is None:
                     return False
             else:
-                logger.warning("OpenSky database not found")
+                logger.info("OpenSky cache not present yet; startup download will be queued")
                 return False
 
         logger.info(f"Loading OpenSky database from {path}...")

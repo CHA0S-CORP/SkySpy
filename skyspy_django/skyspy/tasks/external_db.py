@@ -221,6 +221,17 @@ def load_cached_databases():
         external_db.init_databases(auto_download=False)
         stats = external_db.get_database_stats()
         logger.info(f"Loaded cached external databases on startup: {stats}")
+        if getattr(settings, "OPENSKY_DB_ENABLED", True) and not stats.get("opensky", {}).get("loaded"):
+            from django.core.cache import cache
+
+            # Multiple workers can bootstrap concurrently against the same volume.
+            key = "external-db:opensky:bootstrap"
+            if cache.add(key, True, timeout=900):
+                try:
+                    load_opensky_database.delay()
+                except Exception:
+                    cache.delete(key)
+                    raise
         return stats
     except Exception as e:  # broad: Celery task top-level guard, must not crash the worker
         logger.error(f"Failed to load cached databases: {e}")

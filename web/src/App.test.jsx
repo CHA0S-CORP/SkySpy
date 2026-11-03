@@ -129,7 +129,12 @@ vi.mock('./hooks/socket', () => ({
   })),
 }));
 
+const { authFetchForTest } = vi.hoisted(() => ({
+  authFetchForTest: (...args) => globalThis.fetch(...args),
+}));
+
 vi.mock('./contexts/AuthContext', () => ({
+  useOptionalAuth: () => null,
   useAuth: vi.fn(() => ({
     status: 'anonymous',
     isAuthenticated: false,
@@ -138,6 +143,9 @@ vi.mock('./contexts/AuthContext', () => ({
       publicMode: true,
     },
     getAccessToken: vi.fn(),
+    canAccessFeature: vi.fn(() => true),
+    hasPermission: vi.fn(() => true),
+    authFetch: authFetchForTest,
   })),
 }));
 
@@ -385,6 +393,9 @@ describe('App', () => {
         isAuthenticated: true,
         config: { authEnabled: true, publicMode: false },
         getAccessToken: vi.fn(),
+        canAccessFeature: vi.fn(() => true),
+        hasPermission: vi.fn(() => true),
+        authFetch: authFetchForTest,
       });
 
       window.location.hash = '#login';
@@ -404,6 +415,9 @@ describe('App', () => {
         isAuthenticated: false,
         config: { authEnabled: true, publicMode: false },
         getAccessToken: vi.fn(),
+        canAccessFeature: vi.fn(() => true),
+        hasPermission: vi.fn(() => true),
+        authFetch: authFetchForTest,
       });
 
       window.location.hash = '#map';
@@ -412,6 +426,8 @@ describe('App', () => {
       });
 
       expect(screen.getByText('Loading...')).toBeInTheDocument();
+      const { useSocketIOData } = await import('./hooks/socket');
+      expect(useSocketIOData).toHaveBeenLastCalledWith(false, '', '');
     });
   });
 
@@ -423,6 +439,9 @@ describe('App', () => {
         isAuthenticated: true,
         config: { authEnabled: true, publicMode: false },
         getAccessToken: vi.fn(),
+        canAccessFeature: vi.fn(() => true),
+        hasPermission: vi.fn(() => true),
+        authFetch: authFetchForTest,
       });
 
       window.location.hash = '#map';
@@ -440,6 +459,9 @@ describe('App', () => {
         isAuthenticated: false,
         config: { authEnabled: true, publicMode: true },
         getAccessToken: vi.fn(),
+        canAccessFeature: vi.fn(() => true),
+        hasPermission: vi.fn(() => true),
+        authFetch: authFetchForTest,
       });
 
       window.location.hash = '#map';
@@ -548,6 +570,27 @@ describe('App', () => {
   });
 
   describe('connection status', () => {
+    it('does not subscribe or request status without granular socket permissions', async () => {
+      const { useAuth } = await import('./contexts/AuthContext');
+      const { useSocketIOData } = await import('./hooks/socket');
+      useAuth.mockReturnValue({
+        status: 'authenticated',
+        isAuthenticated: true,
+        user: { id: 2 },
+        config: { authEnabled: true, publicMode: false },
+        canAccessFeature: () => true,
+        hasPermission: () => false,
+        authFetch: authFetchForTest,
+        getAccessToken: vi.fn(),
+      });
+      window.location.hash = '#map';
+      await act(async () => {
+        render(<App />);
+      });
+      expect(useSocketIOData).toHaveBeenLastCalledWith(false, '', '');
+      expect(fetch.mock.calls.some(([url]) => url.includes('/system/status'))).toBe(false);
+    });
+
     it('should pass connected status to the shell', async () => {
       window.location.hash = '#map';
       await act(async () => {

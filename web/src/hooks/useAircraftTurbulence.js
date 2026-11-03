@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 
-import { useApi } from './useApi';
+import { useFeatureQuery } from './queries/useFeatureQuery';
 
 /**
  * Poll per-aircraft turbulence risk from the backend scorer.
@@ -18,11 +18,21 @@ import { useApi } from './useApi';
  * @returns {{ byHex: Map<string, {score:number, level:string}>, loading: boolean, error: (Error|null) }}
  */
 export function useAircraftTurbulence({ enabled = true, interval = 60000, apiBase = '' } = {}) {
-  const { data, loading, error } = useApi(
-    '/api/v1/aviation/turbulence/aircraft',
-    enabled ? interval : null,
-    apiBase
-  );
+  const {
+    data,
+    isLoading: loading,
+    error,
+  } = useFeatureQuery('weather', {
+    queryKey: ['aircraft-turbulence', apiBase],
+    enabled,
+    refetchInterval: interval,
+    retry: false,
+    queryFn: async ({ fetch, signal }) => {
+      const response = await fetch(`${apiBase}/api/v1/aviation/turbulence/aircraft/`, { signal });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return response.json();
+    },
+  });
 
   const byHex = useMemo(() => {
     const map = new Map();
