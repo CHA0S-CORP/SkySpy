@@ -70,6 +70,9 @@ services:
     networks:
       - test-network
     working_dir: /app
+    healthcheck:
+      # The pytest runner does not serve HTTP.
+      disable: true
     command: >
       sh -c "
         echo 'Running database migrations...' &&
@@ -374,7 +377,7 @@ services:
       postgres:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "pg_isready", "-h", "localhost"]
+      test: ["CMD-SHELL", "pg_isready -h localhost -U \"$$DB_USER\" -d \"$$DB_NAME\""]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -524,7 +527,8 @@ services:
       context: ./test/acars-mock/
       dockerfile: Dockerfile
     image: ghcr.io/cha0s-corp/acarshub-mock:latest
-    profiles: ["dev","test"]
+    # The relay destination (acars-listener) runs in the dev profile.
+    profiles: ["dev"]
     container_name: acarshub-mock
     restart: unless-stopped
     networks:
