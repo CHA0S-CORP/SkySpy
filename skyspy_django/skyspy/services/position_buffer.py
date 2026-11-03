@@ -6,6 +6,7 @@ once: a crash between commit and acknowledgement may repeat a batch.
 """
 
 import json
+import time
 from uuid import uuid4
 
 from redis import Redis
@@ -24,7 +25,8 @@ class PositionBuffer:
     def append(self, positions):
         # One stream entry per report; no trimming of unacknowledged data.
         # Backpressure leaves the batch in the producer's bounded local buffer.
-        payloads = [json.dumps(position) for position in positions]
+        observed_at = time.time()
+        payloads = [json.dumps({"_observed_at": observed_at, **position}) for position in positions]
         result = self.redis.eval(
             """
             if redis.call('XLEN', KEYS[1]) + #ARGV - 1 > tonumber(ARGV[1]) then
@@ -58,7 +60,14 @@ class PositionBuffer:
         # A consumer per flush avoids concurrent readers claiming the same pending
         # entry. Remove its metadata on ack; failed consumers are cleaned up when
         # their last pending entry is recovered (without deleting pending data).
-        return consumer, [(entry_id, json.loads(fields[b"position"])) for entry_id, fields in entries]
+        reports = []
+        for entry_id, fields in entries:
+            position = json.loads(fields[b"position"])
+            # Entries queued by the previous version have no observation time.
+            # Their stream ID records enqueue time, never the reclaim time.
+            position.setdefault("_observed_at", int(entry_id.split(b"-")[0]) / 1000)
+            reports.append((entry_id, position))
+        return consumer, reports
 
     def acknowledge(self, consumer, ids):
         with self.redis.pipeline(transaction=True) as pipe:

@@ -98,7 +98,11 @@ The producer atomically enqueues reports; the database task claims up to 5,000
 at a time and acknowledges/deletes them only after its transaction commits.
 Failed or interrupted batches can be reclaimed after 60 seconds. Delivery is at
 least once: a crash after the database commit but before acknowledgement can
-produce duplicate sightings. Redis retains at most 50,000 reports; backpressure
+produce duplicate sightings. Reports retain their original observation time
+across retries. Live-position upserts atomically reject older observations, and
+expired reports only contribute to history; replay cannot reset the live TTL.
+Legacy stream entries use their enqueue timestamp when reclaimed.
+Redis retains at most 50,000 reports; backpressure
 keeps new reports in a bounded producer retry deque. A prolonged Redis/database
 outage can overflow that deque, which logs the dropped count.
 

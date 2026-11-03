@@ -19,7 +19,8 @@ def test_separate_workers_share_positions_and_acknowledge(workers):
     positions = [{"hex": "ABC123", "lat": 30.2, "lon": -97.7}, {"hex": "DEF456", "lat": 31, "lon": -98}]
     producer.append(positions)
     name, entries = consumer.claim()
-    assert [position for _, position in entries] == positions
+    assert [{k: v for k, v in position.items() if k != "_observed_at"} for _, position in entries] == positions
+    assert all(position["_observed_at"] > 0 for _, position in entries)
     assert producer.depth() == 2  # Claiming is not destructive.
     consumer.acknowledge(name, [key for key, _ in entries])
     assert producer.depth() == 0
@@ -54,3 +55,19 @@ def test_flush_can_keep_up_with_more_than_500_positions(workers):
     producer.append([{"hex": f"{i:06X}"} for i in range(1500)])
     _, entries = worker.claim()
     assert len(entries) == 1500
+
+
+def test_handoff_preserves_original_observation_time(workers):
+    producer, worker = workers
+    producer.append([{"hex": "ABC123", "_observed_at": 1234.5}])
+    _, entries = worker.claim()
+    assert entries[0][1]["_observed_at"] == 1234.5
+
+
+def test_legacy_report_uses_enqueue_time_when_reclaimed(workers, monkeypatch):
+    producer, worker = workers
+    key = producer.redis.xadd(STREAM, {"position": '{"hex":"ABC123"}'})
+    worker.claim()
+    monkeypatch.setattr(module, "RETRY_MS", 0)
+    _, entries = producer.claim()
+    assert entries[0][1]["_observed_at"] == int(key.split(b"-")[0]) / 1000

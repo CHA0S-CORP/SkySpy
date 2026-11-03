@@ -1406,3 +1406,64 @@ def test_redis_outage_retains_producer_reports_until_handoff_succeeds():
     stream_module._publish_position_buffer()
     assert not _db_write_buffer
     assert stream_module._position_buffer().depth() == 1
+
+
+@pytest.mark.django_db(transaction=True)
+def test_recovered_batch_cannot_move_live_position_backwards(monkeypatch):
+    """A failed older batch is reclaimed after fresh reports have been saved."""
+    from django.utils import timezone
+
+    from skyspy.models import LiveAircraftPosition
+    from skyspy.services import position_buffer
+
+    reset_stream_state()
+    producer = stream_module._position_buffer()
+    now = timezone.now().timestamp()
+    producer.append([{"hex": "ABC123", "lat": 30, "lon": -97, "_observed_at": now - 30}])
+    producer.claim()  # Simulate a saving worker dying before commit.
+    producer.append([{"hex": "ABC123", "lat": 31, "lon": -98, "_observed_at": now}])
+    flush_stream_to_database()
+    fresh = LiveAircraftPosition.objects.get(icao_hex="ABC123")
+    monkeypatch.setattr(position_buffer, "RETRY_MS", 0)
+    flush_stream_to_database()
+    recovered = LiveAircraftPosition.objects.get(icao_hex="ABC123")
+    assert recovered.geom.y == fresh.geom.y == 31
+    assert recovered.geom.x == fresh.geom.x == -98
+    assert recovered.updated_at == fresh.updated_at
+    assert producer.depth() == 0
+
+
+@pytest.mark.django_db(transaction=True)
+def test_expired_recovered_batch_saves_history_without_reviving_aircraft(monkeypatch):
+    from django.utils import timezone
+
+    from skyspy.models import AircraftSighting, LiveAircraftPosition
+    from skyspy.services import position_buffer
+
+    reset_stream_state()
+    producer = stream_module._position_buffer()
+    producer.append([{"hex": "ABC123", "lat": 30, "lon": -97, "_observed_at": timezone.now().timestamp() - 120}])
+    producer.claim()
+    monkeypatch.setattr(position_buffer, "RETRY_MS", 0)
+    flush_stream_to_database()
+    assert AircraftSighting.objects.filter(icao_hex="ABC123").count() == 1
+    assert not LiveAircraftPosition.objects.filter(icao_hex="ABC123").exists()
+    assert producer.depth() == 0
+
+
+@pytest.mark.django_db
+def test_live_position_uses_newest_observation_in_unordered_batch():
+    from django.utils import timezone
+
+    from skyspy.models import LiveAircraftPosition
+
+    now = timezone.now().timestamp()
+    stream_module._upsert_live_positions(
+        [
+            {"hex": "ABC123", "lat": 31, "lon": -98, "_observed_at": now},
+            {"hex": "ABC123", "lat": 30, "lon": -97, "_observed_at": now - 30},
+        ]
+    )
+    row = LiveAircraftPosition.objects.get(icao_hex="ABC123")
+    assert row.geom.y == 31
+    assert abs(row.updated_at.timestamp() - now) < 0.001

@@ -786,11 +786,9 @@ def update_state_and_broadcast(batch: list[dict], full_snapshot: bool = True):
             if ac.get("lat") is not None and ac.get("lon") is not None:
                 if len(_db_write_buffer) >= cap:
                     _db_buffer_dropped += 1
-                # No .copy() needed: this cycle's dicts are replaced (not mutated
-                # in place) by subsequent cycles, and the only post-buffer mutator
-                # (annotate_ghosts) writes only ghost/ghost_of, which the flush
-                # never reads. Avoids ~250-500 dict copies/sec on the hot path.
-                _db_write_buffer.append(ac)
+                # Capture arrival time before any Redis outage/retry can delay
+                # enqueueing. Do not mutate the aircraft used by live broadcasts.
+                _db_write_buffer.append({**ac, "_observed_at": time.time()})
     _publish_position_buffer()
 
 
@@ -903,63 +901,70 @@ def _safe_altitude(value):
 
 
 def _upsert_live_positions(to_write: list):
-    """Upsert current live positions (one row per hex) + prune stale rows.
+    """Update live coordinates only with newer, unexpired observations.
 
-    Feeds the map's server-side clustering (LiveAircraftPosition). Deduped by hex
-    (last write wins) so an in-batch duplicate can't collide on the unique key.
-    Wrapped in its own savepoint + broad guard so a geom/DB failure here never
-    poisons the sighting insert or the flush task.
+    The timestamp comparison lives in ON CONFLICT so overlapping flushes cannot
+    overwrite a newer row after reading stale state. Observation time also drives
+    expiry, preventing a reclaimed batch from reviving departed aircraft.
     """
-    from datetime import timedelta
+    from datetime import UTC, datetime, timedelta
 
-    from django.db import DatabaseError, transaction
+    from django.db import DatabaseError, connection, transaction
 
     from skyspy.models import LiveAircraftPosition
-    from skyspy.models.aviation import point_from_latlon
 
+    cutoff = timezone.now() - timedelta(seconds=getattr(settings, "LIVE_POSITION_TTL", 90))
     live_by_hex = {}
     for ac in to_write:
         hexid = (ac.get("hex") or "").upper()
         if not hexid or ac.get("lat") is None or ac.get("lon") is None:
             continue
-        live_by_hex[hexid] = ac
+        observed_at = datetime.fromtimestamp(ac["_observed_at"], tz=UTC)
+        if observed_at < cutoff:
+            continue
+        if hexid not in live_by_hex or observed_at > live_by_hex[hexid][0]:
+            live_by_hex[hexid] = (observed_at, ac)
 
     try:
-        if live_by_hex:
-            rows = [
-                LiveAircraftPosition(
-                    icao_hex=hexid,
-                    callsign=ac.get("flight"),
-                    geom=point_from_latlon(ac.get("lat"), ac.get("lon")),
-                    altitude=_safe_altitude(ac.get("alt_baro")) or _safe_altitude(ac.get("alt_geom")),
-                    track=ac.get("track"),
-                    ground_speed=ac.get("gs"),
-                    military=bool(ac.get("military", False)),
-                    emergency=bool(ac.get("emergency", False)),
-                )
-                for hexid, ac in live_by_hex.items()
-            ]
-            with transaction.atomic():
-                LiveAircraftPosition.objects.bulk_create(
-                    rows,
-                    update_conflicts=True,
-                    unique_fields=["icao_hex"],
-                    update_fields=[
-                        "callsign",
-                        "geom",
-                        "altitude",
-                        "track",
-                        "ground_speed",
-                        "military",
-                        "emergency",
-                        "updated_at",
-                    ],
-                )
-
-        # Prune rows older than the TTL so clusters reflect only live traffic.
-        ttl = getattr(settings, "LIVE_POSITION_TTL", 90)
-        cutoff = timezone.now() - timedelta(seconds=ttl)
         with transaction.atomic():
+            # Django bulk_create(update_conflicts=True) cannot express a WHERE
+            # condition on the conflict update. Parameterized PostgreSQL upsert
+            # preserves ordering atomically without a new column or migration.
+            rows = [
+                (
+                    hexid,
+                    ac.get("flight"),
+                    ac["lon"],
+                    ac["lat"],
+                    _safe_altitude(ac.get("alt_baro")) or _safe_altitude(ac.get("alt_geom")),
+                    ac.get("track"),
+                    ac.get("gs"),
+                    bool(ac.get("military", False)),
+                    bool(ac.get("emergency", False)),
+                    observed_at,
+                )
+                for hexid, (observed_at, ac) in live_by_hex.items()
+            ]
+            with connection.cursor() as cursor:
+                for offset in range(0, len(rows), 500):
+                    batch = rows[offset : offset + 500]
+                    placeholders = ", ".join(
+                        ["(%s, %s, ST_SetSRID(ST_MakePoint(%s, %s), 4326), %s, %s, %s, %s, %s, %s)"] * len(batch)
+                    )
+                    cursor.execute(
+                        """INSERT INTO live_aircraft_positions
+                        (icao_hex, callsign, geom, altitude, track, ground_speed, military, emergency, updated_at)
+                        VALUES """
+                        + placeholders
+                        + """
+                        ON CONFLICT (icao_hex) DO UPDATE SET
+                            callsign = EXCLUDED.callsign, geom = EXCLUDED.geom,
+                            altitude = EXCLUDED.altitude, track = EXCLUDED.track,
+                            ground_speed = EXCLUDED.ground_speed, military = EXCLUDED.military,
+                            emergency = EXCLUDED.emergency, updated_at = EXCLUDED.updated_at
+                        WHERE EXCLUDED.updated_at > live_aircraft_positions.updated_at""",
+                        [value for row in batch for value in row],
+                    )
             LiveAircraftPosition.objects.filter(updated_at__lt=cutoff).delete()
     except DatabaseError:
         logger.debug("Live position upsert/prune skipped (DB error)", exc_info=True)
