@@ -27,6 +27,8 @@ services:
     build:
       context: ./docker/postgres
     image: skyspy-postgres:pg16-postgis
+    # This tag is built locally, not published to a registry.
+    pull_policy: build
     container_name: skyspy-postgres
     restart: unless-stopped
     # Docker's default /dev/shm is 64M; parallel VACUUM/ANALYZE + hash ops need
