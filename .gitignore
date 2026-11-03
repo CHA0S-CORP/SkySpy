@@ -10,6 +10,8 @@ web/test-results/
 *storybook.log
 storybook-static
 dist/
+*.egg-info/
+.eggs/
 coverage/
 .ruffle-cache/
 .pytest_cache/
@@ -17,6 +19,7 @@ coverage/
 test-results/
 .venv/
 venv/
+.idea
 
 # SkySpy Go TUI export artifacts (screenshot/CSV/JSON writes default to cwd)
 skyspy_aircraft_*.csv
