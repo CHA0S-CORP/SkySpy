@@ -1,6 +1,7 @@
 README.md
 pyproject.toml
 skyspy_common/__init__.py
+skyspy_common/subprocess_decode.py
 skyspy_common.egg-info/PKG-INFO
 skyspy_common.egg-info/SOURCES.txt
 skyspy_common.egg-info/dependency_links.txt
@@ -22,5 +23,6 @@ skyspy_common/libacars/tests/test_binding.py
 skyspy_common/libacars/tests/test_concurrency.py
 skyspy_common/libacars/tests/test_exceptions.py
 skyspy_common/libacars/tests/test_integration.py
+skyspy_common/libacars/tests/test_msg_dir_crash.py
 skyspy_common/libacars/tests/test_performance.py
 skyspy_common/libacars/tests/test_validation.py
