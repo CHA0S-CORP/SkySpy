@@ -12,12 +12,14 @@ Tests cover:
 """
 
 import contextlib
+import json
 from unittest.mock import MagicMock, patch
 
 import pytest
 from django.core.cache import cache
 from django.test import TestCase, override_settings
 
+import skyspy.tasks.aircraft_stream as stream_module
 from skyspy.tasks.aircraft import poll_aircraft
 from skyspy.tasks.aircraft_stream import (
     CACHE_KEY_AIRCRAFT,
@@ -46,6 +48,19 @@ from skyspy.tasks.aircraft_stream import (
     update_state_and_broadcast,
 )
 
+
+@pytest.fixture(autouse=True)
+def shared_position_redis(monkeypatch):
+    """All stream tests use a shared Redis server, never the deployment broker."""
+    import fakeredis
+
+    from skyspy.services import position_buffer
+
+    server = fakeredis.FakeServer()
+    monkeypatch.setattr(position_buffer.Redis, "from_url", lambda *a, **kw: fakeredis.FakeRedis(server=server))
+    return server
+
+
 # Test settings for Celery eager execution
 CELERY_TEST_SETTINGS = {
     "CELERY_TASK_ALWAYS_EAGER": True,
@@ -61,6 +76,7 @@ def reset_stream_state():
         stream_module._aircraft_state.clear()
     with stream_module._db_buffer_lock:
         stream_module._db_write_buffer.clear()
+    stream_module._position_buffer().redis.flushdb()
     with stream_module._seen_aircraft_lock:
         stream_module._seen_aircraft.clear()
     stream_module._new_aircraft_queue.clear()
@@ -212,8 +228,7 @@ class UpdateStateAndBroadcastTest(TestCase):
 
         # Check database buffer
         with _db_buffer_lock:
-            self.assertEqual(len(_db_write_buffer), 1)
-            self.assertEqual(_db_write_buffer[0]["hex"], "A12345")
+            self.assertEqual(stream_module._position_buffer().depth(), 1)
 
     @patch("skyspy.tasks.aircraft_stream.broadcast_positions_fast")
     @patch("skyspy.tasks.aircraft_stream.broadcast_aircraft_delta")
@@ -309,6 +324,7 @@ class FlushStreamToDatabaseTest(TestCase):
 
         # Mock bulk_create
         with patch("skyspy.models.AircraftSighting.objects.bulk_create") as mock_bulk:
+            stream_module._publish_position_buffer()
             flush_stream_to_database()
             mock_bulk.assert_called_once()
             # Check 2 sightings were created
@@ -817,7 +833,7 @@ class LowLatencyArchitectureTest(TestCase):
 
         # Check buffer has data
         with _db_buffer_lock:
-            self.assertEqual(len(_db_write_buffer), 2)
+            self.assertEqual(stream_module._position_buffer().depth(), 2)
 
     def test_cache_sync_is_separate_from_broadcast(self):
         """Verify that cache sync is a separate operation from broadcast."""
@@ -1289,10 +1305,10 @@ class DifferentialUpdateIntegrationTest(TestCase):
 
 @pytest.mark.django_db
 def test_flush_failure_requeues_entire_batch_in_order():
-    """A failed flush must requeue ALL buffered rows, not just the first 1000.
+    """A failed flush must retain ALL claimed reports in Redis.
 
-    The whole batch is rolled back by transaction.atomic(), so anything not
-    requeued is permanently lost; the deque's maxlen is the sole loss bound.
+    The whole batch is rolled back by transaction.atomic(), so it must stay
+    unacknowledged for recovery by a later worker.
     """
     import skyspy.tasks.aircraft_stream as stream_module
 
@@ -1306,10 +1322,12 @@ def test_flush_failure_requeues_entire_batch_in_order():
             "skyspy.models.AircraftSighting.objects.bulk_create",
             side_effect=Exception("db down"),
         ):
+            stream_module._publish_position_buffer()
             flush_stream_to_database()
 
         with stream_module._db_buffer_lock:
-            requeued = list(stream_module._db_write_buffer)
+            pending = stream_module._position_buffer().redis.xrange("skyspy:positions:v1")
+            requeued = [json.loads(fields[b"position"]) for _, fields in pending]
 
         assert len(requeued) == 1500
         # Chronological order preserved (oldest first)
@@ -1321,7 +1339,7 @@ def test_flush_failure_requeues_entire_batch_in_order():
 
 @pytest.mark.django_db
 def test_flush_failure_requeues_ahead_of_newer_rows():
-    """Requeued rows must sit ahead of rows buffered after the failed flush."""
+    """Failed reports remain in Redis while newer reports can still be staged."""
     import skyspy.tasks.aircraft_stream as stream_module
 
     reset_stream_state()
@@ -1337,13 +1355,115 @@ def test_flush_failure_requeues_ahead_of_newer_rows():
             "skyspy.models.AircraftSighting.objects.bulk_create",
             side_effect=fail_and_buffer_new_row,
         ):
+            stream_module._publish_position_buffer()
             flush_stream_to_database()
 
         # A newer row arrives after the failed flush requeued the batch
         with stream_module._db_buffer_lock:
             stream_module._db_write_buffer.append({"hex": "CCCCCC", "lat": 42.0, "lon": -72.0})
-            hexes = [ac["hex"] for ac in stream_module._db_write_buffer]
+            pending = stream_module._position_buffer().redis.xrange("skyspy:positions:v1")
+            hexes = [json.loads(fields[b"position"])["hex"] for _, fields in pending]
+            hexes += [ac["hex"] for ac in stream_module._db_write_buffer]
 
         assert hexes == ["AAAAAA", "BBBBBB", "CCCCCC"]
     finally:
         reset_stream_state()
+
+
+@pytest.mark.django_db(transaction=True)
+def test_positions_from_another_worker_are_saved_and_returned_by_history_api():
+    """Exercise Redis -> actual DB insert -> the endpoint used by the track UI."""
+    from rest_framework.test import APIClient
+
+    from skyspy.models import AircraftSighting
+
+    reset_stream_state()
+    producer = stream_module._position_buffer()
+    producer.append(
+        [
+            {"hex": "ABC123", "lat": 30.2, "lon": -97.7, "alt_baro": 10000},
+            {"hex": "ABC123", "lat": 30.3, "lon": -97.8, "alt_baro": 11000},
+        ]
+    )
+    assert not _db_write_buffer  # Saving worker has no producer memory.
+    flush_stream_to_database()
+    assert producer.depth() == 0
+    assert AircraftSighting.objects.filter(icao_hex="ABC123").count() == 2
+    response = APIClient().get("/api/v1/sightings/?icao_hex=ABC123&hours=24&limit=1000")
+    assert response.status_code == 200
+    data = response.json()
+    points = data.get("sightings", data.get("results", []))
+    assert len(points) == 2
+    assert {point["lat"] for point in points} == {30.2, 30.3}
+
+
+def test_redis_outage_retains_producer_reports_until_handoff_succeeds():
+    reset_stream_state()
+    _db_write_buffer.append({"hex": "ABC123", "lat": 30.2, "lon": -97.7})
+    with patch.object(stream_module.PositionBuffer, "append", side_effect=ConnectionError("Redis unavailable")):
+        stream_module._publish_position_buffer()
+    assert len(_db_write_buffer) == 1
+    stream_module._publish_position_buffer()
+    assert not _db_write_buffer
+    assert stream_module._position_buffer().depth() == 1
+
+
+@pytest.mark.django_db(transaction=True)
+def test_recovered_batch_cannot_move_live_position_backwards(monkeypatch):
+    """A failed older batch is reclaimed after fresh reports have been saved."""
+    from django.utils import timezone
+
+    from skyspy.models import LiveAircraftPosition
+    from skyspy.services import position_buffer
+
+    reset_stream_state()
+    producer = stream_module._position_buffer()
+    now = timezone.now().timestamp()
+    producer.append([{"hex": "ABC123", "lat": 30, "lon": -97, "_observed_at": now - 30}])
+    producer.claim()  # Simulate a saving worker dying before commit.
+    producer.append([{"hex": "ABC123", "lat": 31, "lon": -98, "_observed_at": now}])
+    flush_stream_to_database()
+    fresh = LiveAircraftPosition.objects.get(icao_hex="ABC123")
+    monkeypatch.setattr(position_buffer, "RETRY_MS", 0)
+    flush_stream_to_database()
+    recovered = LiveAircraftPosition.objects.get(icao_hex="ABC123")
+    assert recovered.geom.y == fresh.geom.y == 31
+    assert recovered.geom.x == fresh.geom.x == -98
+    assert recovered.updated_at == fresh.updated_at
+    assert producer.depth() == 0
+
+
+@pytest.mark.django_db(transaction=True)
+def test_expired_recovered_batch_saves_history_without_reviving_aircraft(monkeypatch):
+    from django.utils import timezone
+
+    from skyspy.models import AircraftSighting, LiveAircraftPosition
+    from skyspy.services import position_buffer
+
+    reset_stream_state()
+    producer = stream_module._position_buffer()
+    producer.append([{"hex": "ABC123", "lat": 30, "lon": -97, "_observed_at": timezone.now().timestamp() - 120}])
+    producer.claim()
+    monkeypatch.setattr(position_buffer, "RETRY_MS", 0)
+    flush_stream_to_database()
+    assert AircraftSighting.objects.filter(icao_hex="ABC123").count() == 1
+    assert not LiveAircraftPosition.objects.filter(icao_hex="ABC123").exists()
+    assert producer.depth() == 0
+
+
+@pytest.mark.django_db
+def test_live_position_uses_newest_observation_in_unordered_batch():
+    from django.utils import timezone
+
+    from skyspy.models import LiveAircraftPosition
+
+    now = timezone.now().timestamp()
+    stream_module._upsert_live_positions(
+        [
+            {"hex": "ABC123", "lat": 31, "lon": -98, "_observed_at": now},
+            {"hex": "ABC123", "lat": 30, "lon": -97, "_observed_at": now - 30},
+        ]
+    )
+    row = LiveAircraftPosition.objects.get(icao_hex="ABC123")
+    assert row.geom.y == 31
+    assert abs(row.updated_at.timestamp() - now) < 0.001

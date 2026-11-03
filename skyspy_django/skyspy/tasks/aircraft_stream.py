@@ -29,6 +29,7 @@ from django.conf import settings
 from django.core.cache import cache
 from django.utils import timezone
 
+from skyspy.services.position_buffer import CAPACITY, PositionBuffer
 from skyspy.socketio.utils import sync_emit
 
 logger = logging.getLogger(__name__)
@@ -37,25 +38,16 @@ logger = logging.getLogger(__name__)
 # In-memory buffers (for low-latency operation)
 # ============================================================================
 #
-# IMPORTANT DEPLOYMENT CONSTRAINT: these module-level buffers are shared
-# between the producer (stream_aircraft on the `polling` queue) and the
-# consumers (flush_stream_to_database / process_new_aircraft_lookups on the
-# `database` queue, cleanup_stale_aircraft on `default`). This only works
-# because a single gevent worker process consumes all queues. If the queues
-# are ever split across multiple worker processes, the cold-path tasks will
-# see empty buffers and DB persistence/lookups will silently stop - move the
-# buffers to Redis before splitting workers.
+# Only the stream owner uses local state. Position reports cross the worker
+# boundary through Redis; the local deque is a bounded retry buffer for brief
+# Redis outages. Other stateful stream tasks still require the polling worker.
 
 # Current aircraft state (hot path - updated on every message)
 _aircraft_state: dict[str, dict] = {}  # icao -> aircraft data
 _aircraft_state_lock = Lock()
 
-# Buffer for database writes (cold path - flushed periodically). deque(maxlen)
-# silently discards the OLDEST row on overflow, so a lagging flush or a feed
-# burst would drop positions with no trace. _db_buffer_dropped counts those
-# discards so flush_stream_to_database can surface them instead of losing data
-# silently; the flush also re-queues failed batches, so overflow is the sole
-# remaining loss path. Sized for ~10s of a dense feed at the 5s flush cadence.
+# Bounded producer-side retry staging for Redis outages. Reports are removed
+# only after Redis accepts them; prolonged outages can overflow this deque.
 _db_write_buffer: deque[dict] = deque(maxlen=50000)
 _db_buffer_dropped = 0
 
@@ -794,11 +786,10 @@ def update_state_and_broadcast(batch: list[dict], full_snapshot: bool = True):
             if ac.get("lat") is not None and ac.get("lon") is not None:
                 if len(_db_write_buffer) >= cap:
                     _db_buffer_dropped += 1
-                # No .copy() needed: this cycle's dicts are replaced (not mutated
-                # in place) by subsequent cycles, and the only post-buffer mutator
-                # (annotate_ghosts) writes only ghost/ghost_of, which the flush
-                # never reads. Avoids ~250-500 dict copies/sec on the hot path.
-                _db_write_buffer.append(ac)
+                # Capture arrival time before any Redis outage/retry can delay
+                # enqueueing. Do not mutate the aircraft used by live broadcasts.
+                _db_write_buffer.append({**ac, "_observed_at": time.time()})
+    _publish_position_buffer()
 
 
 def _bump_messages_total():
@@ -806,14 +797,31 @@ def _bump_messages_total():
     _messages_total += 1
 
 
-def get_db_buffer_stats() -> tuple[int, int]:
-    """Return (current_depth, capacity) of the cold-path DB write buffer.
+def _position_buffer():
+    return PositionBuffer(settings.REDIS_URL)
 
-    Exposed for queue-depth monitoring so the buffer filling toward maxlen
-    (silent oldest-drop) is visible before positions are actually lost.
-    """
+
+def _publish_position_buffer():
+    """Retain reports locally until Redis accepts them; never fall back silently."""
+    global _db_buffer_dropped
+
     with _db_buffer_lock:
-        return len(_db_write_buffer), (_db_write_buffer.maxlen or 0)
+        if _db_buffer_dropped:
+            logger.warning("Dropped %d positions after local Redis retry buffer overflow", _db_buffer_dropped)
+            _db_buffer_dropped = 0
+        if not _db_write_buffer:
+            return
+        try:
+            _position_buffer().append(list(_db_write_buffer))
+        except Exception:
+            logger.exception("Could not hand aircraft positions to Redis; retaining local retry buffer")
+            return
+        _db_write_buffer.clear()
+
+
+def get_db_buffer_stats() -> tuple[int, int]:
+    """Shared unacknowledged reports plus this process's local retry buffer."""
+    return _position_buffer().depth() + len(_db_write_buffer), CAPACITY
 
 
 def sync_cache_state():
@@ -893,63 +901,70 @@ def _safe_altitude(value):
 
 
 def _upsert_live_positions(to_write: list):
-    """Upsert current live positions (one row per hex) + prune stale rows.
+    """Update live coordinates only with newer, unexpired observations.
 
-    Feeds the map's server-side clustering (LiveAircraftPosition). Deduped by hex
-    (last write wins) so an in-batch duplicate can't collide on the unique key.
-    Wrapped in its own savepoint + broad guard so a geom/DB failure here never
-    poisons the sighting insert or the flush task.
+    The timestamp comparison lives in ON CONFLICT so overlapping flushes cannot
+    overwrite a newer row after reading stale state. Observation time also drives
+    expiry, preventing a reclaimed batch from reviving departed aircraft.
     """
-    from datetime import timedelta
+    from datetime import UTC, datetime, timedelta
 
-    from django.db import DatabaseError, transaction
+    from django.db import DatabaseError, connection, transaction
 
     from skyspy.models import LiveAircraftPosition
-    from skyspy.models.aviation import point_from_latlon
 
+    cutoff = timezone.now() - timedelta(seconds=getattr(settings, "LIVE_POSITION_TTL", 90))
     live_by_hex = {}
     for ac in to_write:
         hexid = (ac.get("hex") or "").upper()
         if not hexid or ac.get("lat") is None or ac.get("lon") is None:
             continue
-        live_by_hex[hexid] = ac
+        observed_at = datetime.fromtimestamp(ac["_observed_at"], tz=UTC)
+        if observed_at < cutoff:
+            continue
+        if hexid not in live_by_hex or observed_at > live_by_hex[hexid][0]:
+            live_by_hex[hexid] = (observed_at, ac)
 
     try:
-        if live_by_hex:
-            rows = [
-                LiveAircraftPosition(
-                    icao_hex=hexid,
-                    callsign=ac.get("flight"),
-                    geom=point_from_latlon(ac.get("lat"), ac.get("lon")),
-                    altitude=_safe_altitude(ac.get("alt_baro")) or _safe_altitude(ac.get("alt_geom")),
-                    track=ac.get("track"),
-                    ground_speed=ac.get("gs"),
-                    military=bool(ac.get("military", False)),
-                    emergency=bool(ac.get("emergency", False)),
-                )
-                for hexid, ac in live_by_hex.items()
-            ]
-            with transaction.atomic():
-                LiveAircraftPosition.objects.bulk_create(
-                    rows,
-                    update_conflicts=True,
-                    unique_fields=["icao_hex"],
-                    update_fields=[
-                        "callsign",
-                        "geom",
-                        "altitude",
-                        "track",
-                        "ground_speed",
-                        "military",
-                        "emergency",
-                        "updated_at",
-                    ],
-                )
-
-        # Prune rows older than the TTL so clusters reflect only live traffic.
-        ttl = getattr(settings, "LIVE_POSITION_TTL", 90)
-        cutoff = timezone.now() - timedelta(seconds=ttl)
         with transaction.atomic():
+            # Django bulk_create(update_conflicts=True) cannot express a WHERE
+            # condition on the conflict update. Parameterized PostgreSQL upsert
+            # preserves ordering atomically without a new column or migration.
+            rows = [
+                (
+                    hexid,
+                    ac.get("flight"),
+                    ac["lon"],
+                    ac["lat"],
+                    _safe_altitude(ac.get("alt_baro")) or _safe_altitude(ac.get("alt_geom")),
+                    ac.get("track"),
+                    ac.get("gs"),
+                    bool(ac.get("military", False)),
+                    bool(ac.get("emergency", False)),
+                    observed_at,
+                )
+                for hexid, (observed_at, ac) in live_by_hex.items()
+            ]
+            with connection.cursor() as cursor:
+                for offset in range(0, len(rows), 500):
+                    batch = rows[offset : offset + 500]
+                    placeholders = ", ".join(
+                        ["(%s, %s, ST_SetSRID(ST_MakePoint(%s, %s), 4326), %s, %s, %s, %s, %s, %s)"] * len(batch)
+                    )
+                    cursor.execute(
+                        """INSERT INTO live_aircraft_positions
+                        (icao_hex, callsign, geom, altitude, track, ground_speed, military, emergency, updated_at)
+                        VALUES """
+                        + placeholders
+                        + """
+                        ON CONFLICT (icao_hex) DO UPDATE SET
+                            callsign = EXCLUDED.callsign, geom = EXCLUDED.geom,
+                            altitude = EXCLUDED.altitude, track = EXCLUDED.track,
+                            ground_speed = EXCLUDED.ground_speed, military = EXCLUDED.military,
+                            emergency = EXCLUDED.emergency, updated_at = EXCLUDED.updated_at
+                        WHERE EXCLUDED.updated_at > live_aircraft_positions.updated_at""",
+                        [value for row in batch for value in row],
+                    )
             LiveAircraftPosition.objects.filter(updated_at__lt=cutoff).delete()
     except DatabaseError:
         logger.debug("Live position upsert/prune skipped (DB error)", exc_info=True)
@@ -966,27 +981,12 @@ def flush_stream_to_database(self):
 
     from skyspy.models import AircraftSighting
 
-    global _db_buffer_dropped
-
-    # Grab all buffered data
-    with _db_buffer_lock:
-        if not _db_write_buffer:
-            return
-        # Take a snapshot and clear buffer
-        to_write = list(_db_write_buffer)
-        _db_write_buffer.clear()
-        dropped = _db_buffer_dropped
-        _db_buffer_dropped = 0
-
-    if dropped:
-        logger.warning(
-            "Dropped %d buffered aircraft positions on overflow (DB write buffer hit maxlen — "
-            "flush lagging or feed burst); consider raising the deque maxlen or flush cadence",
-            dropped,
-        )
-
-    if not to_write:
+    buffer = _position_buffer()
+    consumer, entries = buffer.claim()
+    if not entries:
+        buffer.acknowledge(consumer, [])
         return
+    to_write = [position for _, position in entries]
 
     # Batch insert to database
     try:
@@ -1029,13 +1029,11 @@ def flush_stream_to_database(self):
             # Own savepoint so a geom/DB error here can't poison the sighting insert.
             _upsert_live_positions(to_write)
 
-    except Exception as e:  # broad: flush must requeue the batch on ANY failure (no data loss)
-        logger.error(f"Failed to flush stream data to database: {e}")
-        # Re-queue the whole failed batch ahead of newly buffered rows so
-        # nothing is silently dropped; the deque's maxlen=10000 is the sole
-        # loss bound. extendleft(reversed(...)) preserves chronological order.
-        with _db_buffer_lock:
-            _db_write_buffer.extendleft(reversed(to_write))
+        # Also respect callers with an outer transaction: never acknowledge a
+        # batch whose database transaction can still roll back.
+        transaction.on_commit(lambda: buffer.acknowledge(consumer, [entry_id for entry_id, _ in entries]))
+    except Exception:  # A failed batch stays pending for recovery by another worker.
+        logger.exception("Failed to flush stream positions; batch retained in Redis for retry")
 
 
 @shared_task(bind=True, max_retries=1, ignore_result=True)

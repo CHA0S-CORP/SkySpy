@@ -640,9 +640,10 @@ app.conf.task_routes = {
     "skyspy.tasks.analytics.refresh_acars_stats": {"queue": "low_priority"},
     # Aircraft stream cold path (database writes - separate queue to not block hot path)
     "skyspy.tasks.aircraft_stream.flush_stream_to_database": {"queue": "database"},
-    "skyspy.tasks.aircraft_stream.process_new_aircraft_lookups": {"queue": "database"},
-    # Aircraft stream stale cleanup (quick, in-memory operation)
-    "skyspy.tasks.aircraft_stream.cleanup_stale_aircraft": {"queue": "default"},
+    "skyspy.tasks.aircraft_stream.process_new_aircraft_lookups": {"queue": "polling"},
+    # Stream lookup dispatch and stale cleanup use state owned by the polling process.
+    # Expensive lookup work is dispatched separately to the database queue.
+    "skyspy.tasks.aircraft_stream.cleanup_stale_aircraft": {"queue": "polling"},
     # Low-priority expensive analytics tasks (RPi optimization)
     "skyspy.tasks.analytics.refresh_time_comparison_stats": {"queue": "low_priority"},
     "skyspy.tasks.analytics.refresh_tracking_quality_stats": {"queue": "low_priority"},
