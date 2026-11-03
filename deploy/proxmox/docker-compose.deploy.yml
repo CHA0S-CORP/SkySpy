@@ -34,7 +34,8 @@ services:
     depends_on:
       - api
     ports:
-      - "80:80"          # LAN access on the VM; Cloudflare reaches it in-network
+      # Set NGINX_PORT in Portainer when host port 80 is already in use.
+      - "${NGINX_PORT:-80}:80"  # Cloudflare still reaches container port 80.
     volumes:
       - ./deploy/proxmox/nginx.conf:/etc/nginx/templates/default.conf.template:ro
     networks:
