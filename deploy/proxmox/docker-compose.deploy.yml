@@ -28,16 +28,13 @@ services:
     image: nginx:alpine
     container_name: skyspy-nginx
     restart: unless-stopped
-    environment:
-      SERVER_NAME: ${SERVER_NAME:?Set SERVER_NAME for the deployment}
-      NGINX_ENVSUBST_FILTER: ^SERVER_NAME$
     depends_on:
       - api
     ports:
       # Set NGINX_PORT in Portainer when host port 80 is already in use.
       - "${NGINX_PORT:-80}:80"  # Cloudflare still reaches container port 80.
     volumes:
-      - ./deploy/proxmox/nginx.conf:/etc/nginx/templates/default.conf.template:ro
+      - ./deploy/proxmox/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     networks:
       - skyspy-network
 
