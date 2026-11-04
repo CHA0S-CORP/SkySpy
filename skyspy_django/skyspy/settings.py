@@ -25,6 +25,11 @@ def get_env(key, default=None, cast=str):
     return cast(value)
 
 
+# Allow local installations to point GeoDjango at native libraries outside its search path.
+GDAL_LIBRARY_PATH = get_env("GDAL_LIBRARY_PATH")
+GEOS_LIBRARY_PATH = get_env("GEOS_LIBRARY_PATH")
+
+
 # Build mode - disables external services during Docker build (collectstatic, etc.)
 BUILD_MODE = get_env("BUILD_MODE", "False", bool)
 
