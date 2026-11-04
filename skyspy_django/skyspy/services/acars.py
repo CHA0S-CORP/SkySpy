@@ -34,6 +34,7 @@ from collections import OrderedDict, defaultdict
 from datetime import UTC, datetime, timedelta
 
 from django.db import DatabaseError, InterfaceError, OperationalError, close_old_connections
+from django.utils.http import parse_http_date_safe
 
 from skyspy.services.acars_decoder import enrich_acars_message
 from skyspy.socketio.utils import sync_emit
@@ -391,11 +392,25 @@ class AcarsService:
         if key:
             headers["Authorization"] = f"Bearer {key}"
 
+        rate_limit_backoff = 0
         async with httpx.AsyncClient(timeout=15, headers=headers) as client:
             while self._running:
                 try:
                     resp = await client.get(url, params={"limit": 100})
+                    if resp.status_code == 429:
+                        rate_limit_backoff = min(900, max(60, rate_limit_backoff * 2))
+                        retry_after = resp.headers.get("Retry-After", "").strip()
+                        if retry_after.isascii() and retry_after.isdecimal():
+                            retry_delay = int(retry_after)
+                        else:
+                            retry_at = parse_http_date_safe(retry_after)
+                            retry_delay = retry_at - time.time() if retry_at is not None else 0
+                        delay = max(interval, rate_limit_backoff, retry_delay)
+                        logger.warning("Airframes poll rate limited (HTTP 429). Retrying in %.0f seconds.", delay)
+                        await asyncio.sleep(delay)
+                        continue
                     resp.raise_for_status()
+                    rate_limit_backoff = 0
                     payload = resp.json()
                     messages = (
                         payload if isinstance(payload, list) else payload.get("messages") or payload.get("results", [])

@@ -11,11 +11,49 @@ import time
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, patch
 
+import httpx
 from asgiref.sync import sync_to_async
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase, override_settings
+from django.utils.http import http_date
 
 from skyspy.models import AcarsMessage
 from skyspy.services.acars import AcarsService, LRUCache
+
+
+class AirframesPollingTests(SimpleTestCase):
+    @override_settings(AIRFRAMES_ACARS_POLL_INTERVAL=4)
+    async def test_rate_limit_cooldown_and_recovery(self):
+        service = AcarsService()
+        service._running = True
+        now = 1_800_000_000
+        responses = iter(
+            [
+                httpx.Response(429, headers={"Retry-After": "300"}),
+                httpx.Response(429, headers={"Retry-After": "invalid"}),
+                httpx.Response(429, headers={"Retry-After": http_date(now + 600)}),
+                httpx.Response(200, json=[]),
+                httpx.Response(429),
+            ]
+        )
+        delays = []
+
+        async def sleep(delay):
+            delays.append(delay)
+            if len(delays) == 5:
+                service._running = False
+
+        async def get(request):
+            return next(responses)
+
+        client = httpx.AsyncClient(transport=httpx.MockTransport(get))
+        with (
+            patch("httpx.AsyncClient", return_value=client),
+            patch("skyspy.services.acars.time.time", return_value=now),
+            patch("skyspy.services.acars.asyncio.sleep", side_effect=sleep),
+        ):
+            await service._airframes_poll_loop()
+
+        self.assertEqual(delays, [300, 120, 600, 4, 60])
 
 
 class LRUCacheUnitTests(TestCase):
