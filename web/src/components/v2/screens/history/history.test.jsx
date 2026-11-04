@@ -16,6 +16,17 @@ import {
 } from './historyModel';
 import { adaptNotamStats, normalizeNotam } from './ArchiveTab';
 
+const authFetch = vi.fn((...args) => global.fetch(...args));
+
+vi.mock('../../../../contexts/AuthContext', () => ({
+  useAuth: () => ({
+    status: 'authenticated',
+    user: { id: 1 },
+    canAccessFeature: () => true,
+    authFetch,
+  }),
+}));
+
 const S1 = {
   id: 1,
   icao_hex: 'AB1FB0',
@@ -312,6 +323,9 @@ describe('HistoryScreen', () => {
 
   it('deep-links to a tab via hashParams and shows empty state', async () => {
     renderScreen({ hashParams: { data: 'acars' } });
+    await waitFor(() =>
+      expect(authFetch).toHaveBeenCalledWith(expect.stringMatching(/\/api\/v1\/acars\/\?/))
+    );
     await waitFor(() =>
       expect(screen.getByText('No ACARS messages in this window')).toBeInTheDocument()
     );

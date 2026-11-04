@@ -1,8 +1,8 @@
-import { useQuery } from '@tanstack/react-query';
+import { useFeatureQuery } from '../../../../hooks/queries/useFeatureQuery';
 
 export const RANGE_HOURS = { '1h': 1, '6h': 6, '24h': 24, '48h': 48, '7d': 168 };
 
-async function getJson(url, fallback = []) {
+async function getJson(fetch, url, fallback = []) {
   try {
     const res = await fetch(url);
     if (!res.ok) return fallback;
@@ -34,77 +34,78 @@ function asList(data, ...keys) {
 export function useHistoryData(apiBase, range, tab, archiveIcao = '') {
   const hours = RANGE_HOURS[range] ?? 24;
 
-  const sessions = useQuery({
+  const sessions = useFeatureQuery('history', {
     queryKey: ['v2-history-sessions', apiBase, hours],
-    queryFn: async () =>
+    queryFn: async ({ fetch }) =>
       asList(
-        await getJson(`${apiBase}/api/v1/sessions?hours=${hours}&limit=200`),
+        await getJson(fetch, `${apiBase}/api/v1/sessions/?hours=${hours}&limit=200`),
         'sessions',
         'results'
       ),
   });
 
-  const safety = useQuery({
+  const safety = useFeatureQuery('safety', {
     queryKey: ['v2-history-safety', apiBase, hours],
-    queryFn: async () =>
+    queryFn: async ({ fetch }) =>
       asList(
-        await getJson(`${apiBase}/api/v1/safety/events/?hours=${hours}&limit=200`),
+        await getJson(fetch, `${apiBase}/api/v1/safety/events/?hours=${hours}&limit=200`),
         'events',
         'results'
       ),
   });
 
-  const stats = useQuery({
+  const stats = useFeatureQuery('history', {
     queryKey: ['v2-history-stats', apiBase, hours],
-    queryFn: async () => getJson(`${apiBase}/api/v1/history/stats/?hours=${hours}`, {}),
+    queryFn: async ({ fetch }) =>
+      getJson(fetch, `${apiBase}/api/v1/history/stats/?hours=${hours}`, {}),
   });
 
-  const sightings = useQuery({
+  const sightings = useFeatureQuery('history', {
     queryKey: ['v2-history-sightings', apiBase, hours],
     enabled: tab === 'sightings',
-    queryFn: async () =>
+    queryFn: async ({ fetch }) =>
       asList(
-        await getJson(`${apiBase}/api/v1/sightings?hours=${hours}&limit=200`),
+        await getJson(fetch, `${apiBase}/api/v1/sightings/?hours=${hours}&limit=200`),
         'sightings',
         'results'
       ),
   });
 
-  const acars = useQuery({
+  const acars = useFeatureQuery('acars', {
     queryKey: ['v2-history-acars', apiBase, hours],
     enabled: tab === 'acars',
-    queryFn: async () =>
+    queryFn: async ({ fetch }) =>
       asList(
-        await getJson(`${apiBase}/api/v1/acars?hours=${hours}&limit=100`),
+        await getJson(fetch, `${apiBase}/api/v1/acars/?hours=${hours}&limit=100`),
         'messages',
         'results'
       ),
   });
 
-  const notams = useQuery({
+  const notams = useFeatureQuery('aircraft', {
     queryKey: ['v2-history-notams', apiBase],
     enabled: tab === 'notams',
-    queryFn: async () => {
-      const data = await getJson(`${apiBase}/api/v1/notams/?limit=300`, {});
+    queryFn: async ({ fetch }) => {
+      const data = await getJson(fetch, `${apiBase}/api/v1/notams/?limit=300`, {});
       return asList(data, 'notams', 'results');
     },
   });
 
   // The NOTAMs archive tab also surfaces national TFRs (separate feed).
-  const notamTfrs = useQuery({
+  const notamTfrs = useFeatureQuery('aircraft', {
     queryKey: ['v2-history-notam-tfrs', apiBase],
     enabled: tab === 'notams',
-    queryFn: async () => {
-      const data = await getJson(`${apiBase}/api/v1/notams/tfrs/`, {});
+    queryFn: async ({ fetch }) => {
+      const data = await getJson(fetch, `${apiBase}/api/v1/notams/tfrs/`, {});
       return asList(data, 'tfrs', 'results');
     },
   });
 
-  const pireps = useQuery({
+  const pireps = useFeatureQuery('weather', {
     queryKey: ['v2-history-pireps', apiBase],
     enabled: tab === 'pireps',
-    queryFn: async () => {
-      const data = await getJson(`${apiBase}/api/v1/aviation/pireps/`, {});
+    queryFn: async ({ fetch }) => {
+      const data = await getJson(fetch, `${apiBase}/api/v1/aviation/pireps/`, {});
       return asList(data, 'data', 'pireps', 'results');
     },
   });
@@ -113,46 +114,46 @@ export function useHistoryData(apiBase, range, tab, archiveIcao = '') {
   const archiveEnabled = tab === 'archive';
   const icao = (archiveIcao || '').trim().toUpperCase();
 
-  const notamStats = useQuery({
+  const notamStats = useFeatureQuery('aircraft', {
     queryKey: ['v2-archive-notam-stats', apiBase],
     enabled: archiveEnabled,
-    queryFn: async () => getJson(`${apiBase}/api/v1/notams/stats/`, {}),
+    queryFn: async ({ fetch }) => getJson(fetch, `${apiBase}/api/v1/notams/stats/`, {}),
   });
 
-  const archiveNotams = useQuery({
+  const archiveNotams = useFeatureQuery('aircraft', {
     queryKey: ['v2-archive-notams', apiBase, icao],
     enabled: archiveEnabled,
-    queryFn: async () => {
+    queryFn: async ({ fetch }) => {
       // When an airport is entered use the dedicated airport endpoint, else the
       // general NOTAM list (both return { notams: [...] }).
       const url = icao
         ? `${apiBase}/api/v1/notams/airport/${encodeURIComponent(icao)}/`
         : `${apiBase}/api/v1/notams/?limit=200`;
-      const data = await getJson(url, {});
+      const data = await getJson(fetch, url, {});
       return asList(data, 'notams', 'results');
     },
   });
 
-  const tfrs = useQuery({
+  const tfrs = useFeatureQuery('aircraft', {
     queryKey: ['v2-archive-tfrs', apiBase],
     enabled: archiveEnabled,
-    queryFn: async () => {
-      const data = await getJson(`${apiBase}/api/v1/notams/tfrs/`, {});
+    queryFn: async ({ fetch }) => {
+      const data = await getJson(fetch, `${apiBase}/api/v1/notams/tfrs/`, {});
       return asList(data, 'tfrs', 'results');
     },
   });
 
-  const archivePireps = useQuery({
+  const archivePireps = useFeatureQuery(icao ? 'history' : 'weather', {
     queryKey: ['v2-archive-pireps', apiBase, icao],
     enabled: archiveEnabled,
-    queryFn: async () => {
+    queryFn: async ({ fetch }) => {
       // The rich /aviation/pireps/ payload carries the backend `decoded` block
       // and hazard bands the viz components need; the archive endpoint is the
       // filterable fallback when an airport is selected.
       const url = icao
         ? `${apiBase}/api/v1/archive/pireps/?icao=${encodeURIComponent(icao)}&limit=200`
         : `${apiBase}/api/v1/aviation/pireps/?limit=200`;
-      const data = await getJson(url, {});
+      const data = await getJson(fetch, url, {});
       return asList(data, 'data', 'pireps', 'results');
     },
   });
