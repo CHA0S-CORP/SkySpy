@@ -17,6 +17,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 function addRadio(key, label) {
@@ -61,6 +62,37 @@ describe('live radios', () => {
     expect(
       [...second.container.querySelectorAll('audio')].every((audio) => !audio.hasAttribute('src'))
     ).toBe(true);
+  });
+
+  it('applies and persists the stereo pan for each feed', () => {
+    const pans = [];
+    class AudioContext {
+      destination = {};
+      resume = vi.fn().mockResolvedValue();
+      close = vi.fn().mockResolvedValue();
+      createMediaElementSource = vi.fn(() => ({ connect: vi.fn() }));
+
+      createStereoPanner() {
+        const pan = { value: 0 };
+        pans.push(pan);
+        return { pan, connect: vi.fn() };
+      }
+    }
+    vi.stubGlobal('AudioContext', AudioContext);
+
+    const first = render(<LiveRadioPanel />);
+    addRadio('https://radio.example.org/tower', 'Tower');
+    addRadio('https://radio.example.org/ground', 'Ground');
+    fireEvent.click(screen.getByRole('button', { name: 'Play Tower' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Play Ground' }));
+    fireEvent.change(screen.getByLabelText('Tower left/right pan'), { target: { value: '-100' } });
+    expect(pans.map((pan) => pan.value)).toEqual([-1, 0]);
+    first.unmount();
+
+    render(<LiveRadioPanel />);
+    expect(screen.getByLabelText('Tower left/right pan').value).toBe('-100');
+    expect(screen.getByLabelText('Ground left/right pan').value).toBe('0');
+    expect(pans).toHaveLength(2);
   });
 
   it('rejects unsafe URLs and duplicates, and allows retry after playback fails', async () => {
