@@ -464,7 +464,8 @@
 .v2-radio-live__identity [role='status'] {
   color: var(--dim);
 }
-.v2-radio-live__volume {
+.v2-radio-live__volume,
+.v2-radio-live__pan {
   width: 150px;
 }
 
