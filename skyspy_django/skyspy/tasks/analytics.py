@@ -1081,3 +1081,10 @@ def emit_stats_tick():
     except Exception as e:  # broad: periodic beat task must keep running on any failure
         logger.error(f"emit_stats_tick failed: {e}")
         return {"status": "error", "error": str(e)}
+
+
+@shared_task(queue="low_priority", expires=300)
+def refresh_time_comparison_range(kind, period):
+    """Custom ranges share the default refresh's database lock and SQL budget."""
+    from skyspy.services.time_comparison_stats import refresh_custom_range
+    return refresh_custom_range(kind, period)

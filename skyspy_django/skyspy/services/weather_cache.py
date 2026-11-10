@@ -17,6 +17,7 @@ from django.db.models import Max
 from tenacity import retry, retry_if_exception, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from skyspy.models import CachedPirep
+from skyspy.services.provider_health import cooldown_remaining, pause_provider
 
 logger = logging.getLogger(__name__)
 
@@ -454,7 +455,7 @@ def _http() -> httpx.Client:
 
 def _retryable_awc_error(exc: BaseException) -> bool:
     return isinstance(exc, httpx.TransportError) or (
-        isinstance(exc, httpx.HTTPStatusError) and (exc.response.status_code == 429 or exc.response.status_code >= 500)
+        isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code >= 500
     )
 
 
@@ -476,7 +477,10 @@ def _awc_retry_wait(state) -> float:
     reraise=True,
 )
 def _http_get_awc(url: str, params: dict, timeout: float = 15.0) -> httpx.Response:
-    """HTTP GET with retry logic for AWC API."""
+    """Retry transient failures, respecting cooldowns shared by all workers."""
+    endpoint = url.rsplit("/", 1)[-1]
+    if cooldown_remaining("awc") or cooldown_remaining(f"awc:{endpoint}"):
+        raise httpx.RequestError("AWC request skipped during provider cooldown")
     response = _http().get(
         url,
         params=params,
@@ -486,6 +490,13 @@ def _http_get_awc(url: str, params: dict, timeout: float = 15.0) -> httpx.Respon
         },
         timeout=timeout,
     )
+    if response.status_code == 429:
+        from skyspy.services.http_client import _parse_retry_after
+
+        delay = _parse_retry_after(response.headers.get("Retry-After"))
+        pause_provider("awc", max(60, delay or 0), "HTTP 429")
+    elif response.status_code in (400, 401, 403, 404, 422):
+        pause_provider(f"awc:{endpoint}", 3600, f"HTTP {response.status_code}")
     response.raise_for_status()
     return response
 
@@ -855,40 +866,14 @@ def fetch_radar_timestamp() -> str | None:
 
 
 def fetch_winds_aloft(lat: float, lon: float, ttl: int = 3600) -> dict | None:
+    """Return unavailable until a supported winds data adapter is implemented.
+
+    AWC's windtemp product is a regional FB text bulletin, not a latitude /
+    longitude JSON API. Calling it per aircraft cannot produce the structured
+    levels consumed by turbulence scoring and floods AWC with invalid requests.
+    Keep the public function so callers consistently report missing winds data.
     """
-    Fetch winds aloft forecast data from AWC.
-
-    Args:
-        lat: Latitude
-        lon: Longitude
-        ttl: Cache TTL (default 1 hour)
-
-    Returns:
-        Winds aloft data dict or None
-    """
-    cache_key = f"winds:aloft:{round(lat, 1)}:{round(lon, 1)}"
-    cached = cache.get(cache_key)
-    if cached is not None:
-        return cached
-
-    try:
-        # The AWC windtemp endpoint has no JSON representation - it returns raw
-        # FB winds text (e.g. "FBUS31 KWNO ...") even with format=json, which
-        # would fail json parsing on every poll. Fetch directly and detect that.
-        response = _http_get_awc(f"{AWC_BASE}/windtemp", {"lat": lat, "lon": lon, "format": "json"}, timeout=15.0)
-        text = response.text or ""
-        try:
-            data = response.json() if text else []
-        except ValueError:
-            logger.debug("AWC windtemp returned raw FB text (no JSON upstream); winds aloft unavailable")
-            cache.set(cache_key, [], ttl)
-            return []
-
-        cache.set(cache_key, data, ttl)
-        return data
-    except (httpx.HTTPError, ValueError, KeyError, TypeError, ConnectionError, OSError) as e:
-        logger.warning(f"Failed to fetch winds aloft: {e}")
-        return None
+    return None
 
 
 # =============================================================================

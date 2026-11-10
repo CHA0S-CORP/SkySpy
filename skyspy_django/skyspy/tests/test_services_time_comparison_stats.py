@@ -616,9 +616,8 @@ class CacheManagementTests(TestCase):
 
         result = tcs.get_week_comparison()
 
-        # Should calculate and return data
-        self.assertIn("this_week", result)
-        self.assertIn("last_week", result)
+        # A request never runs an expensive calculation on a cold cache.
+        self.assertEqual(result, {})
 
     @patch("skyspy.services.time_comparison_stats.cache")
     def test_get_seasonal_trends_from_cache(self, mock_cache):
@@ -656,33 +655,30 @@ class PublicAPITests(TestCase):
         """Test getting daily totals with custom days parameter."""
         mock_cache.get.return_value = None
 
-        # Non-default value should bypass cache
-        result = tcs.get_daily_totals(days=7)
-
-        self.assertIn("daily_data", result)
-        self.assertEqual(result["days_requested"], 7)
+        with patch("skyspy.tasks.analytics.refresh_time_comparison_range.apply_async") as enqueue:
+            result = tcs.get_daily_totals(days=7)
+        self.assertEqual(result, {})
+        enqueue.assert_called_once_with(args=["daily", 7], expires=300)
 
     @patch("skyspy.services.time_comparison_stats.cache")
     def test_get_weekly_totals_custom_weeks(self, mock_cache):
         """Test getting weekly totals with custom weeks parameter."""
         mock_cache.get.return_value = None
 
-        # Non-default value should bypass cache
-        result = tcs.get_weekly_totals(weeks=4)
-
-        self.assertIn("weekly_data", result)
-        self.assertEqual(result["weeks_requested"], 4)
+        with patch("skyspy.tasks.analytics.refresh_time_comparison_range.apply_async") as enqueue:
+            result = tcs.get_weekly_totals(weeks=4)
+        self.assertEqual(result, {})
+        enqueue.assert_called_once_with(args=["weekly", 4], expires=300)
 
     @patch("skyspy.services.time_comparison_stats.cache")
     def test_get_monthly_totals_custom_months(self, mock_cache):
         """Test getting monthly totals with custom months parameter."""
         mock_cache.get.return_value = None
 
-        # Non-default value should bypass cache
-        result = tcs.get_monthly_totals(months=6)
-
-        self.assertIn("monthly_data", result)
-        self.assertEqual(result["months_requested"], 6)
+        with patch("skyspy.tasks.analytics.refresh_time_comparison_range.apply_async") as enqueue:
+            result = tcs.get_monthly_totals(months=6)
+        self.assertEqual(result, {})
+        enqueue.assert_called_once_with(args=["monthly", 6], expires=300)
 
     @patch("skyspy.services.time_comparison_stats.cache")
     def test_get_all_time_comparison_stats(self, mock_cache):

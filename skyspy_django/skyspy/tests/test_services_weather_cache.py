@@ -12,7 +12,7 @@ from unittest.mock import MagicMock, patch
 import httpx
 import pytest
 from django.core.cache import cache
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase
 
 from skyspy.models import CachedPirep
 from skyspy.services import weather_cache
@@ -675,3 +675,52 @@ class AviationDataCacheTests(TestCase):
         self.assertTrue(result)
         key = weather_cache._make_aviation_cache_key("navaids", bbox)
         self.assertEqual(cache.get(key), test_data)
+
+
+class AwcRequestProtectionTests(SimpleTestCase):
+    def setUp(self):
+        cache.clear()
+        self.addCleanup(cache.clear)
+
+    @patch("skyspy.services.weather_cache._http")
+    def test_winds_scoring_never_calls_unsupported_endpoint(self, client):
+        for lat in (29.1, 30.2, 31.3):
+            self.assertIsNone(weather_cache.fetch_winds_aloft(lat, -97.0))
+        client.assert_not_called()
+
+    @patch("skyspy.services.weather_cache._http")
+    def test_rate_limit_blocks_other_endpoints_without_retry(self, client):
+        request = httpx.Request("GET", f"{weather_cache.AWC_BASE}/metar")
+        client.return_value.get.return_value = httpx.Response(429, headers={"Retry-After": "120"}, request=request)
+        with self.assertRaises(httpx.HTTPStatusError):
+            weather_cache._http_get_awc(str(request.url), {})
+        self.assertGreater(cooldown_remaining := weather_cache.cooldown_remaining("awc"), 110)
+        self.assertLessEqual(cooldown_remaining, 120)
+        with self.assertRaises(httpx.RequestError):
+            weather_cache._http_get_awc(f"{weather_cache.AWC_BASE}/pirep", {})
+        client.return_value.get.assert_called_once()
+
+    @patch("skyspy.services.weather_cache._http")
+    def test_bad_request_pauses_endpoint_but_allows_other_products(self, client):
+        request = httpx.Request("GET", f"{weather_cache.AWC_BASE}/metar")
+        client.return_value.get.return_value = httpx.Response(400, request=request)
+        with self.assertRaises(httpx.HTTPStatusError):
+            weather_cache._http_get_awc(str(request.url), {})
+        with self.assertRaises(httpx.RequestError):
+            weather_cache._http_get_awc(str(request.url), {"ids": "KSEA"})
+        client.return_value.get.return_value = httpx.Response(204, request=request)
+        self.assertEqual(weather_cache._http_get_awc(f"{weather_cache.AWC_BASE}/pirep", {}).status_code, 204)
+        self.assertEqual(client.return_value.get.call_count, 2)
+
+    @patch("skyspy.services.weather_cache._http")
+    def test_missing_retry_after_uses_minimum_and_recovers_after_expiry(self, client):
+        request = httpx.Request("GET", f"{weather_cache.AWC_BASE}/metar")
+        client.return_value.get.return_value = httpx.Response(429, request=request)
+        with patch("skyspy.services.provider_health.time.time", return_value=1000):
+            with self.assertRaises(httpx.HTTPStatusError):
+                weather_cache._http_get_awc(str(request.url), {})
+            self.assertEqual(weather_cache.cooldown_remaining("awc"), 60)
+        client.return_value.get.return_value = httpx.Response(200, json=[], request=request)
+        with patch("skyspy.services.provider_health.time.time", return_value=1061):
+            self.assertEqual(weather_cache._http_get_awc(str(request.url), {}).status_code, 200)
+        self.assertEqual(client.return_value.get.call_count, 2)

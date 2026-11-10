@@ -9,10 +9,8 @@ lat/lon/altitude):
    read via :func:`skyspy.services.airspace.get_advisories`.
 2. PIREP turbulence pilot reports (``CachedPirep``), read via
    :func:`skyspy.services.weather_cache.get_cached_pireps`.
-3. Winds-aloft vertical wind shear (best-effort; AWC frequently serves raw FB
-   text with no JSON, so :func:`weather_cache.fetch_winds_aloft` usually returns
-   an empty list — the shear component then contributes nothing rather than
-   penalizing the score).
+3. Winds-aloft vertical wind shear is unavailable until a supported structured
+   data adapter is implemented; the shear component contributes nothing.
 
 No shapely (unavailable in this env); point-in-polygon is a hand-rolled
 ray-cast with a bounding-box fast-path reusing ``airspace._polygon_bounds``.

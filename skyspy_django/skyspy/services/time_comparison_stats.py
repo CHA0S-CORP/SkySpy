@@ -14,9 +14,12 @@ Update Intervals:
 """
 
 import logging
+from contextlib import contextmanager
 from datetime import datetime, timedelta
+from functools import wraps
 
 from django.core.cache import cache
+from django.db import connection
 from django.db.models import Avg, Count, Max, Q
 from django.db.models.functions import ExtractHour, ExtractWeekDay, TruncDay, TruncMonth, TruncWeek
 from django.utils import timezone
@@ -36,7 +39,7 @@ CACHE_KEY_MONTHLY_TOTALS = "stats:time:monthly_totals"
 CACHE_KEY_TIME_COMPARISON_ALL = "stats:time:all"
 
 # Cache timeout (5 minutes)
-CACHE_TIMEOUT = 300
+CACHE_TIMEOUT = 86400  # Keep the last successful result through slow/failed refreshes.
 
 # Day/Night hours configuration (6am-6pm is day by default)
 DAY_START_HOUR = 6
@@ -697,6 +700,47 @@ def calculate_monthly_totals(months: int = 12) -> dict:
     }
 
 
+@contextmanager
+def _analytics_budget():
+    """Session lock never expires mid-query; PostgreSQL bounds each statement.
+
+    All refresh entry points share this lock, including custom date ranges.
+    A dead connection releases it automatically. No expensive work runs if
+    acquiring the lock fails.
+    """
+    if connection.vendor != "postgresql":
+        yield True
+        return
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT pg_try_advisory_lock(%s)", [736592041])
+        acquired = cursor.fetchone()[0]
+        if not acquired:
+            yield False
+            return
+        try:
+            cursor.execute("SHOW statement_timeout")
+            previous_timeout = cursor.fetchone()[0]
+            cursor.execute("SELECT set_config('statement_timeout', '30s', false)")
+            try:
+                yield True
+            finally:
+                cursor.execute("SELECT set_config('statement_timeout', %s, false)", [previous_timeout])
+        finally:
+            cursor.execute("SELECT pg_advisory_unlock(%s)", [736592041])
+
+
+def _bounded_refresh(func):
+    @wraps(func)
+    def wrapped(*args, **kwargs):
+        with _analytics_budget() as acquired:
+            if not acquired:
+                return {}
+            return func(*args, **kwargs)
+
+    return wrapped
+
+
+@_bounded_refresh
 def refresh_time_comparison_cache(broadcast: bool = True) -> dict:
     """
     Refresh all time comparison stats cache.
@@ -760,87 +804,65 @@ def broadcast_time_comparison_update(data: dict) -> None:
         logger.warning(f"Failed to broadcast time comparison stats: {type(e).__name__}: {e}")
 
 
-# Public API - Get Cached Data
+# Request handlers only read cache. Beat refreshes defaults; custom ranges are
+# queued once per five minutes, never computed on an HTTP/WebSocket thread.
+def _cached(key, kind=None, period=None):
+    stats = cache.get(key)
+    if stats is None and kind is not None:
+        pending = f"{key}:queued"
+        if cache.add(pending, True, timeout=300):
+            try:
+                from skyspy.tasks.analytics import refresh_time_comparison_range
+
+                refresh_time_comparison_range.apply_async(args=[kind, period], expires=300)
+            except Exception:
+                cache.delete(pending)
+                logger.exception("Unable to enqueue time comparison refresh")
+    return stats or {}
 
 
-def get_week_comparison() -> dict | None:
-    """Get cached week-over-week comparison stats."""
-    stats = cache.get(CACHE_KEY_WEEK_COMPARISON)
-    if stats is None:
-        stats = calculate_week_over_week_comparison()
-        cache.set(CACHE_KEY_WEEK_COMPARISON, stats, timeout=CACHE_TIMEOUT)
-    return stats
+def get_week_comparison():
+    return _cached(CACHE_KEY_WEEK_COMPARISON)
 
 
-def get_seasonal_trends() -> dict | None:
-    """Get cached seasonal trends stats."""
-    stats = cache.get(CACHE_KEY_SEASONAL_TRENDS)
-    if stats is None:
-        stats = calculate_seasonal_trends()
-        cache.set(CACHE_KEY_SEASONAL_TRENDS, stats, timeout=CACHE_TIMEOUT)
-    return stats
+def get_seasonal_trends():
+    return _cached(CACHE_KEY_SEASONAL_TRENDS)
 
 
-def get_day_night_ratio() -> dict | None:
-    """Get cached day/night ratio stats."""
-    stats = cache.get(CACHE_KEY_DAY_NIGHT)
-    if stats is None:
-        stats = calculate_day_night_ratio()
-        cache.set(CACHE_KEY_DAY_NIGHT, stats, timeout=CACHE_TIMEOUT)
-    return stats
+def get_day_night_ratio():
+    return _cached(CACHE_KEY_DAY_NIGHT)
 
 
-def get_weekend_weekday_patterns() -> dict | None:
-    """Get cached weekend/weekday patterns stats."""
-    stats = cache.get(CACHE_KEY_WEEKEND_WEEKDAY)
-    if stats is None:
-        stats = calculate_weekend_weekday_patterns()
-        cache.set(CACHE_KEY_WEEKEND_WEEKDAY, stats, timeout=CACHE_TIMEOUT)
-    return stats
+def get_weekend_weekday_patterns():
+    return _cached(CACHE_KEY_WEEKEND_WEEKDAY)
 
 
-def get_daily_totals(days: int = 30) -> dict | None:
-    """Get cached daily totals."""
-    # Use custom days if different from default
-    if days != 30:
-        return calculate_daily_totals(days)
-
-    stats = cache.get(CACHE_KEY_DAILY_TOTALS)
-    if stats is None:
-        stats = calculate_daily_totals(days)
-        cache.set(CACHE_KEY_DAILY_TOTALS, stats, timeout=CACHE_TIMEOUT)
-    return stats
+def get_daily_totals(days=30):
+    key = CACHE_KEY_DAILY_TOTALS if days == 30 else f"{CACHE_KEY_DAILY_TOTALS}:{days}"
+    return _cached(key, "daily" if days != 30 else None, days)
 
 
-def get_weekly_totals(weeks: int = 12) -> dict | None:
-    """Get cached weekly totals."""
-    # Use custom weeks if different from default
-    if weeks != 12:
-        return calculate_weekly_totals(weeks)
-
-    stats = cache.get(CACHE_KEY_WEEKLY_TOTALS)
-    if stats is None:
-        stats = calculate_weekly_totals(weeks)
-        cache.set(CACHE_KEY_WEEKLY_TOTALS, stats, timeout=CACHE_TIMEOUT)
-    return stats
+def get_weekly_totals(weeks=12):
+    key = CACHE_KEY_WEEKLY_TOTALS if weeks == 12 else f"{CACHE_KEY_WEEKLY_TOTALS}:{weeks}"
+    return _cached(key, "weekly" if weeks != 12 else None, weeks)
 
 
-def get_monthly_totals(months: int = 12) -> dict | None:
-    """Get cached monthly totals."""
-    # Use custom months if different from default
-    if months != 12:
-        return calculate_monthly_totals(months)
-
-    stats = cache.get(CACHE_KEY_MONTHLY_TOTALS)
-    if stats is None:
-        stats = calculate_monthly_totals(months)
-        cache.set(CACHE_KEY_MONTHLY_TOTALS, stats, timeout=CACHE_TIMEOUT)
-    return stats
+def get_monthly_totals(months=12):
+    key = CACHE_KEY_MONTHLY_TOTALS if months == 12 else f"{CACHE_KEY_MONTHLY_TOTALS}:{months}"
+    return _cached(key, "monthly" if months != 12 else None, months)
 
 
-def get_all_time_comparison_stats() -> dict:
-    """Get all cached time comparison stats."""
-    stats = cache.get(CACHE_KEY_TIME_COMPARISON_ALL)
-    if stats is None:
-        stats = refresh_time_comparison_cache(broadcast=False)
-    return stats
+def get_all_time_comparison_stats():
+    return _cached(CACHE_KEY_TIME_COMPARISON_ALL)
+
+
+@_bounded_refresh
+def refresh_custom_range(kind, period):
+    calculator, base = {
+        "daily": (calculate_daily_totals, CACHE_KEY_DAILY_TOTALS),
+        "weekly": (calculate_weekly_totals, CACHE_KEY_WEEKLY_TOTALS),
+        "monthly": (calculate_monthly_totals, CACHE_KEY_MONTHLY_TOTALS),
+    }[kind]
+    result = calculator(period)
+    cache.set(f"{base}:{period}", result, timeout=CACHE_TIMEOUT)
+    return result
