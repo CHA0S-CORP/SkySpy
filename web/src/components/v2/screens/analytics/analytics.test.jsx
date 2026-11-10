@@ -306,4 +306,25 @@ describe('AdvancedAnalyticsScreen', () => {
     // busiest-hours day/night ratio
     expect(await screen.findByText(/4×/)).toBeInTheDocument();
   });
+  it('shows preparation rather than zero counts while summaries build', async () => {
+    const existingFetch = global.fetch;
+    global.fetch = vi.fn((url) => url.includes('/history/time-comparison/')
+      ? Promise.resolve({ ok: true, headers: { get: () => 'application/json' }, json: async () => ({ status: 'preparing' }) })
+      : existingFetch(url));
+    renderScreen();
+    expect(await screen.findByRole('status')).toHaveTextContent('Statistics preparing');
+  });
+
+  it('renders the completed historical summary', async () => {
+    const existingFetch = global.fetch;
+    global.fetch = vi.fn((url) => url.includes('/history/time-comparison/')
+      ? Promise.resolve({ ok: true, headers: { get: () => 'application/json' }, json: async () => ({
+        week_comparison: { this_week: { unique_aircraft: 123 }, last_week: { unique_aircraft: 99 } },
+        timestamp: '2026-11-10T12:00:00Z',
+      }) }) : existingFetch(url));
+    renderScreen();
+    expect(await screen.findByText(/This week: 123 unique aircraft/)).toBeInTheDocument();
+    expect(screen.queryByText(/Statistics preparing/)).not.toBeInTheDocument();
+  });
+
 });

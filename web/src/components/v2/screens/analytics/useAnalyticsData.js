@@ -105,7 +105,14 @@ export function useAnalyticsData(apiBase, { hours, xField, yField, military }) {
       getJson(`${apiBase}/api/v1/stats/geographic/military-breakdown/?hours=${hours}`, {}, fetch),
   });
 
+  const timeComparison = useFeatureQuery('history', {
+    queryKey: ['v2-time-comparison', apiBase],
+    refetchInterval: 30000,
+    queryFn: async ({ fetch }) => getJson(`${apiBase}/api/v1/history/time-comparison/`, null, fetch),
+  });
+
   return {
+    timeComparison,
     fields,
     scatter,
     matrix,

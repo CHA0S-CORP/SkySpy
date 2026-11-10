@@ -18,7 +18,7 @@ class AnalyticsBudgetTests(SimpleTestCase):
                 stats.get_monthly_totals,
                 stats.get_all_time_comparison_stats,
             ):
-                self.assertEqual(getter(), {})
+                self.assertEqual(getter(), {"status": "preparing"})
 
     def test_busy_refresh_does_no_work(self):
         with (
@@ -35,11 +35,11 @@ class AnalyticsBudgetTests(SimpleTestCase):
         with patch.object(stats, "connection") as connection:
             connection.vendor = "postgresql"
             cursor = connection.cursor.return_value.__enter__.return_value
-            cursor.fetchone.side_effect = [(True,), ("0",)]
+            cursor.fetchone.side_effect = [(True,), ("0",), ("2",)]
             with self.assertRaises(ValueError), stats._analytics_budget():
                 raise ValueError("failed calculation")
             commands = [call.args[0] for call in cursor.execute.call_args_list]
-            self.assertIn("SELECT set_config('statement_timeout', '30s', false)", commands)
+            self.assertIn("SELECT set_config('statement_timeout', %s, false)", commands)
             self.assertEqual(commands[-1], "SELECT pg_advisory_unlock(%s)")
             self.assertEqual(cursor.execute.call_args_list[-2].args[1], ["0"])
 
@@ -49,6 +49,6 @@ class AnalyticsBudgetTests(SimpleTestCase):
             patch.object(stats.cache, "add", side_effect=[True, False]),
             patch("skyspy.tasks.analytics.refresh_time_comparison_range.apply_async") as enqueue,
         ):
-            self.assertEqual(stats.get_daily_totals(7), {})
-            self.assertEqual(stats.get_daily_totals(7), {})
+            self.assertEqual(stats.get_daily_totals(7), {"status": "preparing"})
+            self.assertEqual(stats.get_daily_totals(7), {"status": "preparing"})
             enqueue.assert_called_once_with(args=["daily", 7], expires=300)

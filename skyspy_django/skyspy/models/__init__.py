@@ -72,7 +72,11 @@ from skyspy.models.stats import (
 )
 from skyspy.models.watch_list import WatchedAircraft
 
+from .time_summary import TimeSummaryAircraft, TimeSummaryHour
+
 __all__ = [
+    "TimeSummaryAircraft",
+    "TimeSummaryHour",
     # Aircraft
     "AircraftSighting",
     "AircraftSession",

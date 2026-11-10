@@ -1157,15 +1157,13 @@ class HistoryViewSet(viewsets.ViewSet):
     @action(detail=False, methods=["get"], url_path="time-comparison/seasonal")
     def time_comparison_seasonal(self, request):
         """Get seasonal/monthly trend data."""
-        from skyspy.services.time_comparison_stats import calculate_seasonal_trends, get_seasonal_trends
+        from skyspy.services.time_comparison_stats import get_seasonal_trends
 
         try:
             months = int(request.query_params.get("months", 12))
         except (ValueError, TypeError):
             months = 12
-        if months != 12:
-            return Response(calculate_seasonal_trends(months))
-        return Response(get_seasonal_trends())
+        return Response(get_seasonal_trends(months))
 
     @extend_schema(
         summary="Get day vs night traffic ratio",
@@ -1178,15 +1176,13 @@ class HistoryViewSet(viewsets.ViewSet):
     @action(detail=False, methods=["get"], url_path="time-comparison/day-night")
     def time_comparison_day_night(self, request):
         """Get day vs night traffic comparison."""
-        from skyspy.services.time_comparison_stats import calculate_day_night_ratio, get_day_night_ratio
+        from skyspy.services.time_comparison_stats import get_day_night_ratio
 
         try:
             days = int(request.query_params.get("days", 30))
         except (ValueError, TypeError):
             days = 30
-        if days != 30:
-            return Response(calculate_day_night_ratio(days))
-        return Response(get_day_night_ratio())
+        return Response(get_day_night_ratio(days))
 
     @extend_schema(
         summary="Get weekend vs weekday patterns",
@@ -1200,7 +1196,6 @@ class HistoryViewSet(viewsets.ViewSet):
     def time_comparison_weekend_weekday(self, request):
         """Get weekend vs weekday traffic comparison."""
         from skyspy.services.time_comparison_stats import (
-            calculate_weekend_weekday_patterns,
             get_weekend_weekday_patterns,
         )
 
@@ -1208,9 +1203,7 @@ class HistoryViewSet(viewsets.ViewSet):
             weeks = int(request.query_params.get("weeks", 4))
         except (ValueError, TypeError):
             weeks = 4
-        if weeks != 4:
-            return Response(calculate_weekend_weekday_patterns(weeks))
-        return Response(get_weekend_weekday_patterns())
+        return Response(get_weekend_weekday_patterns(weeks))
 
     @extend_schema(
         summary="Get daily totals for charts",

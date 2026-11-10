@@ -62,6 +62,7 @@ export function AdvancedAnalyticsScreen({ apiBase, onSelectAircraft }) {
 
   const hours = RANGE_HOURS[range] ?? 24;
   const {
+    timeComparison,
     fields,
     scatter,
     matrix,
@@ -170,6 +171,19 @@ export function AdvancedAnalyticsScreen({ apiBase, onSelectAircraft }) {
           </div>
         </div>
       </div>
+
+      <section className="v2-analytics__card" aria-label="Historical statistics">
+        <div className="v2-analytics__card-head">Historical statistics · All aircraft</div>
+        {timeComparison.data?.status === 'preparing' ? (
+          <p role="status">Statistics preparing. Historical summaries are being built in the background.</p>
+        ) : timeComparison.data?.week_comparison ? (
+          <p>
+            This week: {timeComparison.data.week_comparison.this_week.unique_aircraft.toLocaleString()} unique aircraft
+            {' · '}Last week: {timeComparison.data.week_comparison.last_week.unique_aircraft.toLocaleString()}
+            {' · '}Updated {new Date(timeComparison.data.timestamp).toLocaleString()}
+          </p>
+        ) : <p>Historical statistics unavailable.</p>}
+      </section>
 
       {/* Explorer + matrix */}
       <div className="v2-analytics__grid2">

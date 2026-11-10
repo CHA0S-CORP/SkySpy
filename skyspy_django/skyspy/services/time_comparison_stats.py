@@ -15,16 +15,17 @@ Update Intervals:
 
 import logging
 from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import datetime, timedelta
 from functools import wraps
 
 from django.core.cache import cache
 from django.db import connection
-from django.db.models import Avg, Count, Max, Q
-from django.db.models.functions import ExtractHour, ExtractWeekDay, TruncDay, TruncMonth, TruncWeek
+from django.db.models import Avg, Count, ExpressionWrapper, FloatField, Max, Q, Sum
+from django.db.models.functions import ExtractHour, ExtractWeekDay, NullIf, TruncDay, TruncMonth, TruncWeek
 from django.utils import timezone
 
-from skyspy.models import AircraftSession, AircraftSighting
+from skyspy.models import AircraftSession, AircraftSighting, TimeSummaryAircraft
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +45,24 @@ CACHE_TIMEOUT = 86400  # Keep the last successful result through slow/failed ref
 # Day/Night hours configuration (6am-6pm is day by default)
 DAY_START_HOUR = 6
 DAY_END_HOUR = 18
+
+
+_use_summaries = ContextVar("time_summary_reads", default=False)
+
+
+def _sightings():
+    return TimeSummaryAircraft.objects if _use_summaries.get() else AircraftSighting.objects
+
+
+def _positions(**kwargs):
+    return Sum("positions", **kwargs) if _use_summaries.get() else Count("id", **kwargs)
+
+
+def _average(field):
+    if not _use_summaries.get():
+        return Avg(field)
+    prefix = "altitude" if field == "altitude_baro" else "distance"
+    return ExpressionWrapper(Sum(f"{prefix}_sum") / NullIf(Sum(f"{prefix}_count"), 0), output_field=FloatField())
 
 
 def _get_week_dates(weeks_ago: int = 0) -> tuple[datetime, datetime]:
@@ -100,16 +119,16 @@ def calculate_week_over_week_comparison() -> dict:
         # Limit to data up to now if checking current week
         effective_end = min(end, now)
 
-        sightings = AircraftSighting.objects.filter(timestamp__gte=start, timestamp__lt=effective_end)
+        sightings = _sightings().filter(timestamp__gte=start, timestamp__lt=effective_end)
 
         sessions = AircraftSession.objects.filter(first_seen__gte=start, first_seen__lt=effective_end)
 
         sighting_stats = sightings.aggregate(
-            total_positions=Count("id"),
+            total_positions=_positions(),
             unique_aircraft=Count("icao_hex", distinct=True),
-            military_positions=Count("id", filter=Q(is_military=True)),
-            avg_altitude=Avg("altitude_baro"),
-            avg_distance=Avg("distance_nm"),
+            military_positions=_positions(filter=Q(is_military=True)),
+            avg_altitude=_average("altitude_baro"),
+            avg_distance=_average("distance_nm"),
         )
 
         session_stats = sessions.aggregate(
@@ -169,12 +188,12 @@ def calculate_seasonal_trends(months: int = 12) -> dict:
         start, end = _get_month_dates(i)
         effective_end = min(end, now)
 
-        sightings = AircraftSighting.objects.filter(timestamp__gte=start, timestamp__lt=effective_end)
+        sightings = _sightings().filter(timestamp__gte=start, timestamp__lt=effective_end)
 
         sessions = AircraftSession.objects.filter(first_seen__gte=start, first_seen__lt=effective_end)
 
         sighting_stats = sightings.aggregate(
-            total_positions=Count("id"),
+            total_positions=_positions(),
             unique_aircraft=Count("icao_hex", distinct=True),
         )
 
@@ -228,17 +247,19 @@ def calculate_day_night_ratio(days: int = 30) -> dict:
     """
     now = timezone.now()
     cutoff = now - timedelta(days=days)
+    if _use_summaries.get():
+        cutoff = cutoff.replace(minute=0, second=0, microsecond=0)
 
-    sightings = AircraftSighting.objects.filter(timestamp__gte=cutoff)
+    sightings = _sightings().filter(timestamp__gte=cutoff)
 
     # Annotate with hour
     day_night_data = (
         sightings.annotate(hour=ExtractHour("timestamp"))
         .values("hour")
         .annotate(
-            position_count=Count("id"),
+            position_count=_positions(),
             unique_aircraft=Count("icao_hex", distinct=True),
-            military_count=Count("id", filter=Q(is_military=True)),
+            military_count=_positions(filter=Q(is_military=True)),
         )
         .order_by("hour")
     )
@@ -333,8 +354,10 @@ def calculate_weekend_weekday_patterns(weeks: int = 4) -> dict:
     """
     now = timezone.now()
     cutoff = now - timedelta(weeks=weeks)
+    if _use_summaries.get():
+        cutoff = cutoff.replace(minute=0, second=0, microsecond=0)
 
-    sightings = AircraftSighting.objects.filter(timestamp__gte=cutoff)
+    sightings = _sightings().filter(timestamp__gte=cutoff)
 
     # ExtractWeekDay returns 1=Sunday through 7=Saturday in Django/PostgreSQL
     # Weekend: 1 (Sunday), 7 (Saturday)
@@ -344,9 +367,9 @@ def calculate_weekend_weekday_patterns(weeks: int = 4) -> dict:
         sightings.annotate(weekday=ExtractWeekDay("timestamp"), day=TruncDay("timestamp"))
         .values("day", "weekday")
         .annotate(
-            position_count=Count("id"),
+            position_count=_positions(),
             unique_aircraft=Count("icao_hex", distinct=True),
-            military_count=Count("id", filter=Q(is_military=True)),
+            military_count=_positions(filter=Q(is_military=True)),
         )
         .order_by("day")
     )
@@ -439,17 +462,20 @@ def calculate_daily_totals(days: int = 30) -> dict:
     """
     now = timezone.now()
     cutoff = now - timedelta(days=days)
+    if _use_summaries.get():
+        cutoff = cutoff.replace(minute=0, second=0, microsecond=0)
 
     daily_data = (
-        AircraftSighting.objects.filter(timestamp__gte=cutoff)
+        _sightings()
+        .filter(timestamp__gte=cutoff)
         .annotate(day=TruncDay("timestamp"))
         .values("day")
         .annotate(
-            total_positions=Count("id"),
+            total_positions=_positions(),
             unique_aircraft=Count("icao_hex", distinct=True),
-            military_positions=Count("id", filter=Q(is_military=True)),
-            avg_altitude=Avg("altitude_baro"),
-            avg_distance=Avg("distance_nm"),
+            military_positions=_positions(filter=Q(is_military=True)),
+            avg_altitude=_average("altitude_baro"),
+            avg_distance=_average("distance_nm"),
             max_distance=Max("distance_nm"),
         )
         .order_by("day")
@@ -522,17 +548,20 @@ def calculate_weekly_totals(weeks: int = 12) -> dict:
     """
     now = timezone.now()
     cutoff = now - timedelta(weeks=weeks)
+    if _use_summaries.get():
+        cutoff = cutoff.replace(minute=0, second=0, microsecond=0)
 
     weekly_data = (
-        AircraftSighting.objects.filter(timestamp__gte=cutoff)
+        _sightings()
+        .filter(timestamp__gte=cutoff)
         .annotate(week=TruncWeek("timestamp"))
         .values("week")
         .annotate(
-            total_positions=Count("id"),
+            total_positions=_positions(),
             unique_aircraft=Count("icao_hex", distinct=True),
-            military_positions=Count("id", filter=Q(is_military=True)),
-            avg_altitude=Avg("altitude_baro"),
-            avg_distance=Avg("distance_nm"),
+            military_positions=_positions(filter=Q(is_military=True)),
+            avg_altitude=_average("altitude_baro"),
+            avg_distance=_average("distance_nm"),
             max_distance=Max("distance_nm"),
         )
         .order_by("week")
@@ -615,15 +644,16 @@ def calculate_monthly_totals(months: int = 12) -> dict:
     cutoff = now.replace(year=year, month=month, day=1, hour=0, minute=0, second=0, microsecond=0)
 
     monthly_data = (
-        AircraftSighting.objects.filter(timestamp__gte=cutoff)
+        _sightings()
+        .filter(timestamp__gte=cutoff)
         .annotate(month=TruncMonth("timestamp"))
         .values("month")
         .annotate(
-            total_positions=Count("id"),
+            total_positions=_positions(),
             unique_aircraft=Count("icao_hex", distinct=True),
-            military_positions=Count("id", filter=Q(is_military=True)),
-            avg_altitude=Avg("altitude_baro"),
-            avg_distance=Avg("distance_nm"),
+            military_positions=_positions(filter=Q(is_military=True)),
+            avg_altitude=_average("altitude_baro"),
+            avg_distance=_average("distance_nm"),
             max_distance=Max("distance_nm"),
         )
         .order_by("month")
@@ -701,7 +731,7 @@ def calculate_monthly_totals(months: int = 12) -> dict:
 
 
 @contextmanager
-def _analytics_budget():
+def _analytics_budget(statement_timeout="30s"):
     """Session lock never expires mid-query; PostgreSQL bounds each statement.
 
     All refresh entry points share this lock, including custom date ranges.
@@ -720,10 +750,14 @@ def _analytics_budget():
         try:
             cursor.execute("SHOW statement_timeout")
             previous_timeout = cursor.fetchone()[0]
-            cursor.execute("SELECT set_config('statement_timeout', '30s', false)")
+            cursor.execute("SHOW max_parallel_workers_per_gather")
+            previous_parallel = cursor.fetchone()[0]
+            cursor.execute("SELECT set_config('max_parallel_workers_per_gather', '0', false)")
+            cursor.execute("SELECT set_config('statement_timeout', %s, false)", [statement_timeout])
             try:
                 yield True
             finally:
+                cursor.execute("SELECT set_config('max_parallel_workers_per_gather', %s, false)", [previous_parallel])
                 cursor.execute("SELECT set_config('statement_timeout', %s, false)", [previous_timeout])
         finally:
             cursor.execute("SELECT pg_advisory_unlock(%s)", [736592041])
@@ -735,7 +769,15 @@ def _bounded_refresh(func):
         with _analytics_budget() as acquired:
             if not acquired:
                 return {}
-            return func(*args, **kwargs)
+            from skyspy.services.time_summary import rebuild_hours
+
+            if not rebuild_hours():
+                return {}
+            token = _use_summaries.set(True)
+            try:
+                return func(*args, **kwargs)
+            finally:
+                _use_summaries.reset(token)
 
     return wrapped
 
@@ -807,6 +849,12 @@ def broadcast_time_comparison_update(data: dict) -> None:
 # Request handlers only read cache. Beat refreshes defaults; custom ranges are
 # queued once per five minutes, never computed on an HTTP/WebSocket thread.
 def _cached(key, kind=None, period=None):
+    if kind is not None:
+        from rest_framework.exceptions import ValidationError
+
+        maximum = {"daily": 365, "day_night": 365, "weekly": 52, "weekend": 52, "monthly": 12, "seasonal": 12}[kind]
+        if not isinstance(period, int) or not 1 <= period <= maximum:
+            raise ValidationError({"period": f"Choose a value between 1 and {maximum}."})
     stats = cache.get(key)
     if stats is None and kind is not None:
         pending = f"{key}:queued"
@@ -818,23 +866,26 @@ def _cached(key, kind=None, period=None):
             except Exception:
                 cache.delete(pending)
                 logger.exception("Unable to enqueue time comparison refresh")
-    return stats or {}
+    return stats or {"status": "preparing"}
 
 
 def get_week_comparison():
     return _cached(CACHE_KEY_WEEK_COMPARISON)
 
 
-def get_seasonal_trends():
-    return _cached(CACHE_KEY_SEASONAL_TRENDS)
+def get_seasonal_trends(months=12):
+    key = CACHE_KEY_SEASONAL_TRENDS if months == 12 else f"{CACHE_KEY_SEASONAL_TRENDS}:{months}"
+    return _cached(key, "seasonal" if months != 12 else None, months)
 
 
-def get_day_night_ratio():
-    return _cached(CACHE_KEY_DAY_NIGHT)
+def get_day_night_ratio(days=30):
+    key = CACHE_KEY_DAY_NIGHT if days == 30 else f"{CACHE_KEY_DAY_NIGHT}:{days}"
+    return _cached(key, "day_night" if days != 30 else None, days)
 
 
-def get_weekend_weekday_patterns():
-    return _cached(CACHE_KEY_WEEKEND_WEEKDAY)
+def get_weekend_weekday_patterns(weeks=4):
+    key = CACHE_KEY_WEEKEND_WEEKDAY if weeks == 4 else f"{CACHE_KEY_WEEKEND_WEEKDAY}:{weeks}"
+    return _cached(key, "weekend" if weeks != 4 else None, weeks)
 
 
 def get_daily_totals(days=30):
@@ -859,6 +910,9 @@ def get_all_time_comparison_stats():
 @_bounded_refresh
 def refresh_custom_range(kind, period):
     calculator, base = {
+        "seasonal": (calculate_seasonal_trends, CACHE_KEY_SEASONAL_TRENDS),
+        "day_night": (calculate_day_night_ratio, CACHE_KEY_DAY_NIGHT),
+        "weekend": (calculate_weekend_weekday_patterns, CACHE_KEY_WEEKEND_WEEKDAY),
         "daily": (calculate_daily_totals, CACHE_KEY_DAILY_TOTALS),
         "weekly": (calculate_weekly_totals, CACHE_KEY_WEEKLY_TOTALS),
         "monthly": (calculate_monthly_totals, CACHE_KEY_MONTHLY_TOTALS),
